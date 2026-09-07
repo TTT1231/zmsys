@@ -14,24 +14,8 @@ interface NavItem {
   end?: boolean;
 }
 
-function useNavSections(isWorkbench: boolean): Array<{ group: string; items: NavItem[] }> {
+function useNavSections(): Array<{ group: string; items: NavItem[] }> {
   const { role } = useApp();
-  if (!isWorkbench) {
-    return [
-      {
-        group: "业务导航",
-        items: [
-          { label: "工作台", icon: "grid", to: `/workbench/${role}` },
-          { label: "销售订单", icon: "order", to: "/orders" },
-          { label: "客户档案", icon: "users", to: "/customers" },
-          { label: "物料与 BOM", icon: "layers", to: "/bom" },
-          { label: "生产进度", icon: "chart", to: "/production" },
-          { label: "成品入库", icon: "inbound", to: "/inbound" },
-          { label: "成品出库", icon: "truck", to: "/outbound" },
-        ],
-      },
-    ];
-  }
   if (role === "sales") {
     return [
       {
@@ -39,9 +23,19 @@ function useNavSections(isWorkbench: boolean): Array<{ group: string; items: Nav
         items: [
           { label: "工作台", icon: "grid", to: "/workbench/sales", end: true },
           { label: "销售订单", icon: "order", to: "/orders", tag: "新建+维护" },
-          { label: "客户档案", icon: "users", to: "/customers", tag: "新建+维护" },
+          {
+            label: "客户档案",
+            icon: "users",
+            to: "/customers",
+            tag: "新建+维护",
+          },
           { label: "物料与 BOM", icon: "layers", to: "/bom", tag: "查看" },
-          { label: "生产与交付", icon: "chart", to: "/production", tag: "查看" },
+          {
+            label: "生产与交付",
+            icon: "chart",
+            to: "/production",
+            tag: "查看",
+          },
         ],
       },
     ];
@@ -51,11 +45,36 @@ function useNavSections(isWorkbench: boolean): Array<{ group: string; items: Nav
       {
         group: "业务导航",
         items: [
-          { label: "工作台", icon: "grid", to: "/workbench/warehouse", end: true },
-          { label: "待发货订单", icon: "order", to: "/production", tag: "只读" },
-          { label: "成品入库", icon: "inbound", to: "/inbound", tag: "登记+更正" },
-          { label: "成品出库", icon: "truck", to: "/outbound", tag: "登记+更正" },
-          { label: "变更记录", icon: "log", tag: "不可删除", note: "变更记录：保留操作人、时间与业务对象的完整审计链，记录不可删除、不可篡改；数量更正需填写修改原因。" },
+          {
+            label: "工作台",
+            icon: "grid",
+            to: "/workbench/warehouse",
+            end: true,
+          },
+          {
+            label: "待发货订单",
+            icon: "order",
+            to: "/production",
+            tag: "查看+发货",
+          },
+          {
+            label: "成品入库",
+            icon: "inbound",
+            to: "/inbound",
+            tag: "登记+更正",
+          },
+          {
+            label: "成品出库",
+            icon: "truck",
+            to: "/outbound",
+            tag: "登记+更正",
+          },
+          {
+            label: "变更记录",
+            icon: "log",
+            tag: "不可删除",
+            note: "变更记录：保留操作人、时间与业务对象的完整审计链，记录不可删除、不可篡改；数量更正需填写修改原因。",
+          },
         ],
       },
     ];
@@ -75,7 +94,14 @@ function useNavSections(isWorkbench: boolean): Array<{ group: string; items: Nav
     },
     {
       group: "系统设置",
-      items: [{ label: "用户与权限", icon: "shield", to: "/permissions", tag: "管理" }],
+      items: [
+        {
+          label: "用户与权限",
+          icon: "shield",
+          to: "/permissions",
+          tag: "管理",
+        },
+      ],
     },
   ];
 }
@@ -87,12 +113,30 @@ interface SidebarProps {
   onClose: () => void;
 }
 
-export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarProps) {
+export function Sidebar({
+  collapsed,
+  onToggleCollapse,
+  open,
+  onClose,
+}: SidebarProps) {
+  const navigate = useNavigate();
+  const [desktop, setDesktop] = useState(
+    () => window.matchMedia("(min-width: 1024px)").matches,
+  );
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 1024px)");
+    const update = () => setDesktop(query.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
   const location = useLocation();
   const { role } = useApp();
   const isWorkbench = location.pathname.startsWith("/workbench");
-  const sections = useNavSections(isWorkbench);
-  const [note, setNote] = useState<{ title: string; description: string } | null>(null);
+  const sections = useNavSections();
+  const [note, setNote] = useState<{
+    title: string;
+    description: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -109,6 +153,7 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
     <>
       <aside
         aria-label="主导航"
+        inert={!desktop && !open}
         className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden bg-gradient-to-b from-[#101828] to-[#162033] transition-[width,transform] duration-200 lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0 ${
           collapsed ? "lg:w-[76px]" : "lg:w-[230px]"
         } w-[min(82vw,300px)] shadow-[8px_0_30px_rgba(16,24,40,.08)] lg:shadow-[8px_0_30px_rgba(16,24,40,.08)] ${
@@ -122,8 +167,14 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
             </span>
             {!collapsed && (
               <span className="min-w-0">
-                <span className="block truncate text-[14.5px] font-semibold text-white">智造管理系统</span>
-                {isWorkbench && <span className="block text-[10px] tracking-[0.14em] text-[#aeb8c8] uppercase">Z · M Manager</span>}
+                <span className="block truncate text-[14.5px] font-semibold text-white">
+                  智造管理系统
+                </span>
+                {isWorkbench && (
+                  <span className="block text-[10px] tracking-[0.14em] text-[#aeb8c8] uppercase">
+                    Z · M Manager
+                  </span>
+                )}
               </span>
             )}
           </div>
@@ -131,7 +182,9 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
 
         {isWorkbench && !collapsed && (
           <div className="mx-3 mb-3 rounded-[12px] border border-white/10 bg-white/[.06] px-3 py-2.5">
-            <div className="text-[10.5px] tracking-[0.06em] text-[#aeb8c8]">当前角色工作区</div>
+            <div className="text-[10.5px] tracking-[0.06em] text-[#aeb8c8]">
+              当前角色工作区
+            </div>
             <div className="mt-1 flex items-center gap-1.5 text-[13px] font-semibold text-white">
               <span className="h-1.5 w-1.5 rounded-full bg-[#818cf8]" />
               {ROLE_META[role].roleName}
@@ -139,13 +192,37 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
           </div>
         )}
 
+        <div className="px-4 pb-3 lg:hidden">
+          <label className="text-[12px] text-white">
+            角色工作区
+            <select
+              aria-label="切换角色"
+              value={role}
+              onChange={(event) => {
+                navigate(`/workbench/${event.target.value}`);
+                onClose();
+              }}
+              className="mt-1 min-h-11 w-full rounded-btn bg-white px-3 text-ink"
+            >
+              {(Object.keys(ROLE_META) as Role[]).map((key) => (
+                <option key={key} value={key}>
+                  {ROLE_META[key].label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <nav className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-4">
           {sections.map((section) => (
             <div key={section.group}>
               {!collapsed && isWorkbench && (
-                <div className="px-2.5 pt-3 pb-1.5 text-[10.5px] font-semibold tracking-[0.1em] text-[#7a8699] uppercase">{section.group}</div>
+                <div className="px-2.5 pt-3 pb-1.5 text-[10.5px] font-semibold tracking-[0.1em] text-[#7a8699] uppercase">
+                  {section.group}
+                </div>
               )}
-              {collapsed && <div className="mx-2 my-2 border-t border-white/8" />}
+              {collapsed && (
+                <div className="mx-2 my-2 border-t border-white/8" />
+              )}
               <div className="flex flex-col gap-0.5">
                 {section.items.map((item) =>
                   item.note ? (
@@ -160,9 +237,15 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
                       className={`group relative flex min-h-10 items-center gap-2.5 rounded-[10px] px-2.5 text-[13px] text-[#aeb8c8] transition hover:bg-white/[.06] hover:text-white ${collapsed ? "justify-center" : ""}`}
                     >
                       <Icon name={item.icon} size={19} className="shrink-0" />
-                      {!collapsed && <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>}
+                      {!collapsed && (
+                        <span className="min-w-0 flex-1 truncate text-left">
+                          {item.label}
+                        </span>
+                      )}
                       {!collapsed && item.tag && isWorkbench && (
-                        <span className="rounded-full bg-[rgba(99,102,241,.18)] px-1.5 py-px text-[10px] font-medium whitespace-nowrap text-[#c7d2fe]">{item.tag}</span>
+                        <span className="rounded-full bg-[rgba(99,102,241,.18)] px-1.5 py-px text-[10px] font-medium whitespace-nowrap text-[#c7d2fe]">
+                          {item.tag}
+                        </span>
                       )}
                     </button>
                   ) : (
@@ -181,7 +264,11 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
                       }
                     >
                       <Icon name={item.icon} size={19} className="shrink-0" />
-                      {!collapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
+                      {!collapsed && (
+                        <span className="min-w-0 flex-1 truncate">
+                          {item.label}
+                        </span>
+                      )}
                       {!collapsed && item.tag && isWorkbench && (
                         <span className="rounded-full bg-[rgba(99,102,241,.18)] px-1.5 py-px text-[10px] font-medium whitespace-nowrap text-[#c7d2fe]">
                           {item.tag}
@@ -223,36 +310,24 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
 }
 
 /* 移动端底部导航 */
-export function MobileBottomNav({ onOpenDrawer }: { onOpenDrawer: () => void }) {
-  const location = useLocation();
+export function MobileBottomNav({
+  onOpenDrawer,
+}: {
+  onOpenDrawer: () => void;
+}) {
   const { role } = useApp();
-  const isWorkbench = location.pathname.startsWith("/workbench");
-
-  const centerItems: Array<{ label: string; icon: string; to: string }> = isWorkbench
-    ? role === "admin"
+  const centerItems =
+    role === "warehouse"
       ? [
+          { label: "待发货", icon: "order", to: "/production" },
+          { label: "入库", icon: "inbound", to: "/inbound" },
+          { label: "出库", icon: "truck", to: "/outbound" },
+        ]
+      : [
           { label: "订单", icon: "order", to: "/orders" },
           { label: "客户", icon: "users", to: "/customers" },
-          { label: "BOM", icon: "layers", to: "/bom" },
-        ]
-      : role === "sales"
-        ? [
-            { label: "订单", icon: "order", to: "/orders" },
-            { label: "客户", icon: "users", to: "/customers" },
-            { label: "交付", icon: "chart", to: "/production" },
-          ]
-        : [
-            { label: "入库", icon: "inbound", to: "/inbound" },
-            { label: "出库", icon: "truck", to: "/outbound" },
-            { label: "待发货", icon: "order", to: "/production" },
-          ]
-    : [
-        { label: "订单", icon: "order", to: "/orders" },
-        { label: "客户", icon: "users", to: "/customers" },
-        { label: "生产", icon: "chart", to: "/production" },
-        { label: "入库", icon: "inbound", to: "/inbound" },
-        { label: "出库", icon: "truck", to: "/outbound" },
-      ];
+          { label: "搜索", icon: "search", to: "/search" },
+        ];
 
   const itemClass = ({ isActive }: { isActive: boolean }) =>
     `flex flex-col items-center justify-center gap-0.5 text-[10.5px] transition ${
@@ -260,8 +335,13 @@ export function MobileBottomNav({ onOpenDrawer }: { onOpenDrawer: () => void }) 
     }`;
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 grid h-[60px] grid-cols-6 border-t border-line bg-white/90 backdrop-blur-lg lg:hidden"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    <nav
+      aria-label="移动导航"
+      className="fixed inset-x-0 bottom-0 z-40 grid min-h-[64px] grid-cols-5 border-t border-line bg-white/90 backdrop-blur-lg lg:hidden"
+      style={{
+        paddingBottom: "env(safe-area-inset-bottom)",
+        height: "calc(64px + env(safe-area-inset-bottom))",
+      }}
     >
       <NavLink to={`/workbench/${role}`} className={itemClass} end>
         <Icon name="grid" size={19} />
@@ -273,7 +353,11 @@ export function MobileBottomNav({ onOpenDrawer }: { onOpenDrawer: () => void }) 
           {item.label}
         </NavLink>
       ))}
-      <button type="button" onClick={onOpenDrawer} className="flex flex-col items-center justify-center gap-0.5 text-[10.5px] text-muted">
+      <button
+        type="button"
+        onClick={onOpenDrawer}
+        className="flex flex-col items-center justify-center gap-0.5 text-[10.5px] text-muted"
+      >
         <Icon name="more" size={19} />
         更多
       </button>
@@ -282,10 +366,16 @@ export function MobileBottomNav({ onOpenDrawer }: { onOpenDrawer: () => void }) 
 }
 
 /* 顶栏 */
-export function Topbar({ title, onOpenDrawer }: { title: string; onOpenDrawer: () => void }) {
+export function Topbar({
+  title,
+  onOpenDrawer,
+}: {
+  title: string;
+  onOpenDrawer: () => void;
+}) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { role, setRole, globalSearch, setGlobalSearch } = useApp();
+  const { role, setRole } = useApp();
   const isWorkbench = location.pathname.startsWith("/workbench");
 
   const switchRole = (next: string) => {
@@ -304,26 +394,34 @@ export function Topbar({ title, onOpenDrawer }: { title: string; onOpenDrawer: (
         >
           <Icon name="menu" size={19} />
         </button>
-        {isWorkbench ? (
-          <label className="hidden items-center gap-2 rounded-[10px] border border-line bg-white px-3 py-2 md:flex">
-            <Icon name="search" size={16} className="text-subtle" />
-            <input
-              value={globalSearch}
-              onChange={(event) => setGlobalSearch(event.target.value)}
-              placeholder="搜索订单、客户、成品或 BOM"
-              className="w-[210px] bg-transparent text-[13px] text-ink outline-none placeholder:text-subtle xl:w-[260px]"
-            />
-          </label>
-        ) : (
-          <strong className="block truncate text-[15px] font-semibold text-ink">{title}</strong>
-        )}
+        <strong className="block truncate text-[15px] font-semibold text-ink lg:hidden">
+          {title}
+        </strong>
+        <button
+          type="button"
+          onClick={() => navigate("/search")}
+          className="hidden min-h-11 w-[300px] items-center gap-2 rounded-btn border border-line px-3 text-left text-muted lg:flex"
+        >
+          <Icon name="search" size={17} /> 搜索订单、客户、产品
+        </button>
       </div>
 
       <div className="flex shrink-0 items-center gap-2.5 sm:gap-3">
+        <button
+          type="button"
+          aria-label="全局搜索"
+          onClick={() => navigate("/search")}
+          className="flex h-11 w-11 items-center justify-center rounded-btn text-muted lg:hidden"
+        >
+          <Icon name="search" size={20} />
+        </button>
         <select
           aria-label="切换角色工作台"
           value={isWorkbench ? `/workbench/${role}` : ""}
-          onChange={(event) => event.target.value && switchRole(event.target.value.split("/").pop() as Role)}
+          onChange={(event) =>
+            event.target.value &&
+            switchRole(event.target.value.split("/").pop() as Role)
+          }
           className="hidden h-10 rounded-[10px] border border-line bg-white px-2.5 text-[12.5px] text-ink sm:block"
         >
           {isWorkbench ? null : <option value="">角色工作台</option>}
@@ -338,8 +436,12 @@ export function Topbar({ title, onOpenDrawer }: { title: string; onOpenDrawer: (
             {ROLE_META[role].initial}
           </span>
           <span className="hidden leading-tight sm:block">
-            <span className="block text-[12.5px] font-semibold text-ink">{ROLE_META[role].person}</span>
-            <span className="block text-[11px] text-muted">{ROLE_META[role].roleName}</span>
+            <span className="block text-[12.5px] font-semibold text-ink">
+              {ROLE_META[role].person}
+            </span>
+            <span className="block text-[11px] text-muted">
+              {ROLE_META[role].roleName}
+            </span>
           </span>
         </div>
       </div>

@@ -24,7 +24,7 @@ export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChan
   const to = Math.min(total, current * pageSize);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 max-sm:grid max-sm:grid-cols-[48px_1fr_48px]">
+    <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 max-sm:flex-col">
       <div className="flex items-center gap-3 text-[12.5px] text-muted max-sm:hidden">
         <span>
           显示 {from}–{to}，共 {num(total)} {unit}
@@ -46,7 +46,7 @@ export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChan
           </label>
         )}
       </div>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 max-sm:w-full max-sm:justify-between">
         <button
           type="button"
           aria-label="上一页"
@@ -69,7 +69,7 @@ export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChan
               onClick={() => onPageChange(item)}
               className={`h-8 min-w-8 rounded-[8px] px-2 text-[12.5px] font-medium transition ${
                 item === current
-                  ? "bg-primary text-white"
+                  ? "bg-primary text-white max-sm:hidden"
                   : "border border-line text-muted hover:border-primary-border hover:text-primary max-sm:hidden"
               }`}
             >

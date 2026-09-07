@@ -12,7 +12,7 @@ interface ModalProps {
   footer?: ReactNode;
 }
 
-export function Modal({ open, onClose, title, subtitle, label = "交互原型", width = 560, children, footer }: ModalProps) {
+export function Modal({ open, onClose, title, subtitle, label = "", width = 560, children, footer }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
@@ -89,7 +89,7 @@ export function Modal({ open, onClose, title, subtitle, label = "交互原型", 
       >
         <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-4">
           <div>
-            <div className="text-[11px] font-semibold tracking-[0.08em] text-primary">{label}</div>
+            <div className="text-[11px] font-semibold tracking-[0.08em] text-primary" hidden={!label}>{label}</div>
             <h2 className="mt-0.5 text-[17px] font-semibold text-ink">{title}</h2>
             {subtitle && <p className="mt-0.5 text-[12.5px] text-muted">{subtitle}</p>}
           </div>
@@ -97,13 +97,13 @@ export function Modal({ open, onClose, title, subtitle, label = "交互原型", 
             type="button"
             onClick={onClose}
             aria-label="关闭"
-            className="rounded-[8px] p-1.5 text-muted transition hover:bg-primary-soft hover:text-primary"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-[8px] text-muted transition hover:bg-primary-soft hover:text-primary"
           >
             <Icon name="close" size={18} />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">{children}</div>
-        {footer && <div className="flex justify-end gap-2 border-t border-line bg-[#fcfcfd] px-6 py-3.5">{footer}</div>}
+        <div className="modal-body min-h-0 flex-1 overflow-y-auto px-6 py-4">{children}</div>
+        {footer && <div className="modal-footer flex justify-end gap-2 border-t border-line bg-[#fcfcfd] px-6 py-3.5">{footer}</div>}
       </div>
     </div>
   );

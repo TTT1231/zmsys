@@ -1,43 +1,122 @@
-import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type {
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from "react";
 
 const inputBase =
   "w-full rounded-[9px] border border-line-strong bg-white px-3 py-2 text-[13px] text-ink transition placeholder:text-subtle focus:border-primary focus:outline-none disabled:bg-[#f8fafc] disabled:text-subtle";
 
-export function TextField({ label, required, error, hint, ...rest }: InputHTMLAttributes<HTMLInputElement> & { label: string; required?: boolean; error?: string; hint?: string }) {
+export function TextField({
+  label,
+  required,
+  error,
+  hint,
+  ...rest
+}: InputHTMLAttributes<HTMLInputElement> & {
+  label: string;
+  required?: boolean;
+  error?: string;
+  hint?: string;
+}) {
   return (
     <Field label={label} required={required} error={error} hint={hint}>
-      <input {...rest} className={inputBase} />
+      <input
+        aria-invalid={!!error}
+        aria-required={required}
+        {...rest}
+        className={inputBase}
+      />
     </Field>
   );
 }
 
-export function DateField({ label, required, error, ...rest }: InputHTMLAttributes<HTMLInputElement> & { label: string; required?: boolean; error?: string }) {
+export function DateField({
+  label,
+  required,
+  error,
+  ...rest
+}: InputHTMLAttributes<HTMLInputElement> & {
+  label: string;
+  required?: boolean;
+  error?: string;
+}) {
   return (
     <Field label={label} required={required} error={error}>
-      <input {...rest} type="date" className={inputBase} />
+      <input
+        aria-invalid={!!error}
+        aria-required={required}
+        {...rest}
+        type="date"
+        className={inputBase}
+      />
     </Field>
   );
 }
 
-export function SelectField({ label, required, error, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement> & { label: string; required?: boolean; error?: string }) {
+export function SelectField({
+  label,
+  required,
+  error,
+  children,
+  ...rest
+}: SelectHTMLAttributes<HTMLSelectElement> & {
+  label: string;
+  required?: boolean;
+  error?: string;
+}) {
   return (
     <Field label={label} required={required} error={error}>
-      <select {...rest} className={inputBase}>
+      <select
+        aria-invalid={!!error}
+        aria-required={required}
+        {...rest}
+        className={inputBase}
+      >
         {children}
       </select>
     </Field>
   );
 }
 
-export function TextArea({ label, required, error, placeholder, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string; required?: boolean; error?: string }) {
+export function TextArea({
+  label,
+  required,
+  error,
+  placeholder,
+  ...rest
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  label: string;
+  required?: boolean;
+  error?: string;
+}) {
   return (
     <Field label={label} required={required} error={error}>
-      <textarea {...rest} placeholder={placeholder} className={`${inputBase} min-h-[72px] resize-y`} />
+      <textarea
+        aria-invalid={!!error}
+        aria-required={required}
+        {...rest}
+        placeholder={placeholder}
+        className={`${inputBase} min-h-[72px] resize-y`}
+      />
     </Field>
   );
 }
 
-export function Field({ label, required, error, hint, children }: { label: string; required?: boolean; error?: string; hint?: string; children: ReactNode }) {
+export function Field({
+  label,
+  required,
+  error,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  error?: string;
+  hint?: string;
+  children: ReactNode;
+}) {
   return (
     <label className="block">
       <span className="mb-1 block text-[12.5px] font-medium text-[#344054]">
@@ -46,7 +125,9 @@ export function Field({ label, required, error, hint, children }: { label: strin
       </span>
       {children}
       {error ? (
-        <span className="mt-1 block text-[12px] text-danger">{error}</span>
+        <span role="alert" className="mt-1 block text-[12px] text-danger">
+          {error}
+        </span>
       ) : hint ? (
         <span className="mt-1 block text-[12px] text-subtle">{hint}</span>
       ) : null}

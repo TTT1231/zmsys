@@ -1,18 +1,39 @@
 import { useEffect, useRef } from "react";
-import * as echarts from "echarts";
+import * as echarts from "echarts/core";
+import { LineChart, BarChart } from "echarts/charts";
+import {
+  GridComponent,
+  LegendComponent,
+  TooltipComponent,
+} from "echarts/components";
+import { CanvasRenderer } from "echarts/renderers";
+echarts.use([
+  LineChart,
+  BarChart,
+  GridComponent,
+  LegendComponent,
+  TooltipComponent,
+  CanvasRenderer,
+]);
 import type { EChartsOption } from "echarts";
 
 interface EChartProps {
   option: EChartsOption;
   height: number;
-  onClick?: (params: { name?: string; seriesName?: string; dataIndex?: number }) => void;
+  onClick?: (params: {
+    name?: string;
+    seriesName?: string;
+    dataIndex?: number;
+  }) => void;
 }
 
 export function EChart({ option, height, onClick }: EChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
   const onClickRef = useRef(onClick);
-  onClickRef.current = onClick;
+  useEffect(() => {
+    onClickRef.current = onClick;
+  }, [onClick]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -20,7 +41,11 @@ export function EChart({ option, height, onClick }: EChartProps) {
     const chart = echarts.init(container);
     chartRef.current = chart;
     chart.on("click", (params: unknown) => {
-      const p = params as { name?: string; seriesName?: string; dataIndex?: number };
+      const p = params as {
+        name?: string;
+        seriesName?: string;
+        dataIndex?: number;
+      };
       onClickRef.current?.(p);
     });
     const observer = new ResizeObserver(() => chart.resize());
@@ -33,7 +58,14 @@ export function EChart({ option, height, onClick }: EChartProps) {
   }, []);
 
   useEffect(() => {
-    chartRef.current?.setOption(option, true);
+    chartRef.current?.setOption(
+      {
+        ...option,
+        animation: !window.matchMedia("(prefers-reduced-motion: reduce)")
+          .matches,
+      },
+      true,
+    );
   }, [option]);
 
   return <div ref={containerRef} style={{ height }} />;

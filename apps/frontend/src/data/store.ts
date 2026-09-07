@@ -511,6 +511,9 @@ class WbStore {
 
   createInbound(input: { bomCode: string; qty: number; date: string; inspector: string; remark: string }): InboundRow {
     const bom = this.bomByCode(input.bomCode);
+    if (!bom) throw new Error("成品不存在");
+    if (!Number.isSafeInteger(input.qty) || input.qty <= 0) throw new Error("请输入有效的入库数量");
+    if (!input.date) throw new Error("请选择入库日期");
     const rows = this.inboundLedger.filter((row) => row.date === input.date);
     const seq = rows.length > 0 ? Math.max(...rows.map((row) => Number(row.no.slice(-4)))) + 1 : 25;
     const row: InboundRow = {
@@ -533,6 +536,9 @@ class WbStore {
   createOutbound(input: { orderNo: string; qty: number; date: string; operator: string; remark: string }): OutboundRow {
     const order = this.orders.find((item) => item.orderNo === input.orderNo);
     if (!order) throw new Error("订单不存在");
+    if (!Number.isSafeInteger(input.qty) || input.qty <= 0) throw new Error("请输入有效的发货数量");
+    if (!input.date) throw new Error("请选择出库日期");
+    if (input.qty > maxShipOf(order.orderNo)) throw new Error("可发库存已变化，请重新核对数量");
     const orderRows = this.outboundLedger.filter((row) => row.date === input.date);
     const seq = orderRows.length > 0 ? Math.max(...orderRows.map((row) => Number(row.no.slice(-4)))) + 1 : 19;
     const row: OutboundRow = {

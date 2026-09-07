@@ -1,3 +1,4 @@
+import { SearchPage } from "./pages/workbench/SearchPage";
 import { useEffect, useState } from "react";
 import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router";
 import { MobileBottomNav, Sidebar, Topbar } from "./components/layout/Shell";
@@ -13,6 +14,7 @@ import { PermissionsPage } from "./pages/permissions/PermissionsPage";
 
 const PAGE_TITLES: Array<[RegExp, (match: RegExpMatchArray) => string]> = [
   [/^\/workbench\/(admin|sales|warehouse)/, (match) => ROLE_META[match[1] as Role].label],
+  [/^\/search/, () => "搜索"],
   [/^\/orders/, () => "销售订单"],
   [/^\/customers/, () => "客户档案"],
   [/^\/bom/, () => "物料与 BOM"],
@@ -66,6 +68,7 @@ export const router = createBrowserRouter([
     children: [
       { path: "/", element: <Navigate to="/workbench/admin" replace /> },
       { path: "/workbench/:role", element: <WorkbenchPage /> },
+      { path: "/search", element: <SearchPage /> },
       { path: "/orders", element: <OrdersPage /> },
       { path: "/customers", element: <CustomersPage /> },
       { path: "/bom", element: <BomPage /> },
