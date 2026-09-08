@@ -20,9 +20,9 @@ export const api = {
     await delay(160);
     return store.createCustomer(input);
   },
-  async createCustomBom(input: Parameters<typeof store.createCustomBom>[0]) {
+  async createBom(input: Parameters<typeof store.createBom>[0]) {
     await delay(160);
-    return store.createCustomBom(input);
+    return store.createBom(input);
   },
   async createInbound(input: Parameters<typeof store.createInbound>[0]) {
     await delay(160);

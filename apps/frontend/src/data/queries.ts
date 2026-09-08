@@ -20,6 +20,6 @@ function useWbMutation<TInput, TOutput>(mutationFn: (input: TInput) => Promise<T
 export const useCreateOrder = () => useWbMutation(api.createOrder.bind(api));
 export const useUpdateOrder = () => useWbMutation(api.updateOrder.bind(api));
 export const useCreateCustomer = () => useWbMutation(api.createCustomer.bind(api));
-export const useCreateCustomBom = () => useWbMutation(api.createCustomBom.bind(api));
+export const useCreateBom = () => useWbMutation(api.createBom.bind(api));
 export const useCreateInbound = () => useWbMutation(api.createInbound.bind(api));
 export const useCreateOutbound = () => useWbMutation(api.createOutbound.bind(api));

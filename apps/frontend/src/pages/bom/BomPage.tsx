@@ -9,8 +9,8 @@ import { PageHeading } from "../../components/ui/PageHeading";
 import { Button, TableLink } from "../../components/ui/Badge";
 import { Pagination } from "../../components/ui/Pagination";
 import { Modal } from "../../components/ui/Modal";
-import { SelectField, TextArea, TextField } from "../../components/ui/Field";
-import { useCreateCustomBom, useWbSnapshot } from "../../data/queries";
+import { SelectField, TextField } from "../../components/ui/Field";
+import { useCreateBom, useWbSnapshot } from "../../data/queries";
 import { useToast } from "../../components/ui/Toast";
 import type { Bom } from "../../data/types";
 
@@ -74,10 +74,6 @@ export function BomDetailModal({
         <div className="rounded-[10px] bg-primary-soft/70 px-3 py-2 text-[12.5px] text-primary-strong">
           {bom.spec}
         </div>
-        <div className="rounded-[10px] border border-line px-3 py-2 text-[12.5px] text-td">
-          <span className="text-muted">备注：</span>
-          {bom.remark || "—"}
-        </div>
       </div>
     </Modal>
   );
@@ -93,26 +89,21 @@ function NewBomModal({
   open: boolean;
   onClose: () => void;
 }) {
-  const createBom = useCreateCustomBom();
+  const { data } = useWbSnapshot();
+  const createBom = useCreateBom();
   const toast = useToast();
   const [foot, setFoot] = useState("");
   const [gear, setGear] = useState("");
   const [modelFace, setModelFace] = useState("");
   const [thickness, setThickness] = useState("0.2");
   const [spring, setSpring] = useState("0.5");
-  const [remark, setRemark] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const hash = Math.abs(
-    [...`${foot}${gear}${modelFace}`].reduce(
-      (acc, ch) => (acc * 31 + ch.charCodeAt(0)) | 0,
-      7,
-    ),
-  )
-    .toString(36)
-    .toUpperCase()
-    .padEnd(6, "0")
-    .slice(0, 6);
+  const nextCode = (() => {
+    const boms = data?.boms ?? [];
+    const maxSeq = boms.reduce((max, bom) => Math.max(max, Number(bom.code.slice(2)) || 0), 0);
+    return `ZM${String(maxSeq + 1).padStart(3, "0")}`;
+  })();
 
   const reset = () => {
     setFoot("");
@@ -120,7 +111,6 @@ function NewBomModal({
     setModelFace("");
     setThickness("0.2");
     setSpring("0.5");
-    setRemark("");
     setErrors({});
   };
 
@@ -145,12 +135,10 @@ function NewBomModal({
         gearSpec: gear,
         thickness,
         spring,
-        stemHeight: "4.8",
-        remark,
       },
       {
         onSuccess: (bom) => {
-          toast(`BOM ${bom.code} 已创建，已归入定制 BOM`);
+          toast(`BOM ${bom.code} 已创建`);
           onClose();
           reset();
         },
@@ -236,22 +224,13 @@ function NewBomModal({
             <option key={item}>{item}</option>
           ))}
         </SelectField>
-        <div className="sm:col-span-3">
-          <TextArea
-            label="备注"
-            placeholder="非空备注会自动归入「定制 BOM」"
-            value={remark}
-            onChange={(event) => setRemark(event.target.value)}
-          />
-        </div>
         <div className="rounded-[12px] border border-line bg-[#fcfcfd] px-3.5 py-3 text-[12.5px] sm:col-span-3">
           <div className="mb-1 font-semibold text-ink">预览</div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted sm:grid-cols-3">
             <span>
               规格：{[foot, modelFace].filter(Boolean).join(" ") || "—"}
             </span>
-            <span className="tnum">BOM 编码：BOM-XK2-{hash || "??????"}</span>
-            <span>类型：{remark.trim() ? "定制 BOM" : "通用 BOM"}</span>
+            <span className="tnum">BOM 编码：{nextCode}</span>
             <span>弹簧规格：{spring}</span>
             <span>银点厚度：{thickness}</span>
             <span>杆子高度：4.8</span>
@@ -277,7 +256,6 @@ function QuickFindModal({
   const [keyword, setKeyword] = useState("");
   const boms = data?.boms ?? [];
   const results = boms
-    .filter((bom) => !bom.custom)
     .filter(
       (bom) =>
         (!foot || bom.seriesLabel === foot) && (!gear || bom.gear === gear),
@@ -372,7 +350,6 @@ export function BomPage() {
   const { data, isLoading } = useWbSnapshot();
   const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
-  const [tab, setTab] = useState<"generic" | "custom">("generic");
   const [keyword, setKeyword] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);
@@ -381,24 +358,14 @@ export function BomPage() {
   const [detail, setDetail] = useState<Bom | null>(null);
 
   const boms = data?.boms ?? [];
-  const genericCount = boms.filter((bom) => !bom.custom).length;
-  const customCount = boms.filter((bom) => bom.custom).length;
 
   const filtered = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
-    return boms.filter((bom) => {
-      if (tab === "generic" && bom.custom) return false;
-      if (tab === "custom" && !bom.custom) return false;
-      if (
-        kw &&
-        !`${bom.code} ${bom.modelCode} ${bom.spec} ${bom.remark}`
-          .toLowerCase()
-          .includes(kw)
-      )
-        return false;
-      return true;
-    });
-  }, [boms, tab, keyword]);
+    return boms.filter(
+      (bom) =>
+        !kw || `${bom.code} ${bom.modelCode} ${bom.model} ${bom.spec}`.toLowerCase().includes(kw),
+    );
+  }, [boms, keyword]);
 
   const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
   const canCreate = role === "admin";
@@ -442,35 +409,6 @@ export function BomPage() {
 
       <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
         <div className="list-toolbar flex flex-wrap items-center justify-between gap-2.5 border-b border-line bg-gradient-to-b from-white to-[#fcfcfd] px-5 py-4">
-          <div className="flex items-center gap-1 rounded-full border border-line bg-white p-1">
-            {(
-              [
-                { key: "generic", label: "通用 BOM", count: genericCount },
-                { key: "custom", label: "定制 BOM", count: customCount },
-              ] as const
-            ).map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => {
-                  setTab(item.key);
-                  setPage(1);
-                }}
-                className={`h-[30px] rounded-full px-3.5 text-[12.5px] font-medium transition ${
-                  tab === item.key
-                    ? "bg-primary text-white"
-                    : "text-muted hover:text-primary"
-                }`}
-              >
-                {item.label}
-                <span
-                  className={`tnum ml-1 text-[11px] ${tab === item.key ? "text-[#c7d2fe]" : "text-subtle"}`}
-                >
-                  {item.count}
-                </span>
-              </button>
-            ))}
-          </div>
           <div className="flex flex-wrap items-center gap-2.5">
             <label className="flex h-10 min-w-[220px] items-center gap-2 rounded-[10px] border border-line-strong bg-white px-3 sm:w-[300px]">
               <Icon name="search" size={15} className="text-subtle" />
@@ -480,7 +418,7 @@ export function BomPage() {
                   setKeyword(event.target.value);
                   setPage(1);
                 }}
-                placeholder="搜索编码 / 型号 / 规格 / 备注"
+                placeholder="搜索编码 / 型号 / 规格"
                 className="w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-subtle"
               />
             </label>
@@ -503,8 +441,8 @@ export function BomPage() {
               data-low-priority="true"
               onClick={() =>
                 downloadCsv(
-                  `${tab === "generic" ? "通用" : "定制"}BOM`,
-                  ["序号", "BOM编码", "品名", "型号", "单位", "规格", "备注"],
+                  "BOM",
+                  ["序号", "BOM编码", "品名", "型号", "单位", "规格"],
                   pageRows.map((bom, index) => [
                     String((page - 1) * pageSize + index + 1),
                     bom.code,
@@ -512,7 +450,6 @@ export function BomPage() {
                     bom.model,
                     bom.unit,
                     bom.spec,
-                    bom.remark,
                   ]),
                 )
               }
@@ -535,8 +472,7 @@ export function BomPage() {
               >
                 <p>{bom.spec}</p>
                 <p className="mt-2 text-[13px] text-muted">
-                  {bom.custom ? "客户定制" : "通用产品"} · 库存{" "}
-                  {num(data?.stock[bom.code] ?? 0)} 件
+                  库存 {num(data?.stock[bom.code] ?? 0)} 件
                 </p>
               </RecordCard>
             ))}
@@ -583,12 +519,6 @@ export function BomPage() {
                   </th>
                   <th className="px-3 py-2.5 font-semibold">规格</th>
                   <th
-                    className="px-3 py-2.5 font-semibold"
-                    style={{ width: "12%" }}
-                  >
-                    备注
-                  </th>
-                  <th
                     className="px-5 py-2.5 text-right font-semibold"
                     style={{ width: "10%" }}
                   >
@@ -600,10 +530,10 @@ export function BomPage() {
                 {pageRows.length === 0 && (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={7}
                       className="px-5 py-14 text-center text-[13px] text-subtle"
                     >
-                      暂无{tab === "generic" ? "通用" : "定制"} BOM
+                      暂无 BOM
                     </td>
                   </tr>
                 )}
@@ -641,9 +571,6 @@ export function BomPage() {
                         {bom.spec}
                       </span>
                     </td>
-                    <td className="px-3 py-3 text-[12.5px] text-muted">
-                      {bom.remark || "—"}
-                    </td>
                     <td className="px-5 py-3 text-right">
                       <TableLink onClick={() => setDetail(bom)}>
                         查看详情
@@ -661,7 +588,7 @@ export function BomPage() {
             page={page}
             pageSize={pageSize}
             total={filtered.length}
-            unit={`条${tab === "generic" ? "通用" : "定制"} BOM`}
+            unit="条 BOM"
             onPageChange={setPage}
           />
         </div>

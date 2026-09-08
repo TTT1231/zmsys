@@ -93,7 +93,7 @@ const buildCustomers = (): Customer[] =>
   });
 
 // 33 条人工审核 BOM 主数据（成品编码 = ZM-XK2-<code>）
-const BOM_ROWS: Array<Omit<Bom, "spec" | "productCode" | "custom" | "remark" | "created" | "name" | "model" | "unit">> = [
+const BOM_ROWS: Array<Omit<Bom, "spec" | "productCode" | "created" | "name" | "model" | "unit">> = [
   { code: "ZM001", modelCode: "1-1", seriesLabel: "二脚", gear: "一档", gearSpec: "211-1", gearDir: "正面", thickness: "0.2", spring: "0.5" },
   { code: "ZM002", modelCode: "2-1", seriesLabel: "三脚", gear: "两档", gearSpec: "222-1", gearDir: "正面", thickness: "0.2", spring: "0.5" },
   { code: "ZM003", modelCode: "2-1", seriesLabel: "四脚", gear: "两档", gearSpec: "2-1-4", gearDir: "正面", thickness: "0.2", spring: "0.5" },
@@ -144,8 +144,6 @@ const buildBoms = (): Bom[] =>
     ...row,
     spec: specOf(row),
     productCode: `ZM-XK2-${row.code}`,
-    custom: false,
-    remark: "",
     created: "2026-09-04",
     name: "旋转开关",
     model: "XK2",
@@ -157,12 +155,12 @@ const OPERATORS = ["王师傅", "周丽", "赵师傅"];
 
 // 6 条静态订单（单号格式与主原型一致 ZM+YYMMDD+序号；seedStock 为原型台账的既有库存）
 const STATIC_ORDERS: SeededOrder[] = [
-  { orderNo: "ZM260903086", customer: "华兴精密制造", customerCode: "CUS-1024", bomCode: "ZM001", qty: 2400, outbound: 0, orderDate: "2026-09-03", deliverDate: "2026-09-18", productMode: "generic", remark: "", seedStock: 1600 },
-  { orderNo: "ZM260903085", customer: "东莞启程电子", customerCode: "CUS-0316", bomCode: "ZM002", qty: 800, outbound: 0, orderDate: "2026-09-03", deliverDate: "2026-09-22", productMode: "generic", remark: "", seedStock: 0 },
-  { orderNo: "ZM260902084", customer: "苏州新锐汽车", customerCode: "CUS-0788", bomCode: "ZM003", qty: 1200, outbound: 1200, orderDate: "2026-09-02", deliverDate: "2026-09-15", productMode: "generic", remark: "", seedStock: 0 },
-  { orderNo: "ZM260901083", customer: "杭州微控科技", customerCode: "CUS-0542", bomCode: "ZM004", qty: 560, outbound: 560, orderDate: "2026-09-01", deliverDate: "2026-09-12", productMode: "generic", remark: "", seedStock: 0 },
-  { orderNo: "ZM260831082", customer: "宁波博远工业", customerCode: "CUS-0210", bomCode: "ZM005", qty: 3000, outbound: 0, orderDate: "2026-08-31", deliverDate: "2026-09-20", productMode: "generic", remark: "", seedStock: 1200 },
-  { orderNo: "ZM260830081", customer: "上海恒拓设备", customerCode: "CUS-1190", bomCode: "ZM006", qty: 960, outbound: 0, orderDate: "2026-08-30", deliverDate: "2026-09-16", productMode: "generic", remark: "", seedStock: 0 },
+  { orderNo: "ZM260903086", customer: "华兴精密制造", customerCode: "CUS-1024", bomCode: "ZM001", qty: 2400, outbound: 0, orderDate: "2026-09-03", deliverDate: "2026-09-18", remark: "", seedStock: 1600 },
+  { orderNo: "ZM260903085", customer: "东莞启程电子", customerCode: "CUS-0316", bomCode: "ZM002", qty: 800, outbound: 0, orderDate: "2026-09-03", deliverDate: "2026-09-22", remark: "", seedStock: 0 },
+  { orderNo: "ZM260902084", customer: "苏州新锐汽车", customerCode: "CUS-0788", bomCode: "ZM003", qty: 1200, outbound: 1200, orderDate: "2026-09-02", deliverDate: "2026-09-15", remark: "", seedStock: 0 },
+  { orderNo: "ZM260901083", customer: "杭州微控科技", customerCode: "CUS-0542", bomCode: "ZM004", qty: 560, outbound: 560, orderDate: "2026-09-01", deliverDate: "2026-09-12", remark: "", seedStock: 0 },
+  { orderNo: "ZM260831082", customer: "宁波博远工业", customerCode: "CUS-0210", bomCode: "ZM005", qty: 3000, outbound: 0, orderDate: "2026-08-31", deliverDate: "2026-09-20", remark: "", seedStock: 1200 },
+  { orderNo: "ZM260830081", customer: "上海恒拓设备", customerCode: "CUS-1190", bomCode: "ZM006", qty: 960, outbound: 0, orderDate: "2026-08-30", deliverDate: "2026-09-16", remark: "", seedStock: 0 },
 ];
 
 type SeededOrder = Order & { seedStock: number };
@@ -185,7 +183,6 @@ function buildOrders(boms: Bom[]): SeededOrder[] {
       outbound: status === "已完成" ? qty : 0,
       orderDate,
       deliverDate: addDays(orderDate, 12 + (seq % 8)),
-      productMode: "generic" as const,
       remark: "",
       seedStock: status === "可发货" ? done : 0,
     };
@@ -397,14 +394,11 @@ class WbStore {
     deliverStart: string;
     deliverEnd: string;
     orderDate: string;
-    productMode: "generic" | "custom";
     remark: string;
-    customBom?: Bom;
   }): Order {
     const yyMMdd = input.orderDate.slice(2).replaceAll("-", "");
     const maxSeq = this.orders.reduce((max, order) => Math.max(max, Number(order.orderNo.slice(-3)) || 0), 0);
     const orderNo = `ZM${yyMMdd}${String(maxSeq + 1).padStart(3, "0")}`;
-    if (input.customBom) this.boms.unshift(input.customBom);
     const order: Order = {
       orderNo,
       customer: input.customer,
@@ -414,7 +408,6 @@ class WbStore {
       outbound: 0,
       orderDate: input.orderDate,
       deliverDate: input.deliverEnd,
-      productMode: input.productMode,
       remark: input.remark,
     };
     this.orders.unshift(order);
@@ -475,19 +468,10 @@ class WbStore {
     return customer;
   }
 
-  createCustomBom(input: { foot: string; model: string; contactFace: string; gearSpec: string; thickness: string; spring: string; stemHeight: string; remark: string }): Bom {
-    const hash = Math.abs(
-      [...`${input.foot}${input.model}${input.contactFace}${input.gearSpec}`].reduce(
-        (acc, ch) => (acc * 31 + ch.charCodeAt(0)) | 0,
-        7,
-      ),
-    )
-      .toString(36)
-      .slice(0, 6)
-      .toUpperCase()
-      .padEnd(6, "0");
+  createBom(input: { foot: string; model: string; contactFace: string; gearSpec: string; thickness: string; spring: string }): Bom {
+    const maxSeq = this.boms.reduce((max, bom) => Math.max(max, Number(bom.code.slice(2)) || 0), 0);
     const row = {
-      code: `BOM-XK2-C${hash}`,
+      code: `ZM${String(maxSeq + 1).padStart(3, "0")}`,
       modelCode: input.contactFace,
       seriesLabel: input.foot,
       gear: input.gearSpec,
@@ -495,15 +479,12 @@ class WbStore {
       gearDir: "",
       thickness: input.thickness,
       spring: input.spring,
-      custom: true,
-      remark: input.remark || "客户定制要求",
       created: ANCHOR,
       name: "旋转开关",
       model: input.model,
       unit: "个",
-      stemHeight: input.stemHeight,
     };
-    const bom = { ...row, spec: specOf(row), productCode: `ZM-XK2-${row.code}` } as unknown as Bom;
+    const bom: Bom = { ...row, spec: specOf(row), productCode: `ZM-XK2-${row.code}` };
     this.boms.unshift(bom);
     this.version += 1;
     return bom;

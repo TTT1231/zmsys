@@ -47,18 +47,16 @@ function NewOrderModal({
   const createOrder = useCreateOrder();
   const toast = useToast();
   const customers = data?.customers ?? [];
-  const boms = data?.boms.filter((bom) => !bom.custom) ?? [];
+  const boms = data?.boms ?? [];
 
   const [customerCode, setCustomerCode] = useState("");
   const [qty, setQty] = useState("");
   const [orderDate, setOrderDate] = useState("2026-09-07");
   const [deliverStart, setDeliverStart] = useState("");
   const [deliverEnd, setDeliverEnd] = useState("");
-  const [mode, setMode] = useState<"generic" | "custom">("generic");
   const [foot, setFoot] = useState("");
   const [modelFace, setModelFace] = useState("");
   const [gearOption, setGearOption] = useState("");
-  const [customRequire, setCustomRequire] = useState("");
   const [remark, setRemark] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -84,21 +82,6 @@ function NewOrderModal({
     }));
 
   const selectedBom = boms.find((bom) => bom.code === gearOption);
-  const customBomCandidate =
-    mode === "custom"
-      ? {
-          code: `BOM-XK2-C${Math.abs(
-            [...customRequire].reduce(
-              (acc, ch) => (acc * 31 + ch.charCodeAt(0)) | 0,
-              7,
-            ),
-          )
-            .toString(36)
-            .toUpperCase()
-            .padEnd(6, "0")
-            .slice(0, 6)}`,
-        }
-      : null;
 
   const reset = () => {
     setCustomerCode("");
@@ -106,11 +89,9 @@ function NewOrderModal({
     setOrderDate("2026-09-07");
     setDeliverStart("");
     setDeliverEnd("");
-    setMode("generic");
     setFoot("");
     setModelFace("");
     setGearOption("");
-    setCustomRequire("");
     setRemark("");
     setErrors({});
   };
@@ -125,9 +106,7 @@ function NewOrderModal({
     if (!deliverEnd) nextErrors.deliverEnd = "请选择交货终止日期";
     if (deliverStart && deliverEnd && deliverEnd < deliverStart)
       nextErrors.deliverEnd = "终止不能早于起始";
-    if (mode === "generic" && !selectedBom) nextErrors.bom = "请选择成品方案";
-    if (mode === "custom" && customRequire.trim().length < 4)
-      nextErrors.custom = "请填写至少 4 个字的定制要求";
+    if (!selectedBom) nextErrors.bom = "请选择成品方案";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length)
       requestAnimationFrame(() =>
@@ -142,35 +121,12 @@ function NewOrderModal({
       {
         customerCode,
         customer: customer.name,
-        bomCode:
-          mode === "generic" ? selectedBom!.code : customBomCandidate!.code,
+        bomCode: selectedBom!.code,
         qty: Number(qty),
         deliverStart,
         deliverEnd,
         orderDate,
-        productMode: mode,
         remark,
-        customBom:
-          mode === "custom"
-            ? {
-                code: customBomCandidate!.code,
-                modelCode: "定制",
-                seriesLabel: foot || "按要求",
-                gear: "",
-                gearSpec: "",
-                gearDir: "",
-                thickness: "0.2",
-                spring: "0.5",
-                custom: true,
-                remark: customRequire,
-                created: "2026-09-07",
-                name: "旋转开关",
-                model: "XK2",
-                unit: "个",
-                spec: `定制 · ${customRequire.slice(0, 40)}`,
-                productCode: `ZM-XK2-${customBomCandidate!.code}`,
-              }
-            : undefined,
       },
       {
         onError: (error) => toast(error.message, true),
@@ -268,46 +224,7 @@ function NewOrderModal({
           <legend className="px-1.5 text-[12.5px] font-semibold text-primary">
             ② 选择成品方案
           </legend>
-          <div className="grid gap-2.5 sm:grid-cols-2">
-            {(
-              [
-                {
-                  key: "generic",
-                  title: "使用通用产品",
-                  badge: "推荐",
-                  desc: "从已审核的通用 BOM 中选择，入库发货自动沿用。",
-                },
-                {
-                  key: "custom",
-                  title: "客户定制产品",
-                  badge: "",
-                  desc: "填写定制要求，保存后生成定制 BOM。",
-                },
-              ] as const
-            ).map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                onClick={() => setMode(option.key)}
-                className={`rounded-[12px] border px-3.5 py-3 text-left transition ${mode === option.key ? "border-primary bg-primary-soft/60 shadow-[inset_0_0_0_1px_#4f46e5]" : "border-line hover:border-primary-border"}`}
-              >
-                <span className="flex items-center gap-2 text-[13px] font-semibold text-ink">
-                  {option.title}
-                  {option.badge && (
-                    <span className="rounded-full bg-primary px-1.5 py-px text-[10px] text-white">
-                      {option.badge}
-                    </span>
-                  )}
-                </span>
-                <span className="mt-1 block text-[12px] text-muted">
-                  {option.desc}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          {mode === "generic" ? (
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-3">
               <SelectField
                 label="脚位"
                 value={foot}
@@ -358,23 +275,6 @@ function NewOrderModal({
                 </p>
               )}
             </div>
-          ) : (
-            <div className="mt-3">
-              <TextArea
-                label="定制要求"
-                required
-                placeholder="描述客户定制要求，至少 4 个字"
-                error={errors.custom}
-                value={customRequire}
-                onChange={(event) => setCustomRequire(event.target.value)}
-              />
-              {customBomCandidate && (
-                <p className="mt-2 rounded-[10px] bg-primary-soft/70 px-3 py-2 text-[12px] text-primary-strong">
-                  将生成定制 BOM：{customBomCandidate.code}
-                </p>
-              )}
-            </div>
-          )}
         </fieldset>
 
         <fieldset className="rounded-panel border border-line p-4">
@@ -383,7 +283,7 @@ function NewOrderModal({
           </legend>
           <TextArea
             label="备注"
-            placeholder="选填；普通备注不会创建新的 BOM"
+            placeholder="选填"
             value={remark}
             onChange={(event) => setRemark(event.target.value)}
           />

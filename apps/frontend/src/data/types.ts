@@ -14,7 +14,6 @@ export interface Order {
   outbound: number;
   orderDate: string;
   deliverDate: string;
-  productMode: "generic" | "custom";
   remark: string;
 }
 
@@ -29,8 +28,6 @@ export interface Bom {
   spring: string;
   spec: string;
   productCode: string;
-  custom: boolean;
-  remark: string;
   created: string;
   name: string;
   model: string;
