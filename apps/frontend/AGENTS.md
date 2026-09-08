@@ -30,3 +30,49 @@
 - **客户资料只对销售线可见**（超级管理员/管理员/销售）：仓管发货只需订单信息，员工不可见。
 - **操作与单据分离**：仓管可登记发货但不能打印出库单；管理员可打印出库单但不能登记发货。
 - **出入库台账不可删**：记录不允许删除，写权限仅限新增和修改，保证流水可追溯。
+
+## 项目结构（初期）
+
+```
+admin-manage/
+├── index.html                  # Vite 入口 HTML
+├── vite.config.ts              # Vite 配置（含 Tailwind 插件）
+├── tsconfig.json               # TS 工程引用配置（app / node 两个子配置）
+├── .oxlintrc.json              # oxlint 规则配置
+├── db-scheme.md                # 数据库设计文档
+├── public/                     # 静态资源（favicon.svg、icons.svg 图标集）
+├── scripts/                    # 工具脚本
+│   ├── inventory.test.mjs      # 库存业务逻辑测试（pnpm test）
+│   ├── shot.mjs                # 应用截图脚本（puppeteer-core）
+│   ├── shot-*.mjs              # 交互页 / 权限原型截图脚本
+│   └── shots/                  # 截图输出目录（gitignore）
+└── src/
+    ├── main.tsx                # 应用入口
+    ├── index.css               # 全局样式（Tailwind）
+    ├── router.tsx              # 路由定义
+    ├── components/
+    │   ├── charts/             # ECharts 封装（EChart.tsx 通用组件、options.ts 图表配置）
+    │   ├── layout/             # 页面外壳（Shell.tsx：侧边导航 + 顶栏）
+    │   └── ui/                 # 通用 UI 组件（Modal、Toast、Pagination、Badge、
+    │                           #   Field、KpiCard、MobileList、PageHeading、
+    │                           #   SearchSelect、ToolbarMore、cells 表格单元格）
+    ├── context/
+    │   └── AppContext.tsx      # 全局上下文（登录用户 / 角色权限）
+    ├── data/                   # 数据层
+    │   ├── api.ts              # 后端 API 客户端
+    │   ├── queries.ts          # react-query 查询/变更封装
+    │   ├── store.ts            # 本地数据存取
+    │   ├── types.ts            # 领域类型定义
+    │   ├── permissions.ts      # 角色/菜单/动作权限配置
+    │   └── categories.ts       # 物料分类配置
+    ├── lib/                    # 工具函数（format.ts 格式化、icons.tsx 图标）
+    ├── assets/                 # 静态资源（当前为空）
+    └── pages/                  # 页面模块（按业务域分目录）
+        ├── workbench/          # 工作台（WorkbenchPage、SearchPage 全局搜索、dialogs 弹窗）
+        ├── inbound/            # 成品出入库 - 检验入库
+        ├── outbound/           # 成品出入库 - 登记发货/出库单
+        ├── customers/          # 客户档案
+        ├── bom/                # 物料与BOM（产品档案）
+        ├── orders/             # 销售订单
+        └── permissions/        # 用户权限
+```
