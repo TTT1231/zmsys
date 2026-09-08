@@ -388,7 +388,7 @@ function OutboundDetailModal({
 }
 
 export function OutboundPage() {
-  const { role } = useApp();
+  const { can } = useApp();
   const { data, isLoading } = useWbSnapshot();
   const [searchParams, setSearchParams] = useSearchParams();
   const [keyword, setKeyword] = useState("");
@@ -419,7 +419,8 @@ export function OutboundPage() {
     [filtered],
   );
   const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize);
-  const canRegister = role === "admin" || role === "warehouse";
+  const canRegister = can("outbound:ship");
+  const canPrint = can("outbound:print");
 
   useEffect(() => {
     if (searchParams.get("new") === "outbound") {
@@ -592,13 +593,15 @@ export function OutboundPage() {
                         >
                           查看详情
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => printOutbound(row)}
-                          className="text-[13px] font-medium text-primary-strong underline-offset-2 hover:underline"
-                        >
-                          打印
-                        </button>
+                        {canPrint && (
+                          <button
+                            type="button"
+                            onClick={() => printOutbound(row)}
+                            className="text-[13px] font-medium text-primary-strong underline-offset-2 hover:underline"
+                          >
+                            打印
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

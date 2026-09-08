@@ -198,12 +198,14 @@ class WbStore {
   outboundLedger: OutboundRow[] = [];
   stock = new Map<string, number>();
   users: WbUser[] = [
-    { name: "李晓梅", role: "管理员", account: "li_xiaomei" },
-    { name: "陈志强", role: "管理员", account: "chen_zhiqiang" },
-    { name: "王师傅", role: "检验员", account: "wang_shifu" },
-    { name: "赵师傅", role: "检验员", account: "zhao_shifu" },
-    { name: "周丽", role: "仓库管理员", account: "zhou_li" },
-    { name: "系统管理员", role: "超级管理员", account: "sys_admin" },
+    { id: 1, name: "系统管理员", account: "sys_admin", role: "super", active: true, last: "09-07 08:12" },
+    { id: 2, name: "李晓梅", account: "li_xiaomei", role: "admin", active: true, last: "09-07 09:40" },
+    { id: 3, name: "陈志强", account: "chen_zhiqiang", role: "admin", active: true, last: "09-06 17:22" },
+    { id: 4, name: "周丽", account: "zhou_li", role: "warehouse", active: true, last: "09-07 08:55" },
+    { id: 5, name: "王师傅", account: "wang_shifu", role: "warehouse", active: true, last: "09-05 16:03" },
+    { id: 6, name: "赵师傅", account: "zhao_shifu", role: "warehouse", active: true, last: "09-04 11:20" },
+    { id: 7, name: "陈洁", account: "chen_jie", role: "sales", active: true, last: "09-07 09:12" },
+    { id: 8, name: "刘敏", account: "liu_min", role: "staff", active: true, last: "09-03 15:44" },
   ];
   systemEvents: SystemEvent[] = [
     { level: "高优先级", levelTone: "danger", module: "物料与 BOM", item: "订单引用的 BOM 版本信息缺失", ref: "ZM260830081", found: "09-04 16:20", state: "待核对", open: true },
@@ -547,7 +549,28 @@ class WbStore {
       inboundLedger: this.inboundLedger.map((row) => ({ ...row })),
       outboundLedger: this.outboundLedger.map((row) => ({ ...row })),
       stock: Object.fromEntries(this.stock),
+      users: this.users.map((user) => ({ ...user })),
+      systemEvents: this.systemEvents.map((event) => ({ ...event })),
     };
+  }
+
+  upsertUser(input: { id?: number; name: string; account: string; role: WbUser["role"] }) {
+    if (input.id) {
+      const user = this.users.find((item) => item.id === input.id);
+      if (!user) return;
+      user.name = input.name;
+      user.account = input.account;
+      if (user.role !== "super") user.role = input.role;
+      return;
+    }
+    const nextId = Math.max(0, ...this.users.map((user) => user.id)) + 1;
+    this.users.push({ id: nextId, name: input.name, account: input.account, role: input.role, active: true, last: "—" });
+  }
+
+  setUserActive(id: number, active: boolean) {
+    const user = this.users.find((item) => item.id === id);
+    if (!user || user.role === "super") return;
+    user.active = active;
   }
 }
 

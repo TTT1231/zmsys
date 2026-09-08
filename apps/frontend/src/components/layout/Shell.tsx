@@ -2,101 +2,13 @@ import { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { Icon } from "../../lib/icons";
 import { useApp, ROLE_META, type Role } from "../../context/AppContext";
+import { buildNavSections, type NavItem } from "../../data/permissions";
 import { NoteDialog } from "../../pages/workbench/dialogs";
 
-/* 侧边栏导航模型：管理页面用主原型菜单，工作台按角色用各自原型的菜单 */
-interface NavItem {
-  label: string;
-  icon: string;
-  to?: string;
-  tag?: string;
-  note?: string;
-  end?: boolean;
-}
-
+/* 侧边栏导航：由「角色 + 授权」生成（见 data/permissions.ts） */
 function useNavSections(): Array<{ group: string; items: NavItem[] }> {
-  const { role } = useApp();
-  if (role === "sales") {
-    return [
-      {
-        group: "业务导航",
-        items: [
-          { label: "工作台", icon: "grid", to: "/workbench/sales", end: true },
-          { label: "销售订单", icon: "order", to: "/orders", tag: "新建+维护" },
-          {
-            label: "客户档案",
-            icon: "users",
-            to: "/customers",
-            tag: "新建+维护",
-          },
-          { label: "物料与 BOM", icon: "layers", to: "/bom", tag: "查看" },
-        ],
-      },
-    ];
-  }
-  if (role === "warehouse") {
-    return [
-      {
-        group: "业务导航",
-        items: [
-          {
-            label: "工作台",
-            icon: "grid",
-            to: "/workbench/warehouse",
-            end: true,
-          },
-          {
-            label: "待发货订单",
-            icon: "order",
-            to: "/orders",
-            tag: "查看+发货",
-          },
-          {
-            label: "成品入库",
-            icon: "inbound",
-            to: "/inbound",
-            tag: "登记+更正",
-          },
-          {
-            label: "成品出库",
-            icon: "truck",
-            to: "/outbound",
-            tag: "登记+更正",
-          },
-          {
-            label: "变更记录",
-            icon: "log",
-            tag: "不可删除",
-            note: "变更记录：保留操作人、时间与业务对象的完整审计链，记录不可删除、不可篡改；数量更正需填写修改原因。",
-          },
-        ],
-      },
-    ];
-  }
-  return [
-    {
-      group: "业务导航",
-      items: [
-        { label: "工作台", icon: "grid", to: "/workbench/admin", end: true },
-        { label: "销售订单", icon: "order", to: "/orders", tag: "查看+修改" },
-        { label: "客户档案", icon: "users", to: "/customers", tag: "维护" },
-        { label: "物料与 BOM", icon: "layers", to: "/bom", tag: "维护版本" },
-        { label: "成品入库", icon: "inbound", to: "/inbound", tag: "查看台账" },
-        { label: "成品出库", icon: "truck", to: "/outbound", tag: "查看台账" },
-      ],
-    },
-    {
-      group: "系统设置",
-      items: [
-        {
-          label: "用户与权限",
-          icon: "shield",
-          to: "/permissions",
-          tag: "管理",
-        },
-      ],
-    },
-  ];
+  const { role, grant } = useApp();
+  return buildNavSections(role, grant);
 }
 
 interface SidebarProps {
@@ -302,25 +214,21 @@ export function Sidebar({
   );
 }
 
-/* 移动端底部导航 */
+/* 移动端底部导航：中间入口按菜单授权过滤（客户档案等未授权模块不可达） */
 export function MobileBottomNav({
   onOpenDrawer,
 }: {
   onOpenDrawer: () => void;
 }) {
-  const { role } = useApp();
-  const centerItems =
-    role === "warehouse"
-      ? [
-          { label: "待发货", icon: "order", to: "/orders" },
-          { label: "入库", icon: "inbound", to: "/inbound" },
-          { label: "出库", icon: "truck", to: "/outbound" },
-        ]
-      : [
-          { label: "订单", icon: "order", to: "/orders" },
-          { label: "客户", icon: "users", to: "/customers" },
-          { label: "搜索", icon: "search", to: "/search" },
-        ];
+  const { role, grant } = useApp();
+  const centerItems = [
+    { key: "orders", label: role === "warehouse" ? "待发货" : "订单", icon: "order", to: "/orders" },
+    { key: "customers", label: "客户", icon: "users", to: "/customers" },
+    { key: "inbound", label: "入库", icon: "inbound", to: "/inbound" },
+    { key: "outbound", label: "出库", icon: "truck", to: "/outbound" },
+  ]
+    .filter((item) => grant.menus.includes(item.key))
+    .slice(0, 3);
 
   const itemClass = ({ isActive }: { isActive: boolean }) =>
     `flex flex-col items-center justify-center gap-0.5 text-[10.5px] transition ${
@@ -330,8 +238,9 @@ export function MobileBottomNav({
   return (
     <nav
       aria-label="移动导航"
-      className="fixed inset-x-0 bottom-0 z-40 grid min-h-[64px] grid-cols-5 border-t border-line bg-white/90 backdrop-blur-lg lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 grid min-h-[64px] border-t border-line bg-white/90 backdrop-blur-lg lg:hidden"
       style={{
+        gridTemplateColumns: `repeat(${centerItems.length + 2}, minmax(0, 1fr))`,
         paddingBottom: "env(safe-area-inset-bottom)",
         height: "calc(64px + env(safe-area-inset-bottom))",
       }}

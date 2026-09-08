@@ -1,5 +1,7 @@
 export type StatusKey = "done" | "progress" | "ready" | "pending";
 
+import type { RoleId } from "./permissions";
+
 export interface OrderStatus {
   label: string;
   key: StatusKey;
@@ -72,9 +74,12 @@ export interface OutboundRow {
 }
 
 export interface WbUser {
+  id: number;
   name: string;
-  role: string;
   account: string;
+  role: RoleId;
+  active: boolean;
+  last: string;
 }
 
 export interface SystemEvent {
@@ -105,6 +110,8 @@ export interface Snapshot {
   inboundLedger: InboundRow[];
   outboundLedger: OutboundRow[];
   stock: Record<string, number>;
+  users: WbUser[];
+  systemEvents: SystemEvent[];
 }
 
 export interface ReadyToShipRow {

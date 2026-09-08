@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router";
 import { MobileBottomNav, Sidebar, Topbar } from "./components/layout/Shell";
 import { ROLE_META, useApp, type Role } from "./context/AppContext";
+import { MENU_CATALOG } from "./data/permissions";
 import { WorkbenchPage } from "./pages/workbench/WorkbenchPage";
 import { OrdersPage } from "./pages/orders/OrdersPage";
 import { CustomersPage } from "./pages/customers/CustomersPage";
@@ -12,7 +13,7 @@ import { OutboundPage } from "./pages/outbound/OutboundPage";
 import { PermissionsPage } from "./pages/permissions/PermissionsPage";
 
 const PAGE_TITLES: Array<[RegExp, (match: RegExpMatchArray) => string]> = [
-  [/^\/workbench\/(admin|sales|warehouse)/, (match) => ROLE_META[match[1] as Role].label],
+  [/^\/workbench\/(super|admin|sales|warehouse|staff)/, (match) => ROLE_META[match[1] as Role].label],
   [/^\/search/, () => "搜索"],
   [/^\/orders/, () => "销售订单"],
   [/^\/customers/, () => "客户档案"],
@@ -29,13 +30,13 @@ function pageTitle(title: string, role: string) {
 
 function AppLayout() {
   const location = useLocation();
-  const { role, setRole } = useApp();
+  const { role, setRole, grant } = useApp();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
   // URL 中的角色工作台同步到全局角色状态（侧边栏/顶栏用户身份跟随）
   useEffect(() => {
-    const match = location.pathname.match(/^\/workbench\/(admin|sales|warehouse)$/);
+    const match = location.pathname.match(/^\/workbench\/(super|admin|sales|warehouse|staff)$/);
     if (match) setRole(match[1] as Role);
   }, [location.pathname, setRole]);
 
@@ -53,6 +54,16 @@ function AppLayout() {
       role,
     );
   })();
+
+  // 集中路由守卫：当前路径对应的菜单未授权时回角色工作台（工作台自身不设守卫，
+  // /search 由搜索页按类目过滤）
+  const activeMenu = MENU_CATALOG.find(
+    (menu) =>
+      menu.to && menu.key !== "workbench" && location.pathname.startsWith(menu.to),
+  );
+  if (activeMenu && !grant.menus.includes(activeMenu.key)) {
+    return <Navigate to={`/workbench/${role}`} replace />;
+  }
 
   return (
     <div className="flex min-h-dvh">

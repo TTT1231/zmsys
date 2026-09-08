@@ -18,7 +18,7 @@ import { store } from "../../data/store";
 
 export function SearchPage() {
   const { data, isLoading } = useWbSnapshot();
-  const { role } = useApp();
+  const { can, grant } = useApp();
   const [params, setParams] = useSearchParams();
   const query = params.get("q") ?? "";
   const [category, setCategory] = useState("orders");
@@ -28,6 +28,17 @@ export function SearchPage() {
   );
   const [ship, setShip] = useState<string | null>(null);
   const keyword = query.trim().toLowerCase();
+
+  // 类目按菜单授权过滤：客户档案等未授权模块不出现在搜索结果
+  const categories = [
+    { key: "orders", label: "订单", menu: "orders" },
+    { key: "customers", label: "客户", menu: "customers" },
+    { key: "boms", label: "产品", menu: "bom" },
+  ].filter((item) => grant.menus.includes(item.menu));
+  const effectiveCategory = categories.some((item) => item.key === category)
+    ? category
+    : (categories[0]?.key ?? "orders");
+
   const orders = (data?.orders ?? []).filter((order) =>
     `${order.orderNo} ${order.customer} ${order.customerCode} ${order.bomCode} ${store.bomByCode(order.bomCode)?.spec}`
       .toLowerCase()
@@ -44,9 +55,9 @@ export function SearchPage() {
       .includes(keyword),
   );
   const count =
-    category === "orders"
+    effectiveCategory === "orders"
       ? orders.length
-      : category === "customers"
+      : effectiveCategory === "customers"
         ? customers.length
         : boms.length;
   const order =
@@ -86,30 +97,34 @@ export function SearchPage() {
       ) : (
         <>
           <div className="task-tabs">
-            {[
-              { key: "orders", label: "订单", count: orders.length },
-              { key: "customers", label: "客户", count: customers.length },
-              { key: "boms", label: "产品", count: boms.length },
-            ].map((item) => (
-              <button
-                type="button"
-                key={item.key}
-                aria-pressed={category === item.key}
-                onClick={() => {
-                  setCategory(item.key);
-                  setLimit(10);
-                }}
-              >
-                {item.label} {item.count}
-              </button>
-            ))}
+            {categories.map((item) => {
+              const itemCount =
+                item.key === "orders"
+                  ? orders.length
+                  : item.key === "customers"
+                    ? customers.length
+                    : boms.length;
+              return (
+                <button
+                  type="button"
+                  key={item.key}
+                  aria-pressed={effectiveCategory === item.key}
+                  onClick={() => {
+                    setCategory(item.key);
+                    setLimit(10);
+                  }}
+                >
+                  {item.label} {itemCount}
+                </button>
+              );
+            })}
           </div>
           <p role="status" className="text-[13px] text-muted">
             找到 {count} 条{count > limit ? `，当前显示 ${limit} 条` : ""}
           </p>
           <div className="grid gap-3 lg:grid-cols-2">
             <ListState loading={isLoading} empty={!count}>
-              {category === "orders" &&
+              {effectiveCategory === "orders" &&
                 orders
                   .slice(0, limit)
                   .map((item) => (
@@ -120,13 +135,13 @@ export function SearchPage() {
                         setSelected({ kind: "orders", id: item.orderNo })
                       }
                       onShip={
-                        role !== "sales"
+                        can("outbound:ship")
                           ? () => setShip(item.orderNo)
                           : undefined
                       }
                     />
                   ))}
-              {category === "customers" &&
+              {effectiveCategory === "customers" &&
                 customers.slice(0, limit).map((item) => (
                   <RecordCard
                     key={item.code}
@@ -147,7 +162,7 @@ export function SearchPage() {
                     </p>
                   </RecordCard>
                 ))}
-              {category === "boms" &&
+              {effectiveCategory === "boms" &&
                 boms.slice(0, limit).map((item) => (
                   <RecordCard
                     key={item.code}
@@ -182,7 +197,7 @@ export function SearchPage() {
         order={order}
         onClose={() => setSelected(null)}
         onShip={
-          role !== "sales" && order
+          can("outbound:ship") && order
             ? () => {
                 setShip(order.orderNo);
                 setSelected(null);

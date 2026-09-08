@@ -309,7 +309,7 @@ export function CustomerDetailModal({
 }
 
 export function CustomersPage() {
-  const { role } = useApp();
+  const { can } = useApp();
   const { data, isLoading } = useWbSnapshot();
   const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
@@ -372,7 +372,7 @@ export function CustomersPage() {
     setPage(1);
   };
 
-  const canCreate = role === "admin" || role === "sales";
+  const canCreate = can("customers:create");
 
   return (
     <div className="flex flex-col gap-5">

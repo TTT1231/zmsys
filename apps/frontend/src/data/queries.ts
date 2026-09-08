@@ -23,3 +23,5 @@ export const useCreateCustomer = () => useWbMutation(api.createCustomer.bind(api
 export const useCreateBom = () => useWbMutation(api.createBom.bind(api));
 export const useCreateInbound = () => useWbMutation(api.createInbound.bind(api));
 export const useCreateOutbound = () => useWbMutation(api.createOutbound.bind(api));
+export const useUpsertUser = () => useWbMutation(api.upsertUser.bind(api));
+export const useSetUserActive = () => useWbMutation(api.setUserActive.bind(api));

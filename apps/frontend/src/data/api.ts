@@ -32,4 +32,12 @@ export const api = {
     await delay(160);
     return store.createOutbound(input);
   },
+  async upsertUser(input: Parameters<typeof store.upsertUser>[0]) {
+    await delay(120);
+    return store.upsertUser(input);
+  },
+  async setUserActive(input: { id: number; active: boolean }) {
+    await delay(80);
+    return store.setUserActive(input.id, input.active);
+  },
 };

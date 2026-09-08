@@ -1,6 +1,13 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useState, useSyncExternalStore } from "react";
 import { Navigate, useNavigate, useParams } from "react-router";
 import { type Role } from "../../context/AppContext";
+import {
+  can as canPerm,
+  getGrants,
+  grantFor,
+  ROLE_IDS,
+  subscribeGrants,
+} from "../../data/permissions";
 import {
   ANCHOR,
   dailyTrend,
@@ -52,9 +59,14 @@ function WorkbenchContent() {
   const [showTrend, setShowTrend] = useState(
     () => window.matchMedia("(min-width: 1024px)").matches,
   );
-  if (!["admin", "sales", "warehouse"].includes(role))
+  // 工作台按钮按 URL 角色的授权判断（演示式角色切换，无登录）
+  const grants = useSyncExternalStore(subscribeGrants, getGrants);
+  if (!ROLE_IDS.includes(role))
     return <Navigate to="/workbench/admin" replace />;
-  const canRegister = role !== "sales";
+  const grant = grantFor(grants, role);
+  const canRegister = canPerm(grant, "outbound:ship");
+  const canInbound = canPerm(grant, "inbound:register");
+  const canCreateOrder = canPerm(grant, "orders:create");
   const orders = data?.orders ?? [];
   const rows = readyToShip();
   const ready = rows.filter((row) => row.maxShip > 0);
@@ -94,21 +106,23 @@ function WorkbenchContent() {
         <div className="flex gap-2">
           {role === "warehouse" ? (
             <>
-              <Button
-                variant="secondary"
-                icon="truck"
-                onClick={() => setShip("")}
-              >
-                发货
-              </Button>
-              <Button icon="inbound" onClick={() => setInbound("")}>
-                入库
-              </Button>
+              {canRegister && (
+                <Button variant="secondary" icon="truck" onClick={() => setShip("")}>
+                  发货
+                </Button>
+              )}
+              {canInbound && (
+                <Button icon="inbound" onClick={() => setInbound("")}>
+                  入库
+                </Button>
+              )}
             </>
           ) : (
-            <Button icon="plus" onClick={() => navigate("/orders?new=order")}>
-              新建订单
-            </Button>
+            canCreateOrder && (
+              <Button icon="plus" onClick={() => navigate("/orders?new=order")}>
+                新建订单
+              </Button>
+            )
           )}
         </div>
       </div>
@@ -194,7 +208,7 @@ function WorkbenchContent() {
                         >
                           相关订单
                         </Button>
-                        {canRegister && (
+                        {canInbound && (
                           <Button onClick={() => setInbound(gap.bomCode)}>
                             登记入库
                           </Button>

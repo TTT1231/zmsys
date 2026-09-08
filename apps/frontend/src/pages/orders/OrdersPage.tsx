@@ -548,7 +548,7 @@ export function OrderDetailModal({
 }
 
 export function OrdersPage() {
-  const { role } = useApp();
+  const { role, can } = useApp();
   const { data, isLoading } = useWbSnapshot();
   const [searchParams, setSearchParams] = useSearchParams();
   const [statusFilter, setStatusFilter] = useState("全部状态");
@@ -621,7 +621,9 @@ export function OrdersPage() {
     setPage(1);
   };
 
-  const canCreate = role !== "warehouse";
+  const canCreate = can("orders:create");
+  const canEdit = can("orders:edit");
+  const canShip = can("outbound:ship");
 
   return (
     <div className="flex flex-col gap-5">
@@ -784,9 +786,9 @@ export function OrdersPage() {
                 key={order.orderNo}
                 order={order}
                 onDetail={() => setDetail(order)}
-                onEdit={canCreate ? () => setEditing(order) : undefined}
+                onEdit={canEdit ? () => setEditing(order) : undefined}
                 onShip={
-                  role !== "sales" ? () => setShip(order.orderNo) : undefined
+                  canShip ? () => setShip(order.orderNo) : undefined
                 }
               />
             ))}
@@ -950,12 +952,12 @@ export function OrdersPage() {
                           <TableLink onClick={() => setDetail(order)}>
                             查看详情
                           </TableLink>
-                          {role !== "sales" && maxShipOf(order.orderNo) > 0 && (
+                          {canShip && maxShipOf(order.orderNo) > 0 && (
                             <TableLink onClick={() => setShip(order.orderNo)}>
                               登记发货
                             </TableLink>
                           )}
-                          {canCreate && (
+                          {canEdit && (
                             <TableLink onClick={() => setEditing(order)}>
                               编辑
                             </TableLink>
@@ -1003,7 +1005,7 @@ export function OrdersPage() {
         }
         onClose={() => setDetail(null)}
         onShip={
-          role !== "sales"
+          canShip
             ? () => {
                 setShip(detail!.orderNo);
                 setDetail(null);

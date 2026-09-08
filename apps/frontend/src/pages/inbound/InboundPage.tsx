@@ -227,7 +227,7 @@ function VoucherModal({
 }
 
 export function InboundPage() {
-  const { role } = useApp();
+  const { can } = useApp();
   const { data, isLoading } = useWbSnapshot();
   const [searchParams, setSearchParams] = useSearchParams();
   const [keyword, setKeyword] = useState("");
@@ -258,7 +258,7 @@ export function InboundPage() {
     [filtered],
   );
   const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize);
-  const canRegister = role === "admin" || role === "warehouse";
+  const canRegister = can("inbound:register");
 
   useEffect(() => {
     if (searchParams.get("new") === "inbound") {

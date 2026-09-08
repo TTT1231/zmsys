@@ -346,7 +346,7 @@ function QuickFindModal({
 }
 
 export function BomPage() {
-  const { role } = useApp();
+  const { can } = useApp();
   const { data, isLoading } = useWbSnapshot();
   const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
@@ -368,7 +368,7 @@ export function BomPage() {
   }, [boms, keyword]);
 
   const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
-  const canCreate = role === "admin";
+  const canCreate = can("bom:create");
 
   useEffect(() => {
     if (searchParams.get("new") === "bom") {
