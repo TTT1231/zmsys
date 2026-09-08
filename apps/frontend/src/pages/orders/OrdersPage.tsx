@@ -54,34 +54,20 @@ function NewOrderModal({
   const [orderDate, setOrderDate] = useState("2026-09-07");
   const [deliverStart, setDeliverStart] = useState("");
   const [deliverEnd, setDeliverEnd] = useState("");
-  const [foot, setFoot] = useState("");
-  const [modelFace, setModelFace] = useState("");
-  const [gearOption, setGearOption] = useState("");
+  const [category, setCategory] = useState("");
+  const [bomCode, setBomCode] = useState("");
   const [remark, setRemark] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const feet = [...new Set(boms.map((bom) => bom.seriesLabel))];
-  const modelFaces = [
-    ...new Set(
-      boms
-        .filter((bom) => !foot || bom.seriesLabel === foot)
-        .map((bom) => bom.modelCode),
-    ),
-  ];
-  const gearOptions = boms
-    .filter(
-      (bom) =>
-        (!foot || bom.seriesLabel === foot) &&
-        (!modelFace || bom.modelCode === modelFace),
-    )
+  const categories = [...new Set(boms.map((bom) => bom.name))];
+  const bomOptions = boms
+    .filter((bom) => !category || bom.name === category)
     .map((bom) => ({
-      key: bom.code,
-      label: `${bom.gear} ${bom.gearSpec} ${bom.gearDir}`
-        .replace(/\s+/g, " ")
-        .trim(),
+      value: bom.code,
+      label: `${bom.code} · ${bom.name} · ${bom.spec}`,
     }));
 
-  const selectedBom = boms.find((bom) => bom.code === gearOption);
+  const selectedBom = boms.find((bom) => bom.code === bomCode);
 
   const reset = () => {
     setCustomerCode("");
@@ -89,9 +75,8 @@ function NewOrderModal({
     setOrderDate("2026-09-07");
     setDeliverStart("");
     setDeliverEnd("");
-    setFoot("");
-    setModelFace("");
-    setGearOption("");
+    setCategory("");
+    setBomCode("");
     setRemark("");
     setErrors({});
   };
@@ -225,56 +210,37 @@ function NewOrderModal({
             ② 选择 BOM
           </legend>
           <div className="grid gap-3 sm:grid-cols-3">
-              <SelectField
-                label="脚位"
-                value={foot}
-                onChange={(event) => {
-                  setFoot(event.target.value);
-                  setModelFace("");
-                  setGearOption("");
-                }}
-              >
-                <option value="">全部脚位</option>
-                {feet.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </SelectField>
-              <SelectField
-                label="型号 · 触点面"
-                value={modelFace}
-                onChange={(event) => {
-                  setModelFace(event.target.value);
-                  setGearOption("");
-                }}
-              >
-                <option value="">全部型号</option>
-                {modelFaces.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </SelectField>
-              <SelectField
-                label="档位触点"
+            <SelectField
+              label="品类"
+              value={category}
+              onChange={(event) => {
+                setCategory(event.target.value);
+                setBomCode("");
+              }}
+            >
+              <option value="">全部品类</option>
+              {categories.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </SelectField>
+            <div className="sm:col-span-2">
+              <SearchSelect
+                label="BOM"
+                required
                 error={errors.bom}
-                value={gearOption}
-                onChange={(event) => setGearOption(event.target.value)}
-              >
-                <option value="">请选择</option>
-                {gearOptions.map((item) => (
-                  <option key={item.key} value={item.key}>
-                    {item.label}
-                  </option>
-                ))}
-              </SelectField>
-              {selectedBom && (
-                <p className="rounded-[10px] bg-primary-soft/70 px-3 py-2 text-[12px] text-primary-strong sm:col-span-3">
-                  {selectedBom.code} · {selectedBom.spec}
-                </p>
-              )}
+                value={bomCode}
+                onChange={setBomCode}
+                options={bomOptions}
+              />
             </div>
+            {selectedBom && (
+              <p className="rounded-[10px] bg-primary-soft/70 px-3 py-2 text-[12px] text-primary-strong sm:col-span-3">
+                {selectedBom.code} · {selectedBom.name} · {selectedBom.spec}
+              </p>
+            )}
+          </div>
         </fieldset>
 
         <fieldset className="rounded-panel border border-line p-4">
@@ -553,6 +519,7 @@ export function OrdersPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [statusFilter, setStatusFilter] = useState("全部状态");
   const [keyword, setKeyword] = useState(searchParams.get("q") ?? "");
+  const [categoryFilter, setCategoryFilter] = useState("全部品类");
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
   const [page, setPage] = useState(1);
@@ -566,6 +533,9 @@ export function OrdersPage() {
   const [editing, setEditing] = useState<Order | null>(null);
 
   const orders = data?.orders ?? [];
+  const boms = data?.boms ?? [];
+  const bomCategory = new Map(boms.map((bom) => [bom.code, bom.name]));
+  const categories = [...new Set(boms.map((bom) => bom.name))];
   const counts = {
     total: orders.length,
     unfinished: orders.filter((order) => order.qty - order.outbound > 0).length,
@@ -580,6 +550,11 @@ export function OrdersPage() {
       if (
         statusFilter !== "全部状态" &&
         store.orderStatusOf(order).label !== statusFilter
+      )
+        return false;
+      if (
+        categoryFilter !== "全部品类" &&
+        bomCategory.get(order.bomCode) !== categoryFilter
       )
         return false;
       if (dateStart && order.deliverDate < dateStart) return false;
@@ -616,6 +591,7 @@ export function OrdersPage() {
     setTaskFilter("all");
     setStatusFilter("全部状态");
     setKeyword("");
+    setCategoryFilter("全部品类");
     setDateStart("");
     setDateEnd("");
     setPage(1);
@@ -683,6 +659,20 @@ export function OrdersPage() {
           >
             {STATUS_OPTIONS.map((option) => (
               <option key={option}>{option}</option>
+            ))}
+          </select>
+          <select
+            value={categoryFilter}
+            onChange={(event) => {
+              setCategoryFilter(event.target.value);
+              setPage(1);
+            }}
+            aria-label="按品类筛选"
+            className="h-10 rounded-[10px] border border-line-strong bg-white px-3 text-[13px] text-ink"
+          >
+            <option>全部品类</option>
+            {categories.map((item) => (
+              <option key={item}>{item}</option>
             ))}
           </select>
           <details className="relative">
@@ -907,10 +897,11 @@ export function OrdersPage() {
                         <span className="tnum block text-[13px] font-semibold text-[#475467]">
                           {order.bomCode}
                         </span>
-                        <span className="mt-0.5 block text-[11.5px] text-muted">
-                          {bom
-                            ? `${bom.model} · ${bom.seriesLabel} · ${bom.gear || "—"}`
-                            : "—"}
+                        <span
+                          className="mt-0.5 block max-w-[260px] truncate text-[11.5px] text-muted"
+                          title={bom?.spec}
+                        >
+                          {bom ? `${bom.name} · ${bom.spec}` : "—"}
                         </span>
                       </td>
                       <td className="px-3 py-4 text-right">

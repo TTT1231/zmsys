@@ -20,6 +20,7 @@ import type {
   TrendRow,
   WbUser,
 } from "./types";
+import { categoryOf, defaultsOf, nextBomCode } from "./categories";
 
 export const ANCHOR = "2026-09-07";
 const DAY = 86400000;
@@ -92,74 +93,117 @@ const buildCustomers = (): Customer[] =>
     };
   });
 
-// 33 条人工审核 BOM 主数据
-const BOM_ROWS: Array<Omit<Bom, "spec" | "created" | "name" | "model" | "unit">> = [
-  { code: "ZM001", modelCode: "1-1", seriesLabel: "二脚", gear: "一档", gearSpec: "211-1", gearDir: "正面", thickness: "0.2", spring: "0.5" },
-  { code: "ZM002", modelCode: "2-1", seriesLabel: "三脚", gear: "两档", gearSpec: "222-1", gearDir: "正面", thickness: "0.2", spring: "0.5" },
-  { code: "ZM003", modelCode: "2-1", seriesLabel: "四脚", gear: "两档", gearSpec: "2-1-4", gearDir: "正面", thickness: "0.2", spring: "0.5" },
-  { code: "ZM004", modelCode: "2-2", seriesLabel: "三脚", gear: "两档", gearSpec: "222-2", gearDir: "正面", thickness: "0.2", spring: "0.5" },
-  { code: "ZM005", modelCode: "3-1", seriesLabel: "五脚", gear: "三档", gearSpec: "233-4", gearDir: "正面", thickness: "0.2", spring: "0.5" },
-  { code: "ZM006", modelCode: "3-2", seriesLabel: "三脚", gear: "三档", gearSpec: "233-1-B", gearDir: "反面", thickness: "0.2", spring: "0.5" },
-  { code: "ZM007", modelCode: "3-2", seriesLabel: "五脚", gear: "三档", gearSpec: "233-1", gearDir: "反面", thickness: "0.2", spring: "0.5" },
-  { code: "ZM008", modelCode: "4-1", seriesLabel: "六脚", gear: "四档", gearSpec: "", gearDir: "正面", thickness: "0.2", spring: "0.5" },
-  { code: "ZM009", modelCode: "4-2", seriesLabel: "五脚", gear: "四档", gearSpec: "243-1-2", gearDir: "正面", thickness: "0.2", spring: "0.5" },
-  { code: "ZM010", modelCode: "4-3", seriesLabel: "三脚", gear: "四档", gearSpec: "243-5B", gearDir: "正面反轴", thickness: "0.2", spring: "0.5" },
-  { code: "ZM011", modelCode: "4-3", seriesLabel: "五脚", gear: "四档", gearSpec: "243-5A", gearDir: "正面反轴", thickness: "0.2", spring: "0.5" },
-  { code: "ZM012", modelCode: "4-3", seriesLabel: "五脚", gear: "四档", gearSpec: "243-5", gearDir: "反面转90°扇位朝上", thickness: "0.2", spring: "0.5" },
-  { code: "ZM013", modelCode: "4-4", seriesLabel: "五脚", gear: "四档", gearSpec: "243-1", gearDir: "反面", thickness: "0.2", spring: "0.5" },
-  { code: "ZM014", modelCode: "4-8", seriesLabel: "五脚", gear: "四档", gearSpec: "", gearDir: "正面", thickness: "0.2", spring: "0.5" },
-  { code: "ZM015", modelCode: "4-9", seriesLabel: "五脚", gear: "四档", gearSpec: "", gearDir: "正面", thickness: "0.2", spring: "0.5" },
-  { code: "ZM016", modelCode: "0-2", seriesLabel: "六脚", gear: "八档", gearSpec: "全方位/冷风扇/284-1B", gearDir: "正面", thickness: "0.2", spring: "0.55" },
-  { code: "ZM017", modelCode: "0-2", seriesLabel: "六脚", gear: "八档", gearSpec: "全方位/冷风扇/284-1B", gearDir: "正面转90°扇位朝上", thickness: "0.3", spring: "0.55" },
-  { code: "ZM018", modelCode: "0-2", seriesLabel: "五脚", gear: "八档", gearSpec: "全方位/284-2B", gearDir: "正面", thickness: "0.2", spring: "0.55" },
-  { code: "ZM019", modelCode: "0-3", seriesLabel: "三脚", gear: "两档", gearSpec: "212-1", gearDir: "正面", thickness: "0.2", spring: "0.55" },
-  { code: "ZM020", modelCode: "0-3", seriesLabel: "五脚", gear: "四档", gearSpec: "263-1-A", gearDir: "正面", thickness: "0.2", spring: "0.55" },
-  { code: "ZM021", modelCode: "0-3", seriesLabel: "五脚", gear: "四档", gearSpec: "263-1-A", gearDir: "正面反轴", thickness: "0.2", spring: "0.55" },
-  { code: "ZM022", modelCode: "0-4", seriesLabel: "六脚", gear: "八档", gearSpec: "284-1A", gearDir: "正面", thickness: "0.2", spring: "0.5" },
-  { code: "ZM023", modelCode: "0-4-1", seriesLabel: "六脚", gear: "八档", gearSpec: "284-2", gearDir: "正面", thickness: "0.2", spring: "0.55" },
-  { code: "ZM024", modelCode: "0-4", seriesLabel: "五脚", gear: "八档", gearSpec: "284-1", gearDir: "正面", thickness: "0.2", spring: "0.5" },
-  { code: "ZM025", modelCode: "0-5", seriesLabel: "六脚", gear: "八档", gearSpec: "284-3", gearDir: "正面", thickness: "0.2", spring: "0.55" },
-  { code: "ZM026", modelCode: "0-5", seriesLabel: "六脚", gear: "八档", gearSpec: "", gearDir: "正面", thickness: "0.3", spring: "0.55" },
-  { code: "ZM027", modelCode: "0-5", seriesLabel: "五脚", gear: "八档", gearSpec: "284-4", gearDir: "正面", thickness: "0.2", spring: "0.55" },
-  { code: "ZM028", modelCode: "0-6", seriesLabel: "六脚", gear: "五档", gearSpec: "", gearDir: "正面", thickness: "0.2", spring: "0.6" },
-  { code: "ZM029", modelCode: "0-7", seriesLabel: "五脚", gear: "四档", gearSpec: "", gearDir: "正面", thickness: "0.2", spring: "0.6" },
-  { code: "ZM030", modelCode: "0-8", seriesLabel: "三脚", gear: "四档", gearSpec: "", gearDir: "反面", thickness: "0.2", spring: "0.55" },
-  { code: "ZM031", modelCode: "0-9", seriesLabel: "五脚", gear: "", gearSpec: "", gearDir: "", thickness: "0.2", spring: "0.55" },
-  { code: "ZM032", modelCode: "0-9-1", seriesLabel: "五脚", gear: "六档", gearSpec: "全方位", gearDir: "反面", thickness: "0.2", spring: "0.55" },
-  { code: "ZM033", modelCode: "3-1", seriesLabel: "五脚", gear: "三档", gearSpec: "", gearDir: "", thickness: "0.2", spring: "0.5" },
+// 33 条人工审核旋转开关主数据（编码 ZMXK001 起，specs 键值对见品类模板）
+const ROTARY_ROWS: Array<{
+  modelCode: string;
+  foot: string;
+  gear: string;
+  gearSpec: string;
+  gearDir: string;
+  thickness: string;
+  spring: string;
+}> = [
+  { modelCode: "1-1", foot: "二脚", gear: "一档", gearSpec: "211-1", gearDir: "正面", thickness: "0.2", spring: "0.5" },
+  { modelCode: "2-1", foot: "三脚", gear: "两档", gearSpec: "222-1", gearDir: "正面", thickness: "0.2", spring: "0.5" },
+  { modelCode: "2-1", foot: "四脚", gear: "两档", gearSpec: "2-1-4", gearDir: "正面", thickness: "0.2", spring: "0.5" },
+  { modelCode: "2-2", foot: "三脚", gear: "两档", gearSpec: "222-2", gearDir: "正面", thickness: "0.2", spring: "0.5" },
+  { modelCode: "3-1", foot: "五脚", gear: "三档", gearSpec: "233-4", gearDir: "正面", thickness: "0.2", spring: "0.5" },
+  { modelCode: "3-2", foot: "三脚", gear: "三档", gearSpec: "233-1-B", gearDir: "反面", thickness: "0.2", spring: "0.5" },
+  { modelCode: "3-2", foot: "五脚", gear: "三档", gearSpec: "233-1", gearDir: "反面", thickness: "0.2", spring: "0.5" },
+  { modelCode: "4-1", foot: "六脚", gear: "四档", gearSpec: "", gearDir: "正面", thickness: "0.2", spring: "0.5" },
+  { modelCode: "4-2", foot: "五脚", gear: "四档", gearSpec: "243-1-2", gearDir: "正面", thickness: "0.2", spring: "0.5" },
+  { modelCode: "4-3", foot: "三脚", gear: "四档", gearSpec: "243-5B", gearDir: "正面反轴", thickness: "0.2", spring: "0.5" },
+  { modelCode: "4-3", foot: "五脚", gear: "四档", gearSpec: "243-5A", gearDir: "正面反轴", thickness: "0.2", spring: "0.5" },
+  { modelCode: "4-3", foot: "五脚", gear: "四档", gearSpec: "243-5", gearDir: "反面转90°扇位朝上", thickness: "0.2", spring: "0.5" },
+  { modelCode: "4-4", foot: "五脚", gear: "四档", gearSpec: "243-1", gearDir: "反面", thickness: "0.2", spring: "0.5" },
+  { modelCode: "4-8", foot: "五脚", gear: "四档", gearSpec: "", gearDir: "正面", thickness: "0.2", spring: "0.5" },
+  { modelCode: "4-9", foot: "五脚", gear: "四档", gearSpec: "", gearDir: "正面", thickness: "0.2", spring: "0.5" },
+  { modelCode: "0-2", foot: "六脚", gear: "八档", gearSpec: "全方位/冷风扇/284-1B", gearDir: "正面", thickness: "0.2", spring: "0.55" },
+  { modelCode: "0-2", foot: "六脚", gear: "八档", gearSpec: "全方位/冷风扇/284-1B", gearDir: "正面转90°扇位朝上", thickness: "0.3", spring: "0.55" },
+  { modelCode: "0-2", foot: "五脚", gear: "八档", gearSpec: "全方位/284-2B", gearDir: "正面", thickness: "0.2", spring: "0.55" },
+  { modelCode: "0-3", foot: "三脚", gear: "两档", gearSpec: "212-1", gearDir: "正面", thickness: "0.2", spring: "0.55" },
+  { modelCode: "0-3", foot: "五脚", gear: "四档", gearSpec: "263-1-A", gearDir: "正面", thickness: "0.2", spring: "0.55" },
+  { modelCode: "0-3", foot: "五脚", gear: "四档", gearSpec: "263-1-A", gearDir: "正面反轴", thickness: "0.2", spring: "0.55" },
+  { modelCode: "0-4", foot: "六脚", gear: "八档", gearSpec: "284-1A", gearDir: "正面", thickness: "0.2", spring: "0.5" },
+  { modelCode: "0-4-1", foot: "六脚", gear: "八档", gearSpec: "284-2", gearDir: "正面", thickness: "0.2", spring: "0.55" },
+  { modelCode: "0-4", foot: "五脚", gear: "八档", gearSpec: "284-1", gearDir: "正面", thickness: "0.2", spring: "0.5" },
+  { modelCode: "0-5", foot: "六脚", gear: "八档", gearSpec: "284-3", gearDir: "正面", thickness: "0.2", spring: "0.55" },
+  { modelCode: "0-5", foot: "六脚", gear: "八档", gearSpec: "", gearDir: "正面", thickness: "0.3", spring: "0.55" },
+  { modelCode: "0-5", foot: "五脚", gear: "八档", gearSpec: "284-4", gearDir: "正面", thickness: "0.2", spring: "0.55" },
+  { modelCode: "0-6", foot: "六脚", gear: "五档", gearSpec: "", gearDir: "正面", thickness: "0.2", spring: "0.6" },
+  { modelCode: "0-7", foot: "五脚", gear: "四档", gearSpec: "", gearDir: "正面", thickness: "0.2", spring: "0.6" },
+  { modelCode: "0-8", foot: "三脚", gear: "四档", gearSpec: "", gearDir: "反面", thickness: "0.2", spring: "0.55" },
+  { modelCode: "0-9", foot: "五脚", gear: "", gearSpec: "", gearDir: "", thickness: "0.2", spring: "0.55" },
+  { modelCode: "0-9-1", foot: "五脚", gear: "六档", gearSpec: "全方位", gearDir: "反面", thickness: "0.2", spring: "0.55" },
+  { modelCode: "3-1", foot: "五脚", gear: "三档", gearSpec: "", gearDir: "", thickness: "0.2", spring: "0.5" },
 ];
 
-const specOf = (row: Pick<Bom, "seriesLabel" | "modelCode" | "gear" | "gearSpec" | "gearDir" | "thickness" | "spring">) =>
-  [
-    `${row.seriesLabel} ${row.modelCode}`,
-    [row.gear, row.gearSpec, row.gearDir].filter(Boolean).join(" "),
-    `银点${row.thickness}`,
-    `弹簧规格${row.spring}`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+// 微动 / 跌倒开关样例数据（演示多品类建档与筛选）
+const EXTRA_BOMS: Array<Pick<Bom, "code" | "name" | "modelCode" | "specs">> = [
+  { code: "ZMKW001", name: "微动开关", modelCode: "KW-1", specs: { "触点形式": "常开", "动作力": "160gf", "行程": "0.25mm", "额定电流": "5A 250VAC" } },
+  { code: "ZMKW002", name: "微动开关", modelCode: "KW-2", specs: { "触点形式": "常闭", "动作力": "120gf", "行程": "0.20mm", "额定电流": "10A 250VAC" } },
+  { code: "ZMKW003", name: "微动开关", modelCode: "KW-3", specs: { "触点形式": "转换", "动作力": "200gf", "行程": "0.30mm", "额定电流": "3A 125VAC" } },
+  { code: "ZMDD001", name: "跌倒开关", modelCode: "DD-1", specs: { "感应角度": "±30°", "输出信号": "常开", "额定电流": "2A 30VDC" } },
+  { code: "ZMDD002", name: "跌倒开关", modelCode: "DD-2", specs: { "感应角度": "±45°", "输出信号": "常闭", "额定电流": "1A 30VDC" } },
+];
 
-const buildBoms = (): Bom[] =>
-  BOM_ROWS.map((row) => ({
-    ...row,
-    spec: specOf(row),
-    created: "2026-09-04",
-    name: "旋转开关",
-    model: "XK2",
-    unit: "个",
-  }));
+const specOf = (bom: Pick<Bom, "name" | "modelCode" | "specs">) => {
+  const def = categoryOf(bom.name);
+  const parts = Object.entries(bom.specs)
+    .filter(([key, value]) => {
+      if (!value || !value.trim()) return false;
+      const field = def?.fields.find((item) => item.key === key);
+      // 品类常量（defaultValue）各条目一致、无区分度，不进摘要
+      return !(field?.defaultValue && field.defaultValue === value);
+    })
+    .map(([key, value]) => `${key} ${value}`);
+  return [bom.modelCode, ...parts].filter(Boolean).join(" · ");
+};
+
+const buildBoms = (): Bom[] => {
+  const rotary = categoryOf("旋转开关")!;
+  const rotaryBoms: Bom[] = ROTARY_ROWS.map((row, index) => {
+    const bom: Bom = {
+      code: `ZMXK${String(index + 1).padStart(3, "0")}`,
+      name: "旋转开关",
+      modelCode: row.modelCode,
+      specs: {
+        "脚位": row.foot,
+        "档位": row.gear,
+        "规格": row.gearSpec,
+        "方向": row.gearDir,
+        "银点厚度": row.thickness,
+        "弹簧": row.spring,
+        ...defaultsOf(rotary),
+      },
+      spec: "",
+      created: "2026-09-04",
+      unit: "个",
+    };
+    return { ...bom, spec: specOf(bom) };
+  });
+  return [
+    ...rotaryBoms,
+    ...EXTRA_BOMS.map((row) => ({
+      ...row,
+      spec: specOf(row),
+      created: "2026-09-04",
+      unit: "个",
+    })),
+  ];
+};
 
 const INSPECTORS = ["王师傅", "赵师傅", "周丽"];
 const OPERATORS = ["王师傅", "周丽", "赵师傅"];
 
 // 6 条静态订单（单号格式与主原型一致 ZM+YYMMDD+序号；seedStock 为原型台账的既有库存）
 const STATIC_ORDERS: SeededOrder[] = [
-  { orderNo: "ZM260903086", customer: "华兴精密制造", customerCode: "CUS-1024", bomCode: "ZM001", qty: 2400, outbound: 0, orderDate: "2026-09-03", deliverDate: "2026-09-18", remark: "", seedStock: 1600 },
-  { orderNo: "ZM260903085", customer: "东莞启程电子", customerCode: "CUS-0316", bomCode: "ZM002", qty: 800, outbound: 0, orderDate: "2026-09-03", deliverDate: "2026-09-22", remark: "", seedStock: 0 },
-  { orderNo: "ZM260902084", customer: "苏州新锐汽车", customerCode: "CUS-0788", bomCode: "ZM003", qty: 1200, outbound: 1200, orderDate: "2026-09-02", deliverDate: "2026-09-15", remark: "", seedStock: 0 },
-  { orderNo: "ZM260901083", customer: "杭州微控科技", customerCode: "CUS-0542", bomCode: "ZM004", qty: 560, outbound: 560, orderDate: "2026-09-01", deliverDate: "2026-09-12", remark: "", seedStock: 0 },
-  { orderNo: "ZM260831082", customer: "宁波博远工业", customerCode: "CUS-0210", bomCode: "ZM005", qty: 3000, outbound: 0, orderDate: "2026-08-31", deliverDate: "2026-09-20", remark: "", seedStock: 1200 },
-  { orderNo: "ZM260830081", customer: "上海恒拓设备", customerCode: "CUS-1190", bomCode: "ZM006", qty: 960, outbound: 0, orderDate: "2026-08-30", deliverDate: "2026-09-16", remark: "", seedStock: 0 },
+  { orderNo: "ZM260903086", customer: "华兴精密制造", customerCode: "CUS-1024", bomCode: "ZMXK001", qty: 2400, outbound: 0, orderDate: "2026-09-03", deliverDate: "2026-09-18", remark: "", seedStock: 1600 },
+  { orderNo: "ZM260903085", customer: "东莞启程电子", customerCode: "CUS-0316", bomCode: "ZMXK002", qty: 800, outbound: 0, orderDate: "2026-09-03", deliverDate: "2026-09-22", remark: "", seedStock: 0 },
+  { orderNo: "ZM260902084", customer: "苏州新锐汽车", customerCode: "CUS-0788", bomCode: "ZMXK003", qty: 1200, outbound: 1200, orderDate: "2026-09-02", deliverDate: "2026-09-15", remark: "", seedStock: 0 },
+  { orderNo: "ZM260901083", customer: "杭州微控科技", customerCode: "CUS-0542", bomCode: "ZMKW001", qty: 560, outbound: 560, orderDate: "2026-09-01", deliverDate: "2026-09-12", remark: "", seedStock: 0 },
+  { orderNo: "ZM260831082", customer: "宁波博远工业", customerCode: "CUS-0210", bomCode: "ZMXK005", qty: 3000, outbound: 0, orderDate: "2026-08-31", deliverDate: "2026-09-20", remark: "", seedStock: 1200 },
+  { orderNo: "ZM260830081", customer: "上海恒拓设备", customerCode: "CUS-1190", bomCode: "ZMDD001", qty: 960, outbound: 0, orderDate: "2026-08-30", deliverDate: "2026-09-16", remark: "", seedStock: 0 },
 ];
 
 type SeededOrder = Order & { seedStock: number };
@@ -467,23 +511,18 @@ class WbStore {
     return customer;
   }
 
-  createBom(input: { foot: string; model: string; contactFace: string; gearSpec: string; thickness: string; spring: string }): Bom {
-    const maxSeq = this.boms.reduce((max, bom) => Math.max(max, Number(bom.code.slice(2)) || 0), 0);
-    const row = {
-      code: `ZM${String(maxSeq + 1).padStart(3, "0")}`,
-      modelCode: input.contactFace,
-      seriesLabel: input.foot,
-      gear: input.gearSpec,
-      gearSpec: "",
-      gearDir: "",
-      thickness: input.thickness,
-      spring: input.spring,
+  createBom(input: { name: string; modelCode: string; specs: Record<string, string> }): Bom {
+    const code = nextBomCode(input.name, this.boms.map((bom) => bom.code));
+    const bom: Bom = {
+      code,
+      name: input.name,
+      modelCode: input.modelCode,
+      specs: { ...input.specs },
+      spec: "",
       created: ANCHOR,
-      name: "旋转开关",
-      model: input.model,
       unit: "个",
     };
-    const bom: Bom = { ...row, spec: specOf(row) };
+    bom.spec = specOf(bom);
     this.boms.unshift(bom);
     this.version += 1;
     return bom;

@@ -117,10 +117,11 @@ export function OrderTaskCard({
       }
     >
       <p className="font-medium">
-        {bom?.name} · {bom?.seriesLabel} · {bom?.gear || bom?.modelCode}
+        {bom?.name}
+        {bom?.modelCode ? ` · ${bom.modelCode}` : ""}
       </p>
       <p className="mt-1 text-[12px] text-muted break-words">
-        {bom?.code} · {bom?.gearSpec} {bom?.gearDir}
+        {bom ? `${bom.code} · ${bom.spec}` : ""}
       </p>
       <div className="mt-3 flex flex-wrap justify-between gap-2 border-t border-line pt-3">
         <span>

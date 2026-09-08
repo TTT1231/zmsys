@@ -392,22 +392,30 @@ export function OutboundPage() {
   const { data, isLoading } = useWbSnapshot();
   const [searchParams, setSearchParams] = useSearchParams();
   const [keyword, setKeyword] = useState("");
+  const [category, setCategory] = useState("全部品类");
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);
   const [newOpen, setNewOpen] = useState(false);
   const [detail, setDetail] = useState<OutboundRow | null>(null);
 
   const rows = data?.outboundLedger ?? [];
+  const boms = data?.boms ?? [];
+  const bomCategory = new Map(boms.map((bom) => [bom.code, bom.name]));
+  const categories = [...new Set(boms.map((bom) => bom.name))];
 
   const filtered = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
-    if (!kw) return rows;
-    return rows.filter((row) =>
-      `${row.no} ${row.orderNo} ${row.customer} ${row.bomCode}`
-        .toLowerCase()
-        .includes(kw),
-    );
-  }, [rows, keyword]);
+    return rows.filter((row) => {
+      if (category !== "全部品类" && bomCategory.get(row.bomCode) !== category)
+        return false;
+      return (
+        !kw ||
+        `${row.no} ${row.orderNo} ${row.customer} ${row.bomCode}`
+          .toLowerCase()
+          .includes(kw)
+      );
+    });
+  }, [rows, keyword, category, bomCategory]);
 
   const sorted = useMemo(
     () =>
@@ -457,6 +465,20 @@ export function OutboundPage() {
               className="w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-subtle"
             />
           </label>
+          <select
+            value={category}
+            onChange={(event) => {
+              setCategory(event.target.value);
+              setPage(1);
+            }}
+            aria-label="按品类筛选"
+            className="h-10 rounded-[10px] border border-line-strong bg-white px-3 text-[13px] text-ink"
+          >
+            <option>全部品类</option>
+            {categories.map((item) => (
+              <option key={item}>{item}</option>
+            ))}
+          </select>
 
           <ToolbarMore>
             <Button
@@ -465,6 +487,7 @@ export function OutboundPage() {
               data-low-priority="true"
               onClick={() => {
                 setKeyword("");
+                setCategory("全部品类");
                 setPage(1);
               }}
             >

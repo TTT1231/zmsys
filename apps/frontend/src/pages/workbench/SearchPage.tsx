@@ -166,7 +166,7 @@ export function SearchPage() {
                 boms.slice(0, limit).map((item) => (
                   <RecordCard
                     key={item.code}
-                    title={`${item.name} · ${item.seriesLabel}`}
+                    title={item.name}
                     subtitle={item.code}
                     actions={
                       <Button

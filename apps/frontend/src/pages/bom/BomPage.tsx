@@ -12,23 +12,23 @@ import { Modal } from "../../components/ui/Modal";
 import { SelectField, TextField } from "../../components/ui/Field";
 import { useCreateBom, useWbSnapshot } from "../../data/queries";
 import { useToast } from "../../components/ui/Toast";
+import {
+  BOM_CATEGORIES,
+  categoryOf,
+  initialValuesOf,
+  nextBomCode,
+} from "../../data/categories";
 import type { Bom } from "../../data/types";
 
-/* BOM 规格行 */
+/* BOM 规格行：品类 + 型号 + 各品类规格键值对 */
 function specLines(bom: Bom) {
   return [
-    ["品名", bom.name],
-    ["脚位", bom.seriesLabel],
-    ["档位", bom.gear || "—"],
+    ["品类", bom.name],
     ["型号", bom.modelCode],
-    ["规格", bom.gearSpec || "—"],
-    ["方向", bom.gearDir || "—"],
-    ["A面触点", "A面银点"],
-    ["B面触点", "B面塑料盖板"],
-    ["弹簧", bom.spring],
-    ["银点厚度", bom.thickness],
-    ["杆子高度", "4.8"],
-  ] as Array<[string, string]>;
+    ...Object.entries(bom.specs).map(
+      ([key, value]) => [key, value || "—"] as [string, string],
+    ),
+  ];
 }
 
 export function BomDetailModal({
@@ -45,7 +45,7 @@ export function BomDetailModal({
       onClose={onClose}
       label="BOM 详情"
       title={bom.code}
-      subtitle={`${bom.name} · ${bom.model}`}
+      subtitle={`${bom.name} · ${bom.modelCode}`}
       width={560}
       footer={
         <button
@@ -79,9 +79,6 @@ export function BomDetailModal({
   );
 }
 
-const FOOT_OPTIONS = ["二脚", "三脚", "四脚", "五脚", "六脚"];
-const GEAR_OPTIONS = ["一档", "两档", "三档", "四档", "五档", "六档", "八档"];
-
 function NewBomModal({
   open,
   onClose,
@@ -92,33 +89,39 @@ function NewBomModal({
   const { data } = useWbSnapshot();
   const createBom = useCreateBom();
   const toast = useToast();
-  const [foot, setFoot] = useState("");
-  const [gear, setGear] = useState("");
-  const [modelFace, setModelFace] = useState("");
-  const [thickness, setThickness] = useState("0.2");
-  const [spring, setSpring] = useState("0.5");
+  const [name, setName] = useState("");
+  const [modelCode, setModelCode] = useState("");
+  const [values, setValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const nextCode = (() => {
-    const boms = data?.boms ?? [];
-    const maxSeq = boms.reduce((max, bom) => Math.max(max, Number(bom.code.slice(2)) || 0), 0);
-    return `ZM${String(maxSeq + 1).padStart(3, "0")}`;
-  })();
+  const boms = data?.boms ?? [];
+  const category = categoryOf(name);
 
-  const reset = () => {
-    setFoot("");
-    setGear("");
-    setModelFace("");
-    setThickness("0.2");
-    setSpring("0.5");
+  const nextCode = useMemo(
+    () => (category ? nextBomCode(name, boms.map((bom) => bom.code)) : "—"),
+    [category, name, boms],
+  );
+
+  const pickCategory = (next: string) => {
+    setName(next);
+    setModelCode("");
+    setValues(next ? initialValuesOf(categoryOf(next)!) : {});
     setErrors({});
   };
 
+  const setValue = (key: string, value: string) =>
+    setValues((prev) => ({ ...prev, [key]: value }));
+
   const submit = () => {
     const nextErrors: Record<string, string> = {};
-    if (!foot) nextErrors.foot = "请选择脚位";
-    if (!gear) nextErrors.gear = "请选择档位";
-    if (!modelFace) nextErrors.modelFace = "请填写型号 · 触点面";
+    if (!category) nextErrors.name = "请选择产品品类";
+    if (!modelCode.trim()) nextErrors.modelCode = "请填写型号";
+    category?.fields
+      .filter((field) => field.required)
+      .forEach((field) => {
+        if (!values[field.key]?.trim())
+          nextErrors[field.key] = `请填写${field.label}`;
+      });
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length)
       requestAnimationFrame(() =>
@@ -128,19 +131,12 @@ function NewBomModal({
       );
     if (Object.keys(nextErrors).length > 0) return;
     createBom.mutate(
-      {
-        foot,
-        model: "XK2",
-        contactFace: modelFace,
-        gearSpec: gear,
-        thickness,
-        spring,
-      },
+      { name, modelCode: modelCode.trim(), specs: values },
       {
         onSuccess: (bom) => {
           toast(`BOM ${bom.code} 已创建`);
           onClose();
-          reset();
+          pickCategory("");
         },
       },
     );
@@ -150,8 +146,8 @@ function NewBomModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="新建 BOM · 旋转开关 XK2"
-      subtitle="按脚位 → 型号与触点面 → 档位逐步建档"
+      title="新建 BOM"
+      subtitle="枚举规格点选，型号与自由规格手动输入"
       width={600}
       footer={
         <>
@@ -175,65 +171,75 @@ function NewBomModal({
     >
       <div className="grid gap-3 sm:grid-cols-3">
         <SelectField
-          label="① 脚位"
+          label="① 产品品类"
           required
-          error={errors.foot}
-          value={foot}
-          onChange={(event) => setFoot(event.target.value)}
+          error={errors.name}
+          value={name}
+          onChange={(event) => pickCategory(event.target.value)}
         >
           <option value="">请选择</option>
-          {FOOT_OPTIONS.map((item) => (
-            <option key={item}>{item}</option>
+          {BOM_CATEGORIES.map((item) => (
+            <option key={item.name}>{item.name}</option>
           ))}
         </SelectField>
         <TextField
-          label="② 型号 · 触点面"
+          label={
+            category?.name === "旋转开关" ? "② 型号 · 触点面" : "② 型号"
+          }
           required
-          placeholder="如 2-1"
-          error={errors.modelFace}
-          value={modelFace}
-          onChange={(event) => setModelFace(event.target.value)}
+          placeholder={
+            category?.name === "旋转开关"
+              ? "如 2-1"
+              : category?.name === "微动开关"
+                ? "如 KW-4"
+                : category?.name === "跌倒开关"
+                  ? "如 DD-3"
+                  : "请先选择品类"
+          }
+          error={errors.modelCode}
+          value={modelCode}
+          onChange={(event) => setModelCode(event.target.value)}
         />
-        <SelectField
-          label="③ 档位"
-          required
-          error={errors.gear}
-          value={gear}
-          onChange={(event) => setGear(event.target.value)}
-        >
-          <option value="">请选择</option>
-          {GEAR_OPTIONS.map((item) => (
-            <option key={item}>{item}</option>
-          ))}
-        </SelectField>
-        <SelectField
-          label="银点厚度"
-          value={thickness}
-          onChange={(event) => setThickness(event.target.value)}
-        >
-          {["0.2", "0.3"].map((item) => (
-            <option key={item}>{item}</option>
-          ))}
-        </SelectField>
-        <SelectField
-          label="弹簧"
-          value={spring}
-          onChange={(event) => setSpring(event.target.value)}
-        >
-          {["0.5", "0.55", "0.6"].map((item) => (
-            <option key={item}>{item}</option>
-          ))}
-        </SelectField>
+        {category?.fields.map((field) =>
+            field.type === "select" ? (
+              <SelectField
+                key={field.key}
+                label={field.label}
+                required={field.required}
+                error={errors[field.key]}
+                value={values[field.key] ?? ""}
+                onChange={(event) => setValue(field.key, event.target.value)}
+              >
+                <option value="">请选择</option>
+                {field.options?.map((item) => (
+                  <option key={item}>{item}</option>
+                ))}
+              </SelectField>
+            ) : (
+              <TextField
+                key={field.key}
+                label={field.label}
+                required={field.required}
+                placeholder={field.placeholder}
+                error={errors[field.key]}
+                value={values[field.key] ?? ""}
+                onChange={(event) => setValue(field.key, event.target.value)}
+              />
+            ),
+          )}
         <div className="rounded-[12px] border border-line bg-[#fcfcfd] px-3.5 py-3 text-[12.5px] sm:col-span-3">
           <div className="mb-1 font-semibold text-ink">预览</div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted sm:grid-cols-3">
-            <span>
-              规格：{[foot, modelFace].filter(Boolean).join(" ") || "—"}
-            </span>
+            <span>品类：{name || "—"}</span>
             <span className="tnum">BOM 编码：{nextCode}</span>
-            <span>弹簧规格：{spring}</span>
-            <span>银点厚度：{thickness}</span>
-            <span>杆子高度：4.8</span>
+            <span>型号：{modelCode.trim() || "—"}</span>
+            {Object.entries(values)
+              .filter(([, value]) => value && value.trim())
+              .map(([key, value]) => (
+                <span key={key}>
+                  {key}：{value}
+                </span>
+              ))}
           </div>
         </div>
       </div>
@@ -251,19 +257,15 @@ function QuickFindModal({
   onDetail: (bom: Bom) => void;
 }) {
   const { data } = useWbSnapshot();
-  const [foot, setFoot] = useState("");
-  const [gear, setGear] = useState("");
+  const [name, setName] = useState("");
   const [keyword, setKeyword] = useState("");
   const boms = data?.boms ?? [];
   const results = boms
-    .filter(
-      (bom) =>
-        (!foot || bom.seriesLabel === foot) && (!gear || bom.gear === gear),
-    )
+    .filter((bom) => !name || bom.name === name)
     .filter(
       (bom) =>
         !keyword.trim() ||
-        `${bom.code} ${bom.spec}`
+        `${bom.code} ${bom.name} ${bom.spec}`
           .toLowerCase()
           .includes(keyword.trim().toLowerCase()),
     )
@@ -274,7 +276,7 @@ function QuickFindModal({
       open={open}
       onClose={onClose}
       title="快速查找 BOM"
-      subtitle="按特征筛选或关键词搜索"
+      subtitle="按品类筛选或关键词搜索"
       width={560}
       footer={
         <button
@@ -288,33 +290,23 @@ function QuickFindModal({
     >
       <div className="grid gap-3 sm:grid-cols-3">
         <SelectField
-          label="脚位"
-          value={foot}
-          onChange={(event) => setFoot(event.target.value)}
+          label="品类"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
         >
           <option value="">全部</option>
-          {FOOT_OPTIONS.map((item) => (
-            <option key={item}>{item}</option>
+          {BOM_CATEGORIES.map((item) => (
+            <option key={item.name}>{item.name}</option>
           ))}
         </SelectField>
-        <SelectField
-          label="档位"
-          value={gear}
-          onChange={(event) => setGear(event.target.value)}
-        >
-          <option value="">全部</option>
-          {GEAR_OPTIONS.map((item) => (
-            <option key={item}>{item}</option>
-          ))}
-        </SelectField>
-        <label className="block">
+        <label className="block sm:col-span-2">
           <span className="mb-1 block text-[12.5px] font-medium text-[#344054]">
             关键词
           </span>
           <input
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
-            placeholder="编码 / 规格"
+            placeholder="编码 / 型号 / 规格"
             className="w-full rounded-[9px] border border-line-strong px-3 py-2 text-[13px] outline-none focus:border-primary"
           />
         </label>
@@ -332,7 +324,10 @@ function QuickFindModal({
             onClick={() => onDetail(bom)}
             className="rounded-[10px] border border-line px-3 py-2 text-left transition hover:border-primary-border hover:bg-primary-soft/40"
           >
-            <span className="tnum text-[12.5px] font-semibold text-primary-strong">
+            <span className="text-[11.5px] font-medium text-muted">
+              {bom.name}
+            </span>
+            <span className="tnum ml-2 text-[12.5px] font-semibold text-primary-strong">
               {bom.code}
             </span>
             <span className="mt-0.5 block truncate text-[11.5px] text-muted">
@@ -351,6 +346,7 @@ export function BomPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
   const [keyword, setKeyword] = useState("");
+  const [category, setCategory] = useState("全部品类");
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);
   const [newOpen, setNewOpen] = useState(false);
@@ -358,14 +354,25 @@ export function BomPage() {
   const [detail, setDetail] = useState<Bom | null>(null);
 
   const boms = data?.boms ?? [];
+  const categories = useMemo(
+    () => [...new Set(boms.map((bom) => bom.name))],
+    [boms],
+  );
 
   const filtered = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
-    return boms.filter(
-      (bom) =>
-        !kw || `${bom.code} ${bom.modelCode} ${bom.model} ${bom.spec}`.toLowerCase().includes(kw),
-    );
-  }, [boms, keyword]);
+    return boms
+      .filter(
+        (bom) => category === "全部品类" || bom.name === category,
+      )
+      .filter(
+        (bom) =>
+          !kw ||
+          `${bom.code} ${bom.name} ${bom.modelCode} ${bom.spec}`
+            .toLowerCase()
+            .includes(kw),
+      );
+  }, [boms, keyword, category]);
 
   const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
   const canCreate = can("bom:create");
@@ -418,10 +425,24 @@ export function BomPage() {
                   setKeyword(event.target.value);
                   setPage(1);
                 }}
-                placeholder="搜索编码 / 型号 / 规格"
+                placeholder="搜索编码 / 品类 / 型号 / 规格"
                 className="w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-subtle"
               />
             </label>
+            <select
+              value={category}
+              onChange={(event) => {
+                setCategory(event.target.value);
+                setPage(1);
+              }}
+              className="h-10 rounded-[10px] border border-line-strong bg-white px-3 text-[13px] text-ink"
+              aria-label="按品类筛选"
+            >
+              <option>全部品类</option>
+              {categories.map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
           </div>
           <ToolbarMore>
             <Button
@@ -430,6 +451,7 @@ export function BomPage() {
               data-low-priority="true"
               onClick={() => {
                 setKeyword("");
+                setCategory("全部品类");
                 setPage(1);
               }}
             >
@@ -442,12 +464,12 @@ export function BomPage() {
               onClick={() =>
                 downloadCsv(
                   "BOM",
-                  ["序号", "BOM编码", "品名", "型号", "单位", "规格"],
+                  ["序号", "BOM编码", "品类", "型号", "单位", "规格"],
                   pageRows.map((bom, index) => [
                     String((page - 1) * pageSize + index + 1),
                     bom.code,
                     bom.name,
-                    bom.model,
+                    bom.modelCode,
                     bom.unit,
                     bom.spec,
                   ]),
@@ -464,7 +486,7 @@ export function BomPage() {
             {pageRows.map((bom) => (
               <RecordCard
                 key={bom.code}
-                title={`${bom.name} · ${bom.seriesLabel} · ${bom.gear || bom.modelCode}`}
+                title={`${bom.name} · ${bom.modelCode}`}
                 subtitle={bom.code}
                 actions={
                   <Button onClick={() => setDetail(bom)}>查看规格</Button>
@@ -503,7 +525,7 @@ export function BomPage() {
                     className="px-3 py-2.5 font-semibold"
                     style={{ width: "10%" }}
                   >
-                    品名
+                    品类
                   </th>
                   <th
                     className="px-3 py-2.5 font-semibold"
@@ -559,7 +581,7 @@ export function BomPage() {
                     </td>
                     <td className="px-3 py-3">
                       <span className="inline-block rounded-[6px] border border-[#e0e7ff] bg-primary-soft px-1.5 py-0.5 text-[11.5px] font-medium text-primary-strong">
-                        {bom.model}
+                        {bom.modelCode}
                       </span>
                     </td>
                     <td className="px-3 py-3 tnum text-[13px] text-td">1</td>

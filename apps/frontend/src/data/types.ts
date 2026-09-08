@@ -20,18 +20,12 @@ export interface Order {
 }
 
 export interface Bom {
-  code: string;
-  modelCode: string;
-  seriesLabel: string;
-  gear: string;
-  gearSpec: string;
-  gearDir: string;
-  thickness: string;
-  spring: string;
-  spec: string;
+  code: string; // 编码，如 ZMXK001 / ZMKW001 / ZMDD001
+  name: string; // 品类：旋转开关 / 微动开关 / 跌倒开关
+  modelCode: string; // 型号
+  specs: Record<string, string>; // 品类规格键值对（对应库表 spec JSON）
+  spec: string; // 规格摘要（列表/搜索用）
   created: string;
-  name: string;
-  model: string;
   unit: string;
 }
 
