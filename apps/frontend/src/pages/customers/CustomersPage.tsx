@@ -1,19 +1,19 @@
-import { ToolbarMore } from "../../components/ui/ToolbarMore";
-import { ListState, RecordCard } from "../../components/ui/MobileList";
+import { ToolbarMore } from "@/components/ui/ToolbarMore";
+import { ListState, RecordCard } from "@/components/ui/MobileList";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import { Icon } from "../../lib/icons";
-import { downloadCsv } from "../../lib/format";
-import { useApp } from "../../context/AppContext";
-import { PageHeading } from "../../components/ui/PageHeading";
-import { Badge, Button, TableLink } from "../../components/ui/Badge";
-import { Modal } from "../../components/ui/Modal";
-import { CustomerCell } from "../../components/ui/cells";
-import { SelectField, TextArea, TextField } from "../../components/ui/Field";
-import { useCreateCustomer, useWbSnapshot } from "../../data/queries";
-import { store } from "../../data/store";
-import { useToast } from "../../components/ui/Toast";
-import type { Customer } from "../../data/types";
+import { Icon } from "@/lib/icons";
+import { downloadCsv } from "@/lib/format";
+import { useApp } from "@/context/AppContext";
+import { PageHeading } from "@/components/ui/PageHeading";
+import { Badge, Button, TableLink } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
+import { CustomerCell } from "@/components/ui/cells";
+import { SelectField, TextArea, TextField } from "@/components/ui/Field";
+import { useCreateCustomer, useWbSnapshot } from "@/data/queries";
+import { EMPTY_SNAPSHOT } from "@/data/views";
+import { useToast } from "@/components/ui/Toast";
+import type { Customer, Snapshot } from "@/api";
 
 const AVATAR_TONES = [
   "bg-[#ffedd5] text-[#c2410c]",
@@ -172,14 +172,16 @@ function NewCustomerModal({
 
 export function CustomerDetailModal({
   customer,
+  snap,
   onClose,
 }: {
   customer: Customer | null;
+  snap: Snapshot;
   onClose: () => void;
 }) {
   const toast = useToast();
   if (!customer) return null;
-  const orders = store.orders.filter(
+  const orders = snap.orders.filter(
     (order) => order.customerCode === customer.code,
   );
   const pendingQty = orders.reduce(
@@ -320,7 +322,9 @@ export function CustomersPage() {
   const [newOpen, setNewOpen] = useState(false);
   const [detail, setDetail] = useState<Customer | null>(null);
 
-  const customers = data?.customers ?? [];
+  const snap = data ?? EMPTY_SNAPSHOT;
+  const customers = snap.customers;
+  const orders = snap.orders;
 
   const rows = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
@@ -336,26 +340,26 @@ export function CustomersPage() {
         return true;
       })
       .map((customer) => {
-        const orders = store.orders.filter(
+        const own = orders.filter(
           (order) => order.customerCode === customer.code,
         );
-        const pendingQty = orders.reduce(
+        const pendingQty = own.reduce(
           (sum, order) => sum + Math.max(0, order.qty - order.outbound),
           0,
         );
         const lastOrderDate =
-          orders
+          own
             .map((order) => order.orderDate)
             .sort()
             .at(-1) ?? "—";
         return {
           customer,
-          orderCount: orders.length,
+          orderCount: own.length,
           pendingQty,
           lastOrderDate,
         };
       });
-  }, [customers, statusFilter, keyword]);
+  }, [customers, orders, statusFilter, keyword]);
 
   const pageRows = rows.slice((page - 1) * pageSize, page * pageSize);
 
@@ -620,7 +624,7 @@ export function CustomersPage() {
       {canCreate && (
         <NewCustomerModal open={newOpen} onClose={() => setNewOpen(false)} />
       )}
-      <CustomerDetailModal customer={detail} onClose={() => setDetail(null)} />
+      <CustomerDetailModal customer={detail} snap={snap} onClose={() => setDetail(null)} />
     </div>
   );
 }

@@ -1,27 +1,83 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "./api";
+import type { GrantMap, RoleId } from "./permissions";
+import {
+    createBom,
+    createCustomer,
+    createInbound,
+    createOrder,
+    createOutbound,
+    createUser,
+    fetchGrantLog,
+    fetchGrants,
+    fetchSnapshot,
+    saveRoleGrants,
+    setUserActive as setUserActiveReq,
+    updateOrder as updateOrderReq,
+    updateUser as updateUserReq,
+} from "@/api";
 
 export const wbKeys = {
-  all: ["wb"] as const,
+    all: ["wb"] as const,
+    grants: ["roles", "grants"] as const,
+    grantLog: ["roles", "grants", "log"] as const,
 };
 
 export function useWbSnapshot() {
-  return useQuery({ queryKey: wbKeys.all, queryFn: api.fetchSnapshot });
+    return useQuery({ queryKey: wbKeys.all, queryFn: fetchSnapshot });
 }
 
 function useWbMutation<TInput, TOutput>(mutationFn: (input: TInput) => Promise<TOutput>) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: wbKeys.all }),
-  });
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn,
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: wbKeys.all }),
+    });
 }
 
-export const useCreateOrder = () => useWbMutation(api.createOrder.bind(api));
-export const useUpdateOrder = () => useWbMutation(api.updateOrder.bind(api));
-export const useCreateCustomer = () => useWbMutation(api.createCustomer.bind(api));
-export const useCreateBom = () => useWbMutation(api.createBom.bind(api));
-export const useCreateInbound = () => useWbMutation(api.createInbound.bind(api));
-export const useCreateOutbound = () => useWbMutation(api.createOutbound.bind(api));
-export const useUpsertUser = () => useWbMutation(api.upsertUser.bind(api));
-export const useSetUserActive = () => useWbMutation(api.setUserActive.bind(api));
+export const useCreateOrder = () => useWbMutation(createOrder);
+
+/* 页面沿用旧签名 {orderNo, ...变更}，此处拆参适配契约 PUT /orders/:orderNo */
+export const useUpdateOrder = () =>
+    useWbMutation(
+        (input: { orderNo: string; qty?: number; deliverDate?: string; remark?: string; reason?: string }) => {
+            const { orderNo, ...body } = input;
+            return updateOrderReq(orderNo, body);
+        },
+    );
+
+export const useCreateCustomer = () => useWbMutation(createCustomer);
+export const useCreateBom = () => useWbMutation(createBom);
+export const useCreateInbound = () => useWbMutation(createInbound);
+export const useCreateOutbound = () => useWbMutation(createOutbound);
+export const useCreateUser = () => useWbMutation(createUser);
+
+export const useUpdateUser = () =>
+    useWbMutation((input: { account: string; name: string; role: RoleId }) => updateUserReq(input.account, input));
+
+export const useSetUserActive = () =>
+    useWbMutation((input: { account: string; active: boolean }) => setUserActiveReq(input.account, input.active));
+
+/* ---- 用户与权限 ---- */
+
+export function useGrants() {
+    return useQuery({ queryKey: wbKeys.grants, queryFn: fetchGrants });
+}
+
+export function useGrantLog() {
+    return useQuery({ queryKey: wbKeys.grantLog, queryFn: fetchGrantLog });
+}
+
+/** 保存单角色授权：成功后同时失效聚合快照与授权日志 */
+export function useSaveGrants() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (input: { roleId: RoleId; grant: GrantMap[RoleId]; note: string }) =>
+            saveRoleGrants(input.roleId, input),
+        onSuccess: (_data, variables) => {
+            queryClient.invalidateQueries({ queryKey: wbKeys.grants });
+            queryClient.invalidateQueries({ queryKey: wbKeys.grantLog });
+            queryClient.invalidateQueries({ queryKey: wbKeys.all });
+            void variables; // roleId：如影响当前登录角色，调用方负责 refreshProfile
+        },
+    });
+}

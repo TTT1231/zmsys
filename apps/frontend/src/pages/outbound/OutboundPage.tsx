@@ -1,22 +1,26 @@
-import { ToolbarMore } from "../../components/ui/ToolbarMore";
-import { ListState, RecordCard } from "../../components/ui/MobileList";
+import { ToolbarMore } from "@/components/ui/ToolbarMore";
+import { ListState, RecordCard } from "@/components/ui/MobileList";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import { Icon } from "../../lib/icons";
-import { downloadCsv, num } from "../../lib/format";
-import { useApp } from "../../context/AppContext";
-import { PageHeading } from "../../components/ui/PageHeading";
-import { Button } from "../../components/ui/Badge";
-import { Pagination } from "../../components/ui/Pagination";
-import { Modal } from "../../components/ui/Modal";
-import { CustomerCell, QtyCell } from "../../components/ui/cells";
-import { DateField, TextArea, TextField } from "../../components/ui/Field";
-import { useCreateOutbound, useWbSnapshot } from "../../data/queries";
-import { maxShipOf, store } from "../../data/store";
-import { useToast } from "../../components/ui/Toast";
-import type { OutboundRow } from "../../data/types";
-
-const OPERATORS = ["王师傅", "周丽", "赵师傅"];
+import { Icon } from "@/lib/icons";
+import { downloadCsv, num } from "@/lib/format";
+import { useApp } from "@/context/AppContext";
+import { PageHeading } from "@/components/ui/PageHeading";
+import { Button } from "@/components/ui/Badge";
+import { Pagination } from "@/components/ui/Pagination";
+import { Modal } from "@/components/ui/Modal";
+import { CustomerCell, QtyCell } from "@/components/ui/cells";
+import { DateField, TextArea, TextField } from "@/components/ui/Field";
+import { useCreateOutbound, useWbSnapshot } from "@/data/queries";
+import {
+  EMPTY_SNAPSHOT,
+  bomByCode,
+  maxShipOf,
+  remainingOf,
+} from "@/data/views";
+import { todayIso } from "@/lib/date";
+import { useToast } from "@/components/ui/Toast";
+import type { OutboundRow, Snapshot } from "@/api";
 
 const escapeHtml = (value: string) =>
   value.replace(
@@ -32,8 +36,8 @@ const escapeHtml = (value: string) =>
   );
 
 /* 新窗口渲染出库单据并调起打印；打印窗口保留，便于另存 PDF */
-function printOutbound(row: OutboundRow) {
-  const bom = store.bomByCode(row.bomCode);
+function printOutbound(row: OutboundRow, snap: Snapshot) {
+  const bom = bomByCode(snap, row.bomCode);
   const win = window.open("", "_blank", "width=760,height=640");
   if (!win) return;
   win.document.title = `出库单 ${row.no}`;
@@ -77,20 +81,30 @@ export function OutboundModal({
   initialOrderNo?: string;
 }) {
   const { data } = useWbSnapshot();
+  const { user } = useApp();
+  const snap = data ?? EMPTY_SNAPSHOT;
   const createOutbound = useCreateOutbound();
   const toast = useToast();
   const [orderKeyword, setOrderKeyword] = useState("");
   const [orderNo, setOrderNo] = useState(initialOrderNo);
   const [qty, setQty] = useState("");
-  const [date, setDate] = useState("2026-09-07");
-  const [operator, setOperator] = useState(OPERATORS[1]);
+  const [date, setDate] = useState(todayIso);
+  const [operator, setOperator] = useState("");
   const [remark, setRemark] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const stock = data?.stock ?? {};
-  const orders = data?.orders ?? [];
+  // 操作人 = 在职仓管；默认当前登录用户（仓管），否则首个可用
+  const operators = snap.users
+    .filter((item) => item.role === "warehouse" && item.active)
+    .map((item) => item.name);
+  const effectiveOperator = operators.includes(operator)
+    ? operator
+    : (operators.includes(user?.name ?? "") ? user!.name : (operators[0] ?? ""));
+
+  const stock = snap.stock;
+  const orders = snap.orders;
   const orderOptions = orders
-    .filter((order) => maxShipOf(order.orderNo) > 0)
+    .filter((order) => maxShipOf(snap, order.orderNo) > 0)
     .filter(
       (order) =>
         !orderKeyword.trim() ||
@@ -101,10 +115,10 @@ export function OutboundModal({
     .slice(0, 8);
 
   const selectedOrder = orders.find((order) => order.orderNo === orderNo);
-  const remaining = selectedOrder ? store.remainingOf(selectedOrder) : 0;
+  const remaining = selectedOrder ? remainingOf(selectedOrder) : 0;
   const shipped = selectedOrder?.outbound ?? 0;
   const shareStock = selectedOrder ? stock[selectedOrder.bomCode] || 0 : 0;
-  const maxShip = selectedOrder ? maxShipOf(selectedOrder.orderNo) : 0;
+  const maxShip = selectedOrder ? maxShipOf(snap, selectedOrder.orderNo) : 0;
   const inputQty = Number(qty) || 0;
   const over = selectedOrder ? inputQty > maxShip : false;
 
@@ -112,8 +126,8 @@ export function OutboundModal({
     setOrderKeyword("");
     setOrderNo("");
     setQty("");
-    setDate("2026-09-07");
-    setOperator(OPERATORS[1]);
+    setDate(todayIso());
+    setOperator("");
     setRemark("");
     setErrors({});
   };
@@ -138,7 +152,7 @@ export function OutboundModal({
         orderNo: selectedOrder.orderNo,
         qty: Number(qty),
         date,
-        operator,
+        operator: effectiveOperator,
         remark,
       },
       {
@@ -200,7 +214,7 @@ export function OutboundModal({
                   </p>
                 )}
                 {orderOptions.map((order) => {
-                  const shipMax = maxShipOf(order.orderNo);
+                  const shipMax = maxShipOf(snap, order.orderNo);
                   return (
                     <button
                       key={order.orderNo}
@@ -235,7 +249,7 @@ export function OutboundModal({
                 {selectedOrder.bomCode}
               </span>
               <p className="mt-1 text-[13px] text-muted">
-                {store.bomByCode(selectedOrder.bomCode)?.spec}
+                {bomByCode(snap, selectedOrder.bomCode)?.spec}
               </p>
             </div>
           )}
@@ -306,13 +320,13 @@ export function OutboundModal({
             操作人
           </span>
           <div className="flex gap-1.5">
-            {OPERATORS.map((item) => (
+            {operators.map((item) => (
               <button
                 key={item}
                 type="button"
                 onClick={() => setOperator(item)}
                 className={`h-9 rounded-full border px-3.5 text-[12.5px] font-medium transition ${
-                  operator === item
+                  effectiveOperator === item
                     ? "border-primary bg-primary-soft text-primary-strong"
                     : "border-line bg-white text-muted hover:border-primary-border"
                 }`}
@@ -337,13 +351,15 @@ export function OutboundModal({
 
 function OutboundDetailModal({
   row,
+  snap,
   onClose,
 }: {
   row: OutboundRow | null;
+  snap: Snapshot;
   onClose: () => void;
 }) {
   if (!row) return null;
-  const bom = store.bomByCode(row.bomCode);
+  const bom = bomByCode(snap, row.bomCode);
   return (
     <Modal
       open={!!row}
@@ -390,6 +406,7 @@ function OutboundDetailModal({
 export function OutboundPage() {
   const { can } = useApp();
   const { data, isLoading } = useWbSnapshot();
+  const snap = data ?? EMPTY_SNAPSHOT;
   const [searchParams, setSearchParams] = useSearchParams();
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState("全部品类");
@@ -398,8 +415,8 @@ export function OutboundPage() {
   const [newOpen, setNewOpen] = useState(false);
   const [detail, setDetail] = useState<OutboundRow | null>(null);
 
-  const rows = data?.outboundLedger ?? [];
-  const boms = data?.boms ?? [];
+  const rows = snap.outboundLedger;
+  const boms = snap.boms;
   const bomCategory = new Map(boms.map((bom) => [bom.code, bom.name]));
   const categories = [...new Set(boms.map((bom) => bom.name))];
 
@@ -619,7 +636,7 @@ export function OutboundPage() {
                         {canPrint && (
                           <button
                             type="button"
-                            onClick={() => printOutbound(row)}
+                            onClick={() => printOutbound(row, snap)}
                             className="text-[13px] font-medium text-primary-strong underline-offset-2 hover:underline"
                           >
                             打印
@@ -648,7 +665,7 @@ export function OutboundPage() {
       {canRegister && (
         <OutboundModal open={newOpen} onClose={() => setNewOpen(false)} />
       )}
-      <OutboundDetailModal row={detail} onClose={() => setDetail(null)} />
+      <OutboundDetailModal row={detail} snap={snap} onClose={() => setDetail(null)} />
     </div>
   );
 }

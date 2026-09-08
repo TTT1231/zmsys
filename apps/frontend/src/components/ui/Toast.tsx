@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
-import { Icon } from "../../lib/icons";
+import { Icon } from "@/lib/icons";
 
 interface ToastItem {
   id: number;

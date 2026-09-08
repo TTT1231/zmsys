@@ -1,54 +1,42 @@
-import { lazy, Suspense, useState, useSyncExternalStore } from "react";
-import { Navigate, useNavigate, useParams } from "react-router";
-import { type Role } from "../../context/AppContext";
+import { lazy, Suspense, useState } from "react";
+import { useNavigate } from "react-router";
+import { useApp } from "@/context/AppContext";
 import {
-  can as canPerm,
-  getGrants,
-  grantFor,
-  ROLE_IDS,
-  subscribeGrants,
-} from "../../data/permissions";
-import {
-  ANCHOR,
+  EMPTY_SNAPSHOT,
   dailyTrend,
   readyToShip,
   stockGapList,
-  store,
-} from "../../data/store";
-import { useWbSnapshot } from "../../data/queries";
-import { num } from "../../lib/format";
-import { Icon } from "../../lib/icons";
-import { Button } from "../../components/ui/Badge";
+} from "@/data/views";
+import { useWbSnapshot } from "@/data/queries";
+import { num } from "@/lib/format";
+import { todayIso } from "@/lib/date";
+import { Icon } from "@/lib/icons";
+import { Button } from "@/components/ui/Badge";
 import {
   OrderTaskCard,
   ListState,
   RecordCard,
-} from "../../components/ui/MobileList";
+} from "@/components/ui/MobileList";
 const EChart = lazy(() =>
-  import("../../components/charts/EChart").then((module) => ({
+  import("@/components/charts/EChart").then((module) => ({
     default: module.EChart,
   })),
 );
-import { buildDailyTrendOption } from "../../components/charts/options";
-import { InboundModal } from "../inbound/InboundPage";
-import { OutboundModal } from "../outbound/OutboundPage";
-import { OrderDetailModal } from "../orders/OrdersPage";
+import { buildDailyTrendOption } from "@/components/charts/options";
+import { InboundModal } from "@/pages/inbound/InboundPage";
+import { OutboundModal } from "@/pages/outbound/OutboundPage";
+import { OrderDetailModal } from "@/pages/orders/OrdersPage";
 import { LedgerDialog } from "./dialogs";
 
 type TaskFilter = "priority" | "ready" | "gap" | "all";
 
 export function WorkbenchPage() {
-  const { role } = useParams();
-  return <WorkbenchContent key={role} />;
-}
-
-function WorkbenchContent() {
-  const params = useParams();
   const navigate = useNavigate();
+  const { role, can } = useApp();
   const { data, isLoading } = useWbSnapshot();
-  const role = params.role as Role;
+  const snap = data ?? EMPTY_SNAPSHOT;
   const [filter, setFilter] = useState<TaskFilter>(() =>
-    params.role === "warehouse" ? "ready" : "priority",
+    role === "warehouse" ? "ready" : "priority",
   );
   const [limit, setLimit] = useState(5);
   const [ship, setShip] = useState<string | null>(null);
@@ -59,31 +47,28 @@ function WorkbenchContent() {
   const [showTrend, setShowTrend] = useState(
     () => window.matchMedia("(min-width: 1024px)").matches,
   );
-  // 工作台按钮按 URL 角色的授权判断（演示式角色切换，无登录）
-  const grants = useSyncExternalStore(subscribeGrants, getGrants);
-  if (!ROLE_IDS.includes(role))
-    return <Navigate to="/workbench/admin" replace />;
-  const grant = grantFor(grants, role);
-  const canRegister = canPerm(grant, "outbound:ship");
-  const canInbound = canPerm(grant, "inbound:register");
-  const canCreateOrder = canPerm(grant, "orders:create");
-  const orders = data?.orders ?? [];
-  const rows = readyToShip();
+  // 工作台按钮按登录角色的授权判断
+  const canRegister = can("outbound:ship");
+  const canInbound = can("inbound:register");
+  const canCreateOrder = can("orders:create");
+  const orders = snap.orders;
+  const rows = readyToShip(snap);
   const ready = rows.filter((row) => row.maxShip > 0);
   const priority = rows.filter(
     (row) => row.overdue || row.maxShip < row.remaining,
   );
-  const gaps = stockGapList();
+  const gaps = stockGapList(snap);
   const tasks =
     filter === "ready" ? ready : filter === "priority" ? priority : rows;
-  const recentIn = [...(data?.inboundLedger ?? [])].sort((a, b) =>
+  const recentIn = [...snap.inboundLedger].sort((a, b) =>
     b.no.localeCompare(a.no),
   );
-  const recentOut = [...(data?.outboundLedger ?? [])].sort((a, b) =>
+  const recentOut = [...snap.outboundLedger].sort((a, b) =>
     b.no.localeCompare(a.no),
   );
-  const todayIn = recentIn.filter((row) => row.date === ANCHOR);
-  const todayOut = recentOut.filter((row) => row.date === ANCHOR);
+  const anchor = todayIso();
+  const todayIn = recentIn.filter((row) => row.date === anchor);
+  const todayOut = recentOut.filter((row) => row.date === anchor);
   const pickFilter = (next: TaskFilter) => {
     setFilter(next);
     setLimit(5);
@@ -93,7 +78,7 @@ function WorkbenchContent() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="hidden text-[13px] text-muted lg:block">
-            {ANCHOR} · 今日工作
+            {anchor} · 今日工作
           </p>
           <h1 className="text-[24px] font-bold tracking-tight lg:text-[30px]">
             {role === "warehouse"
@@ -188,7 +173,7 @@ function WorkbenchContent() {
                   <RecordCard
                     key={gap.bomCode}
                     title={
-                      store.bomByCode(gap.bomCode)?.name || gap.bomCode
+                      snap.boms.find((bom) => bom.code === gap.bomCode)?.name || gap.bomCode
                     }
                     subtitle={gap.bomCode}
                     badge={
@@ -216,7 +201,7 @@ function WorkbenchContent() {
                       </>
                     }
                   >
-                    <p>{store.bomByCode(gap.bomCode)?.spec}</p>
+                    <p>{snap.boms.find((bom) => bom.code === gap.bomCode)?.spec}</p>
                     <p className="mt-2 text-[13px] text-muted">
                       影响 {gap.orderCount} 张订单 · 最早交期 {gap.earliestDate}
                     </p>
@@ -239,6 +224,7 @@ function WorkbenchContent() {
                       <OrderTaskCard
                         key={row.orderNo}
                         order={order}
+                        snap={snap}
                         onDetail={() => setDetailNo(row.orderNo)}
                         onShip={
                           canRegister ? () => setShip(row.orderNo) : undefined
@@ -364,7 +350,7 @@ function WorkbenchContent() {
                   }
                 >
                   <EChart
-                    option={buildDailyTrendOption(dailyTrend(days))}
+                    option={buildDailyTrendOption(dailyTrend(snap, days))}
                     height={260}
                   />
                 </Suspense>
@@ -389,6 +375,7 @@ function WorkbenchContent() {
       )}
       <OrderDetailModal
         order={orders.find((order) => order.orderNo === detailNo) ?? null}
+        snap={snap}
         onClose={() => setDetailNo(null)}
         onShip={
           canRegister
@@ -402,6 +389,7 @@ function WorkbenchContent() {
       <LedgerDialog
         open={ledger !== null}
         kind={ledger ?? "inbound"}
+        snap={snap}
         onClose={() => setLedger(null)}
       />
     </div>

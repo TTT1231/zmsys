@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { Icon } from "../../lib/icons";
-import type { StatusKey } from "../../data/types";
+import { Icon } from "@/lib/icons";
+import type { StatusKey } from "@/api";
 
 /* 状态徽章：配色沿用 saas-theme.css 的 status token */
 const STATUS_STYLES: Record<string, string> = {

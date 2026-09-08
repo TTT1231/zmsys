@@ -1,28 +1,27 @@
-import { ToolbarMore } from "../../components/ui/ToolbarMore";
-import { ListState, RecordCard } from "../../components/ui/MobileList";
-import { SearchSelect } from "../../components/ui/SearchSelect";
+import { ToolbarMore } from "@/components/ui/ToolbarMore";
+import { ListState, RecordCard } from "@/components/ui/MobileList";
+import { SearchSelect } from "@/components/ui/SearchSelect";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import { Icon } from "../../lib/icons";
-import { downloadCsv, num } from "../../lib/format";
-import { useApp } from "../../context/AppContext";
-import { PageHeading } from "../../components/ui/PageHeading";
-import { Button } from "../../components/ui/Badge";
-import { Pagination } from "../../components/ui/Pagination";
-import { Modal } from "../../components/ui/Modal";
-import { QtyCell } from "../../components/ui/cells";
+import { Icon } from "@/lib/icons";
+import { downloadCsv, num } from "@/lib/format";
+import { useApp } from "@/context/AppContext";
+import { PageHeading } from "@/components/ui/PageHeading";
+import { Button } from "@/components/ui/Badge";
+import { Pagination } from "@/components/ui/Pagination";
+import { Modal } from "@/components/ui/Modal";
+import { QtyCell } from "@/components/ui/cells";
 import {
   DateField,
   SelectField,
   TextArea,
   TextField,
-} from "../../components/ui/Field";
-import { useCreateInbound, useWbSnapshot } from "../../data/queries";
-import { store } from "../../data/store";
-import { useToast } from "../../components/ui/Toast";
-import type { InboundRow } from "../../data/types";
-
-const INSPECTORS = ["王师傅", "赵师傅", "周丽"];
+} from "@/components/ui/Field";
+import { useCreateInbound, useWbSnapshot } from "@/data/queries";
+import { EMPTY_SNAPSHOT, bomByCode } from "@/data/views";
+import { todayIso } from "@/lib/date";
+import { useToast } from "@/components/ui/Toast";
+import type { InboundRow, Snapshot } from "@/api";
 
 export function InboundModal({
   open,
@@ -34,17 +33,28 @@ export function InboundModal({
   initialBomCode?: string;
 }) {
   const { data } = useWbSnapshot();
+  const snap = data ?? EMPTY_SNAPSHOT;
   const createInbound = useCreateInbound();
   const toast = useToast();
-  const boms = data?.boms ?? [];
-  const stock = data?.stock ?? {};
+  const boms = snap.boms;
+  const stock = snap.stock;
+
+  // 检验登记人 = 在职仓管（后端用户数据）
+  const inspectors = snap.users
+    .filter((user) => user.role === "warehouse" && user.active)
+    .map((user) => user.name);
 
   const [bomCode, setBomCode] = useState(initialBomCode);
   const [qty, setQty] = useState("");
-  const [date, setDate] = useState("2026-09-07");
-  const [inspector, setInspector] = useState(INSPECTORS[0]);
+  const [date, setDate] = useState(todayIso);
+  const [inspector, setInspector] = useState("");
   const [remark, setRemark] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // 用户列表异步到达前 inspector 可能为空，落在首个可用登记人
+  const effectiveInspector = inspectors.includes(inspector)
+    ? inspector
+    : (inspectors[0] ?? "");
 
   const selectedBom = boms.find((bom) => bom.code === bomCode);
   const currentStock = stock[bomCode] || 0;
@@ -53,8 +63,8 @@ export function InboundModal({
   const reset = () => {
     setBomCode("");
     setQty("");
-    setDate("2026-09-07");
-    setInspector(INSPECTORS[0]);
+    setDate(todayIso());
+    setInspector("");
     setRemark("");
     setErrors({});
   };
@@ -74,7 +84,7 @@ export function InboundModal({
       );
     if (Object.keys(nextErrors).length > 0) return;
     createInbound.mutate(
-      { bomCode, qty: Number(qty), date, inspector, remark },
+      { bomCode, qty: Number(qty), date, inspector: effectiveInspector, remark },
       {
         onError: (error) => toast(error.message, true),
         onSuccess: (row) => {
@@ -145,10 +155,10 @@ export function InboundModal({
         />
         <SelectField
           label="检验登记人"
-          value={inspector}
+          value={effectiveInspector}
           onChange={(event) => setInspector(event.target.value)}
         >
-          {INSPECTORS.map((item) => (
+          {inspectors.map((item) => (
             <option key={item}>{item}</option>
           ))}
         </SelectField>
@@ -177,13 +187,15 @@ export function InboundModal({
 
 function VoucherModal({
   row,
+  snap,
   onClose,
 }: {
   row: InboundRow | null;
+  snap: Snapshot;
   onClose: () => void;
 }) {
   if (!row) return null;
-  const bom = store.bomByCode(row.bomCode);
+  const bom = bomByCode(snap, row.bomCode);
   return (
     <Modal
       open={!!row}
@@ -229,6 +241,7 @@ function VoucherModal({
 export function InboundPage() {
   const { can } = useApp();
   const { data, isLoading } = useWbSnapshot();
+  const snap = data ?? EMPTY_SNAPSHOT;
   const [searchParams, setSearchParams] = useSearchParams();
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState("全部品类");
@@ -237,8 +250,8 @@ export function InboundPage() {
   const [newOpen, setNewOpen] = useState(false);
   const [voucher, setVoucher] = useState<InboundRow | null>(null);
 
-  const rows = data?.inboundLedger ?? [];
-  const boms = data?.boms ?? [];
+  const rows = snap.inboundLedger;
+  const boms = snap.boms;
   const bomCategory = new Map(boms.map((bom) => [bom.code, bom.name]));
   const categories = [...new Set(boms.map((bom) => bom.name))];
 
@@ -376,7 +389,7 @@ export function InboundPage() {
                   </Button>
                 }
               >
-                <p>{store.bomByCode(row.bomCode)?.spec}</p>
+                <p>{bomByCode(snap, row.bomCode)?.spec}</p>
                 <p className="mt-2 text-[13px] text-muted">
                   登记人 {row.inspector}
                 </p>
@@ -464,7 +477,7 @@ export function InboundPage() {
       {canRegister && (
         <InboundModal open={newOpen} onClose={() => setNewOpen(false)} />
       )}
-      <VoucherModal row={voucher} onClose={() => setVoucher(null)} />
+      <VoucherModal row={voucher} snap={snap} onClose={() => setVoucher(null)} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
-import { Icon } from "../../lib/icons";
-import { num } from "../../lib/format";
-import { Badge, TableLink } from "../ui/Badge";
+import { Icon } from "@/lib/icons";
+import { num } from "@/lib/format";
+import { Badge, TableLink } from "@/components/ui/Badge";
 
 /* 表格单元格：客户/单号双行 */
 export function CustomerCell({ name, sub, onClick }: { name: string; sub?: string; onClick?: () => void }) {

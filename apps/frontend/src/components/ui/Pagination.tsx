@@ -1,5 +1,5 @@
-import { Icon } from "../../lib/icons";
-import { num } from "../../lib/format";
+import { Icon } from "@/lib/icons";
+import { num } from "@/lib/format";
 
 interface PaginationProps {
   page: number;

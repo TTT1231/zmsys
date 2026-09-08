@@ -1,37 +1,44 @@
-import { ToolbarMore } from "../../components/ui/ToolbarMore";
-import { SearchSelect } from "../../components/ui/SearchSelect";
-import { ListState, OrderTaskCard } from "../../components/ui/MobileList";
-import { OutboundModal } from "../outbound/OutboundPage";
+import { ToolbarMore } from "@/components/ui/ToolbarMore";
+import { SearchSelect } from "@/components/ui/SearchSelect";
+import { ListState, OrderTaskCard } from "@/components/ui/MobileList";
+import { OutboundModal } from "@/pages/outbound/OutboundPage";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
-import { Icon } from "../../lib/icons";
-import { downloadCsv, num } from "../../lib/format";
-import { useApp } from "../../context/AppContext";
-import { PageHeading } from "../../components/ui/PageHeading";
+import { Icon } from "@/lib/icons";
+import { downloadCsv, num } from "@/lib/format";
+import { useApp } from "@/context/AppContext";
+import { PageHeading } from "@/components/ui/PageHeading";
 import {
   Button,
   ProgressTrack,
   StatusBadge,
   TableLink,
-} from "../../components/ui/Badge";
-import { Pagination } from "../../components/ui/Pagination";
-import { Modal } from "../../components/ui/Modal";
-import { CustomerCell, DateCell, QtyCell } from "../../components/ui/cells";
+} from "@/components/ui/Badge";
+import { Pagination } from "@/components/ui/Pagination";
+import { Modal } from "@/components/ui/Modal";
+import { CustomerCell, DateCell, QtyCell } from "@/components/ui/cells";
 import {
   Field,
   SelectField,
   TextArea,
   TextField,
   DateField,
-} from "../../components/ui/Field";
+} from "@/components/ui/Field";
 import {
   useCreateOrder,
   useUpdateOrder,
   useWbSnapshot,
-} from "../../data/queries";
-import { maxShipOf, store } from "../../data/store";
-import { useToast } from "../../components/ui/Toast";
-import type { Order } from "../../data/types";
+} from "@/data/queries";
+import {
+  EMPTY_SNAPSHOT,
+  bomByCode,
+  maxShipOf,
+  orderStatusOf,
+  remainingOf,
+} from "@/data/views";
+import { todayIso } from "@/lib/date";
+import { useToast } from "@/components/ui/Toast";
+import type { Order, Snapshot } from "@/api";
 
 const STATUS_OPTIONS = ["全部状态", "待备货", "可发货", "部分发货", "已完成"];
 
@@ -51,7 +58,7 @@ function NewOrderModal({
 
   const [customerCode, setCustomerCode] = useState("");
   const [qty, setQty] = useState("");
-  const [orderDate, setOrderDate] = useState("2026-09-07");
+  const [orderDate, setOrderDate] = useState(todayIso);
   const [deliverStart, setDeliverStart] = useState("");
   const [deliverEnd, setDeliverEnd] = useState("");
   const [category, setCategory] = useState("");
@@ -72,7 +79,7 @@ function NewOrderModal({
   const reset = () => {
     setCustomerCode("");
     setQty("");
-    setOrderDate("2026-09-07");
+    setOrderDate(todayIso());
     setDeliverStart("");
     setDeliverEnd("");
     setCategory("");
@@ -378,18 +385,20 @@ function EditOrderModal({
 /* 订单详情弹窗 */
 export function OrderDetailModal({
   order,
+  snap,
   onClose,
   onShip,
 }: {
   order: Order | null;
+  snap: Snapshot;
   onClose: () => void;
   onShip?: () => void;
 }) {
   if (!order) return null;
-  const bom = store.bomByCode(order.bomCode);
-  const status = store.orderStatusOf(order);
-  const remaining = store.remainingOf(order);
-  const shipments = store.outboundLedger.filter(
+  const bom = bomByCode(snap, order.bomCode);
+  const status = orderStatusOf(snap, order);
+  const remaining = remainingOf(order);
+  const shipments = snap.outboundLedger.filter(
     (row) => row.orderNo === order.orderNo,
   );
   return (
@@ -402,7 +411,7 @@ export function OrderDetailModal({
       width={560}
       footer={
         <>
-          {onShip && maxShipOf(order.orderNo) > 0 && (
+          {onShip && maxShipOf(snap, order.orderNo) > 0 && (
             <Button icon="truck" onClick={onShip}>
               登记发货
             </Button>
@@ -462,7 +471,7 @@ export function OrderDetailModal({
               "交货日期",
               <span key="dd" className="tnum text-td">
                 {order.deliverDate}
-                {remaining > 0 && order.deliverDate < "2026-09-07"
+                {remaining > 0 && order.deliverDate < todayIso()
                   ? "（已逾期）"
                   : ""}
               </span>,
@@ -516,6 +525,7 @@ export function OrderDetailModal({
 export function OrdersPage() {
   const { role, can } = useApp();
   const { data, isLoading } = useWbSnapshot();
+  const snap = data ?? EMPTY_SNAPSHOT;
   const [searchParams, setSearchParams] = useSearchParams();
   const [statusFilter, setStatusFilter] = useState("全部状态");
   const [keyword, setKeyword] = useState(searchParams.get("q") ?? "");
@@ -532,24 +542,24 @@ export function OrdersPage() {
   const [detail, setDetail] = useState<Order | null>(null);
   const [editing, setEditing] = useState<Order | null>(null);
 
-  const orders = data?.orders ?? [];
-  const boms = data?.boms ?? [];
+  const orders = snap.orders;
+  const boms = snap.boms;
   const bomCategory = new Map(boms.map((bom) => [bom.code, bom.name]));
   const categories = [...new Set(boms.map((bom) => bom.name))];
   const counts = {
     total: orders.length,
     unfinished: orders.filter((order) => order.qty - order.outbound > 0).length,
-    ready: orders.filter((order) => maxShipOf(order.orderNo) > 0).length,
+    ready: orders.filter((order) => maxShipOf(snap, order.orderNo) > 0).length,
   };
 
   const filtered = (() => {
     const kw = keyword.trim().toLowerCase();
     const rows = orders.filter((order) => {
       if (taskFilter === "pending" && order.qty <= order.outbound) return false;
-      if (taskFilter === "ready" && maxShipOf(order.orderNo) <= 0) return false;
+      if (taskFilter === "ready" && maxShipOf(snap, order.orderNo) <= 0) return false;
       if (
         statusFilter !== "全部状态" &&
-        store.orderStatusOf(order).label !== statusFilter
+        orderStatusOf(snap, order).label !== statusFilter
       )
         return false;
       if (
@@ -560,7 +570,7 @@ export function OrdersPage() {
       if (dateStart && order.deliverDate < dateStart) return false;
       if (dateEnd && order.deliverDate > dateEnd) return false;
       if (kw) {
-        const bom = store.bomByCode(order.bomCode);
+        const bom = bomByCode(snap, order.bomCode);
         const text =
           `${order.orderNo} ${order.customer} ${order.customerCode} ${order.bomCode} ${bom?.spec}`.toLowerCase();
         if (!text.includes(kw)) return false;
@@ -759,7 +769,7 @@ export function OrdersPage() {
                     String(order.qty),
                     order.deliverDate,
                     String(order.outbound),
-                    store.orderStatusOf(order).label,
+                    orderStatusOf(snap, order).label,
                   ]),
                 )
               }
@@ -775,6 +785,7 @@ export function OrdersPage() {
               <OrderTaskCard
                 key={order.orderNo}
                 order={order}
+                snap={snap}
                 onDetail={() => setDetail(order)}
                 onEdit={canEdit ? () => setEditing(order) : undefined}
                 onShip={
@@ -869,9 +880,9 @@ export function OrdersPage() {
                   </tr>
                 )}
                 {pageRows.map((order) => {
-                  const bom = store.bomByCode(order.bomCode);
-                  const status = store.orderStatusOf(order);
-                  const remaining = store.remainingOf(order);
+                  const bom = bomByCode(snap, order.bomCode);
+                  const status = orderStatusOf(snap, order);
+                  const remaining = remainingOf(order);
                   const done = remaining === 0;
                   return (
                     <tr
@@ -910,7 +921,7 @@ export function OrdersPage() {
                       <td className="px-3 py-4">
                         <DateCell
                           date={order.deliverDate}
-                          overdue={order.deliverDate < "2026-09-07" && !done}
+                          overdue={order.deliverDate < todayIso() && !done}
                         />
                       </td>
                       <td className="px-3 py-4">
@@ -943,7 +954,7 @@ export function OrdersPage() {
                           <TableLink onClick={() => setDetail(order)}>
                             查看详情
                           </TableLink>
-                          {canShip && maxShipOf(order.orderNo) > 0 && (
+                          {canShip && maxShipOf(snap, order.orderNo) > 0 && (
                             <TableLink onClick={() => setShip(order.orderNo)}>
                               登记发货
                             </TableLink>
@@ -994,6 +1005,7 @@ export function OrdersPage() {
             ? (orders.find((order) => order.orderNo === detail.orderNo) ?? null)
             : null
         }
+        snap={snap}
         onClose={() => setDetail(null)}
         onShip={
           canShip

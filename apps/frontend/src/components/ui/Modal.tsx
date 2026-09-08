@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
-import { Icon } from "../../lib/icons";
+import { Icon } from "@/lib/icons";
 
 interface ModalProps {
   open: boolean;

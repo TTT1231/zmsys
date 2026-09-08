@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router";
-import { Icon } from "../../lib/icons";
-import { useApp, ROLE_META, type Role } from "../../context/AppContext";
-import { buildNavSections, type NavItem } from "../../data/permissions";
-import { NoteDialog } from "../../pages/workbench/dialogs";
+import { NavLink, useNavigate } from "react-router";
+import { Icon } from "@/lib/icons";
+import { useApp, ROLE_META } from "@/context/AppContext";
+import { buildNavSections, type NavItem } from "@/data/permissions";
+import { NoteDialog } from "@/components/ui/NoteDialog";
 
-/* 侧边栏导航：由「角色 + 授权」生成（见 data/permissions.ts） */
+/* 侧边栏导航：由「登录用户角色 + 授权」生成（见 data/permissions.ts） */
 function useNavSections(): Array<{ group: string; items: NavItem[] }> {
   const { role, grant } = useApp();
   return buildNavSections(role, grant);
@@ -24,7 +24,6 @@ export function Sidebar({
   open,
   onClose,
 }: SidebarProps) {
-  const navigate = useNavigate();
   const [desktop, setDesktop] = useState(
     () => window.matchMedia("(min-width: 1024px)").matches,
   );
@@ -34,9 +33,6 @@ export function Sidebar({
     query.addEventListener("change", update);
     return () => query.removeEventListener("change", update);
   }, []);
-  const location = useLocation();
-  const { role } = useApp();
-  const isWorkbench = location.pathname.startsWith("/workbench");
   const sections = useNavSections();
   const [note, setNote] = useState<{
     title: string;
@@ -75,56 +71,14 @@ export function Sidebar({
                 <span className="block truncate text-[14.5px] font-semibold text-white">
                   智造管理系统
                 </span>
-                {isWorkbench && (
-                  <span className="block text-[10px] tracking-[0.14em] text-[#aeb8c8] uppercase">
-                    Z · M Manager
-                  </span>
-                )}
               </span>
             )}
           </div>
         </div>
 
-        {isWorkbench && !collapsed && (
-          <div className="mx-3 mb-3 rounded-[12px] border border-white/10 bg-white/[.06] px-3 py-2.5">
-            <div className="text-[10.5px] tracking-[0.06em] text-[#aeb8c8]">
-              当前角色工作区
-            </div>
-            <div className="mt-1 flex items-center gap-1.5 text-[13px] font-semibold text-white">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#818cf8]" />
-              {ROLE_META[role].roleName}
-            </div>
-          </div>
-        )}
-
-        <div className="px-4 pb-3 lg:hidden">
-          <label className="text-[12px] text-white">
-            角色工作区
-            <select
-              aria-label="切换角色"
-              value={role}
-              onChange={(event) => {
-                navigate(`/workbench/${event.target.value}`);
-                onClose();
-              }}
-              className="mt-1 min-h-11 w-full rounded-btn bg-white px-3 text-ink"
-            >
-              {(Object.keys(ROLE_META) as Role[]).map((key) => (
-                <option key={key} value={key}>
-                  {ROLE_META[key].label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
         <nav className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-4">
           {sections.map((section) => (
             <div key={section.group}>
-              {!collapsed && isWorkbench && (
-                <div className="px-2.5 pt-3 pb-1.5 text-[10.5px] font-semibold tracking-[0.1em] text-[#7a8699] uppercase">
-                  {section.group}
-                </div>
-              )}
               {collapsed && (
                 <div className="mx-2 my-2 border-t border-white/8" />
               )}
@@ -147,11 +101,6 @@ export function Sidebar({
                           {item.label}
                         </span>
                       )}
-                      {!collapsed && item.tag && isWorkbench && (
-                        <span className="rounded-full bg-[rgba(99,102,241,.18)] px-1.5 py-px text-[10px] font-medium whitespace-nowrap text-[#c7d2fe]">
-                          {item.tag}
-                        </span>
-                      )}
                     </button>
                   ) : (
                     <NavLink
@@ -172,11 +121,6 @@ export function Sidebar({
                       {!collapsed && (
                         <span className="min-w-0 flex-1 truncate">
                           {item.label}
-                        </span>
-                      )}
-                      {!collapsed && item.tag && isWorkbench && (
-                        <span className="rounded-full bg-[rgba(99,102,241,.18)] px-1.5 py-px text-[10px] font-medium whitespace-nowrap text-[#c7d2fe]">
-                          {item.tag}
                         </span>
                       )}
                     </NavLink>
@@ -245,7 +189,7 @@ export function MobileBottomNav({
         height: "calc(64px + env(safe-area-inset-bottom))",
       }}
     >
-      <NavLink to={`/workbench/${role}`} className={itemClass} end>
+      <NavLink to="/workbench" className={itemClass} end>
         <Icon name="grid" size={19} />
         工作台
       </NavLink>
@@ -267,7 +211,7 @@ export function MobileBottomNav({
   );
 }
 
-/* 顶栏 */
+/* 顶栏：真实登录用户 + 登出 */
 export function Topbar({
   title,
   onOpenDrawer,
@@ -275,14 +219,12 @@ export function Topbar({
   title: string;
   onOpenDrawer: () => void;
 }) {
-  const location = useLocation();
   const navigate = useNavigate();
-  const { role, setRole } = useApp();
-  const isWorkbench = location.pathname.startsWith("/workbench");
+  const { user, role, logout } = useApp();
 
-  const switchRole = (next: string) => {
-    setRole(next as Role);
-    navigate(`/workbench/${next}`);
+  const onLogout = async () => {
+    await logout();
+    navigate("/login", { replace: true });
   };
 
   return (
@@ -317,35 +259,26 @@ export function Topbar({
         >
           <Icon name="search" size={20} />
         </button>
-        <select
-          aria-label="切换角色工作台"
-          value={isWorkbench ? `/workbench/${role}` : ""}
-          onChange={(event) =>
-            event.target.value &&
-            switchRole(event.target.value.split("/").pop() as Role)
-          }
-          className="hidden h-10 rounded-[10px] border border-line bg-white px-2.5 text-[12.5px] text-ink sm:block"
-        >
-          {isWorkbench ? null : <option value="">角色工作台</option>}
-          {(Object.keys(ROLE_META) as Role[]).map((key) => (
-            <option key={key} value={`/workbench/${key}`}>
-              {ROLE_META[key].label}
-            </option>
-          ))}
-        </select>
         <div className="flex items-center gap-2.5 py-1.5">
           <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#6366f1] to-[#4f46e5] text-[13px] font-semibold text-white">
-            {ROLE_META[role].initial}
+            {user?.name.slice(0, 1) ?? "?"}
           </span>
           <span className="hidden leading-tight sm:block">
             <span className="block text-[12.5px] font-semibold text-ink">
-              {ROLE_META[role].person}
+              {user?.name ?? "未登录"}
             </span>
             <span className="block text-[11px] text-muted">
               {ROLE_META[role].roleName}
             </span>
           </span>
         </div>
+        <button
+          type="button"
+          onClick={onLogout}
+          className="h-9 rounded-btn border border-line px-3 text-[12.5px] text-muted transition hover:border-danger hover:text-danger"
+        >
+          退出
+        </button>
       </div>
     </header>
   );

@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import type { Order } from "../../data/types";
-import { ANCHOR, maxShipOf, store } from "../../data/store";
-import { num } from "../../lib/format";
+import type { Order, Snapshot } from "@/api";
+import { bomByCode, maxShipOf, orderStatusOf, remainingOf } from "@/data/views";
+import { num } from "@/lib/format";
+import { todayIso } from "@/lib/date";
 import { Badge, Button, StatusBadge } from "./Badge";
 
 export function ListState({
@@ -68,21 +69,23 @@ export function RecordCard({
 
 export function OrderTaskCard({
   order,
+  snap,
   onDetail,
   onShip,
   onEdit,
 }: {
   order: Order;
+  snap: Snapshot;
   onDetail: () => void;
   onShip?: () => void;
   onEdit?: () => void;
 }) {
-  const bom = store.bomByCode(order.bomCode);
-  const remaining = store.remainingOf(order);
-  const maxShip = maxShipOf(order.orderNo);
+  const bom = bomByCode(snap, order.bomCode);
+  const remaining = remainingOf(order);
+  const maxShip = maxShipOf(snap, order.orderNo);
   const daysLate = Math.max(
     0,
-    Math.floor((Date.parse(ANCHOR) - Date.parse(order.deliverDate)) / 86400000),
+    Math.floor((Date.parse(todayIso()) - Date.parse(order.deliverDate)) / 86400000),
   );
   return (
     <RecordCard
@@ -92,7 +95,7 @@ export function OrderTaskCard({
         remaining > 0 && daysLate > 0 ? (
           <Badge tone="danger">逾期 {daysLate} 天</Badge>
         ) : (
-          <StatusBadge status={store.orderStatusOf(order).key} />
+          <StatusBadge status={orderStatusOf(snap, order).key} />
         )
       }
       actions={

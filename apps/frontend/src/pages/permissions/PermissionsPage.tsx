@@ -1,33 +1,35 @@
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { Navigate } from "react-router";
-import { ListState, RecordCard } from "../../components/ui/MobileList";
-import { Badge, Button, TableLink } from "../../components/ui/Badge";
-import { Modal } from "../../components/ui/Modal";
-import { PageHeading } from "../../components/ui/PageHeading";
-import { SelectField, TextField } from "../../components/ui/Field";
-import { useToast } from "../../components/ui/Toast";
-import { Icon } from "../../lib/icons";
-import { useApp, type Role } from "../../context/AppContext";
-import { useSetUserActive, useUpsertUser, useWbSnapshot } from "../../data/queries";
-import { store } from "../../data/store";
-import type { WbUser } from "../../data/types";
+import { ListState, RecordCard } from "@/components/ui/MobileList";
+import { Badge, Button, TableLink } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
+import { PageHeading } from "@/components/ui/PageHeading";
+import { SelectField, TextField } from "@/components/ui/Field";
+import { useToast } from "@/components/ui/Toast";
+import { Icon } from "@/lib/icons";
+import { useApp } from "@/context/AppContext";
+import {
+  useCreateUser,
+  useGrantLog,
+  useGrants,
+  useSaveGrants,
+  useSetUserActive,
+  useUpdateUser,
+  useWbSnapshot,
+} from "@/data/queries";
+import { EMPTY_SNAPSHOT } from "@/data/views";
+import type { WbUser } from "@/api";
 import {
   ACTION_CATALOG,
   DEFAULT_GRANTS,
   MENU_CATALOG,
   ROLES,
   actionsOf,
-  buildNavSections,
   diffGrants,
-  getGrants,
-  grantLog,
-  pushGrantLog,
-  saveGrants,
-  subscribeGrants,
   type RoleGrant,
   type RoleId,
-} from "../../data/permissions";
-import { num } from "../../lib/format";
+} from "@/data/permissions";
+import { num } from "@/lib/format";
 
 type PermTab = "accounts" | "roles" | "matrix";
 
@@ -46,14 +48,15 @@ const EVENT_TONE: Record<string, string> = { danger: "danger", warning: "pending
 const EVENT_STATE_TONE: Record<string, string> = { 待核对: "pending", 已拦截: "danger", 已生效: "success" };
 
 export function PermissionsPage() {
-  const { role, can } = useApp();
+  const { can } = useApp();
   const { data, isLoading } = useWbSnapshot();
+  const snap = data ?? EMPTY_SNAPSHOT;
   const [tab, setTab] = useState<PermTab>("accounts");
 
-  if (!can("permissions:view")) return <Navigate to={`/workbench/${role}`} replace />;
+  if (!can("permissions:view")) return <Navigate to="/workbench" replace />;
 
-  const users = data?.users ?? store.users;
-  const events = data?.systemEvents ?? store.systemEvents;
+  const users = snap.users;
+  const events = snap.systemEvents;
   const roleCount = new Set(users.map((user) => user.role)).size;
 
   return (
@@ -201,7 +204,13 @@ function AccountsTab({ users, isLoading }: { users: WbUser[]; isLoading: boolean
           </table>
         </div>
       </section>
-      {editing !== null && <UserDialog user={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
+      {editing !== null && (
+        <UserDialog
+          user={editing === "new" ? null : editing}
+          users={users}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </>
   );
 }
@@ -212,7 +221,7 @@ function UserActiveToggle({ user, asSwitch }: { user: WbUser; asSwitch?: boolean
   if (user.role === "super") {
     return <Badge tone="success">启用</Badge>;
   }
-  const toggle = () => setActive.mutate({ id: user.id, active: !user.active });
+  const toggle = () => setActive.mutate({ account: user.account, active: !user.active });
   if (asSwitch) {
     return (
       <button
@@ -236,8 +245,18 @@ function UserActiveToggle({ user, asSwitch }: { user: WbUser; asSwitch?: boolean
   );
 }
 
-function UserDialog({ user, onClose }: { user: WbUser | null; onClose: () => void }) {
-  const upsert = useUpsertUser();
+function UserDialog({
+  user,
+  users,
+  onClose,
+}: {
+  user: WbUser | null;
+  users: WbUser[];
+  onClose: () => void;
+}) {
+  const createUser = useCreateUser();
+  const updateUser = useUpdateUser();
+  const pending = createUser.isPending || updateUser.isPending;
   const [name, setName] = useState(user?.name ?? "");
   const [account, setAccount] = useState(user?.account ?? "");
   const [role, setRole] = useState<RoleId>(user?.role ?? "staff");
@@ -248,14 +267,17 @@ function UserDialog({ user, onClose }: { user: WbUser | null; onClose: () => voi
     if (!name.trim()) next.name = "请填写姓名";
     const accountOk = /^[A-Za-z0-9_]{3,}$/.test(account.trim());
     if (!accountOk) next.account = "账号需为字母 / 数字 / 下划线";
-    else if (store.users.some((item) => item.account === account.trim() && item.id !== user?.id))
+    else if (users.some((item) => item.account === account.trim() && item.account !== user?.account))
       next.account = "账号已存在";
     setErrors(next);
     if (Object.keys(next).length) return;
-    upsert.mutate(
-      { id: user?.id, name: name.trim(), account: account.trim(), role },
-      { onSuccess: onClose },
-    );
+    const onSuccess = () => onClose();
+    if (user) {
+      // account 创建后不可改，仅更新姓名与角色
+      updateUser.mutate({ account: user.account, name: name.trim(), role }, { onSuccess });
+    } else {
+      createUser.mutate({ name: name.trim(), account: account.trim(), role }, { onSuccess });
+    }
   };
 
   return (
@@ -270,7 +292,7 @@ function UserDialog({ user, onClose }: { user: WbUser | null; onClose: () => voi
           <Button variant="secondary" onClick={onClose}>
             取消
           </Button>
-          <Button onClick={submit} disabled={upsert.isPending}>
+          <Button onClick={submit} disabled={pending}>
             保存
           </Button>
         </>
@@ -292,6 +314,7 @@ function UserDialog({ user, onClose }: { user: WbUser | null; onClose: () => voi
           error={errors.account}
           autoComplete="off"
           placeholder="例：li_xiaomei"
+          disabled={!!user}
           onChange={(event) => setAccount(event.target.value)}
         />
         <SelectField
@@ -318,11 +341,14 @@ function UserDialog({ user, onClose }: { user: WbUser | null; onClose: () => voi
 /* ================= Tab 2 · 角色与权限 ================= */
 
 function RolesTab({ users }: { users: WbUser[] }) {
-  const grants = useSyncExternalStore(subscribeGrants, getGrants);
+  const { refreshProfile } = useApp();
+  const { data: grantsData, isLoading: grantsLoading } = useGrants();
+  const saveGrants = useSaveGrants();
+  const grants = grantsData ?? DEFAULT_GRANTS;
   const [activeRole, setActiveRole] = useState<RoleId>("admin");
   const [draft, setDraft] = useState<RoleGrant | null>(null);
   const locked = ROLES.find((role) => role.id === activeRole)?.locked ?? false;
-  const effective = draft ?? grants[activeRole];
+  const effective = draft ?? grants[activeRole] ?? { menus: [], actions: {} };
 
   const selectRole = (id: RoleId) => {
     if (id === activeRole) return;
@@ -391,20 +417,33 @@ function RolesTab({ users }: { users: WbUser[] }) {
     if (locked || !draft) return;
     const before = grants[activeRole];
     const diff = diffGrants(before, draft);
-    saveGrants({ ...grants, [activeRole]: clone(draft) });
-    pushGrantLog({
-      time: "09-07 12:30",
-      user: "系统管理员",
-      text: `角色【${roleNameOf(activeRole)}】授权变更：${diff || "无变化"}`,
-    });
-    setDraft(null);
+    saveGrants.mutate(
+      {
+        roleId: activeRole,
+        grant: clone(draft),
+        note: `角色【${roleNameOf(activeRole)}】授权变更：${diff || "无变化"}`,
+      },
+      {
+        onSuccess: () => {
+          setDraft(null);
+          // 若改的是当前登录用户的角色，刷新自身权限（菜单/按钮立即生效）
+          void refreshProfile();
+        },
+      },
+    );
   };
 
   const reset = () => {
     setDraft(clone(DEFAULT_GRANTS[activeRole]));
   };
 
-  const status = locked ? "内置角色 · 授权固定" : draft ? "编辑中（未保存）" : "已保存生效";
+  const status = locked
+    ? "内置角色 · 授权固定"
+    : grantsLoading
+      ? "加载中…"
+      : draft
+        ? "编辑中（未保存）"
+        : "已保存生效";
 
   return (
     <div className="grid items-start gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -444,7 +483,6 @@ function RolesTab({ users }: { users: WbUser[] }) {
             })}
           </div>
         </section>
-        <MenuPreview role={activeRole} grant={effective} />
       </div>
 
       <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
@@ -586,56 +624,11 @@ function RolesTab({ users }: { users: WbUser[] }) {
   );
 }
 
-/* 菜单预览：所选角色（含未保存修改）将看到的侧边栏 */
-function MenuPreview({ role, grant }: { role: Role; grant: RoleGrant }) {
-  const sections = useMemo(() => buildNavSections(role, grant), [role, grant]);
-  return (
-    <section className="overflow-hidden rounded-panel border border-line shadow-card">
-      <div className="bg-gradient-to-b from-[#101828] to-[#162033] px-4 pt-4 pb-1">
-        <div className="flex items-center justify-between">
-          <span className="text-[13.5px] font-semibold text-white">{roleNameOf(role)}</span>
-          <span className="rounded-full border border-dashed border-[#c7d2fe]/55 px-2 py-px text-[10px] tracking-[0.08em] text-[#c7d2fe]">
-            菜单预览
-          </span>
-        </div>
-      </div>
-      <nav className="max-h-[280px] overflow-y-auto bg-gradient-to-b from-[#101828] to-[#162033] px-2.5 pt-2 pb-4">
-        {sections.length ? (
-          sections.map((section) => (
-            <div key={section.group} className="mb-1">
-              <div className="px-2.5 pt-2.5 pb-1.5 text-[10.5px] font-semibold tracking-[0.1em] text-[#7a8699] uppercase">
-                {section.group}
-              </div>
-              {section.items.map((item) => (
-                <div key={item.label} className="flex min-h-9 items-center gap-2.5 rounded-[10px] px-2.5 text-[12.5px] text-[#aeb8c8]">
-                  <Icon name={item.icon} size={16} className="shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                  {item.tag && !item.note && (
-                    <span className="rounded-full bg-[rgba(99,102,241,.18)] px-1.5 py-px text-[10px] whitespace-nowrap text-[#c7d2fe]">
-                      {item.tag}
-                    </span>
-                  )}
-                  {item.note && (
-                    <span className="rounded-full border border-white/10 bg-white/[.06] px-1.5 py-px text-[10px] text-[#aeb8c8]">
-                      说明
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          ))
-        ) : (
-          <p className="px-3 py-4 text-[12px] text-[#7a8699]">该角色暂无任何可见菜单</p>
-        )}
-      </nav>
-    </section>
-  );
-}
-
 /* ================= Tab 3 · 权限矩阵 ================= */
 
 function MatrixTab() {
-  const grants = useSyncExternalStore(subscribeGrants, getGrants);
+  const { data } = useGrants();
+  const grants = data ?? DEFAULT_GRANTS;
   const modules = MENU_CATALOG.filter((menu) => !menu.onlyFor && menu.key !== "workbench");
   return (
     <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
@@ -793,8 +786,8 @@ function SystemEventsPanel({
 }
 
 function GrantLogPanel() {
-  useSyncExternalStore(subscribeGrants, getGrants); // 保存授权后刷新日志
-  const logs = grantLog.slice(0, 8);
+  const { data } = useGrantLog();
+  const logs = (data ?? []).slice(0, 8);
   return (
     <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
       <div className="border-b border-line bg-gradient-to-b from-white to-[#fcfcfd] px-5 py-4">

@@ -12,9 +12,11 @@ dist
 dist-ssr
 *.local
 
-# Env
+# Env（.env.example / .env.development 无敏感信息，入库作为默认配置）
 .env
 .env.*
+!.env.example
+!.env.development
 
 # Test coverage
 coverage

@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Modal } from "../../components/ui/Modal";
-import { Badge } from "../../components/ui/Badge";
-import { num } from "../../lib/format";
-import { addDays, ANCHOR, stockGapList, store } from "../../data/store";
-import type { InboundRow, OutboundRow } from "../../data/types";
+import { Modal } from "@/components/ui/Modal";
+import { Badge } from "@/components/ui/Badge";
+import { num } from "@/lib/format";
+import { addDays, todayIso } from "@/lib/date";
+import { stockGapList } from "@/data/views";
+import type { InboundRow, OutboundRow, Snapshot } from "@/api";
 
 function LedgerDaySection({ label, rows }: { label: string; rows: Array<{ no: string; qty: number; meta: string }> }) {
   const [open, setOpen] = useState(label.startsWith("今天"));
@@ -75,9 +76,10 @@ function LedgerDaySection({ label, rows }: { label: string; rows: Array<{ no: st
 }
 
 /* KPI 台账弹窗：入库 / 出库（今天默认展开、昨天折叠，行可勾选划线） */
-export function LedgerDialog({ open, kind, onClose }: { open: boolean; kind: "inbound" | "outbound"; onClose: () => void }) {
-  const yesterday = addDays(ANCHOR, -1);
-  const ledger = kind === "inbound" ? store.inboundLedger : store.outboundLedger;
+export function LedgerDialog({ open, kind, snap, onClose }: { open: boolean; kind: "inbound" | "outbound"; snap: Snapshot; onClose: () => void }) {
+  const anchor = todayIso();
+  const yesterday = addDays(anchor, -1);
+  const ledger = kind === "inbound" ? snap.inboundLedger : snap.outboundLedger;
   const rowsFor = (date: string) => ledger.filter((row) => row.date === date);
 
   const toRow = (row: (typeof ledger)[number]) => {
@@ -93,7 +95,7 @@ export function LedgerDialog({ open, kind, onClose }: { open: boolean; kind: "in
   };
 
   const dayLabel = (date: string) =>
-    `${date === ANCHOR ? "今天" : "昨天"}（${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}）`;
+    `${date === anchor ? "今天" : "昨天"}（${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}）`;
 
   return (
     <Modal
@@ -109,7 +111,7 @@ export function LedgerDialog({ open, kind, onClose }: { open: boolean; kind: "in
       }
     >
       <div className="flex flex-col gap-2.5">
-        <LedgerDaySection label={dayLabel(ANCHOR)} rows={rowsFor(ANCHOR).map(toRow)} />
+        <LedgerDaySection label={dayLabel(anchor)} rows={rowsFor(anchor).map(toRow)} />
         <LedgerDaySection label={dayLabel(yesterday)} rows={rowsFor(yesterday).map(toRow)} />
       </div>
     </Modal>
@@ -117,8 +119,8 @@ export function LedgerDialog({ open, kind, onClose }: { open: boolean; kind: "in
 }
 
 /* 库存缺口明细弹窗 */
-export function GapDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const list = stockGapList();
+export function GapDialog({ open, snap, onClose }: { open: boolean; snap: Snapshot; onClose: () => void }) {
+  const list = stockGapList(snap);
   const totalGap = list.reduce((sum, row) => sum + row.gapQty, 0);
   return (
     <Modal
@@ -183,26 +185,6 @@ export function OrderInfoDialog({ order, onClose }: { order: { id: string; custo
           ))}
         </div>
       )}
-    </Modal>
-  );
-}
-
-/* 通用原型说明弹窗 */
-export function NoteDialog({ note, onClose }: { note: { title: string; description: string } | null; onClose: () => void }) {
-  return (
-    <Modal open={!!note} onClose={onClose} title={note?.title || ""} width={460}
-      footer={
-        <>
-          <button type="button" onClick={onClose} className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-[13px] font-medium text-ink hover:border-primary-border">
-            返回工作台
-          </button>
-          <button type="button" onClick={onClose} className="min-h-10 rounded-btn bg-primary px-4 text-[13px] font-medium text-white hover:bg-primary-hover">
-            知道了
-          </button>
-        </>
-      }
-    >
-      <p className="text-[13px] leading-relaxed text-muted">{note?.description}</p>
     </Modal>
   );
 }

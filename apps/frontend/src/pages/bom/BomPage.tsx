@@ -1,24 +1,24 @@
-import { ToolbarMore } from "../../components/ui/ToolbarMore";
-import { ListState, RecordCard } from "../../components/ui/MobileList";
+import { ToolbarMore } from "@/components/ui/ToolbarMore";
+import { ListState, RecordCard } from "@/components/ui/MobileList";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import { Icon } from "../../lib/icons";
-import { downloadCsv, num } from "../../lib/format";
-import { useApp } from "../../context/AppContext";
-import { PageHeading } from "../../components/ui/PageHeading";
-import { Button, TableLink } from "../../components/ui/Badge";
-import { Pagination } from "../../components/ui/Pagination";
-import { Modal } from "../../components/ui/Modal";
-import { SelectField, TextField } from "../../components/ui/Field";
-import { useCreateBom, useWbSnapshot } from "../../data/queries";
-import { useToast } from "../../components/ui/Toast";
+import { Icon } from "@/lib/icons";
+import { downloadCsv, num } from "@/lib/format";
+import { useApp } from "@/context/AppContext";
+import { PageHeading } from "@/components/ui/PageHeading";
+import { Button, TableLink } from "@/components/ui/Badge";
+import { Pagination } from "@/components/ui/Pagination";
+import { Modal } from "@/components/ui/Modal";
+import { SelectField, TextField } from "@/components/ui/Field";
+import { useCreateBom, useWbSnapshot } from "@/data/queries";
+import { useToast } from "@/components/ui/Toast";
 import {
   BOM_CATEGORIES,
   categoryOf,
   initialValuesOf,
   nextBomCode,
-} from "../../data/categories";
-import type { Bom } from "../../data/types";
+} from "@/data/categories";
+import type { Bom } from "@/api";
 
 /* BOM 规格行：品类 + 型号 + 各品类规格键值对 */
 function specLines(bom: Bom) {

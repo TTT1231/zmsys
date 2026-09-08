@@ -1,23 +1,24 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router";
-import { useWbSnapshot } from "../../data/queries";
-import { useApp } from "../../context/AppContext";
-import { Button } from "../../components/ui/Badge";
+import { useWbSnapshot } from "@/data/queries";
+import { useApp } from "@/context/AppContext";
+import { Button } from "@/components/ui/Badge";
 import {
   ListState,
   OrderTaskCard,
   RecordCard,
-} from "../../components/ui/MobileList";
-import { PageHeading } from "../../components/ui/PageHeading";
-import { Icon } from "../../lib/icons";
-import { OrderDetailModal } from "../orders/OrdersPage";
-import { CustomerDetailModal } from "../customers/CustomersPage";
-import { BomDetailModal } from "../bom/BomPage";
-import { OutboundModal } from "../outbound/OutboundPage";
-import { store } from "../../data/store";
+} from "@/components/ui/MobileList";
+import { PageHeading } from "@/components/ui/PageHeading";
+import { Icon } from "@/lib/icons";
+import { OrderDetailModal } from "@/pages/orders/OrdersPage";
+import { CustomerDetailModal } from "@/pages/customers/CustomersPage";
+import { BomDetailModal } from "@/pages/bom/BomPage";
+import { OutboundModal } from "@/pages/outbound/OutboundPage";
+import { EMPTY_SNAPSHOT, bomByCode } from "@/data/views";
 
 export function SearchPage() {
   const { data, isLoading } = useWbSnapshot();
+  const snap = data ?? EMPTY_SNAPSHOT;
   const { can, grant } = useApp();
   const [params, setParams] = useSearchParams();
   const query = params.get("q") ?? "";
@@ -39,17 +40,17 @@ export function SearchPage() {
     ? category
     : (categories[0]?.key ?? "orders");
 
-  const orders = (data?.orders ?? []).filter((order) =>
-    `${order.orderNo} ${order.customer} ${order.customerCode} ${order.bomCode} ${store.bomByCode(order.bomCode)?.spec}`
+  const orders = snap.orders.filter((order) =>
+    `${order.orderNo} ${order.customer} ${order.customerCode} ${order.bomCode} ${bomByCode(snap, order.bomCode)?.spec}`
       .toLowerCase()
       .includes(keyword),
   );
-  const customers = (data?.customers ?? []).filter((customer) =>
+  const customers = snap.customers.filter((customer) =>
     `${customer.name} ${customer.code} ${customer.contact} ${customer.phoneFull}`
       .toLowerCase()
       .includes(keyword),
   );
-  const boms = (data?.boms ?? []).filter((bom) =>
+  const boms = snap.boms.filter((bom) =>
     `${bom.code} ${bom.name} ${bom.spec}`
       .toLowerCase()
       .includes(keyword),
@@ -131,6 +132,7 @@ export function SearchPage() {
                     <OrderTaskCard
                       key={item.orderNo}
                       order={item}
+                      snap={snap}
                       onDetail={() =>
                         setSelected({ kind: "orders", id: item.orderNo })
                       }
@@ -195,6 +197,7 @@ export function SearchPage() {
       )}
       <OrderDetailModal
         order={order}
+        snap={snap}
         onClose={() => setSelected(null)}
         onShip={
           can("outbound:ship") && order
@@ -212,6 +215,7 @@ export function SearchPage() {
               selected?.kind === "customers" && item.code === selected.id,
           ) ?? null
         }
+        snap={snap}
         onClose={() => setSelected(null)}
       />
       <BomDetailModal
