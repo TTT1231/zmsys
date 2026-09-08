@@ -18,6 +18,55 @@ import type { OutboundRow } from "../../data/types";
 
 const OPERATORS = ["王师傅", "周丽", "赵师傅"];
 
+const escapeHtml = (value: string) =>
+  value.replace(
+    /[&<>"']/g,
+    (ch) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[ch] ?? ch,
+  );
+
+/* 新窗口渲染出库单据并调起打印；打印窗口保留，便于另存 PDF */
+function printOutbound(row: OutboundRow) {
+  const bom = store.bomByCode(row.bomCode);
+  const win = window.open("", "_blank", "width=760,height=640");
+  if (!win) return;
+  win.document.title = `出库单 ${row.no}`;
+  const items: Array<[string, string]> = [
+    ["出库单号", escapeHtml(row.no)],
+    ["关联订单", escapeHtml(row.orderNo)],
+    ["客户", escapeHtml(`${row.customer}（${row.customerCode}）`)],
+    ["成品编码", escapeHtml(row.productCode)],
+    ["规格", escapeHtml(bom?.spec || "—")],
+    ["发货数量", escapeHtml(`${num(row.qty)} 件`)],
+    ["出库日期", escapeHtml(row.date)],
+    ["操作人", escapeHtml(row.operator)],
+    ["备注", escapeHtml(row.remark || "—")],
+  ];
+  win.document.body.innerHTML = `
+    <div style="font-family: Inter, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; max-width: 640px; margin: 32px auto; color: #101828;">
+      <h1 style="margin: 0 0 4px; font-size: 20px;">出库单</h1>
+      <p style="margin: 0 0 16px; font-size: 12px; color: #667085;">智造管理系统 · 打印时间 ${new Date().toLocaleString()}</p>
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+        ${items
+          .map(
+            ([label, value]) => `
+              <tr>
+                <td style="width: 96px; padding: 8px 10px; border: 1px solid #e4e7ec; background: #f8fafc; color: #667085;">${label}</td>
+                <td style="padding: 8px 10px; border: 1px solid #e4e7ec;">${value}</td>
+              </tr>`,
+          )
+          .join("")}
+      </table>
+    </div>`;
+  win.print();
+}
+
 export function OutboundModal({
   open,
   onClose,
@@ -535,13 +584,22 @@ export function OutboundPage() {
                       {row.operator}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setDetail(row)}
-                        className="text-[13px] font-medium text-primary-strong underline-offset-2 hover:underline"
-                      >
-                        查看详情
-                      </button>
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setDetail(row)}
+                          className="text-[13px] font-medium text-primary-strong underline-offset-2 hover:underline"
+                        >
+                          查看详情
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => printOutbound(row)}
+                          className="text-[13px] font-medium text-primary-strong underline-offset-2 hover:underline"
+                        >
+                          打印
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
