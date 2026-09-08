@@ -35,7 +35,7 @@ import type { Order } from "../../data/types";
 
 const STATUS_OPTIONS = ["全部状态", "待备货", "可发货", "部分发货", "已完成"];
 
-/* 新建销售订单弹窗（三步表单：客户与交付 → 成品方案 → 备注） */
+/* 新建销售订单弹窗（三步表单：客户与交付 → BOM 编码 → 备注） */
 function NewOrderModal({
   open,
   onClose,
@@ -106,7 +106,7 @@ function NewOrderModal({
     if (!deliverEnd) nextErrors.deliverEnd = "请选择交货终止日期";
     if (deliverStart && deliverEnd && deliverEnd < deliverStart)
       nextErrors.deliverEnd = "终止不能早于起始";
-    if (!selectedBom) nextErrors.bom = "请选择成品方案";
+    if (!selectedBom) nextErrors.bom = "请选择 BOM";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length)
       requestAnimationFrame(() =>
@@ -144,7 +144,7 @@ function NewOrderModal({
       open={open}
       onClose={onClose}
       title="新建销售订单"
-      subtitle="客户和成品方案选一次，入库发货自动沿用"
+      subtitle="客户和 BOM 选一次，入库发货自动沿用"
       width={640}
       footer={
         <>
@@ -222,7 +222,7 @@ function NewOrderModal({
 
         <fieldset className="rounded-panel border border-line p-4">
           <legend className="px-1.5 text-[12.5px] font-semibold text-primary">
-            ② 选择成品方案
+            ② 选择 BOM
           </legend>
           <div className="grid gap-3 sm:grid-cols-3">
               <SelectField
@@ -271,7 +271,7 @@ function NewOrderModal({
               </SelectField>
               {selectedBom && (
                 <p className="rounded-[10px] bg-primary-soft/70 px-3 py-2 text-[12px] text-primary-strong sm:col-span-3">
-                  {selectedBom.productCode} · {selectedBom.spec}
+                  {selectedBom.code} · {selectedBom.spec}
                 </p>
               )}
             </div>
@@ -475,9 +475,9 @@ export function OrderDetailModal({
           {[
             ["状态", <StatusBadge key="s" status={status.key} />],
             [
-              "成品方案",
+              "BOM 编码",
               <span key="b" className="tnum font-medium text-ink">
-                {bom?.productCode}
+                {order.bomCode}
               </span>,
             ],
             [
@@ -587,7 +587,7 @@ export function OrdersPage() {
       if (kw) {
         const bom = store.bomByCode(order.bomCode);
         const text =
-          `${order.orderNo} ${order.customer} ${order.customerCode} ${bom?.productCode} ${bom?.spec}`.toLowerCase();
+          `${order.orderNo} ${order.customer} ${order.customerCode} ${order.bomCode} ${bom?.spec}`.toLowerCase();
         if (!text.includes(kw)) return false;
       }
       return true;
@@ -753,7 +753,7 @@ export function OrdersPage() {
                     "销售订单号",
                     "客户",
                     "客户编码",
-                    "成品方案",
+                    "BOM 编码",
                     "订单数量",
                     "交货日期",
                     "累计出库",
@@ -763,7 +763,7 @@ export function OrdersPage() {
                     order.orderNo,
                     order.customer,
                     order.customerCode,
-                    store.bomByCode(order.bomCode)?.productCode || "",
+                    order.bomCode,
                     String(order.qty),
                     order.deliverDate,
                     String(order.outbound),
@@ -817,7 +817,7 @@ export function OrdersPage() {
                     className="px-3 py-2.5 font-semibold"
                     style={{ width: "18%" }}
                   >
-                    成品方案
+                    BOM 编码
                   </th>
                   <th
                     className="px-3 py-2.5 text-right font-semibold"
@@ -902,13 +902,13 @@ export function OrdersPage() {
                         />
                       </td>
                       <td className="px-3 py-4">
-                        <span className="block text-[13px] font-semibold text-ink">
+                        <span className="tnum block text-[13px] font-semibold text-[#475467]">
+                          {order.bomCode}
+                        </span>
+                        <span className="mt-0.5 block text-[11.5px] text-muted">
                           {bom
                             ? `${bom.model} · ${bom.seriesLabel} · ${bom.gear || "—"}`
                             : "—"}
-                        </span>
-                        <span className="mt-0.5 block tnum text-[11.5px] text-muted">
-                          {bom?.productCode}
                         </span>
                       </td>
                       <td className="px-3 py-4 text-right">

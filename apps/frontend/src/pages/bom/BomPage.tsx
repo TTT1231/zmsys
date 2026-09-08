@@ -333,7 +333,7 @@ function QuickFindModal({
             className="rounded-[10px] border border-line px-3 py-2 text-left transition hover:border-primary-border hover:bg-primary-soft/40"
           >
             <span className="tnum text-[12.5px] font-semibold text-primary-strong">
-              {bom.productCode}
+              {bom.code}
             </span>
             <span className="mt-0.5 block truncate text-[11.5px] text-muted">
               {bom.spec}
@@ -465,7 +465,7 @@ export function BomPage() {
               <RecordCard
                 key={bom.code}
                 title={`${bom.name} · ${bom.seriesLabel} · ${bom.gear || bom.modelCode}`}
-                subtitle={bom.productCode}
+                subtitle={bom.code}
                 actions={
                   <Button onClick={() => setDetail(bom)}>查看规格</Button>
                 }
@@ -603,7 +603,7 @@ export function BomPage() {
         onDetail={(bom) => {
           setQuickOpen(false);
           setDetail(bom);
-          toast(`已定位到 ${bom.productCode}`);
+          toast(`已定位到 ${bom.code}`);
         }}
       />
       <BomDetailModal bom={detail} onClose={() => setDetail(null)} />

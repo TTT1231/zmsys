@@ -174,9 +174,9 @@ function WorkbenchContent() {
                   <RecordCard
                     key={gap.bomCode}
                     title={
-                      store.bomByCode(gap.bomCode)?.name || gap.productCode
+                      store.bomByCode(gap.bomCode)?.name || gap.bomCode
                     }
-                    subtitle={gap.productCode}
+                    subtitle={gap.bomCode}
                     badge={
                       <span className="text-[13px] font-semibold text-warning">
                         缺 {num(gap.gapQty)} 件
@@ -188,7 +188,7 @@ function WorkbenchContent() {
                           variant="secondary"
                           onClick={() =>
                             navigate(
-                              `/orders?q=${encodeURIComponent(gap.productCode)}`,
+                              `/orders?q=${encodeURIComponent(gap.bomCode)}`,
                             )
                           }
                         >
@@ -301,7 +301,7 @@ function WorkbenchContent() {
                   >
                     <div className="min-w-0">
                       <p className="text-[14px] font-medium">
-                        {row.kind} · {row.productCode}
+                        {row.kind} · {row.bomCode}
                       </p>
                       <p className="mt-1 text-[12px] text-muted">
                         {row.date} {row.time} · {row.no}

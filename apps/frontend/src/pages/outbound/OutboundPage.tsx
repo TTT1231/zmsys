@@ -41,7 +41,7 @@ function printOutbound(row: OutboundRow) {
     ["出库单号", escapeHtml(row.no)],
     ["关联订单", escapeHtml(row.orderNo)],
     ["客户", escapeHtml(`${row.customer}（${row.customerCode}）`)],
-    ["成品编码", escapeHtml(row.productCode)],
+    ["BOM 编码", escapeHtml(row.bomCode)],
     ["规格", escapeHtml(bom?.spec || "—")],
     ["发货数量", escapeHtml(`${num(row.qty)} 件`)],
     ["出库日期", escapeHtml(row.date)],
@@ -232,7 +232,7 @@ export function OutboundModal({
               </strong>
               <span className="text-[13px]">
                 {selectedOrder.orderNo} ·{" "}
-                {store.bomByCode(selectedOrder.bomCode)?.productCode}
+                {selectedOrder.bomCode}
               </span>
               <p className="mt-1 text-[13px] text-muted">
                 {store.bomByCode(selectedOrder.bomCode)?.spec}
@@ -368,7 +368,7 @@ function OutboundDetailModal({
         </p>
         {[
           ["关联订单", row.orderNo],
-          ["成品编码", row.productCode],
+          ["BOM 编码", row.bomCode],
           ["发货数量", `${num(row.qty)} 件`],
           ["出库日期", row.date],
           ["操作人", row.operator],
@@ -403,7 +403,7 @@ export function OutboundPage() {
     const kw = keyword.trim().toLowerCase();
     if (!kw) return rows;
     return rows.filter((row) =>
-      `${row.no} ${row.orderNo} ${row.customer} ${row.productCode}`
+      `${row.no} ${row.orderNo} ${row.customer} ${row.bomCode}`
         .toLowerCase()
         .includes(kw),
     );
@@ -452,7 +452,7 @@ export function OutboundPage() {
                 setKeyword(event.target.value);
                 setPage(1);
               }}
-              placeholder="搜索单号、订单、客户或成品"
+              placeholder="搜索单号、订单、客户或 BOM 编码"
               className="w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-subtle"
             />
           </label>
@@ -480,7 +480,7 @@ export function OutboundPage() {
                     "出库单号",
                     "订单",
                     "客户",
-                    "成品编码",
+                    "BOM 编码",
                     "发货数量",
                     "出库日期",
                     "操作人",
@@ -489,7 +489,7 @@ export function OutboundPage() {
                     row.no,
                     row.orderNo,
                     row.customer,
-                    row.productCode,
+                    row.bomCode,
                     String(row.qty),
                     row.date,
                     row.operator,
@@ -518,7 +518,7 @@ export function OutboundPage() {
                   </Button>
                 }
               >
-                <p>{row.productCode}</p>
+                <p>{row.bomCode}</p>
                 <p className="mt-2 text-[13px] text-muted">
                   {row.no} · {row.operator}
                 </p>
@@ -537,7 +537,7 @@ export function OutboundPage() {
                 <tr className="bg-[#f8fafc] text-left text-[12px] text-muted">
                   <th className="px-5 py-2.5 font-semibold">出库单号</th>
                   <th className="px-3 py-2.5 font-semibold">订单 / 客户</th>
-                  <th className="px-3 py-2.5 font-semibold">成品编码</th>
+                  <th className="px-3 py-2.5 font-semibold">BOM 编码</th>
                   <th className="px-3 py-2.5 text-right font-semibold">
                     发货数量
                   </th>
@@ -572,7 +572,7 @@ export function OutboundPage() {
                       />
                     </td>
                     <td className="px-3 py-3 tnum text-[12.5px] font-medium text-primary-strong">
-                      {row.productCode}
+                      {row.bomCode}
                     </td>
                     <td className="px-3 py-3 text-right">
                       <QtyCell value={row.qty} unit="件" />

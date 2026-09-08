@@ -92,8 +92,8 @@ const buildCustomers = (): Customer[] =>
     };
   });
 
-// 33 条人工审核 BOM 主数据（成品编码 = ZM-XK2-<code>）
-const BOM_ROWS: Array<Omit<Bom, "spec" | "productCode" | "created" | "name" | "model" | "unit">> = [
+// 33 条人工审核 BOM 主数据
+const BOM_ROWS: Array<Omit<Bom, "spec" | "created" | "name" | "model" | "unit">> = [
   { code: "ZM001", modelCode: "1-1", seriesLabel: "二脚", gear: "一档", gearSpec: "211-1", gearDir: "正面", thickness: "0.2", spring: "0.5" },
   { code: "ZM002", modelCode: "2-1", seriesLabel: "三脚", gear: "两档", gearSpec: "222-1", gearDir: "正面", thickness: "0.2", spring: "0.5" },
   { code: "ZM003", modelCode: "2-1", seriesLabel: "四脚", gear: "两档", gearSpec: "2-1-4", gearDir: "正面", thickness: "0.2", spring: "0.5" },
@@ -143,7 +143,6 @@ const buildBoms = (): Bom[] =>
   BOM_ROWS.map((row) => ({
     ...row,
     spec: specOf(row),
-    productCode: `ZM-XK2-${row.code}`,
     created: "2026-09-04",
     name: "旋转开关",
     model: "XK2",
@@ -281,7 +280,6 @@ class WbStore {
           customer: order.customer,
           customerCode: order.customerCode,
           bomCode: order.bomCode,
-          productCode: this.bomByCode(order.bomCode)?.productCode || "",
           qty,
           date,
           time: this.timeOf(raw.length * 3 + partIndex),
@@ -334,7 +332,6 @@ class WbStore {
         else date = clampDate(addDays(baseDate, -randInt(1, 4) - i * randInt(2, 8)), "2026-07-10", ANCHOR);
         raw.push({
           bomCode: bom.code,
-          productCode: bom.productCode,
           qty,
           date,
           time: this.timeOf(raw.length * 5 + i),
@@ -344,7 +341,7 @@ class WbStore {
     });
 
     raw.sort((a, b) =>
-      a.date === b.date ? a.productCode.localeCompare(b.productCode) : a.date.localeCompare(b.date),
+      a.date === b.date ? a.bomCode.localeCompare(b.bomCode) : a.date.localeCompare(b.date),
     );
     const counter = new Map<string, number>();
     return raw.map((row) => {
@@ -484,7 +481,7 @@ class WbStore {
       model: input.model,
       unit: "个",
     };
-    const bom: Bom = { ...row, spec: specOf(row), productCode: `ZM-XK2-${row.code}` };
+    const bom: Bom = { ...row, spec: specOf(row) };
     this.boms.unshift(bom);
     this.version += 1;
     return bom;
@@ -500,7 +497,6 @@ class WbStore {
     const row: InboundRow = {
       no: `RK-${input.date.replaceAll("-", "")}-${String(seq).padStart(4, "0")}`,
       bomCode: input.bomCode,
-      productCode: bom?.productCode || "",
       qty: input.qty,
       date: input.date,
       time: "10:40",
@@ -528,7 +524,6 @@ class WbStore {
       customer: order.customer,
       customerCode: order.customerCode,
       bomCode: order.bomCode,
-      productCode: this.bomByCode(order.bomCode)?.productCode || "",
       qty: input.qty,
       date: input.date,
       time: "11:05",
@@ -585,7 +580,6 @@ export function readyToShip(): ReadyToShipRow[] {
         customer: order.customer,
         customerCode: order.customerCode,
         bomCode: order.bomCode,
-        productCode: bom?.productCode || "",
         bomLabel: bom?.spec || "",
         deliverDate: order.deliverDate,
         remaining,
@@ -612,7 +606,7 @@ export function pendingVsStock(limit: number): PendingVsStockRow[] {
       return {
         id: row.orderNo,
         customer: row.customer,
-        productCode: row.productCode,
+        bomCode: row.bomCode,
         bomLabel: row.bomLabel,
         productType: "通用产品",
         version: "V1.0",
@@ -637,7 +631,7 @@ export function riskOrders(limit?: number): RiskOrderRow[] {
         orderNo: row.orderNo,
         customer: row.customer,
         customerCode: row.customerCode,
-        productCode: row.productCode,
+        bomCode: row.bomCode,
         bomLabel: row.bomLabel,
         deliverDate: row.deliverDate,
         qty: order.qty,
@@ -676,10 +670,8 @@ export function stockGapList(): StockGapRow[] {
     if (demandQty <= stockQty) return;
     const sorted = [...orders].sort((a, b) => a.deliverDate.localeCompare(b.deliverDate));
     const earliest = sorted[0];
-    const bom = store.bomByCode(bomCode);
     list.push({
       bomCode,
-      productCode: bom?.productCode || "",
       gapQty: demandQty - stockQty,
       demandQty,
       stockQty,

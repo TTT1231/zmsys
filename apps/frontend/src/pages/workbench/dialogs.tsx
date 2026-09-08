@@ -87,7 +87,7 @@ export function LedgerDialog({ open, kind, onClose }: { open: boolean; kind: "in
       qty: row.qty,
       meta:
         kind === "inbound"
-          ? `${row.productCode} · 登记人 ${(row as InboundRow).inspector}`
+          ? `${row.bomCode} · 登记人 ${(row as InboundRow).inspector}`
           : `${outbound.orderNo} · ${outbound.customer} · ${outbound.operator}`,
     };
   };
@@ -140,7 +140,7 @@ export function GapDialog({ open, onClose }: { open: boolean; onClose: () => voi
           <div key={row.bomCode} className="flex items-center gap-3 rounded-[10px] border border-line px-3 py-2">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-2 text-[12.5px]">
-                <span className="font-semibold text-ink">{row.productCode}</span>
+                <span className="font-semibold text-ink">{row.bomCode}</span>
                 <span className="text-muted">{row.earliestCustomer}</span>
                 <span className="text-subtle">· {row.earliestDate.slice(5).replace("-", "/")} 交付</span>
                 {row.earliestOverdue && <Badge tone="danger">已逾期</Badge>}
@@ -156,9 +156,9 @@ export function GapDialog({ open, onClose }: { open: boolean; onClose: () => voi
 }
 
 /* 订单明细弹窗（图表点击） */
-export function OrderInfoDialog({ order, onClose }: { order: { id: string; customer: string; productCode: string; bomLabel: string; deliverDate: string; ordered: number; shipped: number; remaining: number; stock: number; maxShip: number; overdue: boolean } | null; onClose: () => void }) {
+export function OrderInfoDialog({ order, onClose }: { order: { id: string; customer: string; bomCode: string; bomLabel: string; deliverDate: string; ordered: number; shipped: number; remaining: number; stock: number; maxShip: number; overdue: boolean } | null; onClose: () => void }) {
   return (
-    <Modal open={!!order} onClose={onClose} label="订单明细" title={order?.id || ""} subtitle={order ? `${order.customer} · ${order.productCode}` : ""} width={480}
+    <Modal open={!!order} onClose={onClose} label="订单明细" title={order?.id || ""} subtitle={order ? `${order.customer} · ${order.bomCode}` : ""} width={480}
       footer={
         <button type="button" onClick={onClose} className="min-h-10 rounded-btn bg-primary px-4 text-[13px] font-medium text-white hover:bg-primary-hover">
           知道了

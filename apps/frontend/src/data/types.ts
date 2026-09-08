@@ -27,7 +27,6 @@ export interface Bom {
   thickness: string;
   spring: string;
   spec: string;
-  productCode: string;
   created: string;
   name: string;
   model: string;
@@ -52,7 +51,6 @@ export interface Customer {
 export interface InboundRow {
   no: string;
   bomCode: string;
-  productCode: string;
   qty: number;
   date: string;
   time: string;
@@ -66,7 +64,6 @@ export interface OutboundRow {
   customer: string;
   customerCode: string;
   bomCode: string;
-  productCode: string;
   qty: number;
   date: string;
   time: string;
@@ -115,7 +112,6 @@ export interface ReadyToShipRow {
   customer: string;
   customerCode: string;
   bomCode: string;
-  productCode: string;
   bomLabel: string;
   deliverDate: string;
   remaining: number;
@@ -128,7 +124,7 @@ export interface ReadyToShipRow {
 export interface PendingVsStockRow {
   id: string;
   customer: string;
-  productCode: string;
+  bomCode: string;
   bomLabel: string;
   productType: string;
   version: string;
@@ -145,7 +141,7 @@ export interface RiskOrderRow {
   orderNo: string;
   customer: string;
   customerCode: string;
-  productCode: string;
+  bomCode: string;
   bomLabel: string;
   deliverDate: string;
   qty: number;
@@ -158,7 +154,6 @@ export interface RiskOrderRow {
 
 export interface StockGapRow {
   bomCode: string;
-  productCode: string;
   gapQty: number;
   demandQty: number;
   stockQty: number;

@@ -29,7 +29,7 @@ export function SearchPage() {
   const [ship, setShip] = useState<string | null>(null);
   const keyword = query.trim().toLowerCase();
   const orders = (data?.orders ?? []).filter((order) =>
-    `${order.orderNo} ${order.customer} ${order.customerCode} ${store.bomByCode(order.bomCode)?.productCode} ${store.bomByCode(order.bomCode)?.spec}`
+    `${order.orderNo} ${order.customer} ${order.customerCode} ${order.bomCode} ${store.bomByCode(order.bomCode)?.spec}`
       .toLowerCase()
       .includes(keyword),
   );
@@ -39,7 +39,7 @@ export function SearchPage() {
       .includes(keyword),
   );
   const boms = (data?.boms ?? []).filter((bom) =>
-    `${bom.code} ${bom.productCode} ${bom.name} ${bom.spec}`
+    `${bom.code} ${bom.name} ${bom.spec}`
       .toLowerCase()
       .includes(keyword),
   );
@@ -152,7 +152,7 @@ export function SearchPage() {
                   <RecordCard
                     key={item.code}
                     title={`${item.name} · ${item.seriesLabel}`}
-                    subtitle={item.productCode}
+                    subtitle={item.code}
                     actions={
                       <Button
                         onClick={() =>

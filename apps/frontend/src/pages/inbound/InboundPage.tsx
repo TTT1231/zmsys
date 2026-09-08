@@ -123,7 +123,7 @@ export function InboundModal({
             onChange={setBomCode}
             options={boms.map((bom) => ({
               value: bom.code,
-              label: `${bom.productCode} · ${bom.spec}`,
+              label: `${bom.code} · ${bom.spec}`,
             }))}
           />
         </div>
@@ -161,7 +161,7 @@ export function InboundModal({
         {selectedBom && (
           <div className="rounded-[12px] border border-line bg-[#fcfcfd] px-3.5 py-3 text-[12.5px] sm:col-span-2">
             <div className="font-semibold text-ink">
-              {selectedBom.productCode}
+              {selectedBom.code}
             </div>
             <div className="mt-1 text-muted">{selectedBom.spec}</div>
             <div className="tnum mt-1.5 font-medium text-primary-strong">
@@ -190,7 +190,7 @@ function VoucherModal({
       onClose={onClose}
       label="入库凭证"
       title={row.no}
-      subtitle={row.productCode}
+      subtitle={row.bomCode}
       width={480}
       footer={
         <button
@@ -242,7 +242,7 @@ export function InboundPage() {
     const kw = keyword.trim().toLowerCase();
     if (!kw) return rows;
     return rows.filter((row) =>
-      `${row.no} ${row.productCode} ${row.inspector}`
+      `${row.no} ${row.bomCode} ${row.inspector}`
         .toLowerCase()
         .includes(kw),
     );
@@ -291,7 +291,7 @@ export function InboundPage() {
                 setKeyword(event.target.value);
                 setPage(1);
               }}
-              placeholder="搜索单号、成品编码或登记人"
+              placeholder="搜索单号、BOM 编码或登记人"
               className="w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-subtle"
             />
           </label>
@@ -317,14 +317,14 @@ export function InboundPage() {
                   "成品入库",
                   [
                     "入库单号",
-                    "成品编码",
+                    "BOM 编码",
                     "入库数量",
                     "入库日期",
                     "检验登记人",
                   ],
                   pageRows.map((row) => [
                     row.no,
-                    row.productCode,
+                    row.bomCode,
                     String(row.qty),
                     row.date,
                     row.inspector,
@@ -342,7 +342,7 @@ export function InboundPage() {
             {pageRows.map((row) => (
               <RecordCard
                 key={row.no}
-                title={row.productCode}
+                title={row.bomCode}
                 subtitle={`${row.date} · ${row.no}`}
                 badge={
                   <strong className="text-success">+{num(row.qty)} 件</strong>
@@ -371,7 +371,7 @@ export function InboundPage() {
               <thead>
                 <tr className="bg-[#f8fafc] text-left text-[12px] text-muted">
                   <th className="px-5 py-2.5 font-semibold">入库单号</th>
-                  <th className="px-3 py-2.5 font-semibold">成品编码</th>
+                  <th className="px-3 py-2.5 font-semibold">BOM 编码</th>
                   <th className="px-3 py-2.5 text-right font-semibold">
                     入库数量
                   </th>
@@ -400,7 +400,7 @@ export function InboundPage() {
                       {row.no}
                     </td>
                     <td className="px-3 py-3 tnum text-[12.5px] font-medium text-primary-strong">
-                      {row.productCode}
+                      {row.bomCode}
                     </td>
                     <td className="px-3 py-3 text-right">
                       <QtyCell value={row.qty} unit="件" />

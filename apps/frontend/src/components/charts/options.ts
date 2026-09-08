@@ -71,7 +71,7 @@ export function buildPendingVsStockOption(rows: PendingVsStockRow[]): EChartsOpt
         if (!row) return "";
         return [
           `<div style="font-weight:600;font-size:13px;">${row.id}${tipBadge(row.overdue)}</div>`,
-          `<div style="margin-top:2px;color:#667085;font-size:11.5px;">${row.customer} · ${row.productCode}</div>`,
+          `<div style="margin-top:2px;color:#667085;font-size:11.5px;">${row.customer} · ${row.bomCode}</div>`,
           `<div style="color:#667085;font-size:11.5px;">${row.deliverDate} 交付</div>`,
           `<div style="margin-top:7px;display:flex;justify-content:space-between;gap:18px;"><span style="color:#667085;">剩余待交付</span><b>${fmt(row.remaining)} 件</b></div>`,
           `<div style="display:flex;justify-content:space-between;gap:18px;"><span style="color:#667085;">可用库存</span><b>${fmt(row.stock)} 件</b></div>`,

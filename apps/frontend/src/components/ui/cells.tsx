@@ -39,7 +39,7 @@ export function DateCell({ date, overdue }: { date: string; overdue?: boolean })
   );
 }
 
-/* 成品编码 chip */
+/* BOM 编码 chip */
 export function BomTag({ children }: { children: string }) {
   return (
     <span className="inline-block max-w-[220px] truncate rounded-[6px] border border-[#e0e7ff] bg-primary-soft px-1.5 py-0.5 text-[11.5px] font-medium text-primary-strong tnum">
