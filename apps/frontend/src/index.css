@@ -188,6 +188,8 @@ button:active:not(:disabled) {
 @layer base {
   html {
     font-size: 14px;
+    /* 滚动条槽位常驻：弹窗锁 body 滚动时内容宽度不变，表格不因列宽重排而抖动 */
+    scrollbar-gutter: stable;
   }
 
   body {
