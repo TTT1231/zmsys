@@ -13,7 +13,6 @@ const PAGES = {
   "app-orders": "http://localhost:5180/orders",
   "app-customers": "http://localhost:5180/customers",
   "app-bom": "http://localhost:5180/bom",
-  "app-production": "http://localhost:5180/production",
   "app-inbound": "http://localhost:5180/inbound",
   "app-outbound": "http://localhost:5180/outbound",
   "app-permissions": "http://localhost:5180/permissions",

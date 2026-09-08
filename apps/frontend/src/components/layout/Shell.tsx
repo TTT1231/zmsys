@@ -30,12 +30,6 @@ function useNavSections(): Array<{ group: string; items: NavItem[] }> {
             tag: "新建+维护",
           },
           { label: "物料与 BOM", icon: "layers", to: "/bom", tag: "查看" },
-          {
-            label: "生产与交付",
-            icon: "chart",
-            to: "/production",
-            tag: "查看",
-          },
         ],
       },
     ];
@@ -54,7 +48,7 @@ function useNavSections(): Array<{ group: string; items: NavItem[] }> {
           {
             label: "待发货订单",
             icon: "order",
-            to: "/production",
+            to: "/orders",
             tag: "查看+发货",
           },
           {
@@ -87,7 +81,6 @@ function useNavSections(): Array<{ group: string; items: NavItem[] }> {
         { label: "销售订单", icon: "order", to: "/orders", tag: "查看+修改" },
         { label: "客户档案", icon: "users", to: "/customers", tag: "维护" },
         { label: "物料与 BOM", icon: "layers", to: "/bom", tag: "维护版本" },
-        { label: "生产进度", icon: "chart", to: "/production", tag: "查看" },
         { label: "成品入库", icon: "inbound", to: "/inbound", tag: "查看台账" },
         { label: "成品出库", icon: "truck", to: "/outbound", tag: "查看台账" },
       ],
@@ -319,7 +312,7 @@ export function MobileBottomNav({
   const centerItems =
     role === "warehouse"
       ? [
-          { label: "待发货", icon: "order", to: "/production" },
+          { label: "待发货", icon: "order", to: "/orders" },
           { label: "入库", icon: "inbound", to: "/inbound" },
           { label: "出库", icon: "truck", to: "/outbound" },
         ]

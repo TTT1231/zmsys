@@ -560,7 +560,7 @@ export function OrdersPage() {
   const [newOpen, setNewOpen] = useState(false);
   const [ship, setShip] = useState<string | null>(null);
   const [taskFilter, setTaskFilter] = useState(
-    searchParams.get("task") ?? "all",
+    searchParams.get("task") ?? (role === "warehouse" ? "ready" : "all"),
   );
   const [detail, setDetail] = useState<Order | null>(null);
   const [editing, setEditing] = useState<Order | null>(null);
@@ -574,7 +574,7 @@ export function OrdersPage() {
 
   const filtered = (() => {
     const kw = keyword.trim().toLowerCase();
-    return orders.filter((order) => {
+    const rows = orders.filter((order) => {
       if (taskFilter === "pending" && order.qty <= order.outbound) return false;
       if (taskFilter === "ready" && maxShipOf(order.orderNo) <= 0) return false;
       if (
@@ -592,6 +592,14 @@ export function OrdersPage() {
       }
       return true;
     });
+    // 仓库角色按交期优先排序，便于安排发货
+    return role === "warehouse"
+      ? [...rows].sort(
+          (a, b) =>
+            a.deliverDate.localeCompare(b.deliverDate) ||
+            a.orderNo.localeCompare(b.orderNo),
+        )
+      : rows;
   })();
 
   const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -618,7 +626,7 @@ export function OrdersPage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeading
-        title="销售订单"
+        title={role === "warehouse" ? "待发货订单" : "销售订单"}
         actions={
           canCreate ? (
             <Button icon="plus" onClick={() => setNewOpen(true)}>

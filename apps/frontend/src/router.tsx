@@ -7,7 +7,6 @@ import { WorkbenchPage } from "./pages/workbench/WorkbenchPage";
 import { OrdersPage } from "./pages/orders/OrdersPage";
 import { CustomersPage } from "./pages/customers/CustomersPage";
 import { BomPage } from "./pages/bom/BomPage";
-import { ProductionPage } from "./pages/production/ProductionPage";
 import { InboundPage } from "./pages/inbound/InboundPage";
 import { OutboundPage } from "./pages/outbound/OutboundPage";
 import { PermissionsPage } from "./pages/permissions/PermissionsPage";
@@ -18,15 +17,19 @@ const PAGE_TITLES: Array<[RegExp, (match: RegExpMatchArray) => string]> = [
   [/^\/orders/, () => "销售订单"],
   [/^\/customers/, () => "客户档案"],
   [/^\/bom/, () => "物料与 BOM"],
-  [/^\/production/, () => "生产进度"],
   [/^\/inbound/, () => "成品入库"],
   [/^\/outbound/, () => "成品出库"],
   [/^\/permissions/, () => "用户与权限"],
 ];
 
+// 仓库角色在订单页关注发货，标题跟随其工作台入口
+function pageTitle(title: string, role: string) {
+  return title === "销售订单" && role === "warehouse" ? "待发货订单" : title;
+}
+
 function AppLayout() {
   const location = useLocation();
-  const { setRole } = useApp();
+  const { role, setRole } = useApp();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -40,12 +43,15 @@ function AppLayout() {
     setDrawerOpen(false);
     const match = PAGE_TITLES.find(([pattern]) => pattern.test(location.pathname));
     const title = match ? match[1](location.pathname.match(match[0])!) : "智造管理系统";
-    document.title = `${title} · 智造管理系统`;
-  }, [location.pathname]);
+    document.title = `${pageTitle(title, role)} · 智造管理系统`;
+  }, [location.pathname, role]);
 
   const title = (() => {
     const match = PAGE_TITLES.find(([pattern]) => pattern.test(location.pathname));
-    return match ? match[1](location.pathname.match(match[0])!) : "智造管理系统";
+    return pageTitle(
+      match ? match[1](location.pathname.match(match[0])!) : "智造管理系统",
+      role,
+    );
   })();
 
   return (
@@ -72,7 +78,7 @@ export const router = createBrowserRouter([
       { path: "/orders", element: <OrdersPage /> },
       { path: "/customers", element: <CustomersPage /> },
       { path: "/bom", element: <BomPage /> },
-      { path: "/production", element: <ProductionPage /> },
+      { path: "/production", element: <Navigate to="/orders" replace /> },
       { path: "/inbound", element: <InboundPage /> },
       { path: "/outbound", element: <OutboundPage /> },
       { path: "/permissions", element: <PermissionsPage /> },
