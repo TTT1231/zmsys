@@ -36,24 +36,19 @@
 ```
 admin-manage/
 ├── index.html                  # Vite 入口 HTML
-├── vite.config.ts              # Vite 配置（Tailwind 插件 + "@" 别名指向 src/）
 ├── tsconfig.json               # TS 工程引用配置（app / node 两个子配置）
-├── .oxlintrc.json              # oxlint 规则配置
-├── .oxfmtrc.json               # oxfmt 格式化配置（pnpm format：3 空格缩进 / 120 列 / 单参箭头免括号）
 ├── docs/db-scheme.md           # 数据库设计文档
 ├── docs/api/openapi.yaml       # API 契约（交付后端，与 TS 类型 / MSW handlers 三方对齐）
-├── .env.example                # 环境变量样例（VITE_API_BASE_URL / VITE_ENABLE_MSW）
+├── .env.development            # 环境变量默认配置（VITE_API_BASE_URL / VITE_ENABLE_MSW，无敏感信息入库）
 ├── mocks/                      # MSW mock（开发模式拦截 /api/*，生产构建不打包；与 src 平级的"假后端"）
 │   ├── browser.ts              # setupWorker
 │   ├── data/                   # 数据 mock：内存数据库 db.ts（种子数据 + 业务规则，
 │   │                           #   日期锚点动态取今天；node --test 可直接导入）
-│   └── request/                # 请求 mock：handlers（auth / business / system）
+│   └── request/                # 请求 mock：index 聚合出口 + handlers（auth / business / system）+ shared 工具
 ├── public/                     # 静态资源（favicon.svg、icons.svg、mockServiceWorker.js）
 ├── scripts/                    # 工具脚本
-│   ├── inventory.test.mjs      # 库存业务逻辑测试（pnpm test，直跑 TS，被测模块的
-│   │                           #   运行时导入须用相对路径 + .ts 扩展名）
-│   ├── shot.mjs                # 应用截图脚本（puppeteer-core）
-│   └── shot-*.mjs              # 交互页 / 权限原型截图脚本
+│   └── inventory.test.mjs      # 库存业务逻辑测试（pnpm test，直跑 TS，被测模块的
+│                               #   运行时导入须用相对路径 + .ts 扩展名）
 └── src/                        # 路径别名 "@" → src/
     ├── main.tsx                # 应用入口（DEV 且未关闭 MSW 时先启动 mock worker）
     ├── index.css               # 全局样式（Tailwind + 设计令牌）
@@ -65,27 +60,29 @@ admin-manage/
     │   ├── token.ts            # accessToken 存取（localStorage）
     │   └── errors.ts / types.ts / interceptor-manager.ts
     ├── api/                    # 业务 API 契约层（依赖 http，端点与 openapi.yaml 对齐）
-    │   ├── index.ts            # api 出口（fetchSnapshot 聚合 + 旧方法面兼容 queries.ts）
+    │   ├── index.ts            # barrel 出口（类型经 export type * 转发，函数显式 re-export）
     │   ├── types.ts            # 契约类型中心
+    │   ├── snapshot.ts         # fetchSnapshot：多资源端点聚合快照（库存由台账推导）
     │   └── auth.ts / orders.ts / customers.ts / boms.ts / inbound.ts /
     │       outbound.ts / users.ts / permissions.ts / events.ts
     ├── components/
     │   ├── charts/             # ECharts 封装（EChart.tsx 通用组件、options.ts 图表配置）
     │   ├── layout/             # 页面外壳（Shell.tsx：侧边导航 + 顶栏 + 移动底栏）
     │   └── ui/                 # 通用 UI 组件（Modal、Toast、Pagination、Badge、
-    │                           #   Field、KpiCard、MobileList、PageHeading、
+    │                           #   Field、MobileList、NoteDialog、PageHeading、
     │                           #   SearchSelect、ToolbarMore、cells 表格单元格）
     ├── context/
     │   └── AppContext.tsx      # 认证上下文（登录用户 / 角色授权 / login、logout、can()）
-    ├── data/                   # 领域层（不发请求，职责详见 src/data/readme.md）
+    ├── data/                   # 领域层（不发请求，职责详见 src/data/README.md）
     │   ├── queries.ts          # react-query 查询/变更封装
     │   ├── views.ts            # 派生视图纯函数（输入快照，工作台/列表页消费）
     │   ├── permissions.ts      # 角色/菜单/动作权限字典 + 纯派生工具（授权是后端数据）
-    │   └── categories.ts       # 物料分类配置（前端常量，不落库）
-    ├── lib/                    # 工具函数（format.ts 格式化、date.ts 日期、icons.tsx 图标）
+    │   ├── categories.ts       # 物料分类配置（前端常量，不落库）
+    │   └── README.md           # 领域层职责与同步约定
+    ├── lib/                    # 工具函数（format.ts 格式化/CSV 导出、date.ts 日期、icons.tsx 图标）
     └── pages/                  # 页面模块（按业务域分目录）
         ├── login/              # 登录页
-        ├── workbench/          # 工作台（WorkbenchPage、SearchPage 全局搜索、dialogs 弹窗）
+        ├── workbench/          # 工作台（WorkbenchPage、SearchPage 全局搜索、dialogs 台账弹窗）
         ├── inbound/            # 成品出入库 - 检验入库
         ├── outbound/           # 成品出入库 - 登记发货/出库单
         ├── customers/          # 客户档案
@@ -103,14 +100,9 @@ admin-manage/
 - **登录鉴权**：`POST /auth/login` 换单 accessToken（localStorage `zm-token`），`GET /auth/profile` 下发用户 + 角色授权；401 由 http 层统一清 token 跳 `/login`。演示账号为 mock 种子用户（`mocks/data/db.ts`，密码均 `123456`）。
 - **权限渲染**：菜单/按钮字典在前端常量（`data/permissions.ts`），授权关系是后端数据（sys_grant），登录后经 profile 下发；角色授权编辑走 `PUT /roles/{roleId}/grants`。
 - **Mock 开关**：开发模式默认启用 MSW；设 `VITE_ENABLE_MSW=false` 联调真实后端，业务代码零改动。
-- **统计前端算**：后端只出基础资源 CRUD，工作台派生视图（待发货/缺口/趋势/TOP 客户）由 `data/views.ts` 基于聚合快照计算；库存 = Σ入库 − Σ出库。
+- **统计前端算**：后端只出基础资源 CRUD，工作台派生视图（待发货/缺口/趋势）由 `data/views.ts` 基于聚合快照计算；库存 = Σ入库 − Σ出库。
 - **契约同步**：改接口须同步三处——`src/api/types.ts`、`src/mocks/request/`、`docs/api/openapi.yaml`。
 
-### 导入与桶（barrel）策略
+## Tailwind v4 样式约定
 
-- **设桶的目录**：`src/http/index.ts`（请求基础设施）、`src/api/index.ts`（业务契约层）。消费者一律从桶导入（`@/http`、`@/api`），**类型同样走桶**（如 `import type { Order } from "@/api"`），不深路径直达 `@/api/types`、`@/api/auth` 等内部模块。
-- **桶只做出口**：桶文件只写显式 named re-export（禁 `export *`、禁 default），不放业务逻辑；聚合/适配逻辑下沉到具体模块（如 `api/snapshot.ts`、`data/queries.ts` 的签名适配）。
-- **不设桶的目录**：`components/ui`、`data`、`lib`、`pages`——按文件直接从 `@/...` 具名导入，避免无效聚合层。
-- **路径风格**：跨目录一律 `@/` 别名（含动态 `import("@/...")`）；仅 `src` 根文件（main/router）可用 `./` 相对。
-- **例外（勿"好心修复"）**：`src/data/views.ts` 与 `src/mocks/data/db.ts` 被 `pnpm test`（Node 直跑 TS）引用，Node 不解析 `@/` 别名，因此这两个文件对 `data/`、`lib/` 的**运行时值导入必须保留相对路径 + `.ts` 扩展名**（type 导入会被擦除，不受限）。
-- **层级方向**：`components` 不得反向依赖 `pages`（通用弹窗等下沉 `components/ui`）；页面之间目前的跨页 Modal 互引是已知网状，新增引用前先确认不会成环。
+- **优先原生刻度类，`[...]` 任意值是最后手段**：v4 工具类动态生成，数值直接写——例如`py-[3px]` → `py-0.75`等。

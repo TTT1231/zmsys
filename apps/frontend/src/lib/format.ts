@@ -4,10 +4,6 @@ export const num = (value: number) => value.toLocaleString("zh-CN");
 
 export const todayIso = today;
 
-export const maskPhone = (phone: string) => phone;
-
-export const formatDateCn = (iso: string) => iso;
-
 export function csvEscape(value: string) {
     if (/^[=+\-@]/.test(value)) return `'${value}`;
     return /[",\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;

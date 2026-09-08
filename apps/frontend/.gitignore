@@ -12,17 +12,13 @@ dist
 dist-ssr
 *.local
 
-# Env（.env.example / .env.development 无敏感信息，入库作为默认配置）
+# Env（.env.development 无敏感信息，入库作为默认配置）
 .env
 .env.*
-!.env.example
 !.env.development
 
 # Test coverage
 coverage
-
-# UI 验证截图输出（scripts/shot.mjs 生成）
-scripts/shots/
 
 # 验收截图产物
 acceptance-output/
@@ -39,4 +35,6 @@ acceptance-output/
 *.sw?
 
 .playwright-mcp
-prototype
+
+# husky 生成的钩子垫片目录
+.husky/_

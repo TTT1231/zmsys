@@ -183,10 +183,6 @@ export const DEFAULT_GRANTS = buildDefaultGrants();
 
 /* ---------- 派生工具 ---------- */
 
-export function grantFor(grants: GrantMap, role: RoleId): RoleGrant {
-    return grants[role];
-}
-
 /** 权限码判断：can(grant, "outbound:print") */
 export function can(grant: RoleGrant | undefined, perm: PermCode): boolean {
     if (!grant) return false;

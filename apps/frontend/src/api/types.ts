@@ -222,37 +222,6 @@ export interface ReadyToShipRow {
     overdue: boolean;
 }
 
-export interface PendingVsStockRow {
-    id: string;
-    customer: string;
-    bomCode: string;
-    bomLabel: string;
-    productType: string;
-    version: string;
-    deliverDate: string;
-    ordered: number;
-    shipped: number;
-    remaining: number;
-    stock: number;
-    maxShip: number;
-    overdue: boolean;
-}
-
-export interface RiskOrderRow {
-    orderNo: string;
-    customer: string;
-    customerCode: string;
-    bomCode: string;
-    bomLabel: string;
-    deliverDate: string;
-    qty: number;
-    outbound: number;
-    remaining: number;
-    stock: number;
-    maxShip: number;
-    overdue: boolean;
-}
-
 export interface StockGapRow {
     bomCode: string;
     gapQty: number;
@@ -274,13 +243,4 @@ export interface TrendRow {
     inboundCount: number;
     outboundQty: number;
     outboundCount: number;
-}
-
-export interface TopCustomerRow {
-    customer: string;
-    customerCode: string;
-    orderCount: number;
-    totalQty: number;
-    outboundQty: number;
-    pendingQty: number;
 }

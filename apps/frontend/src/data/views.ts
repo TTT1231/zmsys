@@ -1,19 +1,6 @@
 /* 派生视图（纯函数）：输入聚合快照，输出工作台/列表页所需行。
  * 服务端不出统计端点，全部在前端基于快照计算（与旧 store.ts 的派生函数同口径）。 */
-import type {
-    Bom,
-    InboundRow,
-    Order,
-    OrderStatus,
-    OutboundRow,
-    PendingVsStockRow,
-    ReadyToShipRow,
-    RiskOrderRow,
-    Snapshot,
-    StockGapRow,
-    TopCustomerRow,
-    TrendRow,
-} from "@/api";
+import type { Bom, Order, OrderStatus, ReadyToShipRow, Snapshot, StockGapRow, TrendRow } from "@/api";
 // 注意：本文件被 node --test 直跑，运行时值导入保留相对路径 + .ts 扩展名
 import { addDays, todayIso } from "../lib/date.ts";
 
@@ -49,14 +36,6 @@ export function orderStatusOf(snap: Pick<Snapshot, "stock">, order: Order): Orde
     return { label: "待备货", key: "pending" };
 }
 
-export function statusCounts(snap: Pick<Snapshot, "orders" | "stock">) {
-    const counts = { total: snap.orders.length, done: 0, progress: 0, ready: 0, pending: 0 };
-    snap.orders.forEach(order => {
-        counts[orderStatusOf(snap, order).key] += 1;
-    });
-    return counts;
-}
-
 /* 待发货明细：按交期顺序在共享库存池上做可发量分配（同一 BOM 库存不重复承诺） */
 export function readyToShip(snap: Snapshot): ReadyToShipRow[] {
     const left = new Map(Object.entries(snap.stock));
@@ -87,55 +66,6 @@ export function readyToShip(snap: Snapshot): ReadyToShipRow[] {
 
 export function maxShipOf(snap: Snapshot, orderNo: string): number {
     return readyToShip(snap).find(row => row.orderNo === orderNo)?.maxShip ?? 0;
-}
-
-export function pendingVsStock(snap: Snapshot, limit: number): PendingVsStockRow[] {
-    return readyToShip(snap)
-        .sort((a, b) => a.deliverDate.localeCompare(b.deliverDate) || b.remaining - a.remaining)
-        .slice(0, limit)
-        .map(row => {
-            const order = snap.orders.find(item => item.orderNo === row.orderNo)!;
-            return {
-                id: row.orderNo,
-                customer: row.customer,
-                bomCode: row.bomCode,
-                bomLabel: row.bomLabel,
-                productType: "通用产品",
-                version: "V1.0",
-                deliverDate: row.deliverDate.slice(5).replace("-", "/"),
-                ordered: order.qty,
-                shipped: order.outbound,
-                remaining: row.remaining,
-                stock: row.stock,
-                maxShip: row.maxShip,
-                overdue: row.overdue,
-            };
-        });
-}
-
-export function riskOrders(snap: Snapshot, limit?: number): RiskOrderRow[] {
-    const today = todayIso();
-    const rows = readyToShip(snap)
-        .filter(row => row.maxShip < row.remaining && row.deliverDate <= addDays(today, 14))
-        .sort((a, b) => a.deliverDate.localeCompare(b.deliverDate))
-        .map(row => {
-            const order = snap.orders.find(item => item.orderNo === row.orderNo)!;
-            return {
-                orderNo: row.orderNo,
-                customer: row.customer,
-                customerCode: row.customerCode,
-                bomCode: row.bomCode,
-                bomLabel: row.bomLabel,
-                deliverDate: row.deliverDate,
-                qty: order.qty,
-                outbound: order.outbound,
-                remaining: row.remaining,
-                stock: row.stock,
-                maxShip: row.maxShip,
-                overdue: row.deliverDate < today,
-            };
-        });
-    return limit ? rows.slice(0, limit) : rows;
 }
 
 export function stockGapList(snap: Snapshot): StockGapRow[] {
@@ -206,39 +136,4 @@ export function dailyTrend(snap: Snapshot, days: number): TrendRow[] {
         }
     });
     return result;
-}
-
-export function topCustomers(snap: Snapshot, limit?: number): TopCustomerRow[] {
-    const byCustomer = new Map<string, TopCustomerRow>();
-    snap.orders.forEach(order => {
-        const entry = byCustomer.get(order.customerCode) || {
-            customer: order.customer,
-            customerCode: order.customerCode,
-            orderCount: 0,
-            totalQty: 0,
-            outboundQty: 0,
-            pendingQty: 0,
-        };
-        entry.orderCount += 1;
-        entry.totalQty += order.qty;
-        entry.outboundQty += order.outbound;
-        entry.pendingQty += remainingOf(order);
-        byCustomer.set(order.customerCode, entry);
-    });
-    const rows = [...byCustomer.values()].sort((a, b) => b.totalQty - a.totalQty);
-    return limit ? rows.slice(0, limit) : rows;
-}
-
-export function recentInbound(snap: Snapshot, limit?: number): Array<InboundRow & { bomLabel: string }> {
-    const rows = [...snap.inboundLedger]
-        .sort((a, b) => (a.date === b.date ? b.no.localeCompare(a.no) : b.date.localeCompare(a.date)))
-        .map(row => ({ ...row, bomLabel: bomByCode(snap, row.bomCode)?.spec ?? "" }));
-    return limit ? rows.slice(0, limit) : rows;
-}
-
-export function recentOutbound(snap: Snapshot, limit?: number): OutboundRow[] {
-    const rows = [...snap.outboundLedger].sort((a, b) =>
-        a.date === b.date ? b.no.localeCompare(a.no) : b.date.localeCompare(a.date),
-    );
-    return limit ? rows.slice(0, limit) : rows;
 }
