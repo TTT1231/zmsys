@@ -35,3 +35,6 @@ acceptance-output/
 *.njsproj
 *.sln
 *.sw?
+
+.playwright-mcp
+prototype
