@@ -16,9 +16,9 @@ import { useToast } from "@/components/ui/Toast";
 import type { Customer, Snapshot } from "@/api";
 
 const AVATAR_TONES = [
-    "bg-[#ffedd5] text-[#c2410c]",
+    "bg-orange-100 text-orange-700",
     "bg-success-soft text-success",
-    "bg-[#f3e8ff] text-[#7e22ce]",
+    "bg-purple-100 text-purple-700",
     "bg-accent-soft text-accent",
 ];
 
@@ -85,7 +85,7 @@ function NewCustomerModal({ open, onClose }: { open: boolean; onClose: () => voi
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-[13px] font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -93,7 +93,7 @@ function NewCustomerModal({ open, onClose }: { open: boolean; onClose: () => voi
                         type="button"
                         disabled={createCustomer.isPending}
                         onClick={submit}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-[13px] font-medium text-white hover:bg-primary-hover disabled:opacity-60"
+                        className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
                     >
                         保存档案
                     </button>
@@ -177,7 +177,7 @@ export function CustomerDetailModal({
                 <button
                     type="button"
                     onClick={onClose}
-                    className="min-h-10 rounded-btn bg-primary px-4 text-[13px] font-medium text-white hover:bg-primary-hover"
+                    className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover"
                 >
                     关闭
                 </button>
@@ -186,34 +186,34 @@ export function CustomerDetailModal({
             <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-3 rounded-panel border border-line bg-gradient-to-r from-[#f7f7ff] to-white px-4 py-3">
                     <span
-                        className={`flex h-11 w-11 items-center justify-center rounded-full text-[16px] font-semibold ${AVATAR_TONES[0]}`}
+                        className={`flex h-11 w-11 items-center justify-center rounded-full text-16 font-semibold ${AVATAR_TONES[0]}`}
                     >
                         {customer.name.slice(0, 1)}
                     </span>
                     <div className="min-w-0 flex-1">
-                        <div className="text-[14px] font-semibold text-ink">{customer.name}</div>
-                        <div className="tnum text-[12px] text-muted">
+                        <div className="text-14 font-semibold text-ink">{customer.name}</div>
+                        <div className="tnum text-12 text-muted">
                             {customer.code} · 建档 {customer.created}
                         </div>
                     </div>
                     <Badge tone={customer.status === "合作中" ? "done" : "pending"}>{customer.status}</Badge>
                 </div>
                 <div className="grid grid-cols-2 gap-2.5">
-                    <div className="rounded-[12px] border border-line px-3 py-2.5 text-center">
-                        <div className="text-[11.5px] text-muted">累计订单</div>
-                        <div className="tnum text-[20px] font-bold text-ink">
-                            {orders.length} <i className="text-[12px] font-normal text-subtle not-italic">单</i>
+                    <div className="rounded-xl border border-line px-3 py-2.5 text-center">
+                        <div className="text-11.5 text-muted">累计订单</div>
+                        <div className="tnum text-20 font-bold text-ink">
+                            {orders.length} <i className="text-12 font-normal text-subtle not-italic">单</i>
                         </div>
                     </div>
-                    <div className="rounded-[12px] border border-line px-3 py-2.5 text-center">
-                        <div className="text-[11.5px] text-muted">已完成订单</div>
-                        <div className="tnum text-[20px] font-bold text-success">
+                    <div className="rounded-xl border border-line px-3 py-2.5 text-center">
+                        <div className="text-11.5 text-muted">已完成订单</div>
+                        <div className="tnum text-20 font-bold text-success">
                             {orders.filter(order => order.outbound >= order.qty).length}
-                            <i className="ml-1 text-[12px] font-normal not-italic">单</i>
+                            <i className="ml-1 text-12 font-normal not-italic">单</i>
                         </div>
                     </div>
                 </div>
-                <div className="flex flex-col gap-2 text-[13px]">
+                <div className="flex flex-col gap-2 text-13">
                     {[
                         ["联系人", customer.contact],
                         ["联系电话", customer.phone],
@@ -233,18 +233,18 @@ export function CustomerDetailModal({
                     ))}
                 </div>
                 <div>
-                    <div className="mb-2 text-[12.5px] font-semibold text-ink">最近动态</div>
+                    <div className="mb-2 text-12.5 font-semibold text-ink">最近动态</div>
                     <ol className="flex flex-col gap-2.5 border-l border-line pl-4">
-                        {timeline.length === 0 && <li className="text-[12.5px] text-subtle">暂无订单动态。</li>}
+                        {timeline.length === 0 && <li className="text-12.5 text-subtle">暂无订单动态。</li>}
                         {timeline.map(order => (
                             <li key={order.orderNo} className="relative">
                                 <span className="absolute top-1.5 -left-5.25 h-2 w-2 rounded-full bg-primary" />
-                                <div className="text-[12.5px] text-ink">
+                                <div className="text-12.5 text-ink">
                                     新建订单{" "}
                                     <span className="tnum font-semibold text-primary-strong">{order.orderNo}</span> ·{" "}
                                     {order.qty.toLocaleString("zh-CN")} 件
                                 </div>
-                                <div className="tnum text-[11.5px] text-muted">{order.orderDate}</div>
+                                <div className="tnum text-11.5 text-muted">{order.orderDate}</div>
                             </li>
                         ))}
                     </ol>
@@ -259,7 +259,7 @@ export function CustomerDetailModal({
                             toast("复制失败，请从客户信息中选择号码复制", true);
                         }
                     }}
-                    className="self-start rounded-[9px] border border-line-strong px-3 py-2 text-[12.5px] font-medium text-primary-strong hover:border-primary-border"
+                    className="self-start rounded-input border border-line-strong px-3 py-2 text-12.5 font-medium text-primary-strong hover:border-primary-border"
                 >
                     复制完整手机号
                 </button>
@@ -340,20 +340,20 @@ export function CustomersPage() {
             />
 
             <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
-                <div className="list-toolbar flex flex-wrap items-center gap-2.5 border-b border-line bg-gradient-to-b from-white to-[#fcfcfd] px-5 py-4">
+                <div className="list-toolbar flex flex-wrap items-center gap-2.5 border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
                     <select
                         value={statusFilter}
                         onChange={event => {
                             setStatusFilter(event.target.value);
                             setPage(1);
                         }}
-                        className="h-10 rounded-[10px] border border-line-strong bg-white px-3 text-[13px] text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
                     >
                         {["全部状态", "合作中", "待跟进"].map(option => (
                             <option key={option}>{option}</option>
                         ))}
                     </select>
-                    <label className="flex h-10 min-w-55 flex-1 items-center gap-2 rounded-[10px] border border-line-strong bg-white px-3 sm:max-w-75">
+                    <label className="flex h-10 min-w-55 flex-1 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 sm:max-w-75">
                         <Icon name="search" size={15} className="text-subtle" />
                         <input
                             value={keyword}
@@ -362,7 +362,7 @@ export function CustomersPage() {
                                 setPage(1);
                             }}
                             placeholder="搜索公司名称或编码"
-                            className="w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-subtle"
+                            className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
                         />
                     </label>
 
@@ -441,11 +441,11 @@ export function CustomersPage() {
                 </div>
                 <div className="hidden overflow-x-auto lg:block">
                     {isLoading ? (
-                        <div className="py-16 text-center text-[13px] text-subtle">加载中…</div>
+                        <div className="py-16 text-center text-13 text-subtle">加载中…</div>
                     ) : (
                         <table className="w-full min-w-240 border-collapse">
                             <thead>
-                                <tr className="bg-[#f8fafc] text-left text-[12px] text-muted">
+                                <tr className="bg-soft text-left text-12 text-muted">
                                     <th className="px-5 py-2.5 font-semibold">客户信息</th>
                                     <th className="px-3 py-2.5 font-semibold">联系人</th>
                                     <th className="px-3 py-2.5 font-semibold">电话</th>
@@ -459,7 +459,7 @@ export function CustomersPage() {
                             <tbody>
                                 {pageRows.length === 0 && (
                                     <tr>
-                                        <td colSpan={8} className="px-5 py-14 text-center text-[13px] text-subtle">
+                                        <td colSpan={8} className="px-5 py-14 text-center text-13 text-subtle">
                                             没有找到匹配的客户
                                         </td>
                                     </tr>
@@ -472,7 +472,7 @@ export function CustomersPage() {
                                         <td className="px-5 py-3">
                                             <div className="flex items-center gap-2.5">
                                                 <span
-                                                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold ${AVATAR_TONES[index % AVATAR_TONES.length]}`}
+                                                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-13 font-semibold ${AVATAR_TONES[index % AVATAR_TONES.length]}`}
                                                 >
                                                     {row.customer.name.slice(0, 1)}
                                                 </span>
@@ -483,10 +483,10 @@ export function CustomersPage() {
                                                 />
                                             </div>
                                         </td>
-                                        <td className="px-3 py-3 text-[13px] text-td">{row.customer.contact}</td>
+                                        <td className="px-3 py-3 text-13 text-td">{row.customer.contact}</td>
                                         <td className="px-3 py-3">
                                             <span className="flex items-center gap-1.5">
-                                                <span className="tnum text-[13px] text-td">{row.customer.phone}</span>
+                                                <span className="tnum text-13 text-td">{row.customer.phone}</span>
                                                 <button
                                                     type="button"
                                                     aria-label="复制完整手机号"
@@ -494,19 +494,19 @@ export function CustomersPage() {
                                                         void navigator.clipboard?.writeText(row.customer.phoneFull);
                                                         toast("完整手机号已复制");
                                                     }}
-                                                    className="rounded-[6px] p-1 text-subtle transition hover:bg-primary-soft hover:text-primary"
+                                                    className="rounded-md p-1 text-subtle transition hover:bg-primary-soft hover:text-primary"
                                                 >
                                                     <Icon name="copy" size={13} />
                                                 </button>
                                             </span>
                                         </td>
                                         <td className="px-3 py-3">
-                                            <span className="flex items-center gap-1.5 text-[13px] text-td">
+                                            <span className="flex items-center gap-1.5 text-13 text-td">
                                                 <Icon name="location" size={14} className="text-subtle" />
                                                 {row.customer.region} · {row.customer.city}
                                             </span>
                                         </td>
-                                        <td className="px-3 py-3 text-[13px] text-td tnum">
+                                        <td className="px-3 py-3 text-13 text-td tnum">
                                             {row.orderCount} 单
                                             {row.pendingQty > 0 ? (
                                                 <span className="text-muted">
@@ -515,7 +515,7 @@ export function CustomersPage() {
                                                 </span>
                                             ) : null}
                                         </td>
-                                        <td className="px-3 py-3 tnum text-[13px] text-td">{row.lastOrderDate}</td>
+                                        <td className="px-3 py-3 tnum text-13 text-td">{row.lastOrderDate}</td>
                                         <td className="px-3 py-3">
                                             <Badge tone={row.customer.status === "合作中" ? "done" : "pending"}>
                                                 {row.customer.status}
@@ -531,7 +531,7 @@ export function CustomersPage() {
                     )}
                 </div>
 
-                <div className="border-t border-line px-5 py-3.5 text-[12.5px] text-muted">共 {rows.length} 家客户</div>
+                <div className="border-t border-line px-5 py-3.5 text-12.5 text-muted">共 {rows.length} 家客户</div>
             </section>
 
             {canCreate && <NewCustomerModal open={newOpen} onClose={() => setNewOpen(false)} />}

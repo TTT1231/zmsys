@@ -31,15 +31,44 @@
   --color-sidebar-soft: #1d2939;
 
   --color-td: #344054;
+  --color-td-strong: #475467;
   --color-row-hover: #f8f9ff;
+  --color-soft: #f8fafc;
+  --color-panel: #fcfcfd;
+  --color-scrim: rgba(15, 23, 42, 0.48);
 
+  /* 圆角：md/xl 锁定设计稿 px（14px 根字号下 rem 档位会缩小；lg 已有存量使用，保持默认） */
   --radius-btn: 10px;
+  --radius-input: 9px;
   --radius-card: 14px;
   --radius-panel: 18px;
+  --radius-md: 6px;
+  --radius-xl: 12px;
 
   --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
   --shadow-card: 0 2px 6px rgba(16, 24, 40, 0.04);
   --shadow-modal: 0 18px 45px rgba(16, 24, 40, 0.12);
+  --shadow-glow: 0 6px 18px rgba(79, 70, 229, 0.45);
+
+  /* 字号：数字类名 = 设计稿 px 值（text-13 即 13px；不设 --line-height 对，保持继承 1.5） */
+  --text-11: 11px;
+  --text-12: 12px;
+  --text-13: 13px;
+  --text-14: 14px;
+  --text-15: 15px;
+  --text-16: 16px;
+  --text-17: 17px;
+  --text-20: 20px;
+  --text-22: 22px;
+  --text-24: 24px;
+  --text-30: 30px;
+
+  /* 半像素字号（类名带点，如 text-12.5 = 12.5px） */
+  --text-10\.5: 10.5px;
+  --text-11\.5: 11.5px;
+  --text-12\.5: 12.5px;
+  --text-13\.5: 13.5px;
+  --text-14\.5: 14.5px;
 }
 
 .record-card {

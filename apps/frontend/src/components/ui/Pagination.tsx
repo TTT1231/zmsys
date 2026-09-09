@@ -25,7 +25,7 @@ export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChan
 
     return (
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 max-sm:flex-col">
-            <div className="flex items-center gap-3 text-[12.5px] text-muted max-sm:hidden">
+            <div className="flex items-center gap-3 text-12.5 text-muted max-sm:hidden">
                 <span>
                     显示 {from}–{to}，共 {num(total)} {unit}
                 </span>
@@ -35,7 +35,7 @@ export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChan
                         <select
                             value={pageSize}
                             onChange={event => onPageSizeChange(Number(event.target.value))}
-                            className="rounded-lg border border-line bg-white px-2 py-1 text-[12.5px] text-ink"
+                            className="rounded-lg border border-line bg-white px-2 py-1 text-12.5 text-ink"
                         >
                             {[10, 30, 50].map(size => (
                                 <option key={size} value={size}>
@@ -58,7 +58,7 @@ export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChan
                 </button>
                 {paginationWindow(current, pages).map((item, index) =>
                     item === "…" ? (
-                        <span key={`ellipsis-${index}`} className="px-1.5 text-[12.5px] text-subtle max-sm:hidden">
+                        <span key={`ellipsis-${index}`} className="px-1.5 text-12.5 text-subtle max-sm:hidden">
                             …
                         </span>
                     ) : (
@@ -67,7 +67,7 @@ export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChan
                             type="button"
                             aria-current={item === current ? "page" : undefined}
                             onClick={() => onPageChange(item)}
-                            className={`h-8 min-w-8 rounded-lg px-2 text-[12.5px] font-medium transition ${
+                            className={`h-8 min-w-8 rounded-lg px-2 text-12.5 font-medium transition ${
                                 item === current
                                     ? "bg-primary text-white max-sm:hidden"
                                     : "border border-line text-muted hover:border-primary-border hover:text-primary max-sm:hidden"
@@ -77,7 +77,7 @@ export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChan
                         </button>
                     ),
                 )}
-                <span className="hidden text-center text-[12px] text-muted max-sm:block">
+                <span className="hidden text-center text-12 text-muted max-sm:block">
                     第 {current} / {pages} 页
                 </span>
                 <button

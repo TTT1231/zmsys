@@ -113,7 +113,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-[13px] font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -121,7 +121,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
                         type="button"
                         disabled={createOrder.isPending}
                         onClick={submit}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-[13px] font-medium text-white hover:bg-primary-hover disabled:opacity-60"
+                        className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
                     >
                         {createOrder.isPending ? "正在提交…" : "提交订单"}
                     </button>
@@ -130,7 +130,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
         >
             <div className="flex flex-col gap-5">
                 <fieldset className="rounded-panel border border-line p-4">
-                    <legend className="px-1.5 text-[12.5px] font-semibold text-primary">① 客户与交付</legend>
+                    <legend className="px-1.5 text-12.5 font-semibold text-primary">① 客户与交付</legend>
                     <div className="grid gap-3 sm:grid-cols-2">
                         <SearchSelect
                             label="客户"
@@ -179,7 +179,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
                 </fieldset>
 
                 <fieldset className="rounded-panel border border-line p-4">
-                    <legend className="px-1.5 text-[12.5px] font-semibold text-primary">② 选择 BOM</legend>
+                    <legend className="px-1.5 text-12.5 font-semibold text-primary">② 选择 BOM</legend>
                     <div className="grid gap-3 sm:grid-cols-3">
                         <SelectField
                             label="品类"
@@ -207,7 +207,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
                             />
                         </div>
                         {selectedBom && (
-                            <p className="rounded-[10px] bg-primary-soft/70 px-3 py-2 text-[12px] text-primary-strong sm:col-span-3">
+                            <p className="rounded-btn bg-primary-soft/70 px-3 py-2 text-12 text-primary-strong sm:col-span-3">
                                 {selectedBom.code} · {selectedBom.name} · {selectedBom.spec}
                             </p>
                         )}
@@ -215,7 +215,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
                 </fieldset>
 
                 <fieldset className="rounded-panel border border-line p-4">
-                    <legend className="px-1.5 text-[12.5px] font-semibold text-primary">③ 订单备注</legend>
+                    <legend className="px-1.5 text-12.5 font-semibold text-primary">③ 订单备注</legend>
                     <TextArea
                         label="备注"
                         placeholder="选填"
@@ -280,7 +280,7 @@ function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void 
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-[13px] font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -288,7 +288,7 @@ function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void 
                         type="button"
                         disabled={updateOrder.isPending}
                         onClick={submit}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-[13px] font-medium text-white hover:bg-primary-hover disabled:opacity-60"
+                        className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
                     >
                         保存修改
                     </button>
@@ -366,7 +366,7 @@ export function OrderDetailModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-[13px] font-medium text-white hover:bg-primary-hover"
+                        className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover"
                     >
                         关闭
                     </button>
@@ -380,17 +380,17 @@ export function OrderDetailModal({
                         { label: "累计出库", value: order.outbound, danger: false },
                         { label: "剩余待交付", value: remaining, danger: remaining > 0 },
                     ].map(metric => (
-                        <div key={metric.label} className="rounded-[12px] border border-line px-3 py-2.5 text-center">
-                            <div className="text-[11.5px] text-muted">{metric.label}</div>
+                        <div key={metric.label} className="rounded-xl border border-line px-3 py-2.5 text-center">
+                            <div className="text-11.5 text-muted">{metric.label}</div>
                             <div
-                                className={`tnum text-[20px] font-bold ${metric.value > 0 && metric.label === "剩余待交付" ? "text-danger" : "text-ink"}`}
+                                className={`tnum text-20 font-bold ${metric.value > 0 && metric.label === "剩余待交付" ? "text-danger" : "text-ink"}`}
                             >
                                 {num(metric.value)}
                             </div>
                         </div>
                     ))}
                 </div>
-                <div className="flex flex-col gap-2 text-[13px]">
+                <div className="flex flex-col gap-2 text-13">
                     {[
                         ["状态", <StatusBadge key="s" status={status.key} />],
                         [
@@ -434,16 +434,16 @@ export function OrderDetailModal({
                         </div>
                     ))}
                 </div>
-                <details className="rounded-[12px] border border-line px-3.5 py-2.5" open={shipments.length > 0}>
-                    <summary className="cursor-pointer text-[12.5px] font-semibold text-ink">
+                <details className="rounded-xl border border-line px-3.5 py-2.5" open={shipments.length > 0}>
+                    <summary className="cursor-pointer text-12.5 font-semibold text-ink">
                         发货记录（{shipments.length}）
                     </summary>
                     <div className="mt-2 flex flex-col gap-1.5">
-                        {shipments.length === 0 && <p className="text-[12px] text-subtle">暂无发货记录。</p>}
+                        {shipments.length === 0 && <p className="text-12 text-subtle">暂无发货记录。</p>}
                         {shipments.map(row => (
                             <div
                                 key={row.no}
-                                className="flex items-center justify-between gap-3 rounded-[9px] bg-[#f8fafc] px-3 py-1.5 text-[12.5px]"
+                                className="flex items-center justify-between gap-3 rounded-input bg-soft px-3 py-1.5 text-12.5"
                             >
                                 <span className="tnum font-medium text-ink">{row.no}</span>
                                 <span className="text-muted">
@@ -569,8 +569,8 @@ export function OrdersPage() {
             </div>
 
             <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
-                <div className="list-toolbar flex flex-wrap items-center gap-2.5 border-b border-line bg-gradient-to-b from-white to-[#fcfcfd] px-5 py-4">
-                    <label className="flex h-10 min-w-55 items-center gap-2 rounded-[10px] border border-line-strong bg-white px-3 sm:w-70">
+                <div className="list-toolbar flex flex-wrap items-center gap-2.5 border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
+                    <label className="flex h-10 min-w-55 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 sm:w-70">
                         <Icon name="search" size={15} className="text-subtle" />
                         <input
                             value={keyword}
@@ -579,7 +579,7 @@ export function OrdersPage() {
                                 setPage(1);
                             }}
                             placeholder="搜索客户、订单或产品"
-                            className="w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-subtle"
+                            className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
                         />
                     </label>
                     <select
@@ -588,7 +588,7 @@ export function OrdersPage() {
                             setStatusFilter(event.target.value);
                             setPage(1);
                         }}
-                        className="h-10 rounded-[10px] border border-line-strong bg-white px-3 text-[13px] text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
                     >
                         {STATUS_OPTIONS.map(option => (
                             <option key={option}>{option}</option>
@@ -601,7 +601,7 @@ export function OrdersPage() {
                             setPage(1);
                         }}
                         aria-label="按品类筛选"
-                        className="h-10 rounded-[10px] border border-line-strong bg-white px-3 text-[13px] text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
                     >
                         <option>全部品类</option>
                         {categories.map(item => (
@@ -610,7 +610,7 @@ export function OrdersPage() {
                     </select>
                     <details className="relative">
                         <summary
-                            className={`flex h-10 list-none items-center gap-1.5 rounded-[10px] px-3 text-[13px] transition ${
+                            className={`flex h-10 list-none items-center gap-1.5 rounded-btn px-3 text-13 transition ${
                                 dateFilterActive
                                     ? "bg-primary-soft text-primary-strong"
                                     : "text-ink hover:text-primary-strong"
@@ -620,7 +620,7 @@ export function OrdersPage() {
                             交期筛选
                             {dateFilterActive && <span className="h-1.5 w-1.5 rounded-full bg-success" />}
                         </summary>
-                        <div className="fixed inset-x-4 top-45 z-50 grid grid-cols-1 gap-2 lg:absolute lg:inset-x-auto lg:top-12 lg:right-0 lg:w-75 rounded-[12px] border border-line bg-white p-3 shadow-modal">
+                        <div className="fixed inset-x-4 top-45 z-50 grid grid-cols-1 gap-2 lg:absolute lg:inset-x-auto lg:top-12 lg:right-0 lg:w-75 rounded-xl border border-line bg-white p-3 shadow-modal">
                             <Field label="开始">
                                 <input
                                     type="date"
@@ -629,7 +629,7 @@ export function OrdersPage() {
                                         setDateStart(event.target.value);
                                         setPage(1);
                                     }}
-                                    className="rounded-[9px] border border-line-strong px-2.5 py-2 text-[13px]"
+                                    className="rounded-input border border-line-strong px-2.5 py-2 text-13"
                                 />
                             </Field>
                             <Field label="结束">
@@ -640,7 +640,7 @@ export function OrdersPage() {
                                         setDateEnd(event.target.value);
                                         setPage(1);
                                     }}
-                                    className="rounded-[9px] border border-line-strong px-2.5 py-2 text-[13px]"
+                                    className="rounded-input border border-line-strong px-2.5 py-2 text-13"
                                 />
                             </Field>
                             <Button onClick={event => event.currentTarget.closest("details")?.removeAttribute("open")}>
@@ -705,11 +705,11 @@ export function OrdersPage() {
                 </div>
                 <div className="hidden overflow-x-auto lg:block">
                     {isLoading ? (
-                        <div className="py-16 text-center text-[13px] text-subtle">加载中…</div>
+                        <div className="py-16 text-center text-13 text-subtle">加载中…</div>
                     ) : (
                         <table className="w-full min-w-245 border-collapse">
                             <thead>
-                                <tr className="bg-[#f8fafc] text-left text-[12px] text-muted">
+                                <tr className="bg-soft text-left text-12 text-muted">
                                     <th className="px-5 py-2.5 font-semibold" style={{ width: "14%" }}>
                                         销售订单号
                                     </th>
@@ -741,12 +741,12 @@ export function OrdersPage() {
                                     <tr>
                                         <td colSpan={8} className="px-5 py-14 text-center">
                                             <Icon name="search" size={28} className="mx-auto mb-2 text-subtle" />
-                                            <p className="text-[13px] font-medium text-ink">没有找到匹配的订单</p>
-                                            <p className="mt-0.5 text-[12px] text-muted">调整筛选或搜索关键词后重试</p>
+                                            <p className="text-13 font-medium text-ink">没有找到匹配的订单</p>
+                                            <p className="mt-0.5 text-12 text-muted">调整筛选或搜索关键词后重试</p>
                                             <button
                                                 type="button"
                                                 onClick={reset}
-                                                className="mt-3 rounded-[9px] border border-line-strong px-3.5 py-2 text-[12.5px] font-medium text-primary-strong hover:border-primary-border"
+                                                className="mt-3 rounded-input border border-line-strong px-3.5 py-2 text-12.5 font-medium text-primary-strong hover:border-primary-border"
                                             >
                                                 清除筛选
                                             </button>
@@ -767,7 +767,7 @@ export function OrdersPage() {
                                                 <button
                                                     type="button"
                                                     onClick={() => setDetail(order)}
-                                                    className="tnum text-[13px] font-semibold text-[#475467] underline-offset-2 hover:text-primary-strong hover:underline"
+                                                    className="tnum text-13 font-semibold text-td-strong underline-offset-2 hover:text-primary-strong hover:underline"
                                                 >
                                                     {order.orderNo}
                                                 </button>
@@ -776,11 +776,11 @@ export function OrdersPage() {
                                                 <CustomerCell name={order.customer} sub={order.customerCode} />
                                             </td>
                                             <td className="px-3 py-4">
-                                                <span className="tnum block text-[13px] font-semibold text-[#475467]">
+                                                <span className="tnum block text-13 font-semibold text-td-strong">
                                                     {order.bomCode}
                                                 </span>
                                                 <span
-                                                    className="mt-0.5 block max-w-65 truncate text-[11.5px] text-muted"
+                                                    className="mt-0.5 block max-w-65 truncate text-11.5 text-muted"
                                                     title={bom?.spec}
                                                 >
                                                     {bom ? `${bom.name} · ${bom.spec}` : "—"}
@@ -796,7 +796,7 @@ export function OrdersPage() {
                                                 />
                                             </td>
                                             <td className="px-3 py-4">
-                                                <div className="text-[12.5px] text-muted">
+                                                <div className="text-12.5 text-muted">
                                                     {done ? (
                                                         "已全部交付"
                                                     ) : (
@@ -805,7 +805,7 @@ export function OrdersPage() {
                                                         </>
                                                     )}
                                                 </div>
-                                                <div className="tnum mt-0.5 text-[11.5px] text-muted">
+                                                <div className="tnum mt-0.5 text-11.5 text-muted">
                                                     已发 {num(order.outbound)} / {num(order.qty)}
                                                 </div>
                                                 <div className="mt-1.5">

@@ -12,13 +12,13 @@ export function PageHeading({ eyebrow, title, description, actions }: PageHeadin
     return (
         <section className="page-heading flex flex-wrap items-end justify-between gap-4">
             <div className="page-heading-copy">
-                {eyebrow && <div className="text-[12px] font-semibold tracking-[0.08em] text-primary">{eyebrow}</div>}
+                {eyebrow && <div className="text-12 font-semibold tracking-[0.08em] text-primary">{eyebrow}</div>}
                 <h1
                     className={`text-[clamp(25px,2.2vw,32px)] leading-tight font-bold tracking-[-0.035em] text-ink ${eyebrow ? "mt-1" : ""}`}
                 >
                     {title}
                 </h1>
-                {description && <p className="mt-1.5 max-w-160 text-[13px] text-muted">{description}</p>}
+                {description && <p className="mt-1.5 max-w-160 text-13 text-muted">{description}</p>}
             </div>
             {actions && <div className="flex flex-wrap items-center gap-2.5">{actions}</div>}
         </section>

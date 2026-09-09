@@ -1,7 +1,7 @@
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
 const inputBase =
-    "w-full rounded-[9px] border border-line-strong bg-white px-3 py-2 text-[13px] text-ink transition placeholder:text-subtle focus:border-primary focus:outline-none disabled:bg-[#f8fafc] disabled:text-subtle";
+    "w-full rounded-input border border-line-strong bg-white px-3 py-2 text-13 text-ink transition placeholder:text-subtle focus:border-primary focus:outline-none disabled:bg-soft disabled:text-subtle";
 
 export function TextField({
     label,
@@ -98,17 +98,17 @@ export function Field({
 }) {
     return (
         <label className="block">
-            <span className="mb-1 block text-[12.5px] font-medium text-td">
+            <span className="mb-1 block text-12.5 font-medium text-td">
                 {label}
                 {required && <span className="ml-0.5 text-danger">*</span>}
             </span>
             {children}
             {error ? (
-                <span role="alert" className="mt-1 block text-[12px] text-danger">
+                <span role="alert" className="mt-1 block text-12 text-danger">
                     {error}
                 </span>
             ) : hint ? (
-                <span className="mt-1 block text-[12px] text-subtle">{hint}</span>
+                <span className="mt-1 block text-12 text-subtle">{hint}</span>
             ) : null}
         </label>
     );

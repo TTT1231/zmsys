@@ -97,7 +97,7 @@ export function InboundModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-[13px] font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -105,7 +105,7 @@ export function InboundModal({
                         type="button"
                         disabled={createInbound.isPending}
                         onClick={submit}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-[13px] font-medium text-white hover:bg-primary-hover disabled:opacity-60"
+                        className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
                     >
                         {createInbound.isPending ? "正在登记…" : "确认入库"}
                     </button>
@@ -158,7 +158,7 @@ export function InboundModal({
                     onChange={event => setRemark(event.target.value)}
                 />
                 {selectedBom && (
-                    <div className="rounded-[12px] border border-line bg-[#fcfcfd] px-3.5 py-3 text-[12.5px] sm:col-span-2">
+                    <div className="rounded-xl border border-line bg-panel px-3.5 py-3 text-12.5 sm:col-span-2">
                         <div className="font-semibold text-ink">{selectedBom.code}</div>
                         <div className="mt-1 text-muted">{selectedBom.spec}</div>
                         <div className="tnum mt-1.5 font-medium text-primary-strong">
@@ -186,16 +186,14 @@ function VoucherModal({ row, snap, onClose }: { row: InboundRow | null; snap: Sn
                 <button
                     type="button"
                     onClick={onClose}
-                    className="min-h-10 rounded-btn bg-primary px-4 text-[13px] font-medium text-white hover:bg-primary-hover"
+                    className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover"
                 >
                     关闭
                 </button>
             }
         >
-            <div className="flex flex-col gap-2 text-[13px]">
-                <p className="rounded-[10px] bg-primary-soft/70 px-3 py-2 text-[12.5px] text-primary-strong">
-                    {bom?.spec}
-                </p>
+            <div className="flex flex-col gap-2 text-13">
+                <p className="rounded-btn bg-primary-soft/70 px-3 py-2 text-12.5 text-primary-strong">{bom?.spec}</p>
                 {[
                     ["入库数量", `${num(row.qty)} 件`],
                     ["入库日期", row.date],
@@ -268,8 +266,8 @@ export function InboundPage() {
             />
 
             <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
-                <div className="list-toolbar flex flex-wrap items-center gap-2.5 border-b border-line bg-gradient-to-b from-white to-[#fcfcfd] px-5 py-4">
-                    <label className="flex h-10 min-w-55 flex-1 items-center gap-2 rounded-[10px] border border-line-strong bg-white px-3 sm:max-w-75">
+                <div className="list-toolbar flex flex-wrap items-center gap-2.5 border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
+                    <label className="flex h-10 min-w-55 flex-1 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 sm:max-w-75">
                         <Icon name="search" size={15} className="text-subtle" />
                         <input
                             value={keyword}
@@ -278,7 +276,7 @@ export function InboundPage() {
                                 setPage(1);
                             }}
                             placeholder="搜索单号、BOM 编码或登记人"
-                            className="w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-subtle"
+                            className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
                         />
                     </label>
                     <select
@@ -288,7 +286,7 @@ export function InboundPage() {
                             setPage(1);
                         }}
                         aria-label="按品类筛选"
-                        className="h-10 rounded-[10px] border border-line-strong bg-white px-3 text-[13px] text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
                     >
                         <option>全部品类</option>
                         {categories.map(item => (
@@ -347,18 +345,18 @@ export function InboundPage() {
                                 }
                             >
                                 <p>{bomByCode(snap, row.bomCode)?.spec}</p>
-                                <p className="mt-2 text-[13px] text-muted">登记人 {row.inspector}</p>
+                                <p className="mt-2 text-13 text-muted">登记人 {row.inspector}</p>
                             </RecordCard>
                         ))}
                     </ListState>
                 </div>
                 <div className="hidden overflow-x-auto lg:block">
                     {isLoading ? (
-                        <div className="py-16 text-center text-[13px] text-subtle">加载中…</div>
+                        <div className="py-16 text-center text-13 text-subtle">加载中…</div>
                     ) : (
                         <table className="w-full min-w-215 border-collapse">
                             <thead>
-                                <tr className="bg-[#f8fafc] text-left text-[12px] text-muted">
+                                <tr className="bg-soft text-left text-12 text-muted">
                                     <th className="px-5 py-2.5 font-semibold">入库单号</th>
                                     <th className="px-3 py-2.5 font-semibold">BOM 编码</th>
                                     <th className="px-3 py-2.5 text-right font-semibold">入库数量</th>
@@ -370,29 +368,29 @@ export function InboundPage() {
                             <tbody>
                                 {pageRows.length === 0 && (
                                     <tr>
-                                        <td colSpan={6} className="px-5 py-14 text-center text-[13px] text-subtle">
+                                        <td colSpan={6} className="px-5 py-14 text-center text-13 text-subtle">
                                             没有找到匹配的入库记录
                                         </td>
                                     </tr>
                                 )}
                                 {pageRows.map(row => (
                                     <tr key={row.no} className="border-t border-line/70 transition hover:bg-row-hover">
-                                        <td className="px-5 py-3 tnum text-[13px] font-semibold text-[#475467]">
+                                        <td className="px-5 py-3 tnum text-13 font-semibold text-td-strong">
                                             {row.no}
                                         </td>
-                                        <td className="px-3 py-3 tnum text-[12.5px] font-medium text-primary-strong">
+                                        <td className="px-3 py-3 tnum text-12.5 font-medium text-primary-strong">
                                             {row.bomCode}
                                         </td>
                                         <td className="px-3 py-3 text-right">
                                             <QtyCell value={row.qty} unit="件" />
                                         </td>
-                                        <td className="px-3 py-3 tnum text-[13px] text-td">{row.date}</td>
-                                        <td className="px-3 py-3 text-[13px] text-td">{row.inspector}</td>
+                                        <td className="px-3 py-3 tnum text-13 text-td">{row.date}</td>
+                                        <td className="px-3 py-3 text-13 text-td">{row.inspector}</td>
                                         <td className="px-5 py-3 text-right">
                                             <button
                                                 type="button"
                                                 onClick={() => setVoucher(row)}
-                                                className="text-[13px] font-medium text-primary-strong underline-offset-2 hover:underline"
+                                                className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline"
                                             >
                                                 查看凭证
                                             </button>

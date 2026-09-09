@@ -10,11 +10,11 @@ function LedgerDaySection({ label, rows }: { label: string; rows: Array<{ no: st
     const totalQty = rows.reduce((sum, row) => sum + row.qty, 0);
 
     return (
-        <div className="rounded-[12px] border border-line">
+        <div className="rounded-xl border border-line">
             <button
                 type="button"
                 onClick={() => setOpen(value => !value)}
-                className="flex w-full items-center justify-between px-3.5 py-2.5 text-left text-[12.5px] font-semibold text-ink"
+                className="flex w-full items-center justify-between px-3.5 py-2.5 text-left text-12.5 font-semibold text-ink"
             >
                 <span>{label}</span>
                 <span className="tnum font-normal text-muted">
@@ -27,7 +27,7 @@ function LedgerDaySection({ label, rows }: { label: string; rows: Array<{ no: st
             >
                 <div className="overflow-hidden">
                     <div className="flex flex-col gap-1 px-2 pb-2">
-                        {rows.length === 0 && <div className="px-2 py-3 text-[12.5px] text-subtle">无登记记录</div>}
+                        {rows.length === 0 && <div className="px-2 py-3 text-12.5 text-subtle">无登记记录</div>}
                         {rows.map(row => {
                             const isChecked = checked.has(row.no);
                             return (
@@ -42,7 +42,7 @@ function LedgerDaySection({ label, rows }: { label: string; rows: Array<{ no: st
                                             return next;
                                         })
                                     }
-                                    className={`flex items-center gap-2.5 rounded-[9px] px-2 py-1.5 text-left transition hover:bg-primary-soft/60 ${isChecked ? "opacity-55" : ""}`}
+                                    className={`flex items-center gap-2.5 rounded-input px-2 py-1.5 text-left transition hover:bg-primary-soft/60 ${isChecked ? "opacity-55" : ""}`}
                                 >
                                     <span
                                         className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] border ${
@@ -66,15 +66,15 @@ function LedgerDaySection({ label, rows }: { label: string; rows: Array<{ no: st
                                     </span>
                                     <span className="min-w-0 flex-1">
                                         <span
-                                            className={`block text-[12.5px] font-medium text-ink ${isChecked ? "line-through" : ""}`}
+                                            className={`block text-12.5 font-medium text-ink ${isChecked ? "line-through" : ""}`}
                                         >
                                             {row.no}
                                         </span>
-                                        <span className="block truncate text-[11px] text-muted">{row.meta}</span>
+                                        <span className="block truncate text-11 text-muted">{row.meta}</span>
                                     </span>
-                                    <span className="tnum text-[12.5px] font-semibold text-ink">
+                                    <span className="tnum text-12.5 font-semibold text-ink">
                                         {num(row.qty)}
-                                        <i className="ml-0.5 text-[10.5px] font-normal text-subtle not-italic">件</i>
+                                        <i className="ml-0.5 text-10.5 font-normal text-subtle not-italic">件</i>
                                     </span>
                                 </button>
                             );
@@ -129,7 +129,7 @@ export function LedgerDialog({
                 <button
                     type="button"
                     onClick={onClose}
-                    className="min-h-10 rounded-btn bg-primary px-4 text-[13px] font-medium text-white hover:bg-primary-hover"
+                    className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover"
                 >
                     关闭
                 </button>

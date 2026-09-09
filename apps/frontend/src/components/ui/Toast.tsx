@@ -33,7 +33,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                     <div
                         key={item.id}
                         role="status"
-                        className={`pointer-events-auto flex items-center gap-2 rounded-btn px-4 py-2.5 text-[13px] text-white shadow-modal ${
+                        className={`pointer-events-auto flex items-center gap-2 rounded-btn px-4 py-2.5 text-13 text-white shadow-modal ${
                             item.error ? "bg-danger" : "bg-sidebar-soft"
                         }`}
                     >

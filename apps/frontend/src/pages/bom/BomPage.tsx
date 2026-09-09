@@ -38,7 +38,7 @@ export function BomDetailModal({ bom, onClose }: { bom: Bom | null; onClose: () 
                 <button
                     type="button"
                     onClick={onClose}
-                    className="min-h-10 rounded-btn bg-primary px-4 text-[13px] font-medium text-white hover:bg-primary-hover"
+                    className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover"
                 >
                     关闭
                 </button>
@@ -47,15 +47,13 @@ export function BomDetailModal({ bom, onClose }: { bom: Bom | null; onClose: () 
             <div className="flex flex-col gap-2">
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {specLines(bom).map(([label, value]) => (
-                        <div key={label} className="rounded-[10px] border border-line px-3 py-2">
-                            <div className="text-[11px] text-muted">{label}</div>
-                            <div className="truncate text-[13px] font-medium text-ink">{value}</div>
+                        <div key={label} className="rounded-btn border border-line px-3 py-2">
+                            <div className="text-11 text-muted">{label}</div>
+                            <div className="truncate text-13 font-medium text-ink">{value}</div>
                         </div>
                     ))}
                 </div>
-                <div className="rounded-[10px] bg-primary-soft/70 px-3 py-2 text-[12.5px] text-primary-strong">
-                    {bom.spec}
-                </div>
+                <div className="rounded-btn bg-primary-soft/70 px-3 py-2 text-12.5 text-primary-strong">{bom.spec}</div>
             </div>
         </Modal>
     );
@@ -132,7 +130,7 @@ function NewBomModal({ open, onClose }: { open: boolean; onClose: () => void }) 
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-[13px] font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -140,7 +138,7 @@ function NewBomModal({ open, onClose }: { open: boolean; onClose: () => void }) 
                         type="button"
                         disabled={createBom.isPending}
                         onClick={submit}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-[13px] font-medium text-white hover:bg-primary-hover disabled:opacity-60"
+                        className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
                     >
                         保存 BOM
                     </button>
@@ -203,7 +201,7 @@ function NewBomModal({ open, onClose }: { open: boolean; onClose: () => void }) 
                         />
                     ),
                 )}
-                <div className="rounded-[12px] border border-line bg-[#fcfcfd] px-3.5 py-3 text-[12.5px] sm:col-span-3">
+                <div className="rounded-xl border border-line bg-panel px-3.5 py-3 text-12.5 sm:col-span-3">
                     <div className="mb-1 font-semibold text-ink">预览</div>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted sm:grid-cols-3">
                         <span>品类：{name || "—"}</span>
@@ -256,7 +254,7 @@ function QuickFindModal({
                 <button
                     type="button"
                     onClick={onClose}
-                    className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-[13px] font-medium text-ink hover:border-primary-border"
+                    className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
                 >
                     关闭
                 </button>
@@ -270,27 +268,27 @@ function QuickFindModal({
                     ))}
                 </SelectField>
                 <label className="block sm:col-span-2">
-                    <span className="mb-1 block text-[12.5px] font-medium text-[#344054]">关键词</span>
+                    <span className="mb-1 block text-12.5 font-medium text-td">关键词</span>
                     <input
                         value={keyword}
                         onChange={event => setKeyword(event.target.value)}
                         placeholder="编码 / 型号 / 规格"
-                        className="w-full rounded-[9px] border border-line-strong px-3 py-2 text-[13px] outline-none focus:border-primary"
+                        className="w-full rounded-input border border-line-strong px-3 py-2 text-13 outline-none focus:border-primary"
                     />
                 </label>
             </div>
             <div className="mt-3 flex flex-col gap-1.5">
-                {results.length === 0 && <p className="py-3 text-center text-[12.5px] text-subtle">没有匹配的 BOM</p>}
+                {results.length === 0 && <p className="py-3 text-center text-12.5 text-subtle">没有匹配的 BOM</p>}
                 {results.map(bom => (
                     <button
                         key={bom.code}
                         type="button"
                         onClick={() => onDetail(bom)}
-                        className="rounded-[10px] border border-line px-3 py-2 text-left transition hover:border-primary-border hover:bg-primary-soft/40"
+                        className="rounded-btn border border-line px-3 py-2 text-left transition hover:border-primary-border hover:bg-primary-soft/40"
                     >
-                        <span className="text-[11.5px] font-medium text-muted">{bom.name}</span>
-                        <span className="tnum ml-2 text-[12.5px] font-semibold text-primary-strong">{bom.code}</span>
-                        <span className="mt-0.5 block truncate text-[11.5px] text-muted">{bom.spec}</span>
+                        <span className="text-11.5 font-medium text-muted">{bom.name}</span>
+                        <span className="tnum ml-2 text-12.5 font-semibold text-primary-strong">{bom.code}</span>
+                        <span className="mt-0.5 block truncate text-11.5 text-muted">{bom.spec}</span>
                     </button>
                 ))}
             </div>
@@ -354,9 +352,9 @@ export function BomPage() {
             />
 
             <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
-                <div className="list-toolbar flex flex-wrap items-center justify-between gap-2.5 border-b border-line bg-gradient-to-b from-white to-[#fcfcfd] px-5 py-4">
+                <div className="list-toolbar flex flex-wrap items-center justify-between gap-2.5 border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
                     <div className="flex flex-wrap items-center gap-2.5">
-                        <label className="flex h-10 min-w-55 items-center gap-2 rounded-[10px] border border-line-strong bg-white px-3 sm:w-75">
+                        <label className="flex h-10 min-w-55 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 sm:w-75">
                             <Icon name="search" size={15} className="text-subtle" />
                             <input
                                 value={keyword}
@@ -365,7 +363,7 @@ export function BomPage() {
                                     setPage(1);
                                 }}
                                 placeholder="搜索编码 / 品类 / 型号 / 规格"
-                                className="w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-subtle"
+                                className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
                             />
                         </label>
                         <select
@@ -374,7 +372,7 @@ export function BomPage() {
                                 setCategory(event.target.value);
                                 setPage(1);
                             }}
-                            className="h-10 rounded-[10px] border border-line-strong bg-white px-3 text-[13px] text-ink"
+                            className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
                             aria-label="按品类筛选"
                         >
                             <option>全部品类</option>
@@ -430,18 +428,18 @@ export function BomPage() {
                                 actions={<Button onClick={() => setDetail(bom)}>查看规格</Button>}
                             >
                                 <p>{bom.spec}</p>
-                                <p className="mt-2 text-[13px] text-muted">库存 {num(data?.stock[bom.code] ?? 0)} 件</p>
+                                <p className="mt-2 text-13 text-muted">库存 {num(data?.stock[bom.code] ?? 0)} 件</p>
                             </RecordCard>
                         ))}
                     </ListState>
                 </div>
                 <div className="hidden overflow-x-auto lg:block">
                     {isLoading ? (
-                        <div className="py-16 text-center text-[13px] text-subtle">加载中…</div>
+                        <div className="py-16 text-center text-13 text-subtle">加载中…</div>
                     ) : (
                         <table className="w-full min-w-230 border-collapse">
                             <thead>
-                                <tr className="bg-[#f8fafc] text-left text-[12px] text-muted">
+                                <tr className="bg-soft text-left text-12 text-muted">
                                     <th className="px-5 py-2.5 font-semibold" style={{ width: "6%" }}>
                                         序号
                                     </th>
@@ -466,7 +464,7 @@ export function BomPage() {
                             <tbody>
                                 {pageRows.length === 0 && (
                                     <tr>
-                                        <td colSpan={7} className="px-5 py-14 text-center text-[13px] text-subtle">
+                                        <td colSpan={7} className="px-5 py-14 text-center text-13 text-subtle">
                                             暂无 BOM
                                         </td>
                                     </tr>
@@ -476,28 +474,28 @@ export function BomPage() {
                                         key={bom.code}
                                         className="border-t border-line/70 transition hover:bg-row-hover"
                                     >
-                                        <td className="px-5 py-3 tnum text-[13px] text-muted">
+                                        <td className="px-5 py-3 tnum text-13 text-muted">
                                             {(page - 1) * pageSize + index + 1}
                                         </td>
                                         <td className="px-3 py-3">
                                             <button
                                                 type="button"
                                                 onClick={() => setDetail(bom)}
-                                                className="tnum text-[13px] font-semibold text-primary-strong underline-offset-2 hover:underline"
+                                                className="tnum text-13 font-semibold text-primary-strong underline-offset-2 hover:underline"
                                             >
                                                 {bom.code}
                                             </button>
                                         </td>
-                                        <td className="px-3 py-3 text-[13px] text-td">{bom.name}</td>
+                                        <td className="px-3 py-3 text-13 text-td">{bom.name}</td>
                                         <td className="px-3 py-3">
-                                            <span className="inline-block rounded-[6px] border border-[#e0e7ff] bg-primary-soft px-1.5 py-0.5 text-[11.5px] font-medium text-primary-strong">
+                                            <span className="inline-block rounded-md border border-indigo-100 bg-primary-soft px-1.5 py-0.5 text-11.5 font-medium text-primary-strong">
                                                 {bom.modelCode}
                                             </span>
                                         </td>
-                                        <td className="px-3 py-3 tnum text-[13px] text-td">1</td>
+                                        <td className="px-3 py-3 tnum text-13 text-td">1</td>
                                         <td className="px-3 py-3">
                                             <span
-                                                className="block max-w-90 truncate text-[12.5px] text-td"
+                                                className="block max-w-90 truncate text-12.5 text-td"
                                                 title={bom.spec}
                                             >
                                                 {bom.spec}

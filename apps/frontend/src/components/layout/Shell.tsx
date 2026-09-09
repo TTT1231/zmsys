@@ -48,7 +48,7 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
             <aside
                 aria-label="主导航"
                 inert={!desktop && !open}
-                className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden bg-gradient-to-b from-[#101828] to-[#162033] transition-[width,transform] duration-200 lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0 ${
+                className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden bg-gradient-to-b from-sidebar to-[#162033] transition-[width,transform] duration-200 lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0 ${
                     collapsed ? "lg:w-19" : "lg:w-57.5"
                 } w-[min(82vw,300px)] shadow-[8px_0_30px_rgba(16,24,40,.08)] lg:shadow-[8px_0_30px_rgba(16,24,40,.08)] ${
                     open ? "translate-x-0" : "-translate-x-[103%] lg:translate-x-0"
@@ -56,14 +56,12 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
             >
                 <div className="relative px-4 pt-5 pb-4">
                     <div className="flex items-center gap-3">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-gradient-to-br from-[#6366f1] to-[#4f46e5] text-white shadow-[0_6px_18px_rgba(79,70,229,.45)]">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-glow">
                             <Icon name="brand" size={17} />
                         </span>
                         {!collapsed && (
                             <span className="min-w-0">
-                                <span className="block truncate text-[14.5px] font-semibold text-white">
-                                    智造管理系统
-                                </span>
+                                <span className="block truncate text-14.5 font-semibold text-white">智造管理系统</span>
                             </span>
                         )}
                     </div>
@@ -84,7 +82,7 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
                                                 onClose();
                                             }}
                                             title={collapsed ? item.label : undefined}
-                                            className={`group relative flex min-h-10 items-center gap-2.5 rounded-[10px] px-2.5 text-[13px] text-[#aeb8c8] transition hover:bg-white/6 hover:text-white ${collapsed ? "justify-center" : ""}`}
+                                            className={`group relative flex min-h-10 items-center gap-2.5 rounded-btn px-2.5 text-13 text-[#aeb8c8] transition hover:bg-white/6 hover:text-white ${collapsed ? "justify-center" : ""}`}
                                         >
                                             <Icon name={item.icon} size={19} className="shrink-0" />
                                             {!collapsed && (
@@ -99,7 +97,7 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
                                             onClick={onClose}
                                             title={collapsed ? item.label : undefined}
                                             className={({ isActive }) =>
-                                                `group relative flex min-h-10 items-center gap-2.5 rounded-[10px] px-2.5 text-[13px] transition ${
+                                                `group relative flex min-h-10 items-center gap-2.5 rounded-btn px-2.5 text-13 transition ${
                                                     isActive
                                                         ? "bg-gradient-to-r from-[rgba(99,102,241,.30)] to-[rgba(79,70,229,.16)] font-semibold text-white shadow-[inset_3px_0_0_0_#818cf8]"
                                                         : "text-[#aeb8c8] hover:bg-white/6 hover:text-white"
@@ -136,7 +134,7 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
                     type="button"
                     aria-label="关闭主导航"
                     onClick={onClose}
-                    className="fixed inset-0 z-40 bg-[rgba(15,23,42,.48)] backdrop-blur-[2px] lg:hidden"
+                    className="fixed inset-0 z-40 bg-scrim backdrop-blur-[2px] lg:hidden"
                 />
             )}
 
@@ -158,7 +156,7 @@ export function MobileBottomNav({ onOpenDrawer }: { onOpenDrawer: () => void }) 
         .slice(0, 3);
 
     const itemClass = ({ isActive }: { isActive: boolean }) =>
-        `flex flex-col items-center justify-center gap-0.5 text-[10.5px] transition ${
+        `flex flex-col items-center justify-center gap-0.5 text-10.5 transition ${
             isActive ? "bg-primary-soft font-semibold text-primary" : "text-muted"
         }`;
 
@@ -185,7 +183,7 @@ export function MobileBottomNav({ onOpenDrawer }: { onOpenDrawer: () => void }) 
             <button
                 type="button"
                 onClick={onOpenDrawer}
-                className="flex flex-col items-center justify-center gap-0.5 text-[10.5px] text-muted"
+                className="flex flex-col items-center justify-center gap-0.5 text-10.5 text-muted"
             >
                 <Icon name="more" size={19} />
                 更多
@@ -211,11 +209,11 @@ export function Topbar({ title, onOpenDrawer }: { title: string; onOpenDrawer: (
                     type="button"
                     aria-label="打开主导航"
                     onClick={onOpenDrawer}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] border border-line text-ink lg:hidden"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-btn border border-line text-ink lg:hidden"
                 >
                     <Icon name="menu" size={19} />
                 </button>
-                <strong className="block truncate text-[15px] font-semibold text-ink lg:hidden">{title}</strong>
+                <strong className="block truncate text-15 font-semibold text-ink lg:hidden">{title}</strong>
                 <button
                     type="button"
                     onClick={() => navigate("/search")}
@@ -235,18 +233,18 @@ export function Topbar({ title, onOpenDrawer }: { title: string; onOpenDrawer: (
                     <Icon name="search" size={20} />
                 </button>
                 <div className="flex items-center gap-2.5 py-1.5">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#6366f1] to-[#4f46e5] text-[13px] font-semibold text-white">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 text-13 font-semibold text-white">
                         {user?.name.slice(0, 1) ?? "?"}
                     </span>
                     <span className="hidden leading-tight sm:block">
-                        <span className="block text-[12.5px] font-semibold text-ink">{user?.name ?? "未登录"}</span>
-                        <span className="block text-[11px] text-muted">{ROLE_META[role].roleName}</span>
+                        <span className="block text-12.5 font-semibold text-ink">{user?.name ?? "未登录"}</span>
+                        <span className="block text-11 text-muted">{ROLE_META[role].roleName}</span>
                     </span>
                 </div>
                 <button
                     type="button"
                     onClick={onLogout}
-                    className="h-9 rounded-btn border border-line px-3 text-[12.5px] text-muted transition hover:border-danger hover:text-danger"
+                    className="h-9 rounded-btn border border-line px-3 text-12.5 text-muted transition hover:border-danger hover:text-danger"
                 >
                     退出
                 </button>

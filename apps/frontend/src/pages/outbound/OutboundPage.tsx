@@ -171,7 +171,7 @@ export function OutboundModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-[13px] font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -179,7 +179,7 @@ export function OutboundModal({
                         type="button"
                         disabled={createOutbound.isPending || over}
                         onClick={submit}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-[13px] font-medium text-white hover:bg-primary-hover disabled:opacity-60"
+                        className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
                     >
                         {createOutbound.isPending ? "正在登记…" : "确认发货"}
                     </button>
@@ -188,7 +188,7 @@ export function OutboundModal({
         >
             <div className="grid gap-3 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                    <span className="mb-1 block text-[12.5px] font-medium text-[#344054]">
+                    <span className="mb-1 block text-12.5 font-medium text-td">
                         选择订单<span className="ml-0.5 text-danger">*</span>
                     </span>
                     {!initialOrderNo && (
@@ -198,11 +198,11 @@ export function OutboundModal({
                                 value={orderKeyword}
                                 onChange={event => setOrderKeyword(event.target.value)}
                                 placeholder="输入订单号或客户名过滤"
-                                className="w-full rounded-[9px] border border-line-strong px-3 py-2 text-[13px] outline-none focus:border-primary"
+                                className="w-full rounded-input border border-line-strong px-3 py-2 text-13 outline-none focus:border-primary"
                             />
-                            <div className="mt-1.5 max-h-37.5 overflow-y-auto rounded-[10px] border border-line">
+                            <div className="mt-1.5 max-h-37.5 overflow-y-auto rounded-btn border border-line">
                                 {orderOptions.length === 0 && (
-                                    <p className="px-3 py-3 text-[12.5px] text-subtle">没有可发货的订单</p>
+                                    <p className="px-3 py-3 text-12.5 text-subtle">没有可发货的订单</p>
                                 )}
                                 {orderOptions.map(order => {
                                     const shipMax = maxShipOf(snap, order.orderNo);
@@ -211,7 +211,7 @@ export function OutboundModal({
                                             key={order.orderNo}
                                             type="button"
                                             onClick={() => setOrderNo(order.orderNo)}
-                                            className={`flex w-full items-center justify-between gap-3 border-b border-line/60 px-3 py-2 text-left text-[12.5px] transition last:border-b-0 hover:bg-primary-soft/50 ${orderNo === order.orderNo ? "bg-primary-soft" : ""}`}
+                                            className={`flex w-full items-center justify-between gap-3 border-b border-line/60 px-3 py-2 text-left text-12.5 transition last:border-b-0 hover:bg-primary-soft/50 ${orderNo === order.orderNo ? "bg-primary-soft" : ""}`}
                                         >
                                             <span className="tnum font-medium text-ink">{order.orderNo}</span>
                                             <span className="min-w-0 flex-1 truncate text-muted">{order.customer}</span>
@@ -228,20 +228,18 @@ export function OutboundModal({
                     )}
                     {initialOrderNo && selectedOrder && (
                         <div className="rounded-btn bg-primary-soft p-3">
-                            <strong className="block text-[16px]">{selectedOrder.customer}</strong>
-                            <span className="text-[13px]">
+                            <strong className="block text-16">{selectedOrder.customer}</strong>
+                            <span className="text-13">
                                 {selectedOrder.orderNo} · {selectedOrder.bomCode}
                             </span>
-                            <p className="mt-1 text-[13px] text-muted">
-                                {bomByCode(snap, selectedOrder.bomCode)?.spec}
-                            </p>
+                            <p className="mt-1 text-13 text-muted">{bomByCode(snap, selectedOrder.bomCode)?.spec}</p>
                         </div>
                     )}
-                    {errors.orderNo && <span className="mt-1 block text-[12px] text-danger">{errors.orderNo}</span>}
+                    {errors.orderNo && <span className="mt-1 block text-12 text-danger">{errors.orderNo}</span>}
                 </div>
 
                 {selectedOrder && (
-                    <div className="rounded-[12px] border border-line bg-[#fcfcfd] px-3.5 py-3 text-[12.5px] sm:col-span-2">
+                    <div className="rounded-xl border border-line bg-panel px-3.5 py-3 text-12.5 sm:col-span-2">
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4">
                             {[
                                 ["剩余待发", `${num(remaining)} 件`],
@@ -263,7 +261,7 @@ export function OutboundModal({
                     </div>
                 )}
 
-                <p className="text-[12px] text-muted sm:col-span-2">
+                <p className="text-12 text-muted sm:col-span-2">
                     可发数量按交期分配库存；本次发货不会占用更早订单的预留数量。
                 </p>
                 {selectedOrder && maxShip > 0 && (
@@ -292,14 +290,14 @@ export function OutboundModal({
                     onChange={event => setDate(event.target.value)}
                 />
                 <div className="sm:col-span-2">
-                    <span className="mb-1 block text-[12.5px] font-medium text-[#344054]">操作人</span>
+                    <span className="mb-1 block text-12.5 font-medium text-td">操作人</span>
                     <div className="flex gap-1.5">
                         {operators.map(item => (
                             <button
                                 key={item}
                                 type="button"
                                 onClick={() => setOperator(item)}
-                                className={`h-9 rounded-full border px-3.5 text-[12.5px] font-medium transition ${
+                                className={`h-9 rounded-full border px-3.5 text-12.5 font-medium transition ${
                                     effectiveOperator === item
                                         ? "border-primary bg-primary-soft text-primary-strong"
                                         : "border-line bg-white text-muted hover:border-primary-border"
@@ -338,16 +336,14 @@ function OutboundDetailModal({ row, snap, onClose }: { row: OutboundRow | null; 
                 <button
                     type="button"
                     onClick={onClose}
-                    className="min-h-10 rounded-btn bg-primary px-4 text-[13px] font-medium text-white hover:bg-primary-hover"
+                    className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover"
                 >
                     关闭
                 </button>
             }
         >
-            <div className="flex flex-col gap-2 text-[13px]">
-                <p className="rounded-[10px] bg-primary-soft/70 px-3 py-2 text-[12.5px] text-primary-strong">
-                    {bom?.spec}
-                </p>
+            <div className="flex flex-col gap-2 text-13">
+                <p className="rounded-btn bg-primary-soft/70 px-3 py-2 text-12.5 text-primary-strong">{bom?.spec}</p>
                 {[
                     ["关联订单", row.orderNo],
                     ["BOM 编码", row.bomCode],
@@ -422,8 +418,8 @@ export function OutboundPage() {
             />
 
             <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
-                <div className="list-toolbar flex flex-wrap items-center gap-2.5 border-b border-line bg-gradient-to-b from-white to-[#fcfcfd] px-5 py-4">
-                    <label className="flex h-10 min-w-55 flex-1 items-center gap-2 rounded-[10px] border border-line-strong bg-white px-3 sm:max-w-75">
+                <div className="list-toolbar flex flex-wrap items-center gap-2.5 border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
+                    <label className="flex h-10 min-w-55 flex-1 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 sm:max-w-75">
                         <Icon name="search" size={15} className="text-subtle" />
                         <input
                             value={keyword}
@@ -432,7 +428,7 @@ export function OutboundPage() {
                                 setPage(1);
                             }}
                             placeholder="搜索单号、订单、客户或 BOM 编码"
-                            className="w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-subtle"
+                            className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
                         />
                     </label>
                     <select
@@ -442,7 +438,7 @@ export function OutboundPage() {
                             setPage(1);
                         }}
                         aria-label="按品类筛选"
-                        className="h-10 rounded-[10px] border border-line-strong bg-white px-3 text-[13px] text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
                     >
                         <option>全部品类</option>
                         {categories.map(item => (
@@ -503,7 +499,7 @@ export function OutboundPage() {
                                 }
                             >
                                 <p>{row.bomCode}</p>
-                                <p className="mt-2 text-[13px] text-muted">
+                                <p className="mt-2 text-13 text-muted">
                                     {row.no} · {row.operator}
                                 </p>
                             </RecordCard>
@@ -512,11 +508,11 @@ export function OutboundPage() {
                 </div>
                 <div className="hidden overflow-x-auto lg:block">
                     {isLoading ? (
-                        <div className="py-16 text-center text-[13px] text-subtle">加载中…</div>
+                        <div className="py-16 text-center text-13 text-subtle">加载中…</div>
                     ) : (
                         <table className="w-full min-w-225 border-collapse">
                             <thead>
-                                <tr className="bg-[#f8fafc] text-left text-[12px] text-muted">
+                                <tr className="bg-soft text-left text-12 text-muted">
                                     <th className="px-5 py-2.5 font-semibold">出库单号</th>
                                     <th className="px-3 py-2.5 font-semibold">订单 / 客户</th>
                                     <th className="px-3 py-2.5 font-semibold">BOM 编码</th>
@@ -529,14 +525,14 @@ export function OutboundPage() {
                             <tbody>
                                 {pageRows.length === 0 && (
                                     <tr>
-                                        <td colSpan={7} className="px-5 py-14 text-center text-[13px] text-subtle">
+                                        <td colSpan={7} className="px-5 py-14 text-center text-13 text-subtle">
                                             没有找到匹配的出库记录
                                         </td>
                                     </tr>
                                 )}
                                 {pageRows.map(row => (
                                     <tr key={row.no} className="border-t border-line/70 transition hover:bg-row-hover">
-                                        <td className="px-5 py-3 tnum text-[13px] font-semibold text-[#475467]">
+                                        <td className="px-5 py-3 tnum text-13 font-semibold text-td-strong">
                                             {row.no}
                                         </td>
                                         <td className="px-3 py-3">
@@ -545,20 +541,20 @@ export function OutboundPage() {
                                                 sub={`${row.orderNo} · ${row.customerCode}`}
                                             />
                                         </td>
-                                        <td className="px-3 py-3 tnum text-[12.5px] font-medium text-primary-strong">
+                                        <td className="px-3 py-3 tnum text-12.5 font-medium text-primary-strong">
                                             {row.bomCode}
                                         </td>
                                         <td className="px-3 py-3 text-right">
                                             <QtyCell value={row.qty} unit="件" />
                                         </td>
-                                        <td className="px-3 py-3 tnum text-[13px] text-td">{row.date}</td>
-                                        <td className="px-3 py-3 text-[13px] text-td">{row.operator}</td>
+                                        <td className="px-3 py-3 tnum text-13 text-td">{row.date}</td>
+                                        <td className="px-3 py-3 text-13 text-td">{row.operator}</td>
                                         <td className="px-5 py-3 text-right">
                                             <div className="flex items-center justify-end gap-3">
                                                 <button
                                                     type="button"
                                                     onClick={() => setDetail(row)}
-                                                    className="text-[13px] font-medium text-primary-strong underline-offset-2 hover:underline"
+                                                    className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline"
                                                 >
                                                     查看详情
                                                 </button>
@@ -566,7 +562,7 @@ export function OutboundPage() {
                                                     <button
                                                         type="button"
                                                         onClick={() => printOutbound(row, snap)}
-                                                        className="text-[13px] font-medium text-primary-strong underline-offset-2 hover:underline"
+                                                        className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline"
                                                     >
                                                         打印
                                                     </button>

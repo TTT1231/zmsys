@@ -53,7 +53,7 @@ export function SearchPage() {
     return (
         <div className="flex flex-col gap-4">
             <PageHeading title="搜索" description="查找订单、客户和成品，直接查看详情或处理。" />
-            <label className="flex min-h-12.5 items-center gap-3 rounded-[12px] border border-line-strong bg-white px-4">
+            <label className="flex min-h-12.5 items-center gap-3 rounded-xl border border-line-strong bg-white px-4">
                 <Icon name="search" size={20} />
                 <input
                     aria-label="搜索订单、客户、产品"
@@ -67,12 +67,12 @@ export function SearchPage() {
                         setLimit(10);
                     }}
                     placeholder="订单号、客户名、产品编码或规格"
-                    className="min-w-0 flex-1 bg-transparent text-[16px] outline-none"
+                    className="min-w-0 flex-1 bg-transparent text-16 outline-none"
                 />
             </label>
             {!keyword ? (
                 <div className="rounded-panel border border-line bg-white p-6">
-                    <h2 className="text-[17px] font-semibold">想找什么？</h2>
+                    <h2 className="text-17 font-semibold">想找什么？</h2>
                     <p className="mt-2 text-muted">输入客户名称、订单号或产品规格。搜索覆盖全部记录。</p>
                 </div>
             ) : (
@@ -100,7 +100,7 @@ export function SearchPage() {
                             );
                         })}
                     </div>
-                    <p role="status" className="text-[13px] text-muted">
+                    <p role="status" className="text-13 text-muted">
                         找到 {count} 条{count > limit ? `，当前显示 ${limit} 条` : ""}
                     </p>
                     <div className="grid gap-3 lg:grid-cols-2">

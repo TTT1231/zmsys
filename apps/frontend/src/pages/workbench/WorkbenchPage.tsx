@@ -57,8 +57,8 @@ export function WorkbenchPage() {
         <div className="flex flex-col gap-4 lg:gap-6">
             <div className="flex items-center justify-between gap-3">
                 <div>
-                    <p className="hidden text-[13px] text-muted lg:block">{anchor} · 今日工作</p>
-                    <h1 className="text-[24px] font-bold tracking-tight lg:text-[30px]">
+                    <p className="hidden text-13 text-muted lg:block">{anchor} · 今日工作</p>
+                    <h1 className="text-24 font-bold tracking-tight lg:text-30">
                         {role === "warehouse" ? "收发工作台" : role === "sales" ? "销售工作台" : "今日工作台"}
                     </h1>
                 </div>
@@ -88,12 +88,12 @@ export function WorkbenchPage() {
             <button
                 type="button"
                 onClick={() => navigate("/search")}
-                className="flex min-h-12 items-center gap-3 rounded-[12px] border border-line bg-white px-4 text-left text-[15px] text-muted lg:hidden"
+                className="flex min-h-12 items-center gap-3 rounded-xl border border-line bg-white px-4 text-left text-15 text-muted lg:hidden"
             >
                 <Icon name="search" size={19} />
                 搜索订单、客户、产品
             </button>
-            <div className="grid grid-cols-3 overflow-hidden rounded-[14px] border border-line bg-white divide-x divide-line">
+            <div className="grid grid-cols-3 overflow-hidden rounded-card border border-line bg-white divide-x divide-line">
                 {[
                     { label: "需关注", value: priority.length, target: "priority" },
                     { label: "可发货", value: ready.length, target: "ready" },
@@ -106,9 +106,9 @@ export function WorkbenchPage() {
                         onClick={() => pickFilter(item.target as TaskFilter)}
                         className={`px-2 py-3 text-center lg:py-5 ${filter === item.target ? "bg-primary-soft/60" : ""}`}
                     >
-                        <span className="block text-[12px] text-muted lg:text-[14px]">{item.label}</span>
+                        <span className="block text-12 text-muted lg:text-14">{item.label}</span>
                         <strong
-                            className={`tnum mt-1 block text-[24px] font-semibold lg:text-[30px] ${filter === item.target ? "text-primary" : "text-ink"}`}
+                            className={`tnum mt-1 block text-24 font-semibold lg:text-30 ${filter === item.target ? "text-primary" : "text-ink"}`}
                         >
                             {item.value}
                         </strong>
@@ -118,7 +118,7 @@ export function WorkbenchPage() {
             <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
                 <section className="min-w-0">
                     <div className="mb-3 flex items-center justify-between gap-2">
-                        <h2 className="text-[17px] font-semibold">
+                        <h2 className="text-17 font-semibold">
                             {filter === "gap"
                                 ? "需要补充的库存"
                                 : filter === "ready"
@@ -129,7 +129,7 @@ export function WorkbenchPage() {
                         </h2>
                         <button
                             type="button"
-                            className="px-2 text-[13px] text-primary"
+                            className="px-2 text-13 text-primary"
                             onClick={() => {
                                 pickFilter(filter === "all" ? "priority" : "all");
                             }}
@@ -147,7 +147,7 @@ export function WorkbenchPage() {
                                         title={snap.boms.find(bom => bom.code === gap.bomCode)?.name || gap.bomCode}
                                         subtitle={gap.bomCode}
                                         badge={
-                                            <span className="text-[13px] font-semibold text-warning">
+                                            <span className="text-13 font-semibold text-warning">
                                                 缺 {num(gap.gapQty)} 件
                                             </span>
                                         }
@@ -168,10 +168,10 @@ export function WorkbenchPage() {
                                         }
                                     >
                                         <p>{snap.boms.find(bom => bom.code === gap.bomCode)?.spec}</p>
-                                        <p className="mt-2 text-[13px] text-muted">
+                                        <p className="mt-2 text-13 text-muted">
                                             影响 {gap.orderCount} 张订单 · 最早交期 {gap.earliestDate}
                                         </p>
-                                        <p className="mt-1 text-[13px]">
+                                        <p className="mt-1 text-13">
                                             需求 {num(gap.demandQty)} · 库存 {num(gap.stockQty)} 件
                                         </p>
                                     </RecordCard>
@@ -210,7 +210,7 @@ export function WorkbenchPage() {
                 </section>
                 <div className="flex min-w-0 flex-col gap-5">
                     <section className="rounded-panel border border-line bg-white p-4 lg:p-5">
-                        <h2 className="text-[16px] font-semibold">今日收发</h2>
+                        <h2 className="text-16 font-semibold">今日收发</h2>
                         <div className="mt-3 grid grid-cols-2 gap-3">
                             {[
                                 { kind: "inbound", label: "入库", rows: todayIn },
@@ -220,14 +220,14 @@ export function WorkbenchPage() {
                                     type="button"
                                     key={item.kind}
                                     onClick={() => setLedger(item.kind as "inbound" | "outbound")}
-                                    className="rounded-[12px] bg-canvas p-3 text-left"
+                                    className="rounded-xl bg-canvas p-3 text-left"
                                 >
-                                    <span className="text-[13px] text-muted">
+                                    <span className="text-13 text-muted">
                                         {item.label} {item.rows.length} 笔
                                     </span>
-                                    <strong className="mt-1 block text-[22px] font-semibold">
+                                    <strong className="mt-1 block text-22 font-semibold">
                                         {num(item.rows.reduce((sum, row) => sum + row.qty, 0))}
-                                        <span className="ml-1 text-[12px] font-normal text-muted">件</span>
+                                        <span className="ml-1 text-12 font-normal text-muted">件</span>
                                     </strong>
                                 </button>
                             ))}
@@ -235,11 +235,11 @@ export function WorkbenchPage() {
                     </section>
                     <section className="rounded-panel border border-line bg-white p-4 lg:p-5">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-[16px] font-semibold">最近登记</h2>
+                            <h2 className="text-16 font-semibold">最近登记</h2>
                             <button
                                 type="button"
                                 onClick={() => navigate("/outbound")}
-                                className="text-[13px] text-primary"
+                                className="text-13 text-primary"
                             >
                                 查看台账
                             </button>
@@ -254,14 +254,14 @@ export function WorkbenchPage() {
                                 .map(row => (
                                     <div key={row.no} className="flex items-center justify-between gap-3 py-3">
                                         <div className="min-w-0">
-                                            <p className="text-[14px] font-medium">
+                                            <p className="text-14 font-medium">
                                                 {row.kind} · {row.bomCode}
                                             </p>
-                                            <p className="mt-1 text-[12px] text-muted">
+                                            <p className="mt-1 text-12 text-muted">
                                                 {row.date} {row.time} · {row.no}
                                             </p>
                                         </div>
-                                        <strong className="shrink-0 text-[14px]">{num(row.qty)} 件</strong>
+                                        <strong className="shrink-0 text-14">{num(row.qty)} 件</strong>
                                     </div>
                                 ))}
                         </div>
@@ -271,12 +271,10 @@ export function WorkbenchPage() {
                             type="button"
                             aria-expanded={showTrend}
                             onClick={() => setShowTrend(value => !value)}
-                            className="flex w-full items-center justify-between text-[16px] font-semibold"
+                            className="flex w-full items-center justify-between text-16 font-semibold"
                         >
                             收发趋势{" "}
-                            <span className="text-[12px] font-normal text-muted">
-                                {showTrend ? "收起" : "展开分析"}
-                            </span>
+                            <span className="text-12 font-normal text-muted">{showTrend ? "收起" : "展开分析"}</span>
                         </button>
                         {showTrend && (
                             <>
