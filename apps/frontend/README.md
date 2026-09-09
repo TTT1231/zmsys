@@ -20,7 +20,7 @@
 pnpm dev        # 开发服务器
 pnpm build      # 类型检查 + 构建
 pnpm lint       # oxlint
-pnpm test       # 库存分配与登记回归测试，需要 Node.js 24+
+pnpm test       # vitest 单元 + 组件测试（数据层纯函数 / UI 交互 / mock 库存规则）
 ```
 
 ## 手机优先的操作方式

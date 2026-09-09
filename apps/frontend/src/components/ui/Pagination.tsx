@@ -10,7 +10,7 @@ interface PaginationProps {
     unit?: string;
 }
 
-function paginationWindow(page: number, pages: number): Array<number | "…"> {
+export function paginationWindow(page: number, pages: number): Array<number | "…"> {
     if (pages <= 5) return Array.from({ length: pages }, (_, index) => index + 1);
     if (page <= 3) return [1, 2, 3, 4, "…", pages];
     if (page >= pages - 2) return [1, "…", pages - 3, pages - 2, pages - 1, pages];

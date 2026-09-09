@@ -7,8 +7,9 @@
         "dev": "vite",
         "build": "tsc -b && vite build",
         "lint": "oxlint",
-        "format": "oxfmt src mocks scripts *.ts *.json *.md",
-        "test": "node --test scripts/inventory.test.mjs",
+        "format": "oxfmt src mocks test *.ts *.json *.md",
+        "test": "vitest run",
+        "test:coverage": "vitest run --coverage",
         "preview": "vite preview",
         "prepare": "husky"
     },
@@ -22,18 +23,24 @@
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.3.3",
+        "@testing-library/jest-dom": "^7.0.1",
+        "@testing-library/react": "^16.3.3",
+        "@testing-library/user-event": "^14.6.7",
         "@types/node": "^26.4.1",
         "@types/react": "^19.2.18",
         "@types/react-dom": "^19.2.7",
         "@vitejs/plugin-react": "^6.1.1",
+        "@vitest/coverage-v8": "^5.0.0",
         "husky": "^9.1.7",
+        "jsdom": "^30.0.1",
         "lint-staged": "^17.5.0",
         "msw": "^2.15.0",
         "oxfmt": "^0.66.0",
         "oxlint": "^1.81.0",
         "tailwindcss": "^4.3.3",
         "typescript": "~7.0.2",
-        "vite": "^8.2.2"
+        "vite": "^8.2.2",
+        "vitest": "^5.0.0"
     },
     "lint-staged": {
         "*.{js,jsx,ts,tsx,mjs,cjs}": [
