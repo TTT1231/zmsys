@@ -52,6 +52,7 @@ admin-manage/
     │   ├── permissions.ts      # 角色/菜单/动作权限字典 + 纯派生工具（授权是后端数据）
     │   ├── categories.ts       # 物料分类配置（前端常量，不落库）
     │   └── README.md           # 领域层职责与同步约定
+    ├── layout/                 # 应用外壳（AppLayout：标题同步、认证/菜单守卫、侧边栏骨架）
     ├── lib/                    # 工具函数
     └── pages/                  # 页面模块（按业务域分目录：login、dashboard、user and etc..）
 ```
