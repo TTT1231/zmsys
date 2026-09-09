@@ -88,6 +88,34 @@ paths:
         "401":
           description: token 失效
           content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } }
+    put:
+      tags: [auth]
+      summary: 个人中心：更新自己的姓名
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, description: 新姓名（1-20 字符）, example: 张三 }
+      responses:
+        "200":
+          description: 成功（返回脱敏后的用户信息）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/WbUser" }
+        "400":
+          description: 姓名为空 / 超过 20 字符
+          content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } }
+        "401":
+          description: token 失效
+          content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } }
 
   /orders:
     get:

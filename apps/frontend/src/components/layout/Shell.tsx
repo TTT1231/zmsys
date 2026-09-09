@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router";
 import { Icon } from "@/lib/icons";
-import { useApp, ROLE_META } from "@/context/AppContext";
+import { useApp } from "@/context/AppContext";
 import { buildNavSections, type NavItem } from "@/data/permissions";
+import { useWbRefresh } from "@/data/queries";
 import { NoteDialog } from "@/components/ui/NoteDialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { UserMenu } from "./UserMenu";
+import { useFullscreen } from "./useFullscreen";
 
 /* 侧边栏导航：由「登录用户角色 + 授权」生成（见 data/permissions.ts） */
 function useNavSections(): Array<{ group: string; items: NavItem[] }> {
@@ -82,7 +86,7 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
                                                 onClose();
                                             }}
                                             title={collapsed ? item.label : undefined}
-                                            className={`group relative flex min-h-10 items-center gap-2.5 rounded-btn px-2.5 text-13 text-[#aeb8c8] transition hover:bg-white/6 hover:text-white ${collapsed ? "justify-center" : ""}`}
+                                            className={`group relative flex min-h-10 max-lg:min-h-[44px] items-center gap-2.5 rounded-btn px-2.5 text-13 text-[#aeb8c8] transition hover:bg-white/6 hover:text-white ${collapsed ? "justify-center" : ""}`}
                                         >
                                             <Icon name={item.icon} size={19} className="shrink-0" />
                                             {!collapsed && (
@@ -97,7 +101,7 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
                                             onClick={onClose}
                                             title={collapsed ? item.label : undefined}
                                             className={({ isActive }) =>
-                                                `group relative flex min-h-10 items-center gap-2.5 rounded-btn px-2.5 text-13 transition ${
+                                                `group relative flex min-h-10 max-lg:min-h-[44px] items-center gap-2.5 rounded-btn px-2.5 text-13 transition ${
                                                     isActive
                                                         ? "bg-gradient-to-r from-[rgba(99,102,241,.30)] to-[rgba(79,70,229,.16)] font-semibold text-white shadow-[inset_3px_0_0_0_#818cf8]"
                                                         : "text-[#aeb8c8] hover:bg-white/6 hover:text-white"
@@ -117,13 +121,15 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
                 </nav>
             </aside>
 
-            {/* 折叠开关（桌面端左缘悬浮） */}
+            {/* 折叠开关（桌面端左缘悬浮）。
+                left 用 rem 跟随侧栏宽度(lg:w-19/lg:w-57.5):侧栏宽 − 按钮半宽(w-7/2=0.875rem),
+                中心恒骑在侧栏右缘上;html 根字号变化(16→14px 迁移)时不再错位 */}
             <button
                 type="button"
                 aria-label={collapsed ? "展开侧边栏" : "折叠侧边栏"}
                 onClick={onToggleCollapse}
                 className="fixed top-18.5 z-40 hidden h-7 w-7 items-center justify-center rounded-full border border-line bg-white text-muted shadow-xs transition hover:text-primary lg:flex"
-                style={{ left: collapsed ? 62 : 216 }}
+                style={{ left: collapsed ? "3.875rem" : "13.5rem" }}
             >
                 <Icon name={collapsed ? "chevron-right" : "chevron-left"} size={14} />
             </button>
@@ -192,15 +198,14 @@ export function MobileBottomNav({ onOpenDrawer }: { onOpenDrawer: () => void }) 
     );
 }
 
-/* 顶栏：真实登录用户 + 登出 */
+/* 顶栏：全局刷新 / 全屏 / 用户菜单（真实登录用户） */
 export function Topbar({ title, onOpenDrawer }: { title: string; onOpenDrawer: () => void }) {
     const navigate = useNavigate();
-    const { user, role, logout } = useApp();
+    const { refresh, refreshing } = useWbRefresh();
+    const { supported, isFullscreen, toggle } = useFullscreen();
 
-    const onLogout = async () => {
-        await logout();
-        navigate("/login", { replace: true });
-    };
+    const iconBtn =
+        "flex h-11 w-11 shrink-0 max-lg:min-h-[44px] max-lg:min-w-[44px] items-center justify-center rounded-btn text-muted transition hover:bg-soft hover:text-ink active:scale-90";
 
     return (
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-line bg-white/88 px-4 backdrop-blur-[18px] saturate-150 sm:px-6">
@@ -209,7 +214,7 @@ export function Topbar({ title, onOpenDrawer }: { title: string; onOpenDrawer: (
                     type="button"
                     aria-label="打开主导航"
                     onClick={onOpenDrawer}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-btn border border-line text-ink lg:hidden"
+                    className="flex h-11 w-11 shrink-0 max-lg:min-h-[44px] max-lg:min-w-[44px] items-center justify-center rounded-btn border border-line text-ink lg:hidden"
                 >
                     <Icon name="menu" size={19} />
                 </button>
@@ -223,31 +228,41 @@ export function Topbar({ title, onOpenDrawer }: { title: string; onOpenDrawer: (
                 </button>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2.5 sm:gap-3">
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
                 <button
                     type="button"
                     aria-label="全局搜索"
                     onClick={() => navigate("/search")}
-                    className="flex h-11 w-11 items-center justify-center rounded-btn text-muted lg:hidden"
+                    className="flex h-11 w-11 max-lg:min-h-[44px] max-lg:min-w-[44px] items-center justify-center rounded-btn text-muted lg:hidden"
                 >
                     <Icon name="search" size={20} />
                 </button>
-                <div className="flex items-center gap-2.5 py-1.5">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 text-13 font-semibold text-white">
-                        {user?.name.slice(0, 1) ?? "?"}
-                    </span>
-                    <span className="hidden leading-tight sm:block">
-                        <span className="block text-12.5 font-semibold text-ink">{user?.name ?? "未登录"}</span>
-                        <span className="block text-11 text-muted">{ROLE_META[role].roleName}</span>
-                    </span>
-                </div>
-                <button
-                    type="button"
-                    onClick={onLogout}
-                    className="h-9 rounded-btn border border-line px-3 text-12.5 text-muted transition hover:border-danger hover:text-danger"
-                >
-                    退出
-                </button>
+                <TooltipProvider delayDuration={250}>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <button type="button" aria-label="刷新数据" onClick={refresh} className={iconBtn}>
+                                <Icon name="refresh" size={20} className={refreshing ? "animate-spin" : ""} />
+                            </button>
+                        </TooltipTrigger>
+                        <TooltipContent>刷新数据</TooltipContent>
+                    </Tooltip>
+                    {supported && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <button
+                                    type="button"
+                                    aria-label={isFullscreen ? "退出全屏" : "进入全屏"}
+                                    onClick={toggle}
+                                    className={`${iconBtn} hidden sm:flex`}
+                                >
+                                    <Icon name={isFullscreen ? "minimize" : "maximize"} size={20} />
+                                </button>
+                            </TooltipTrigger>
+                            <TooltipContent>{isFullscreen ? "退出全屏" : "进入全屏"}</TooltipContent>
+                        </Tooltip>
+                    )}
+                </TooltipProvider>
+                <UserMenu />
             </div>
         </header>
     );

@@ -5,9 +5,9 @@ import type { WbUser } from "@/api";
 import { ROLES } from "@/data/permissions";
 import { db } from "../data/db";
 
-/** 成功信封（60–160ms 随机延迟，模拟真实网络） */
+/** 成功信封（400–900ms 随机延迟：让加载/刷新的过渡效果可感知，仍不至于拖慢演示） */
 export async function ok<T>(data: T) {
-    await delay(60 + Math.random() * 100);
+    await delay(400 + Math.random() * 500);
     return HttpResponse.json({ code: 0, data, message: "ok" });
 }
 

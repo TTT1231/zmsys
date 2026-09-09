@@ -834,6 +834,15 @@ class MockDb {
         return user && user.active ? user : null;
     }
 
+    /** 个人中心：仅允许更新自己的姓名（账号/角色/状态为管理员域） */
+    updateUserName(account: string, name: string): WbUser {
+        const user = this.users.find(item => item.account === account);
+        if (!user || !user.active) throw new Error("账号不存在或已停用");
+        user.name = name;
+        const { password: _password, ...rest } = user;
+        return rest;
+    }
+
     // ---- 授权 ----
 
     getGrant(role: RoleId): RoleGrant {

@@ -10,7 +10,9 @@ import { Badge, Button, TableLink } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { CustomerCell } from "@/components/ui/cells";
 import { SelectField, TextArea, TextField } from "@/components/ui/Field";
-import { useCreateCustomer, useWbSnapshot } from "@/data/queries";
+import { useCreateCustomer, useWbRefresh, useWbSnapshot } from "@/data/queries";
+import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
+import { PageLoading } from "@/components/ui/PageLoading";
 import { EMPTY_SNAPSHOT } from "@/data/views";
 import { useToast } from "@/components/ui/Toast";
 import type { Customer, Snapshot } from "@/api";
@@ -270,7 +272,10 @@ export function CustomerDetailModal({
 
 export function CustomersPage() {
     const { can } = useApp();
-    const { data, isLoading } = useWbSnapshot();
+    const { data, isLoading, isFetching } = useWbSnapshot();
+    const { refresh } = useWbRefresh();
+    // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
+    const overlay = useDelayedFlag(isFetching && !isLoading);
     const [searchParams, setSearchParams] = useSearchParams();
     const toast = useToast();
     const [statusFilter, setStatusFilter] = useState("全部状态");
@@ -339,7 +344,8 @@ export function CustomersPage() {
                 }
             />
 
-            <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
+            <section className="relative overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
+                {overlay && <LoadingOverlay />}
                 <div className="list-toolbar flex flex-wrap items-center gap-2.5 border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
                     <select
                         value={statusFilter}
@@ -367,8 +373,11 @@ export function CustomersPage() {
                     </label>
 
                     <ToolbarMore>
-                        <Button variant="secondary" icon="refresh" data-low-priority="true" onClick={reset}>
+                        <Button variant="secondary" icon="reset" data-low-priority="true" onClick={reset}>
                             重置
+                        </Button>
+                        <Button variant="secondary" icon="refresh" data-low-priority="true" onClick={refresh}>
+                            刷新
                         </Button>
                         <Button
                             variant="secondary"
@@ -441,7 +450,7 @@ export function CustomersPage() {
                 </div>
                 <div className="hidden overflow-x-auto lg:block">
                     {isLoading ? (
-                        <div className="py-16 text-center text-13 text-subtle">加载中…</div>
+                        <PageLoading className="py-16" />
                     ) : (
                         <table className="w-full min-w-240 border-collapse">
                             <thead>

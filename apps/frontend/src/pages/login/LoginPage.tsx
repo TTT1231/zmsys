@@ -3,11 +3,13 @@ import { Navigate, useNavigate } from "react-router";
 import { Icon } from "@/lib/icons";
 import { useApp } from "@/context/AppContext";
 import { isApiError } from "@/http";
+import { useToast } from "@/components/ui/Toast";
 
 /* 登录页：账号密码 → POST /auth/login → 建立会话后进入自己角色的工作台 */
 export function LoginPage() {
     const { status, login } = useApp();
     const navigate = useNavigate();
+    const toast = useToast();
     const [account, setAccount] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
@@ -25,10 +27,13 @@ export function LoginPage() {
         }
         setBusy(true);
         try {
-            await login(account.trim(), password);
+            const user = await login(account.trim(), password);
+            toast(`欢迎回来，${user?.name ?? ""}`);
             navigate("/workbench", { replace: true });
         } catch (err) {
-            setError(isApiError(err) ? err.message : "登录失败，请稍后重试");
+            const message = isApiError(err) ? err.message : "登录失败，请稍后重试";
+            setError(message);
+            toast(message, true);
         } finally {
             setBusy(false);
         }

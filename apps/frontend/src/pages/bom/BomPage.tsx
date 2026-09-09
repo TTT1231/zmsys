@@ -10,7 +10,9 @@ import { Button, TableLink } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { SelectField, TextField } from "@/components/ui/Field";
-import { useCreateBom, useWbSnapshot } from "@/data/queries";
+import { useCreateBom, useWbRefresh, useWbSnapshot } from "@/data/queries";
+import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
+import { PageLoading } from "@/components/ui/PageLoading";
 import { useToast } from "@/components/ui/Toast";
 import { BOM_CATEGORIES, categoryOf, initialValuesOf, nextBomCode } from "@/data/categories";
 import type { Bom } from "@/api";
@@ -298,7 +300,10 @@ function QuickFindModal({
 
 export function BomPage() {
     const { can } = useApp();
-    const { data, isLoading } = useWbSnapshot();
+    const { data, isLoading, isFetching } = useWbSnapshot();
+    const { refresh } = useWbRefresh();
+    // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
+    const overlay = useDelayedFlag(isFetching && !isLoading);
     const [searchParams, setSearchParams] = useSearchParams();
     const toast = useToast();
     const [keyword, setKeyword] = useState("");
@@ -351,7 +356,8 @@ export function BomPage() {
                 }
             />
 
-            <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
+            <section className="relative overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
+                {overlay && <LoadingOverlay />}
                 <div className="list-toolbar flex flex-wrap items-center justify-between gap-2.5 border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
                     <div className="flex flex-wrap items-center gap-2.5">
                         <label className="flex h-10 min-w-55 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 sm:w-75">
@@ -384,7 +390,7 @@ export function BomPage() {
                     <ToolbarMore>
                         <Button
                             variant="secondary"
-                            icon="refresh"
+                            icon="reset"
                             data-low-priority="true"
                             onClick={() => {
                                 setKeyword("");
@@ -393,6 +399,9 @@ export function BomPage() {
                             }}
                         >
                             重置
+                        </Button>
+                        <Button variant="secondary" icon="refresh" data-low-priority="true" onClick={refresh}>
+                            刷新
                         </Button>
                         <Button
                             variant="secondary"
@@ -435,7 +444,7 @@ export function BomPage() {
                 </div>
                 <div className="hidden overflow-x-auto lg:block">
                     {isLoading ? (
-                        <div className="py-16 text-center text-13 text-subtle">加载中…</div>
+                        <PageLoading className="py-16" />
                     ) : (
                         <table className="w-full min-w-230 border-collapse">
                             <thead>

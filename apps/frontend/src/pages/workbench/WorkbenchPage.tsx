@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { useApp } from "@/context/AppContext";
 import { EMPTY_SNAPSHOT, dailyTrend, readyToShip, stockGapList } from "@/data/views";
 import { useWbSnapshot } from "@/data/queries";
+import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { num } from "@/lib/format";
 import { todayIso } from "@/lib/date";
 import { Icon } from "@/lib/icons";
@@ -24,7 +25,9 @@ type TaskFilter = "priority" | "ready" | "gap" | "all";
 export function WorkbenchPage() {
     const navigate = useNavigate();
     const { role, can } = useApp();
-    const { data, isLoading } = useWbSnapshot();
+    const { data, isLoading, isFetching } = useWbSnapshot();
+    // 顶栏全局刷新时此处同步出现保留式遮罩(200ms 内完成不闪现)
+    const overlay = useDelayedFlag(isFetching && !isLoading);
     const snap = data ?? EMPTY_SNAPSHOT;
     const [filter, setFilter] = useState<TaskFilter>(() => (role === "warehouse" ? "ready" : "priority"));
     const [limit, setLimit] = useState(5);
@@ -54,7 +57,8 @@ export function WorkbenchPage() {
         setLimit(5);
     };
     return (
-        <div className="flex flex-col gap-4 lg:gap-6">
+        <div className="relative flex flex-col gap-4 lg:gap-6">
+            {overlay && <LoadingOverlay />}
             <div className="flex items-center justify-between gap-3">
                 <div>
                     <p className="hidden text-13 text-muted lg:block">{anchor} · 今日工作</p>

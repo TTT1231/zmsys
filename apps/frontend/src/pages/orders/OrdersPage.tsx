@@ -13,10 +13,12 @@ import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { CustomerCell, DateCell, QtyCell } from "@/components/ui/cells";
 import { Field, SelectField, TextArea, TextField, DateField } from "@/components/ui/Field";
-import { useCreateOrder, useUpdateOrder, useWbSnapshot } from "@/data/queries";
+import { useCreateOrder, useUpdateOrder, useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { EMPTY_SNAPSHOT, bomByCode, maxShipOf, orderStatusOf, remainingOf } from "@/data/views";
 import { todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/Toast";
+import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
+import { PageLoading } from "@/components/ui/PageLoading";
 import type { Order, Snapshot } from "@/api";
 
 const STATUS_OPTIONS = ["全部状态", "待备货", "可发货", "部分发货", "已完成"];
@@ -461,7 +463,10 @@ export function OrderDetailModal({
 
 export function OrdersPage() {
     const { role, can } = useApp();
-    const { data, isLoading } = useWbSnapshot();
+    const { data, isLoading, isFetching } = useWbSnapshot();
+    const { refresh } = useWbRefresh();
+    // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
+    const overlay = useDelayedFlag(isFetching && !isLoading);
     const snap = data ?? EMPTY_SNAPSHOT;
     const [searchParams, setSearchParams] = useSearchParams();
     const [statusFilter, setStatusFilter] = useState("全部状态");
@@ -568,7 +573,8 @@ export function OrdersPage() {
                 ))}
             </div>
 
-            <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
+            <section className="relative overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
+                {overlay && <LoadingOverlay />}
                 <div className="list-toolbar flex flex-wrap items-center gap-2.5 border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
                     <label className="flex h-10 min-w-55 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 sm:w-70">
                         <Icon name="search" size={15} className="text-subtle" />
@@ -650,8 +656,11 @@ export function OrdersPage() {
                     </details>
 
                     <ToolbarMore>
-                        <Button variant="secondary" icon="refresh" data-low-priority="true" onClick={reset}>
+                        <Button variant="secondary" icon="reset" data-low-priority="true" onClick={reset}>
                             重置
+                        </Button>
+                        <Button variant="secondary" icon="refresh" data-low-priority="true" onClick={refresh}>
+                            刷新
                         </Button>
                         <Button
                             variant="secondary"
@@ -705,7 +714,7 @@ export function OrdersPage() {
                 </div>
                 <div className="hidden overflow-x-auto lg:block">
                     {isLoading ? (
-                        <div className="py-16 text-center text-13 text-subtle">加载中…</div>
+                        <PageLoading className="py-16" />
                     ) : (
                         <table className="w-full min-w-245 border-collapse">
                             <thead>

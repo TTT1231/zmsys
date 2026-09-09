@@ -12,7 +12,9 @@ import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { QtyCell } from "@/components/ui/cells";
 import { DateField, SelectField, TextArea, TextField } from "@/components/ui/Field";
-import { useCreateInbound, useWbSnapshot } from "@/data/queries";
+import { useCreateInbound, useWbRefresh, useWbSnapshot } from "@/data/queries";
+import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
+import { PageLoading } from "@/components/ui/PageLoading";
 import { EMPTY_SNAPSHOT, bomByCode } from "@/data/views";
 import { todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/Toast";
@@ -213,7 +215,10 @@ function VoucherModal({ row, snap, onClose }: { row: InboundRow | null; snap: Sn
 
 export function InboundPage() {
     const { can } = useApp();
-    const { data, isLoading } = useWbSnapshot();
+    const { data, isLoading, isFetching } = useWbSnapshot();
+    const { refresh } = useWbRefresh();
+    // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
+    const overlay = useDelayedFlag(isFetching && !isLoading);
     const snap = data ?? EMPTY_SNAPSHOT;
     const [searchParams, setSearchParams] = useSearchParams();
     const [keyword, setKeyword] = useState("");
@@ -265,7 +270,8 @@ export function InboundPage() {
                 }
             />
 
-            <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
+            <section className="relative overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
+                {overlay && <LoadingOverlay />}
                 <div className="list-toolbar flex flex-wrap items-center gap-2.5 border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
                     <label className="flex h-10 min-w-55 flex-1 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 sm:max-w-75">
                         <Icon name="search" size={15} className="text-subtle" />
@@ -297,7 +303,7 @@ export function InboundPage() {
                     <ToolbarMore>
                         <Button
                             variant="secondary"
-                            icon="refresh"
+                            icon="reset"
                             data-low-priority="true"
                             onClick={() => {
                                 setKeyword("");
@@ -306,6 +312,9 @@ export function InboundPage() {
                             }}
                         >
                             重置
+                        </Button>
+                        <Button variant="secondary" icon="refresh" data-low-priority="true" onClick={refresh}>
+                            刷新
                         </Button>
                         <Button
                             variant="secondary"
@@ -352,7 +361,7 @@ export function InboundPage() {
                 </div>
                 <div className="hidden overflow-x-auto lg:block">
                     {isLoading ? (
-                        <div className="py-16 text-center text-13 text-subtle">加载中…</div>
+                        <PageLoading className="py-16" />
                     ) : (
                         <table className="w-full min-w-215 border-collapse">
                             <thead>

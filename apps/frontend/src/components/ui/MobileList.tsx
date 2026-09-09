@@ -4,12 +4,13 @@ import { bomByCode, maxShipOf, orderStatusOf, remainingOf } from "@/data/views";
 import { num } from "@/lib/format";
 import { todayIso } from "@/lib/date";
 import { Badge, Button, StatusBadge } from "./Badge";
+import { Loader } from "./Loader";
 
 export function ListState({ loading, empty, children }: { loading?: boolean; empty: boolean; children: ReactNode }) {
     if (loading)
         return (
-            <p role="status" className="p-8 text-center text-muted">
-                正在加载…
+            <p role="status" className="flex items-center justify-center gap-2.5 p-8 text-13 text-muted">
+                <Loader size={16} /> 正在加载…
             </p>
         );
     if (empty)

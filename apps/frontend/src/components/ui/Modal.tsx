@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "@/lib/icons";
 
 interface ModalProps {
@@ -71,7 +72,9 @@ export function Modal({ open, onClose, title, subtitle, label = "", width = 560,
 
     if (!open) return null;
 
-    return (
+    /* Portal 到 body:祖先的 transform / backdrop-filter（顶栏毛玻璃、侧栏抽屉）会劫持
+       fixed 定位基准,弹窗会被压进祖先盒子;挂 body 才保证遮罩铺满视口 */
+    return createPortal(
         <div
             className="fixed inset-0 z-150 flex items-center justify-center bg-scrim p-4 backdrop-blur-[2px] max-md:items-end max-md:p-0"
             onMouseDown={event => {
@@ -111,6 +114,7 @@ export function Modal({ open, onClose, title, subtitle, label = "", width = 560,
                     </div>
                 )}
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }

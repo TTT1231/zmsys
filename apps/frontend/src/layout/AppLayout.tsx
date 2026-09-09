@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 import { ROLE_META, useApp, type Role } from "@/context/AppContext";
 import { MENU_CATALOG, menuLabelFor } from "@/data/permissions";
 import { MobileBottomNav, Sidebar, Topbar } from "@/components/layout/Shell";
+import { PageLoading } from "@/components/ui/PageLoading";
 
 // 工作台标题随登录角色；其余页面标题取菜单字典（含仓管在订单页的「待发货订单」别名）
 function resolveTitle(pathname: string, role: Role) {
@@ -19,6 +20,11 @@ export function AppLayout() {
     // 抽屉只在打开它的那个路由上可见，路由一变自动收起（兜底重定向/浏览器回退等非点击导航）
     const [drawerPath, setDrawerPath] = useState<string | null>(null);
     const [collapsed, setCollapsed] = useState(false);
+    // 首屏(含登录后首次进入)不播页面进入动画,避免拖慢首次内容感知;此后路由切换播放
+    const firstRender = useRef(true);
+    useEffect(() => {
+        firstRender.current = false;
+    });
 
     const title = resolveTitle(location.pathname, role);
 
@@ -26,9 +32,9 @@ export function AppLayout() {
         document.title = `${title} · 智造管理系统`;
     }, [title]);
 
-    // 认证守卫：未登录进登录页；本地 token 校验中先不渲染（避免未授权请求）
+    // 认证守卫：未登录进登录页；本地 token 校验中显示全屏加载画面（避免未授权请求）
     if (status === "guest") return <Navigate to="/login" replace />;
-    if (status === "loading") return null;
+    if (status === "loading") return <PageLoading className="min-h-dvh bg-canvas" />;
 
     // 集中菜单守卫：当前路径对应的菜单未授权时回自己角色的工作台
     //（工作台自身不设守卫，/search 由搜索页按类目过滤）
@@ -53,7 +59,12 @@ export function AppLayout() {
                     id="mainContent"
                     className="mx-auto w-full max-w-390 flex-1 px-[clamp(16px,3vw,48px)] pt-6 pb-[calc(76px+env(safe-area-inset-bottom))] lg:pb-11"
                 >
-                    <Outlet />
+                    <Suspense fallback={<PageLoading />}>
+                        {/* key 只用 pathname(不含 search):改筛选参数不重播进入动画 */}
+                        <div key={location.pathname} className={firstRender.current ? "" : "animate-page-enter"}>
+                            <Outlet />
+                        </div>
+                    </Suspense>
                 </main>
             </div>
             <MobileBottomNav onOpenDrawer={() => setDrawerPath(location.pathname)} />

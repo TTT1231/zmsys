@@ -1,4 +1,4 @@
-import type { LoginInput, LoginResult, ProfileResult } from "./types";
+import type { LoginInput, LoginResult, ProfileResult, WbUser } from "./types";
 import { clearToken, requestClient, setToken } from "@/http";
 
 export async function login(input: LoginInput): Promise<LoginResult> {
@@ -17,4 +17,9 @@ export async function logout(): Promise<void> {
 
 export function fetchProfile(): Promise<ProfileResult> {
     return requestClient.get<ProfileResult>("/auth/profile");
+}
+
+/** 个人中心:更新自己的姓名(账号/角色/状态为管理员域,不可自行修改) */
+export function updateProfile(input: { name: string }): Promise<WbUser> {
+    return requestClient.put<WbUser>("/auth/profile", input);
 }

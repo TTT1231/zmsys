@@ -26,6 +26,13 @@ export function useWbSnapshot() {
     return useQuery({ queryKey: wbKeys.all, queryFn: fetchSnapshot });
 }
 
+/** 刷新快照:refetch 同一 query(全站共享,一处刷新全局生效)。
+ *  保留页面本地筛选/页码——与「重置」(清筛选)职责分离 */
+export function useWbRefresh() {
+    const { refetch, isFetching } = useWbSnapshot();
+    return { refresh: () => void refetch(), refreshing: isFetching };
+}
+
 function useWbMutation<TInput, TOutput>(mutationFn: (input: TInput) => Promise<TOutput>) {
     const queryClient = useQueryClient();
     return useMutation({

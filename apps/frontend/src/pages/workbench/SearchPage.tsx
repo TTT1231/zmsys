@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { useWbSnapshot } from "@/data/queries";
+import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/ui/Badge";
 import { ListState, OrderTaskCard, RecordCard } from "@/components/ui/MobileList";
@@ -13,7 +14,9 @@ import { OutboundModal } from "@/pages/outbound/OutboundPage";
 import { EMPTY_SNAPSHOT, bomByCode } from "@/data/views";
 
 export function SearchPage() {
-    const { data, isLoading } = useWbSnapshot();
+    const { data, isLoading, isFetching } = useWbSnapshot();
+    // 顶栏全局刷新时此处同步出现保留式遮罩(200ms 内完成不闪现)
+    const overlay = useDelayedFlag(isFetching && !isLoading);
     const snap = data ?? EMPTY_SNAPSHOT;
     const { can, grant } = useApp();
     const [params, setParams] = useSearchParams();
@@ -51,7 +54,8 @@ export function SearchPage() {
               : boms.length;
     const order = data?.orders.find(item => selected?.kind === "orders" && item.orderNo === selected.id) ?? null;
     return (
-        <div className="flex flex-col gap-4">
+        <div className="relative flex flex-col gap-4">
+            {overlay && <LoadingOverlay />}
             <PageHeading title="搜索" description="查找订单、客户和成品，直接查看详情或处理。" />
             <label className="flex min-h-12.5 items-center gap-3 rounded-xl border border-line-strong bg-white px-4">
                 <Icon name="search" size={20} />
