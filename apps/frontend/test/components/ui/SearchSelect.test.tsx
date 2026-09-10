@@ -11,7 +11,7 @@ afterEach(cleanup);
 const options = [
     { value: "ZMXK001", label: "二脚 / 一档" },
     { value: "ZMXK002", label: "三脚 / 两档" },
-    { value: "ZMDD001", label: "±30° 常开" },
+    { value: "ZMKQ001", label: "四键焊线" },
 ];
 
 describe("SearchSelect", () => {
@@ -32,9 +32,9 @@ describe("SearchSelect", () => {
     });
 
     it("keeps the current value visible even when it does not match the query", () => {
-        render(<SearchSelect label="BOM" value="ZMDD001" onChange={() => {}} options={options} />);
+        render(<SearchSelect label="BOM" value="ZMKQ001" onChange={() => {}} options={options} />);
         fireEvent.change(screen.getByRole("searchbox", { name: "搜索BOM" }), { target: { value: "三脚" } });
-        expect(screen.getByText("±30° 常开")).toBeInTheDocument();
+        expect(screen.getByText("四键焊线")).toBeInTheDocument();
     });
 
     it("shows no-match placeholder when search empties the list", () => {

@@ -2,7 +2,7 @@ import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { ListState, OrderTaskCard } from "@/components/ui/MobileList";
 import { OutboundModal } from "@/pages/outbound/OutboundPage";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
@@ -20,16 +20,20 @@ import { useToast } from "@/components/ui/Toast";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import type { Order, Snapshot } from "@/api";
+import { categoryOf } from "@/data/categories";
+import { bomSelectorOptionLabel, buildBomSelectorSchema, resolveBomSelection } from "@/data/bomSelection";
 
 const STATUS_OPTIONS = ["全部状态", "待备货", "可发货", "部分发货", "已完成"];
+const EMPTY_BOMS: Snapshot["boms"] = [];
+const EMPTY_CUSTOMERS: Snapshot["customers"] = [];
 
 /* 新建销售订单弹窗（三步表单：客户与交付 → BOM 编码 → 备注） */
 function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     const { data } = useWbSnapshot();
     const createOrder = useCreateOrder();
     const toast = useToast();
-    const customers = data?.customers ?? [];
-    const boms = data?.boms ?? [];
+    const customers = data?.customers ?? EMPTY_CUSTOMERS;
+    const boms = data?.boms ?? EMPTY_BOMS;
 
     const [customerCode, setCustomerCode] = useState("");
     const [qty, setQty] = useState("");
@@ -37,19 +41,53 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
     const [deliverStart, setDeliverStart] = useState("");
     const [deliverEnd, setDeliverEnd] = useState("");
     const [category, setCategory] = useState("");
-    const [bomCode, setBomCode] = useState("");
+    const [bomSelections, setBomSelections] = useState<Record<string, string>>({});
     const [remark, setRemark] = useState("");
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    const categories = [...new Set(boms.map(bom => bom.name))];
-    const bomOptions = boms
-        .filter(bom => !category || bom.name === category)
-        .map(bom => ({
-            value: bom.code,
-            label: `${bom.code} · ${bom.name} · ${bom.spec}`,
-        }));
+    const customerOptions = useMemo(
+        () =>
+            customers.map(customer => ({
+                value: customer.code,
+                label: `${customer.name}（${customer.code}）`,
+            })),
+        [customers],
+    );
+    const categories = useMemo(() => [...new Set(boms.map(bom => bom.name))], [boms]);
+    const categoryBoms = useMemo(() => (category ? boms.filter(bom => bom.name === category) : []), [boms, category]);
+    const selectorSchema = useMemo(
+        () =>
+            buildBomSelectorSchema(
+                categoryBoms,
+                categoryOf(category)?.fields.map(field => field.key),
+            ),
+        [categoryBoms, category],
+    );
+    const resolution = useMemo(
+        () => resolveBomSelection(categoryBoms, selectorSchema.fields, bomSelections),
+        [categoryBoms, selectorSchema.fields, bomSelections],
+    );
+    const selectedBom =
+        !resolution.pending && resolution.candidates.length === 1 ? resolution.candidates[0] : undefined;
 
-    const selectedBom = boms.find(bom => bom.code === bomCode);
+    const pickCategory = (nextCategory: string) => {
+        setCategory(nextCategory);
+        setBomSelections({});
+        setErrors(current => ({ ...current, category: "", bom: "" }));
+    };
+
+    const pickBomDimension = (fieldId: string, value: string) => {
+        const fieldIndex = selectorSchema.fields.findIndex(field => field.id === fieldId);
+        setBomSelections(current => {
+            const next: Record<string, string> = {};
+            selectorSchema.fields.slice(0, fieldIndex).forEach(field => {
+                if (current[field.id]) next[field.id] = current[field.id];
+            });
+            if (value) next[fieldId] = value;
+            return next;
+        });
+        setErrors(current => ({ ...current, bom: "" }));
+    };
 
     const reset = () => {
         setCustomerCode("");
@@ -58,7 +96,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
         setDeliverStart("");
         setDeliverEnd("");
         setCategory("");
-        setBomCode("");
+        setBomSelections({});
         setRemark("");
         setErrors({});
     };
@@ -72,7 +110,8 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
         if (!deliverStart) nextErrors.deliverStart = "请选择交货起始日期";
         if (!deliverEnd) nextErrors.deliverEnd = "请选择交货终止日期";
         if (deliverStart && deliverEnd && deliverEnd < deliverStart) nextErrors.deliverEnd = "终止不能早于起始";
-        if (!selectedBom) nextErrors.bom = "请选择 BOM";
+        if (!category) nextErrors.category = "请选择 BOM 品类";
+        else if (!selectedBom) nextErrors.bom = "请完成规格选择";
         setErrors(nextErrors);
         if (Object.keys(nextErrors).length)
             requestAnimationFrame(() =>
@@ -108,7 +147,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
             open={open}
             onClose={onClose}
             title="新建销售订单"
-            subtitle="客户和 BOM 选一次，入库发货自动沿用"
+            subtitle="按品类与部件组合定位 BOM，无需滚动长清单"
             width={640}
             footer={
                 <>
@@ -140,10 +179,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
                             error={errors.customerCode}
                             value={customerCode}
                             onChange={setCustomerCode}
-                            options={customers.map(customer => ({
-                                value: customer.code,
-                                label: `${customer.name}（${customer.code}）`,
-                            }))}
+                            options={customerOptions}
                         />
                         <TextField
                             label="订单数量（件）"
@@ -182,36 +218,84 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
 
                 <fieldset className="rounded-panel border border-line p-4">
                     <legend className="px-1.5 text-12.5 font-semibold text-primary">② 选择 BOM</legend>
-                    <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
                         <SelectField
                             label="品类"
+                            required
+                            error={errors.category}
                             value={category}
-                            onChange={event => {
-                                setCategory(event.target.value);
-                                setBomCode("");
-                            }}
+                            onChange={event => pickCategory(event.target.value)}
                         >
-                            <option value="">全部品类</option>
+                            <option value="">请选择品类</option>
                             {categories.map(item => (
                                 <option key={item} value={item}>
                                     {item}
                                 </option>
                             ))}
                         </SelectField>
-                        <div className="sm:col-span-2">
-                            <SearchSelect
-                                label="BOM"
+
+                        {resolution.steps.map((step, index) => (
+                            <SelectField
+                                key={step.field.id}
+                                label={step.field.label}
                                 required
-                                error={errors.bom}
-                                value={bomCode}
-                                onChange={setBomCode}
-                                options={bomOptions}
-                            />
-                        </div>
-                        {selectedBom && (
-                            <p className="rounded-btn bg-primary-soft/70 px-3 py-2 text-12 text-primary-strong sm:col-span-3">
-                                {selectedBom.code} · {selectedBom.name} · {selectedBom.spec}
+                                error={index === resolution.steps.length - 1 ? errors.bom : undefined}
+                                value={bomSelections[step.field.id] ?? ""}
+                                onChange={event => pickBomDimension(step.field.id, event.target.value)}
+                            >
+                                <option value="">请选择{step.field.label}</option>
+                                {step.options.map(option => (
+                                    <option key={option} value={option}>
+                                        {bomSelectorOptionLabel(option)}
+                                    </option>
+                                ))}
+                            </SelectField>
+                        ))}
+
+                        {category && selectorSchema.fixedSpecs.length > 0 && (
+                            <div className="rounded-btn border border-line bg-panel px-3 py-2.5 sm:col-span-2">
+                                <p className="text-11.5 font-semibold text-td">固定规格（无需选择）</p>
+                                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                    {selectorSchema.fixedSpecs.map(item => (
+                                        <span
+                                            key={item.key}
+                                            className="rounded-md bg-white px-2 py-1 text-11.5 text-muted shadow-xs"
+                                        >
+                                            {item.key}：{item.value}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {category && !selectedBom && categoryBoms.length > 0 && (
+                            <p className="text-12 text-muted sm:col-span-2" aria-live="polite">
+                                当前匹配 {num(resolution.candidates.length)} 条 BOM，继续选择下一项即可自动定位。
                             </p>
+                        )}
+                        {errors.bom && resolution.steps.length === 0 && (
+                            <p role="alert" className="text-12 text-danger sm:col-span-2">
+                                {errors.bom}
+                            </p>
+                        )}
+                        {selectedBom && (
+                            <div
+                                className="rounded-btn border border-primary-border bg-primary-soft/70 px-3.5 py-3 sm:col-span-2"
+                                aria-live="polite"
+                            >
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <span className="tnum text-14 font-semibold text-primary-strong">
+                                        {selectedBom.code}
+                                    </span>
+                                    <span className="rounded-full bg-white px-2 py-1 text-11 font-medium text-success">
+                                        已匹配
+                                    </span>
+                                </div>
+                                <p className="mt-1 text-12.5 text-td">
+                                    {selectedBom.name} · {selectedBom.modelCode}
+                                </p>
+                                <p className="mt-1 break-words text-11.5 text-muted">{selectedBom.spec}</p>
+                            </div>
                         )}
                     </div>
                 </fieldset>
@@ -235,7 +319,8 @@ function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void 
     const updateOrder = useUpdateOrder();
     const toast = useToast();
     const [qty, setQty] = useState(String(order.qty));
-    const [deliverEnd, setDeliverEnd] = useState(order.deliverDate);
+    const [deliverStart, setDeliverStart] = useState(order.deliverStart);
+    const [deliverEnd, setDeliverEnd] = useState(order.deliverEnd);
     const [remark, setRemark] = useState(order.remark);
     const [reason, setReason] = useState("");
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -245,6 +330,9 @@ function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void 
         if (!order) return;
         const nextErrors: Record<string, string> = {};
         if (!qty || Number(qty) <= 0) nextErrors.qty = "请填写订单数量";
+        if (!deliverStart) nextErrors.deliverStart = "请选择交货起始日期";
+        if (!deliverEnd) nextErrors.deliverEnd = "请选择交货截止日期";
+        if (deliverStart && deliverEnd && deliverEnd < deliverStart) nextErrors.deliverEnd = "截止不能早于起始";
         if (qtyChanged && reason.trim().length < 4) nextErrors.reason = "修改数量必须填写至少 4 个字的修改原因";
         setErrors(nextErrors);
         if (Object.keys(nextErrors).length)
@@ -256,7 +344,8 @@ function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void 
             {
                 orderNo: order.orderNo,
                 qty: Number(qty),
-                deliverDate: deliverEnd,
+                deliverStart,
+                deliverEnd,
                 remark,
                 reason,
             },
@@ -308,7 +397,16 @@ function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void 
                         onChange={event => setQty(event.target.value.replace(/\D/g, ""))}
                     />
                     <DateField
-                        label="交货日期"
+                        label="交货起始日期"
+                        required
+                        error={errors.deliverStart}
+                        value={deliverStart}
+                        onChange={event => setDeliverStart(event.target.value)}
+                    />
+                    <DateField
+                        label="交货截止日期"
+                        required
+                        error={errors.deliverEnd}
                         value={deliverEnd}
                         onChange={event => setDeliverEnd(event.target.value)}
                     />
@@ -414,10 +512,16 @@ export function OrderDetailModal({
                             </span>,
                         ],
                         [
-                            "交货日期",
-                            <span key="dd" className="tnum text-td">
-                                {order.deliverDate}
-                                {remaining > 0 && order.deliverDate < todayIso() ? "（已逾期）" : ""}
+                            "交货起始日期",
+                            <span key="ds" className="tnum text-td">
+                                {order.deliverStart}
+                            </span>,
+                        ],
+                        [
+                            "交货截止日期",
+                            <span key="de" className="tnum text-td">
+                                {order.deliverEnd}
+                                {remaining > 0 && order.deliverEnd < todayIso() ? "（已逾期）" : ""}
                             </span>,
                         ],
                         [
@@ -499,8 +603,8 @@ export function OrdersPage() {
             if (taskFilter === "ready" && maxShipOf(snap, order.orderNo) <= 0) return false;
             if (statusFilter !== "全部状态" && orderStatusOf(snap, order).label !== statusFilter) return false;
             if (categoryFilter !== "全部品类" && bomCategory.get(order.bomCode) !== categoryFilter) return false;
-            if (dateStart && order.deliverDate < dateStart) return false;
-            if (dateEnd && order.deliverDate > dateEnd) return false;
+            if (dateStart && order.deliverEnd < dateStart) return false;
+            if (dateEnd && order.deliverEnd > dateEnd) return false;
             if (kw) {
                 const bom = bomByCode(snap, order.bomCode);
                 const text =
@@ -511,7 +615,7 @@ export function OrdersPage() {
         });
         // 仓库角色按交期优先排序，便于安排发货
         return role === "warehouse"
-            ? [...rows].sort((a, b) => a.deliverDate.localeCompare(b.deliverDate) || a.orderNo.localeCompare(b.orderNo))
+            ? [...rows].sort((a, b) => a.deliverEnd.localeCompare(b.deliverEnd) || a.orderNo.localeCompare(b.orderNo))
             : rows;
     })();
 
@@ -676,7 +780,8 @@ export function OrdersPage() {
                                         "客户编码",
                                         "BOM 编码",
                                         "订单数量",
-                                        "交货日期",
+                                        "交货起始日期",
+                                        "交货截止日期",
                                         "累计出库",
                                         "状态",
                                     ],
@@ -686,7 +791,8 @@ export function OrdersPage() {
                                         order.customerCode,
                                         order.bomCode,
                                         String(order.qty),
-                                        order.deliverDate,
+                                        order.deliverStart,
+                                        order.deliverEnd,
                                         String(order.outbound),
                                         orderStatusOf(snap, order).label,
                                     ]),
@@ -725,14 +831,14 @@ export function OrdersPage() {
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "16%" }}>
                                         客户
                                     </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "18%" }}>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "15%" }}>
                                         BOM 编码
                                     </th>
                                     <th className="px-3 py-2.5 text-right font-semibold" style={{ width: "9%" }}>
                                         订单数量
                                     </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "11%" }}>
-                                        交货日期
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "14%" }}>
+                                        交货期
                                     </th>
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "14%" }}>
                                         交付情况
@@ -799,9 +905,10 @@ export function OrdersPage() {
                                                 <QtyCell value={order.qty} />
                                             </td>
                                             <td className="px-3 py-4">
+                                                <div className="text-11.5 tnum text-muted">{order.deliverStart} 起</div>
                                                 <DateCell
-                                                    date={order.deliverDate}
-                                                    overdue={order.deliverDate < todayIso() && !done}
+                                                    date={order.deliverEnd}
+                                                    overdue={order.deliverEnd < todayIso() && !done}
                                                 />
                                             </td>
                                             <td className="px-3 py-4">
@@ -863,7 +970,7 @@ export function OrdersPage() {
                 </div>
             </section>
 
-            {canCreate && <NewOrderModal open={newOpen} onClose={() => setNewOpen(false)} />}
+            {canCreate && newOpen && <NewOrderModal open onClose={() => setNewOpen(false)} />}
             {editing && <EditOrderModal key={editing.orderNo} order={editing} onClose={() => setEditing(null)} />}
             <OrderDetailModal
                 order={detail ? (orders.find(order => order.orderNo === detail.orderNo) ?? null) : null}

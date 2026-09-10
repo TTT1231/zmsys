@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { maxShipOf, readyToShip } from "@/data/views";
+import { newMicroSwitchGaugeOf } from "@/data/categories";
 import { ANCHOR, db } from "../../mocks/data/db";
 
 // db 是 import 即 init 的单例，同文件内 it 顺序执行；
@@ -8,6 +9,21 @@ import { ANCHOR, db } from "../../mocks/data/db";
 const actor = { name: "测试", roleLabel: "检验员" };
 
 describe("mock db inventory rules", () => {
+    it("seeds new micro switches with one matching-gauge bracket and static plate", () => {
+        const rows = db.boms.filter(bom => bom.name === "新微动");
+        expect(rows).toHaveLength(3744);
+        expect(
+            rows.every(
+                bom =>
+                    !Object.hasOwn(bom.specs, "6.3支架") &&
+                    !Object.hasOwn(bom.specs, "4.8支架") &&
+                    !Object.hasOwn(bom.specs, "6.3静片") &&
+                    !Object.hasOwn(bom.specs, "4.8静片") &&
+                    newMicroSwitchGaugeOf(bom.specs["支架"]) === newMicroSwitchGaugeOf(bom.specs["静片"]),
+            ),
+        ).toBe(true);
+    });
+
     it("allocates stock without over-promising one pool twice", () => {
         const rows = readyToShip(db.snapshot());
         for (const bom of db.boms) {
@@ -102,7 +118,7 @@ describe("mock db business write rules", () => {
         expect(() => db.updateOrder({ orderNo: order.orderNo, qty: 6, reason: "太短" }, actor)).toThrow("至少 4 个字");
         expect(db.updateOrder({ orderNo: order.orderNo, qty: 6, reason: "客户追加订单数量" }, actor).qty).toBe(6);
         // 交期调整不涉及数量，无需原因
-        expect(db.updateOrder({ orderNo: order.orderNo, deliverDate: "2026-03-28" }, actor).deliverDate).toBe(
+        expect(db.updateOrder({ orderNo: order.orderNo, deliverEnd: "2026-03-28" }, actor).deliverEnd).toBe(
             "2026-03-28",
         );
         expect(() => db.updateOrder({ orderNo: "ZM-NOPE", qty: 1, reason: "xxxx" }, actor)).toThrow("订单不存在");

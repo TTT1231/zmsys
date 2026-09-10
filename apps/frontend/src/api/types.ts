@@ -18,13 +18,14 @@ export interface Order {
     qty: number;
     outbound: number;
     orderDate: string;
-    deliverDate: string;
+    deliverStart: string; // 交货起始日期
+    deliverEnd: string; // 交货截止日期（排序/逾期口径）
     remark: string;
 }
 
 export interface Bom {
-    code: string; // 编码，如 ZMXK001 / ZMKW001 / ZMDD001
-    name: string; // 品类：旋转开关 / 微动开关 / 跌倒开关
+    code: string; // 编码，如 ZMXK2001 / ZMXK3001 / ZMKW0001 / ZMKW16001 / ZMKQ001
+    name: string; // 品类：旋转开关 / XK3 / 新微动 / 老微动 / 琴键开关
     modelCode: string; // 型号
     specs: Record<string, string>; // 品类规格键值对（对应库表 spec JSON）
     spec: string; // 规格摘要（列表/搜索用）
@@ -158,7 +159,8 @@ export interface CreateOrderInput {
 
 export interface UpdateOrderInput {
     qty?: number;
-    deliverDate?: string;
+    deliverStart?: string;
+    deliverEnd?: string;
     remark?: string;
     /** 修改数量时必填，≥4 字符 */
     reason?: string;
@@ -214,7 +216,8 @@ export interface ReadyToShipRow {
     customerCode: string;
     bomCode: string;
     bomLabel: string;
-    deliverDate: string;
+    deliverStart: string;
+    deliverEnd: string;
     remaining: number;
     stock: number;
     maxShip: number;

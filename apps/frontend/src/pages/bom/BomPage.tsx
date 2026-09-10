@@ -1,6 +1,6 @@
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard } from "@/components/ui/MobileList";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
@@ -14,8 +14,10 @@ import { useCreateBom, useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { useToast } from "@/components/ui/Toast";
-import { BOM_CATEGORIES, categoryOf, initialValuesOf, nextBomCode } from "@/data/categories";
+import { BOM_CATEGORIES, categoryOf, defaultsOf, nextBomCode } from "@/data/categories";
 import type { Bom } from "@/api";
+
+const EMPTY_BOMS: Bom[] = [];
 
 /* BOM 规格行：品类 + 型号 + 各品类规格键值对 */
 function specLines(bom: Bom) {
@@ -61,47 +63,98 @@ export function BomDetailModal({ bom, onClose }: { bom: Bom | null; onClose: () 
     );
 }
 
+/* 新建弹窗各品类型号输入示例 */
+const MODEL_PLACEHOLDERS: Record<string, string> = {
+    旋转开关: "如 2-1",
+    XK3: "如 XK3",
+    新微动: "如 KW-1",
+    老微动: "如 KW16",
+    琴键开关: "如 KQ-1",
+};
+
+interface SpecRow {
+    id: number;
+    key: string;
+    value: string;
+}
+
+const blankSpecRow = (id: number): SpecRow => ({ id, key: "", value: "" });
+const RESERVED_SPEC_KEYS = new Set(["品类", "型号", "BOM编码", "BOM 编码"].map(key => key.toLocaleLowerCase()));
+
 function NewBomModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     const { data } = useWbSnapshot();
     const createBom = useCreateBom();
     const toast = useToast();
     const [name, setName] = useState("");
     const [modelCode, setModelCode] = useState("");
-    const [values, setValues] = useState<Record<string, string>>({});
+    const [specRows, setSpecRows] = useState<SpecRow[]>([blankSpecRow(0)]);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const nextRowId = useRef(1);
 
-    const boms = data?.boms ?? [];
+    const boms = data?.boms ?? EMPTY_BOMS;
     const category = categoryOf(name);
-
-    const nextCode = useMemo(
+    const fixedSpecs = useMemo(() => (category ? defaultsOf(category) : {}), [category]);
+    const customSpecs = useMemo(
         () =>
-            category
-                ? nextBomCode(
-                      name,
-                      boms.map(bom => bom.code),
-                  )
-                : "—",
-        [category, name, boms],
+            Object.fromEntries(
+                specRows
+                    .filter(row => row.key.trim() && row.value.trim())
+                    .map(row => [row.key.trim(), row.value.trim()]),
+            ),
+        [specRows],
     );
+    const previewSpecs = useMemo(() => ({ ...fixedSpecs, ...customSpecs }), [fixedSpecs, customSpecs]);
+
+    const nextCode = useMemo(() => (category ? nextBomCode(name, boms) : "—"), [category, name, boms]);
 
     const pickCategory = (next: string) => {
         setName(next);
         setModelCode("");
-        setValues(next ? initialValuesOf(categoryOf(next)!) : {});
+        nextRowId.current = 1;
+        setSpecRows([blankSpecRow(0)]);
         setErrors({});
     };
 
-    const setValue = (key: string, value: string) => setValues(prev => ({ ...prev, [key]: value }));
+    const updateSpecRow = (id: number, patch: Partial<Pick<SpecRow, "key" | "value">>) => {
+        setSpecRows(current => current.map(row => (row.id === id ? { ...row, ...patch } : row)));
+        setErrors(current => ({ ...current, specs: "", [`spec-key-${id}`]: "", [`spec-value-${id}`]: "" }));
+    };
+
+    const addSpecRow = () => {
+        setSpecRows(current => [...current, blankSpecRow(nextRowId.current++)]);
+    };
+
+    const removeSpecRow = (id: number) => {
+        setSpecRows(current =>
+            current.length === 1 ? [blankSpecRow(current[0]!.id)] : current.filter(row => row.id !== id),
+        );
+        setErrors(current => ({ ...current, specs: "", [`spec-key-${id}`]: "", [`spec-value-${id}`]: "" }));
+    };
 
     const submit = () => {
         const nextErrors: Record<string, string> = {};
         if (!category) nextErrors.name = "请选择产品品类";
         if (!modelCode.trim()) nextErrors.modelCode = "请填写型号";
-        category?.fields
-            .filter(field => field.required)
-            .forEach(field => {
-                if (!values[field.key]?.trim()) nextErrors[field.key] = `请填写${field.label}`;
-            });
+        const activeRows = specRows.filter(row => row.key.trim() || row.value.trim());
+        if (activeRows.length === 0) {
+            nextErrors.specs = "请至少添加一项规格";
+            nextErrors[`spec-key-${specRows[0]!.id}`] = "请填写规格名称";
+        }
+
+        const fixedKeys = new Set(Object.keys(fixedSpecs).map(key => key.toLocaleLowerCase()));
+        const usedKeys = new Set<string>();
+        activeRows.forEach(row => {
+            const key = row.key.trim();
+            const normalizedKey = key.toLocaleLowerCase();
+            if (!key) nextErrors[`spec-key-${row.id}`] = "请填写规格名称";
+            if (!row.value.trim()) nextErrors[`spec-value-${row.id}`] = "请填写规格值";
+            if (key && RESERVED_SPEC_KEYS.has(normalizedKey))
+                nextErrors[`spec-key-${row.id}`] = "该名称为系统字段，请换一个名称";
+            else if (key && fixedKeys.has(normalizedKey))
+                nextErrors[`spec-key-${row.id}`] = "该规格已由品类固定，无需重复添加";
+            else if (key && usedKeys.has(normalizedKey)) nextErrors[`spec-key-${row.id}`] = "规格名称不能重复";
+            if (key) usedKeys.add(normalizedKey);
+        });
         setErrors(nextErrors);
         if (Object.keys(nextErrors).length)
             requestAnimationFrame(() =>
@@ -109,8 +162,9 @@ function NewBomModal({ open, onClose }: { open: boolean; onClose: () => void }) 
             );
         if (Object.keys(nextErrors).length > 0) return;
         createBom.mutate(
-            { name, modelCode: modelCode.trim(), specs: values },
+            { name, modelCode: modelCode.trim(), specs: { ...fixedSpecs, ...customSpecs } },
             {
+                onError: error => toast(error.message, true),
                 onSuccess: bom => {
                     toast(`BOM ${bom.code} 已创建`);
                     onClose();
@@ -125,8 +179,8 @@ function NewBomModal({ open, onClose }: { open: boolean; onClose: () => void }) 
             open={open}
             onClose={onClose}
             title="新建 BOM"
-            subtitle="枚举规格点选，型号与自由规格手动输入"
-            width={600}
+            subtitle="规格名称和值按实际物料自由添加，不受预设格式限制"
+            width={680}
             footer={
                 <>
                     <button
@@ -142,80 +196,114 @@ function NewBomModal({ open, onClose }: { open: boolean; onClose: () => void }) 
                         onClick={submit}
                         className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
                     >
-                        保存 BOM
+                        {createBom.isPending ? "正在保存…" : "保存 BOM"}
                     </button>
                 </>
             }
         >
-            <div className="grid gap-3 sm:grid-cols-3">
-                <SelectField
-                    label="① 产品品类"
-                    required
-                    error={errors.name}
-                    value={name}
-                    onChange={event => pickCategory(event.target.value)}
-                >
-                    <option value="">请选择</option>
-                    {BOM_CATEGORIES.map(item => (
-                        <option key={item.name}>{item.name}</option>
-                    ))}
-                </SelectField>
-                <TextField
-                    label={category?.name === "旋转开关" ? "② 型号 · 触点面" : "② 型号"}
-                    required
-                    placeholder={
-                        category?.name === "旋转开关"
-                            ? "如 2-1"
-                            : category?.name === "微动开关"
-                              ? "如 KW-4"
-                              : category?.name === "跌倒开关"
-                                ? "如 DD-3"
-                                : "请先选择品类"
-                    }
-                    error={errors.modelCode}
-                    value={modelCode}
-                    onChange={event => setModelCode(event.target.value)}
-                />
-                {category?.fields.map(field =>
-                    field.type === "select" ? (
-                        <SelectField
-                            key={field.key}
-                            label={field.label}
-                            required={field.required}
-                            error={errors[field.key]}
-                            value={values[field.key] ?? ""}
-                            onChange={event => setValue(field.key, event.target.value)}
-                        >
-                            <option value="">请选择</option>
-                            {field.options?.map(item => (
-                                <option key={item}>{item}</option>
+            <div className="flex flex-col gap-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <SelectField
+                        label="① 产品品类"
+                        required
+                        error={errors.name}
+                        value={name}
+                        onChange={event => pickCategory(event.target.value)}
+                    >
+                        <option value="">请选择</option>
+                        {BOM_CATEGORIES.map(item => (
+                            <option key={item.name}>{item.name}</option>
+                        ))}
+                    </SelectField>
+                    <TextField
+                        label={category?.name === "旋转开关" ? "② 型号 · 触点面" : "② 型号"}
+                        required
+                        placeholder={(category && MODEL_PLACEHOLDERS[category.name]) || "请先选择品类"}
+                        error={errors.modelCode}
+                        value={modelCode}
+                        onChange={event => setModelCode(event.target.value)}
+                    />
+                </div>
+
+                {Object.keys(fixedSpecs).length > 0 && (
+                    <div className="rounded-btn border border-line bg-panel px-3.5 py-3">
+                        <p className="text-11.5 font-semibold text-td">品类固定规格（保存时自动带入）</p>
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            {Object.entries(fixedSpecs).map(([key, value]) => (
+                                <span
+                                    key={key}
+                                    className="rounded-md bg-white px-2 py-1 text-11.5 text-muted shadow-xs"
+                                >
+                                    {key}：{value}
+                                </span>
                             ))}
-                        </SelectField>
-                    ) : (
-                        <TextField
-                            key={field.key}
-                            label={field.label}
-                            required={field.required}
-                            placeholder={field.placeholder}
-                            error={errors[field.key]}
-                            value={values[field.key] ?? ""}
-                            onChange={event => setValue(field.key, event.target.value)}
-                        />
-                    ),
+                        </div>
+                    </div>
                 )}
-                <div className="rounded-xl border border-line bg-panel px-3.5 py-3 text-12.5 sm:col-span-3">
+
+                <fieldset className="rounded-panel border border-line p-4">
+                    <legend className="px-1.5 text-12.5 font-semibold text-primary">③ 自定义规格</legend>
+                    <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                        <p className="max-w-105 text-12 text-muted">
+                            规格名称与规格值均可自由填写，例如“底座 / 带 CB”。
+                        </p>
+                        <Button variant="secondary" icon="plus" onClick={addSpecRow}>
+                            添加规格
+                        </Button>
+                    </div>
+                    <div className="flex flex-col gap-2.5">
+                        {specRows.map((row, index) => (
+                            <div
+                                key={row.id}
+                                className="grid gap-2 rounded-btn border border-line bg-panel/50 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto]"
+                            >
+                                <TextField
+                                    label={`规格 ${index + 1} 名称`}
+                                    required={index === 0 || Boolean(row.key || row.value)}
+                                    placeholder="如 底座"
+                                    error={errors[`spec-key-${row.id}`]}
+                                    value={row.key}
+                                    onChange={event => updateSpecRow(row.id, { key: event.target.value })}
+                                />
+                                <TextField
+                                    label="规格值"
+                                    required={index === 0 || Boolean(row.key || row.value)}
+                                    placeholder="如 带 CB"
+                                    error={errors[`spec-value-${row.id}`]}
+                                    value={row.value}
+                                    onChange={event => updateSpecRow(row.id, { value: event.target.value })}
+                                />
+                                <div className="flex items-end">
+                                    <button
+                                        type="button"
+                                        aria-label={`删除规格 ${index + 1}`}
+                                        onClick={() => removeSpecRow(row.id)}
+                                        className="min-h-10 w-full rounded-btn border border-line-strong bg-white px-3 text-12.5 font-medium text-muted transition hover:border-danger hover:text-danger sm:w-auto"
+                                    >
+                                        删除
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    {errors.specs && (
+                        <p role="alert" className="mt-2 text-12 text-danger">
+                            {errors.specs}
+                        </p>
+                    )}
+                </fieldset>
+
+                <div className="rounded-xl border border-line bg-panel px-3.5 py-3 text-12.5">
                     <div className="mb-1 font-semibold text-ink">预览</div>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted sm:grid-cols-3">
                         <span>品类：{name || "—"}</span>
                         <span className="tnum">BOM 编码：{nextCode}</span>
                         <span>型号：{modelCode.trim() || "—"}</span>
-                        {Object.entries(values)
-                            .filter(([, value]) => value && value.trim())
-                            .map(([key, value]) => (
-                                <span key={key}>
-                                    {key}：{value}
-                                </span>
-                            ))}
+                        {Object.entries(previewSpecs).map(([key, value]) => (
+                            <span key={key} className="break-words">
+                                {key}：{value}
+                            </span>
+                        ))}
                     </div>
                 </div>
             </div>
@@ -235,7 +323,7 @@ function QuickFindModal({
     const { data } = useWbSnapshot();
     const [name, setName] = useState("");
     const [keyword, setKeyword] = useState("");
-    const boms = data?.boms ?? [];
+    const boms = data?.boms ?? EMPTY_BOMS;
     const results = boms
         .filter(bom => !name || bom.name === name)
         .filter(
@@ -314,7 +402,7 @@ export function BomPage() {
     const [quickOpen, setQuickOpen] = useState(false);
     const [detail, setDetail] = useState<Bom | null>(null);
 
-    const boms = data?.boms ?? [];
+    const boms = data?.boms ?? EMPTY_BOMS;
     const categories = useMemo(() => [...new Set(boms.map(bom => bom.name))], [boms]);
 
     const filtered = useMemo(() => {

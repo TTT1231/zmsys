@@ -10,7 +10,14 @@ import type { Bom, Customer, InboundRow, OpLogEntry, Order, OutboundRow, Snapsho
 import type { GrantMap, RoleGrant, RoleId } from "@/data/permissions";
 import { ROLES, buildDefaultGrants } from "../../src/data/permissions.ts";
 import type { GrantLogEntry } from "@/api";
-import { categoryOf, defaultsOf, nextBomCode } from "../../src/data/categories.ts";
+import {
+    categoryOf,
+    defaultsOf,
+    NEW_MICRO_SWITCH_BRACKET_OPTIONS,
+    NEW_MICRO_SWITCH_STATIC_PLATE_OPTIONS,
+    newMicroSwitchGaugeOf,
+    nextBomCode,
+} from "../../src/data/categories.ts";
 import { addDays, nowStamp, nowTime, todayIso } from "../../src/lib/date.ts";
 import { maxShipOf } from "../../src/data/views.ts";
 
@@ -85,7 +92,7 @@ const buildCustomers = (): Customer[] =>
         };
     });
 
-// 33 条人工审核旋转开关主数据（编码 ZMXK001 起，specs 键值对见品类模板）
+// 33 条人工审核旋转开关主数据（编码 ZMXK2001 起，specs 键值对见品类模板）
 const ROTARY_ROWS: Array<{
     modelCode: string;
     foot: string;
@@ -322,37 +329,150 @@ const ROTARY_ROWS: Array<{
     { modelCode: "3-1", foot: "五脚", gear: "三档", gearSpec: "", gearDir: "", thickness: "0.2", spring: "0.5" },
 ];
 
-// 微动 / 跌倒开关样例数据（演示多品类建档与筛选）
+// XK3 / 新微动 / 老微动 / 琴键开关种子数据（按真实物料清单建档，品类常量由 defaultsOf 并入）
+
+/* 规格维度笛卡尔积：[[键, 选项], ...] → 逐维展开的键值对数组 */
+const specCombos = (dims: Array<[string, string[]]>): Record<string, string>[] =>
+    dims.reduce<Record<string, string>[]>(
+        (rows, [key, options]) => rows.flatMap(row => options.map(option => ({ ...row, [key]: option }))),
+        [{}],
+    );
+
+// XK3 全组合：外壳5 × 底座2 × 杆子4 × 小静片2 × 半圆静片2 × 动片2 × 卡线片2 × 弹簧2 = 1280 种
+const XK3_BOMS: Array<Pick<Bom, "code" | "name" | "modelCode" | "specs">> = specCombos([
+    [
+        "外壳",
+        [
+            "圆孔长外壳（茶色）",
+            "圆孔长外壳（透明）",
+            "圆孔短外壳（茶色）",
+            "椭圆孔长外壳无CB字（茶色）",
+            "无耳外壳无CB字（茶色）",
+        ],
+    ],
+    ["底座", ["茶色", "透明"]],
+    ["杆子", ["圆轴长杆子", "圆轴短杆子", "扁轴4.8", "扁轴4.8转90°"]],
+    ["小静片", ["不电镀", "镀锡"]],
+    ["半圆静片", ["不电镀", "镀锡"]],
+    ["动片", ["不电镀", "镀锡"]],
+    ["卡线片", ["0.15", "0.2"]],
+    ["弹簧", ["0.45长弹簧", "0.45短弹簧"]],
+]).map((specs, index) => ({
+    code: `ZMXK3${String(index + 1).padStart(3, "0")}`,
+    name: "XK3",
+    modelCode: "XK3",
+    specs,
+}));
+
+// 老微动全组合：底座2 × 按钮3 × 弹簧2 = 12 种
+const OLD_KW_BOMS: Array<Pick<Bom, "code" | "name" | "modelCode" | "specs">> = specCombos([
+    ["底座", ["带CB", "不带CB"]],
+    ["按钮", ["8.5mm（常用装跌倒）", "8.9mm", "9.6mm"]],
+    ["弹簧", ["0.25", "0.27"]],
+]).map((specs, index) => ({
+    code: `ZMKW16${String(index + 1).padStart(3, "0")}`,
+    name: "老微动",
+    modelCode: "KW16",
+    specs,
+}));
+
+// 新微动全组合：底座2 × 按钮8 × (6.3支架3×6.3静片3 + 4.8支架2×4.8静片2) × 动片2 × 摆片3 × 弹片3 = 3744 种
+const NEW_KW_BOMS: Array<Pick<Bom, "code" | "name" | "modelCode" | "specs">> = specCombos([
+    ["底座", ["二脚底座（无挡脚）", "三脚底座（有挡脚）"]],
+    ["按钮高度", ["7.6mm（常用装跌倒）", "8.0mm", "8.1mm", "8.2mm圆弧", "8.3mm", "8.5mm", "8.8mm", "9.1mm"]],
+    ["支架", NEW_MICRO_SWITCH_BRACKET_OPTIONS],
+    ["静片", NEW_MICRO_SWITCH_STATIC_PLATE_OPTIONS],
+    ["动片", ["铜镀银", "镀锡"]],
+    ["摆片", ["铜镀银摆片", "铁镀镍摆片", "复合铜镀镍摆片"]],
+    ["弹片", ["0.12", "0.15", "0.2"]],
+])
+    .filter(specs => {
+        const bracketGauge = newMicroSwitchGaugeOf(specs["支架"]);
+        const staticPlateGauge = newMicroSwitchGaugeOf(specs["静片"]);
+        return bracketGauge !== undefined && bracketGauge === staticPlateGauge;
+    })
+    .map((specs, index) => ({
+        code: `ZMKW${String(index + 1).padStart(4, "0")}`,
+        name: "新微动",
+        modelCode: "KW",
+        specs,
+    }));
+
 const EXTRA_BOMS: Array<Pick<Bom, "code" | "name" | "modelCode" | "specs">> = [
+    ...XK3_BOMS,
+    ...NEW_KW_BOMS,
+    ...OLD_KW_BOMS,
     {
-        code: "ZMKW001",
-        name: "微动开关",
-        modelCode: "KW-1",
-        specs: { 触点形式: "常开", 动作力: "160gf", 行程: "0.25mm", 额定电流: "5A 250VAC" },
+        code: "ZMKQ001",
+        name: "琴键开关",
+        modelCode: "KQ-1",
+        specs: {
+            类型: "四键焊线",
+            卡板: "大卡板18mm+小卡板18mm+短卡板16mm",
+            弹簧: "0.3",
+            触点: "不带点",
+            五金件明细: "扣板+连锁片×2+不带点静片+不带点动片",
+        },
     },
     {
-        code: "ZMKW002",
-        name: "微动开关",
-        modelCode: "KW-2",
-        specs: { 触点形式: "常闭", 动作力: "120gf", 行程: "0.20mm", 额定电流: "10A 250VAC" },
+        code: "ZMKQ002",
+        name: "琴键开关",
+        modelCode: "KQ-2",
+        specs: {
+            类型: "四键插线",
+            卡板: "大卡板18mm+小卡板18mm+短卡板16mm",
+            弹簧: "0.3",
+            触点: "不带点",
+            五金件明细: "扣板+连锁片×2+不带点静片+不带点动片",
+        },
     },
     {
-        code: "ZMKW003",
-        name: "微动开关",
-        modelCode: "KW-3",
-        specs: { 触点形式: "转换", 动作力: "200gf", 行程: "0.30mm", 额定电流: "3A 125VAC" },
+        code: "ZMKQ003",
+        name: "琴键开关",
+        modelCode: "KQ-3",
+        specs: {
+            类型: "小太阳四键三档（摇头）",
+            卡板: "小卡板18mm+短卡板16mm",
+            弹簧: "0.35",
+            触点: "带点",
+            五金件明细: "扣板×2+连锁片+带点静片+带点动片",
+        },
     },
     {
-        code: "ZMDD001",
-        name: "跌倒开关",
-        modelCode: "DD-1",
-        specs: { 感应角度: "±30°", 输出信号: "常开", 额定电流: "2A 30VDC" },
+        code: "ZMKQ004",
+        name: "琴键开关",
+        modelCode: "KQ-4",
+        specs: {
+            类型: "小太阳四键二档（不摇头）",
+            卡板: "小卡板18mm+短卡板16mm",
+            弹簧: "0.35",
+            触点: "带点",
+            五金件明细: "扣板+连锁片+带点静片+带点动片",
+        },
     },
     {
-        code: "ZMDD002",
-        name: "跌倒开关",
-        modelCode: "DD-2",
-        specs: { 感应角度: "±45°", 输出信号: "常闭", 额定电流: "1A 30VDC" },
+        code: "ZMKQ005",
+        name: "琴键开关",
+        modelCode: "KQ-5",
+        specs: {
+            类型: "冷风扇琴键（茶色）",
+            卡板: "小卡板18mm+大卡板18mm",
+            弹簧: "0.35",
+            触点: "不带点",
+            五金件明细: "扣板×2+连锁片+不带点静片+不带点动片+辅助动片",
+        },
+    },
+    {
+        code: "ZMKQ006",
+        name: "琴键开关",
+        modelCode: "KQ-6",
+        specs: {
+            类型: "冷风扇琴键（透明大功率带触点）",
+            卡板: "小卡板18mm+大卡板18mm",
+            弹簧: "0.35",
+            触点: "带点",
+            五金件明细: "扣板×2+连锁片+带点静片+带点动片+辅助动片",
+        },
     },
 ];
 
@@ -373,7 +493,7 @@ const buildBoms = (): Bom[] => {
     const rotary = categoryOf("旋转开关")!;
     const rotaryBoms: Bom[] = ROTARY_ROWS.map((row, index) => {
         const bom: Bom = {
-            code: `ZMXK${String(index + 1).padStart(3, "0")}`,
+            code: `ZMXK2${String(index + 1).padStart(3, "0")}`,
             name: "旋转开关",
             modelCode: row.modelCode,
             specs: {
@@ -391,15 +511,18 @@ const buildBoms = (): Bom[] => {
         };
         return { ...bom, spec: specOf(bom) };
     });
-    return [
-        ...rotaryBoms,
-        ...EXTRA_BOMS.map(row => ({
+    const extraBoms: Bom[] = EXTRA_BOMS.map(row => {
+        const bom: Bom = {
             ...row,
-            spec: specOf(row),
+            // 品类常量（固定部件）并入 specs，行数据优先
+            specs: { ...defaultsOf(categoryOf(row.name)!), ...row.specs },
+            spec: "",
             created: addDays(ANCHOR, -3),
             unit: "个",
-        })),
-    ];
+        };
+        return { ...bom, spec: specOf(bom) };
+    });
+    return [...rotaryBoms, ...extraBoms];
 };
 
 const INSPECTORS = ["王师傅", "赵师傅", "周丽"];
@@ -428,18 +551,19 @@ function staticOrders(): SeededOrder[] {
             qty,
             outbound,
             orderDate,
-            deliverDate: addDays(orderDate, deliverInDays),
+            deliverStart: addDays(orderDate, Math.max(1, deliverInDays - 5)),
+            deliverEnd: addDays(orderDate, deliverInDays),
             remark: "",
             seedStock,
         };
     };
     return [
-        mk(86, 4, 15, 0, "ZMXK001", 2400, 0, 1600),
-        mk(85, 4, 19, 1, "ZMXK002", 800, 0, 0),
-        mk(84, 5, 13, 2, "ZMXK003", 1200, 1200, 0),
-        mk(83, 6, 11, 3, "ZMKW001", 560, 560, 0),
-        mk(82, 7, 20, 4, "ZMXK005", 3000, 0, 1200),
-        mk(81, 8, 17, 5, "ZMDD001", 960, 0, 0),
+        mk(86, 4, 15, 0, "ZMXK2001", 2400, 0, 1600),
+        mk(85, 4, 19, 1, "ZMXK2002", 800, 0, 0),
+        mk(84, 5, 13, 2, "ZMXK2003", 1200, 1200, 0),
+        mk(83, 6, 11, 3, "ZMKW0001", 560, 560, 0),
+        mk(82, 7, 20, 4, "ZMXK2005", 3000, 0, 1200),
+        mk(81, 8, 17, 5, "ZMKW16001", 960, 0, 0),
     ];
 }
 
@@ -464,7 +588,8 @@ function buildOrders(boms: Bom[]): SeededOrder[] {
             qty,
             outbound: status === "已完成" ? qty : 0,
             orderDate,
-            deliverDate: addDays(orderDate, 12 + (seq % 8)),
+            deliverStart: addDays(orderDate, 7 + (seq % 4)),
+            deliverEnd: addDays(orderDate, 12 + (seq % 8)),
             remark: "",
             seedStock: status === "可发货" ? done : 0,
         };
@@ -659,7 +784,7 @@ class MockDb {
         const raw: Array<Omit<OutboundRow, "no">> = [];
         const shipped = this.orders.filter(order => order.outbound > 0);
         const recent = [...shipped]
-            .sort((a, b) => a.deliverDate.localeCompare(b.deliverDate))
+            .sort((a, b) => a.deliverEnd.localeCompare(b.deliverEnd))
             .slice(-12)
             .map(order => order.orderNo);
         const recentSet = new Set([
@@ -680,7 +805,7 @@ class MockDb {
                 if (recentSet.has(order.orderNo)) {
                     date = partIndex === 0 && todayFirst.has(order.orderNo) ? ANCHOR : addDays(ANCHOR, -randInt(1, 6));
                 } else {
-                    date = clampDate(addDays(order.deliverDate, -randInt(0, 3)), addDays(ANCHOR, -55), ANCHOR);
+                    date = clampDate(addDays(order.deliverEnd, -randInt(0, 3)), addDays(ANCHOR, -55), ANCHOR);
                 }
                 raw.push({
                     orderNo: order.orderNo,
@@ -883,7 +1008,8 @@ class MockDb {
             qty: input.qty,
             outbound: 0,
             orderDate: input.orderDate,
-            deliverDate: input.deliverEnd,
+            deliverStart: input.deliverStart,
+            deliverEnd: input.deliverEnd,
             remark: input.remark,
         };
         this.orders.unshift(order);
@@ -900,7 +1026,14 @@ class MockDb {
     }
 
     updateOrder(
-        input: { orderNo: string; qty?: number; deliverDate?: string; remark?: string; reason?: string },
+        input: {
+            orderNo: string;
+            qty?: number;
+            deliverStart?: string;
+            deliverEnd?: string;
+            remark?: string;
+            reason?: string;
+        },
         actor: Actor,
     ): Order {
         const order = this.orders.find(item => item.orderNo === input.orderNo);
@@ -908,8 +1041,12 @@ class MockDb {
         if (input.qty !== undefined && input.qty !== order.qty && (input.reason || "").trim().length < 4) {
             throw new Error("修改订单数量必须填写至少 4 个字的修改原因");
         }
+        const nextStart = input.deliverStart ?? order.deliverStart;
+        const nextEnd = input.deliverEnd ?? order.deliverEnd;
+        if (nextEnd < nextStart) throw new Error("交货截止日期不能早于起始日期");
         if (input.qty !== undefined) order.qty = input.qty;
-        if (input.deliverDate) order.deliverDate = input.deliverDate;
+        order.deliverStart = nextStart;
+        order.deliverEnd = nextEnd;
         if (input.remark !== undefined) order.remark = input.remark;
         if (input.reason && input.reason.trim()) {
             this.opLog.unshift({
@@ -965,10 +1102,7 @@ class MockDb {
     }
 
     createBom(input: { name: string; modelCode: string; specs: Record<string, string> }): Bom {
-        const code = nextBomCode(
-            input.name,
-            this.boms.map(bom => bom.code),
-        );
+        const code = nextBomCode(input.name, this.boms);
         const bom: Bom = {
             code,
             name: input.name,

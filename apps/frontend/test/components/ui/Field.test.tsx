@@ -46,7 +46,7 @@ describe("DateField / SelectField / TextArea", () => {
         render(
             <SelectField label="品类" value="x" onChange={onChange}>
                 <option value="x">旋转开关</option>
-                <option value="y">微动开关</option>
+                <option value="y">琴键开关</option>
             </SelectField>,
         );
         fireEvent.change(screen.getByLabelText("品类"), { target: { value: "y" } });

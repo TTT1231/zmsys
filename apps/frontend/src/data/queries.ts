@@ -46,7 +46,14 @@ export const useCreateOrder = () => useWbMutation(createOrder);
 /* 页面沿用旧签名 {orderNo, ...变更}，此处拆参适配契约 PUT /orders/:orderNo */
 export const useUpdateOrder = () =>
     useWbMutation(
-        (input: { orderNo: string; qty?: number; deliverDate?: string; remark?: string; reason?: string }) => {
+        (input: {
+            orderNo: string;
+            qty?: number;
+            deliverStart?: string;
+            deliverEnd?: string;
+            remark?: string;
+            reason?: string;
+        }) => {
             const { orderNo, ...body } = input;
             return updateOrderReq(orderNo, body);
         },
