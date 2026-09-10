@@ -31,4 +31,18 @@ export const authHandlers = [
         if (name.length > 20) return fail("姓名最多 20 个字符");
         return ok(db.updateUserName(auth.user.account, name));
     }),
+
+    // 个人中心：修改自己的密码（不强制；成功后 token 保持有效）
+    http.put("/api/auth/password", async ({ request }) => {
+        const auth = authenticate(request);
+        if (!auth) return fail("登录已过期，请重新登录", 401);
+        const body = (await request.json().catch(() => null)) as { oldPassword?: string; newPassword?: string } | null;
+        if (!body?.oldPassword || !body?.newPassword) return fail("请输入旧密码与新密码");
+        try {
+            db.changePassword(auth.user.account, body.oldPassword, body.newPassword);
+            return ok(null);
+        } catch (error) {
+            return fail(error instanceof Error ? error.message : "密码修改失败");
+        }
+    }),
 ];

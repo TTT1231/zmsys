@@ -15,6 +15,18 @@ function ToastTrigger({ message, error }: { message: string; error?: boolean }) 
     );
 }
 
+function NotificationTrigger() {
+    const push = useToast();
+    return (
+        <button
+            type="button"
+            onClick={() => push({ title: "登录成功", message: "欢迎回来，李晓梅", tone: "success", duration: 4000 })}
+        >
+            触发欢迎通知
+        </button>
+    );
+}
+
 beforeEach(() => {
     vi.useFakeTimers();
 });
@@ -25,7 +37,7 @@ afterEach(() => {
 });
 
 describe("ToastProvider", () => {
-    it("pushes a toast via context and auto dismisses after 2400ms", () => {
+    it("pushes a toast via context and auto dismisses with an exit animation", () => {
         render(
             <ToastProvider>
                 <ToastTrigger message="保存成功" />
@@ -34,11 +46,15 @@ describe("ToastProvider", () => {
         fireEvent.click(screen.getByRole("button", { name: "触发" }));
         expect(screen.getByRole("status")).toHaveTextContent("保存成功");
         act(() => {
-            vi.advanceTimersByTime(2399);
+            vi.advanceTimersByTime(3599);
         });
         expect(screen.getByRole("status")).toBeInTheDocument();
         act(() => {
             vi.advanceTimersByTime(1);
+        });
+        expect(screen.getByRole("status")).toHaveAttribute("data-state", "closing");
+        act(() => {
+            vi.advanceTimersByTime(160);
         });
         expect(screen.queryByRole("status")).not.toBeInTheDocument();
     });
@@ -50,10 +66,12 @@ describe("ToastProvider", () => {
             </ToastProvider>,
         );
         fireEvent.click(screen.getByRole("button", { name: "触发" }));
-        expect(screen.getByRole("status").className).toContain("bg-danger");
+        const status = screen.getByRole("status");
+        expect(status).toHaveAttribute("data-tone", "error");
+        expect(status).toHaveAttribute("aria-live", "assertive");
     });
 
-    it("honors explicit error flag and stacks messages", () => {
+    it("honors an explicit error flag", () => {
         render(
             <ToastProvider>
                 <ToastTrigger message="plain" error={true} />
@@ -61,7 +79,27 @@ describe("ToastProvider", () => {
         );
         fireEvent.click(screen.getByRole("button", { name: "触发" }));
         const status = screen.getByRole("status");
-        expect(status.className).toContain("bg-danger");
+        expect(status).toHaveAttribute("data-tone", "error");
         expect(status).toHaveTextContent("plain");
+    });
+
+    it("renders a titled notification and supports manual dismissal", () => {
+        render(
+            <ToastProvider>
+                <NotificationTrigger />
+            </ToastProvider>,
+        );
+        fireEvent.click(screen.getByRole("button", { name: "触发欢迎通知" }));
+
+        const notification = screen.getByRole("status");
+        expect(notification).toHaveTextContent("登录成功");
+        expect(notification).toHaveTextContent("欢迎回来，李晓梅");
+
+        fireEvent.click(screen.getByRole("button", { name: "关闭通知" }));
+        expect(notification).toHaveAttribute("data-state", "closing");
+        act(() => {
+            vi.advanceTimersByTime(160);
+        });
+        expect(screen.queryByRole("status")).not.toBeInTheDocument();
     });
 });

@@ -28,12 +28,16 @@ export function LoginPage() {
         setBusy(true);
         try {
             const user = await login(account.trim(), password);
-            toast(`欢迎回来，${user?.name ?? ""}`);
+            toast({
+                title: "登录成功",
+                message: user?.name ? `欢迎回来，${user.name}` : "欢迎回来",
+                tone: "success",
+                duration: 4000,
+            });
             navigate("/workbench", { replace: true });
         } catch (err) {
             const message = isApiError(err) ? err.message : "登录失败，请稍后重试";
             setError(message);
-            toast(message, true);
         } finally {
             setBusy(false);
         }

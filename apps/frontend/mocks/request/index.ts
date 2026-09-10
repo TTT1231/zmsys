@@ -1,5 +1,5 @@
 import { authHandlers } from "./auth";
-import { bomHandlers, customerHandlers, eventHandlers, ledgerHandlers, orderHandlers } from "./business";
+import { bomHandlers, customerHandlers, ledgerHandlers, orderHandlers } from "./business";
 import { roleHandlers, userHandlers } from "./system";
 
 export const handlers = [
@@ -8,7 +8,6 @@ export const handlers = [
     ...customerHandlers,
     ...bomHandlers,
     ...ledgerHandlers,
-    ...eventHandlers,
     ...userHandlers,
     ...roleHandlers,
 ];

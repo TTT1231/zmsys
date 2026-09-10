@@ -37,7 +37,7 @@ describe("mock db inventory rules", () => {
         expect(row).toBeTruthy();
         if (!row) return;
 
-        const input = { orderNo: row.orderNo, date: ANCHOR, operator: "测试", remark: "测试" };
+        const input = { orderNo: row.orderNo, date: ANCHOR, remark: "测试" };
         const before = db.snapshot();
         const badQty = [0, -1, 0.5, NaN, maxShipOf(db.snapshot(), row.orderNo) + 1];
         for (const qty of badQty) {
@@ -46,9 +46,7 @@ describe("mock db inventory rules", () => {
         expect(db.snapshot()).toEqual(before);
 
         const afterOutbound = db.snapshot();
-        expect(() =>
-            db.createInbound({ bomCode: row.bomCode, qty: -1, date: ANCHOR, inspector: "测试", remark: "" }, actor),
-        ).toThrow();
+        expect(() => db.createInbound({ bomCode: row.bomCode, qty: -1, date: ANCHOR, remark: "" }, actor)).toThrow();
         expect(db.snapshot()).toEqual(afterOutbound);
     });
 
@@ -59,10 +57,7 @@ describe("mock db inventory rules", () => {
 
         const before = db.snapshot();
         const allocation = maxShipOf(db.snapshot(), row.orderNo);
-        const record = db.createOutbound(
-            { orderNo: row.orderNo, date: ANCHOR, operator: "测试", remark: "测试", qty: 1 },
-            actor,
-        );
+        const record = db.createOutbound({ orderNo: row.orderNo, date: ANCHOR, remark: "测试", qty: 1 }, actor);
         expect(record.qty).toBe(1);
         expect(db.stockOf(row.bomCode)).toBe(row.stock - 1);
         expect(maxShipOf(db.snapshot(), row.orderNo)).toBe(allocation - 1);
@@ -71,7 +66,7 @@ describe("mock db inventory rules", () => {
         expect(db.remainingOf(order!)).toBe(row.remaining - 1);
         expect(db.outboundLedger.length).toBe(before.outboundLedger.length + 1);
 
-        db.createInbound({ bomCode: row.bomCode, qty: 1, date: ANCHOR, inspector: "测试", remark: "" }, actor);
+        db.createInbound({ bomCode: row.bomCode, qty: 1, date: ANCHOR, remark: "" }, actor);
         expect(db.stockOf(row.bomCode)).toBe(row.stock);
 
         for (const bom of db.boms) {
@@ -104,47 +99,88 @@ describe("mock db business write rules", () => {
             actor,
         );
 
-    it("issues sequential order numbers prefixed by order date", () => {
-        const seqBefore = db.orders.reduce((max, order) => Math.max(max, Number(order.orderNo.slice(-3)) || 0), 0);
+    it("issues per-day sequential order numbers prefixed by order date", () => {
         const order = newOrder();
-        expect(order.orderNo).toBe(`ZM260310${String(seqBefore + 1).padStart(3, "0")}`);
+        // 2026-03-10 无既有订单，按日序号从 001 起
+        expect(order.orderNo).toBe("ZM260310001");
         expect(db.orders[0]!.orderNo).toBe(order.orderNo);
         expect(order.outbound).toBe(0);
+        // 同日第二单序号递增
+        expect(newOrder().orderNo).toBe("ZM260310002");
     });
 
-    it("requires a 4-char reason when changing order qty", () => {
-        const order = newOrder();
-        expect(() => db.updateOrder({ orderNo: order.orderNo, qty: 6 }, actor)).toThrow("至少 4 个字");
-        expect(() => db.updateOrder({ orderNo: order.orderNo, qty: 6, reason: "太短" }, actor)).toThrow("至少 4 个字");
-        expect(db.updateOrder({ orderNo: order.orderNo, qty: 6, reason: "客户追加订单数量" }, actor).qty).toBe(6);
-        // 交期调整不涉及数量，无需原因
-        expect(db.updateOrder({ orderNo: order.orderNo, deliverEnd: "2026-03-28" }, actor).deliverEnd).toBe(
-            "2026-03-28",
+    it("rejects qty below shipped and validates delivery window", () => {
+        const shipped = db.orders.find(order => order.outbound > 0);
+        expect(shipped).toBeTruthy();
+        if (!shipped) return;
+        expect(() => db.updateOrder({ orderNo: shipped.orderNo, qty: shipped.outbound - 1 })).toThrow(
+            "新数量不能低于累计已发",
         );
-        expect(() => db.updateOrder({ orderNo: "ZM-NOPE", qty: 1, reason: "xxxx" }, actor)).toThrow("订单不存在");
+        // 恰好等于已发量允许（就发这么多，订单结束）
+        expect(db.updateOrder({ orderNo: shipped.orderNo, qty: shipped.outbound }).qty).toBe(shipped.outbound);
+        expect(() => db.updateOrder({ orderNo: shipped.orderNo, deliverEnd: "2020-01-01" })).toThrow(
+            "交货截止日期不能早于起始日期",
+        );
+        expect(() => db.updateOrder({ orderNo: "ZM-NOPE", qty: 1 })).toThrow("订单不存在");
     });
 
-    it("masks customer phone and maps region to city", () => {
+    it("creates and updates customers with region fields, masked phone and derived cooperation", () => {
         const seqBefore = db.customers.reduce(
             (max, customer) => Math.max(max, Number(customer.code.slice(-4)) || 0),
             0,
         );
-        const customer = db.createCustomer(
+        const payload = {
+            name: "新客户精密制造",
+            contact: "王先生",
+            phone: "13812345678",
+            province: "江苏省",
+            city: "苏州市",
+            district: "吴中区",
+            town: "长桥街道",
+            address: "兴园路 1 号",
+            ownerAccount: "chen_jie",
+            payTerms: "月结 30 天",
+        };
+        const customer = db.createCustomer(payload);
+        expect(customer.code).toBe(`CUS-${String(seqBefore + 1).padStart(4, "0")}`);
+        expect(customer.phone).toBe("138****5678");
+        expect(customer).not.toHaveProperty("phoneFull");
+        expect(customer.city).toBe("苏州市");
+        expect(customer.town).toBe("长桥街道");
+        expect(customer.owner).toBe("陈洁");
+        // 新客户无订单 → 待跟进
+        expect(customer.cooperation).toBe("待跟进");
+
+        // 编辑：电话留空保持原掩码；付款条件与联系人可改
+        const updated = db.updateCustomer(customer.code, {
+            ...payload,
+            name: "新客户精密制造有限公司",
+            contact: "李女士",
+            phone: "",
+            payTerms: "月结 60 天",
+        });
+        expect(updated.contact).toBe("李女士");
+        expect(updated.phone).toBe("138****5678");
+        expect(updated.payTerms).toBe("月结 60 天");
+
+        // 负责人须为在职销售
+        expect(() => db.updateCustomer(customer.code, { ...payload, ownerAccount: "sys_admin" })).toThrow("在职销售");
+
+        // 有近期订单后派生为合作中
+        db.createOrder(
             {
-                name: "新客户",
-                contact: "王先生",
-                phone: "13812345678",
-                region: "华东",
-                address: "苏州工业园区",
+                customerCode: customer.code,
+                customer: customer.name,
+                bomCode: db.boms[0]!.code,
+                qty: 5,
+                deliverStart: "2026-03-20",
+                deliverEnd: "2026-03-25",
+                orderDate: ANCHOR,
                 remark: "",
             },
             actor,
         );
-        expect(customer.code).toBe(`CUS-${String(seqBefore + 1).padStart(4, "0")}`);
-        expect(customer.phone).toBe("138****5678");
-        expect(customer.phoneFull).toBe("13812345678");
-        expect(customer.city).toBe("苏州");
-        expect(customer.owner).toBe(actor.name);
+        expect(db.listCustomers().find(item => item.code === customer.code)?.cooperation).toBe("合作中");
     });
 
     it("validates account format and uniqueness when creating users", () => {

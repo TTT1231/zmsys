@@ -2,346 +2,359 @@
 
 /* 智造管理系统 · 设计令牌（源自原型 manufacturing-saas-theme.css 最终生效层） */
 @theme {
-  --font-sans:
-    Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    "PingFang SC", "Microsoft YaHei", sans-serif;
+    --font-sans:
+        Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei",
+        sans-serif;
 
-  --color-primary: #4f46e5;
-  --color-primary-hover: #4338ca;
-  --color-primary-strong: #3730a3;
-  --color-primary-soft: #eef2ff;
-  --color-primary-border: #c7d2fe;
-  --color-accent: #0284c7;
-  --color-accent-soft: #e0f2fe;
-  --color-success: #047857;
-  --color-success-soft: #ecfdf3;
-  --color-warning: #b45309;
-  --color-warning-soft: #fff7ed;
-  --color-danger: #b42318;
-  --color-danger-soft: #fef3f2;
+    --color-primary: #4f46e5;
+    --color-primary-hover: #4338ca;
+    --color-primary-strong: #3730a3;
+    --color-primary-soft: #eef2ff;
+    --color-primary-border: #c7d2fe;
+    --color-accent: #0284c7;
+    --color-accent-soft: #e0f2fe;
+    --color-success: #047857;
+    --color-success-soft: #ecfdf3;
+    --color-warning: #b45309;
+    --color-warning-soft: #fff7ed;
+    --color-danger: #b42318;
+    --color-danger-soft: #fef3f2;
 
-  --color-ink: #101828;
-  --color-muted: #667085;
-  --color-subtle: #667085;
-  --color-line: #e4e7ec;
-  --color-line-strong: #d0d5dd;
-  --color-surface: #ffffff;
-  --color-canvas: #f5f7fb;
-  --color-sidebar: #101828;
-  --color-sidebar-soft: #1d2939;
+    --color-ink: #101828;
+    --color-muted: #667085;
+    --color-subtle: #667085;
+    --color-line: #e4e7ec;
+    --color-line-strong: #d0d5dd;
+    --color-surface: #ffffff;
+    --color-canvas: #f5f7fb;
+    --color-sidebar: #101828;
+    --color-sidebar-soft: #1d2939;
 
-  --color-td: #344054;
-  --color-td-strong: #475467;
-  --color-row-hover: #f8f9ff;
-  --color-soft: #f8fafc;
-  --color-panel: #fcfcfd;
-  --color-scrim: rgba(15, 23, 42, 0.48);
+    --color-td: #344054;
+    --color-td-strong: #475467;
+    --color-row-hover: #f8f9ff;
+    --color-soft: #f8fafc;
+    --color-panel: #fcfcfd;
+    --color-scrim: rgba(15, 23, 42, 0.48);
 
-  /* 圆角：md/xl 锁定设计稿 px（14px 根字号下 rem 档位会缩小；lg 已有存量使用，保持默认） */
-  --radius-btn: 10px;
-  --radius-input: 9px;
-  --radius-card: 14px;
-  --radius-panel: 18px;
-  --radius-md: 6px;
-  --radius-xl: 12px;
+    /* 圆角：md/xl 锁定设计稿 px（14px 根字号下 rem 档位会缩小；lg 已有存量使用，保持默认） */
+    --radius-btn: 10px;
+    --radius-input: 9px;
+    --radius-card: 14px;
+    --radius-panel: 18px;
+    --radius-md: 6px;
+    --radius-xl: 12px;
 
-  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
-  --shadow-card: 0 2px 6px rgba(16, 24, 40, 0.04);
-  --shadow-modal: 0 18px 45px rgba(16, 24, 40, 0.12);
-  --shadow-glow: 0 6px 18px rgba(79, 70, 229, 0.45);
+    --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+    --shadow-card: 0 2px 6px rgba(16, 24, 40, 0.04);
+    --shadow-modal: 0 18px 45px rgba(16, 24, 40, 0.12);
+    --shadow-glow: 0 6px 18px rgba(79, 70, 229, 0.45);
 
-  /* 字号：数字类名 = 设计稿 px 值（text-13 即 13px；不设 --line-height 对，保持继承 1.5） */
-  --text-11: 11px;
-  --text-12: 12px;
-  --text-13: 13px;
-  --text-14: 14px;
-  --text-15: 15px;
-  --text-16: 16px;
-  --text-17: 17px;
-  --text-20: 20px;
-  --text-22: 22px;
-  --text-24: 24px;
-  --text-30: 30px;
+    /* 字号：数字类名 = 设计稿 px 值（text-13 即 13px；不设 --line-height 对，保持继承 1.5） */
+    --text-11: 11px;
+    --text-12: 12px;
+    --text-13: 13px;
+    --text-14: 14px;
+    --text-15: 15px;
+    --text-16: 16px;
+    --text-17: 17px;
+    --text-20: 20px;
+    --text-22: 22px;
+    --text-24: 24px;
+    --text-30: 30px;
 
-  /* 半像素字号（类名带点，如 text-12.5 = 12.5px） */
-  --text-10\.5: 10.5px;
-  --text-11\.5: 11.5px;
-  --text-12\.5: 12.5px;
-  --text-13\.5: 13.5px;
-  --text-14\.5: 14.5px;
+    /* 半像素字号（类名带点，如 text-12.5 = 12.5px） */
+    --text-10\.5: 10.5px;
+    --text-11\.5: 11.5px;
+    --text-12\.5: 12.5px;
+    --text-13\.5: 13.5px;
+    --text-14\.5: 14.5px;
 
-  /* 过渡动画：遮罩 / 下拉 / tooltip 淡入 */
-  --animate-fade-in: fade-in 0.18s ease-out;
+    /* 过渡动画：遮罩 / 下拉 / tooltip 淡入 */
+    --animate-fade-in: fade-in 0.18s ease-out;
 
-  @keyframes fade-in {
-    from {
-      opacity: 0;
+    @keyframes fade-in {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
     }
-    to {
-      opacity: 1;
-    }
-  }
 
-  /* 路由页面进入动画（UI/产品/设计三方融合定稿）：淡入 + 上移 10px，decelerate 缓动，
+    /* 路由页面进入动画（UI/产品/设计三方融合定稿）：淡入 + 上移 10px，decelerate 缓动，
      只做进入不做退出（退出动画是新内容延迟感的最大来源）；reduced-motion 由全局降级兜底 */
-  --animate-page-enter: page-enter 0.22s cubic-bezier(0.2, 0, 0, 1);
+    --animate-page-enter: page-enter 0.22s cubic-bezier(0.2, 0, 0, 1);
 
-  @keyframes page-enter {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
+    @keyframes page-enter {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
     }
-  }
 
-  /* vben 式方块弹跳 loader（百分比单位，任意尺寸自适应）：
+    /* 全局通知：右上角轻滑入，退出更快；仅使用 transform / opacity 避免布局抖动 */
+    --animate-notification-enter: notification-enter 0.22s cubic-bezier(0.2, 0, 0, 1);
+    --animate-notification-exit: notification-exit 0.16s ease-in forwards;
+
+    @keyframes notification-enter {
+        from {
+            opacity: 0;
+            transform: translate3d(12px, -4px, 0);
+        }
+    }
+
+    @keyframes notification-exit {
+        to {
+            opacity: 0;
+            transform: translate3d(8px, 0, 0);
+        }
+    }
+
+    /* vben 式方块弹跳 loader（百分比单位，任意尺寸自适应）：
      方块下落挤压变形旋转 + 地面阴影伸缩，0.5s 循环 */
-  @keyframes loader-jump-ani {
-    15% {
-      border-bottom-right-radius: 6%;
+    @keyframes loader-jump-ani {
+        15% {
+            border-bottom-right-radius: 6%;
+        }
+        25% {
+            transform: translateY(18.75%) rotate(22.5deg);
+        }
+        50% {
+            border-bottom-right-radius: 80%;
+            transform: translateY(37.5%) scale(1, 0.9) rotate(45deg);
+        }
+        75% {
+            transform: translateY(18.75%) rotate(67.5deg);
+        }
+        100% {
+            transform: translateY(0) rotate(90deg);
+        }
     }
-    25% {
-      transform: translateY(18.75%) rotate(22.5deg);
-    }
-    50% {
-      border-bottom-right-radius: 80%;
-      transform: translateY(37.5%) scale(1, 0.9) rotate(45deg);
-    }
-    75% {
-      transform: translateY(18.75%) rotate(67.5deg);
-    }
-    100% {
-      transform: translateY(0) rotate(90deg);
-    }
-  }
 
-  @keyframes loader-shadow-ani {
-    0%,
-    100% {
-      transform: scale(1, 1);
+    @keyframes loader-shadow-ani {
+        0%,
+        100% {
+            transform: scale(1, 1);
+        }
+        50% {
+            transform: scale(1.2, 1);
+        }
     }
-    50% {
-      transform: scale(1.2, 1);
-    }
-  }
 }
 
 .record-card {
-  padding: 18px;
-  border: 1px solid var(--color-line);
-  border-radius: 16px;
-  background: white;
+    padding: 18px;
+    border: 1px solid var(--color-line);
+    border-radius: 16px;
+    background: white;
 }
 .mobile-records {
-  display: grid;
-  gap: 12px;
-  padding: 12px;
-  background: var(--color-canvas);
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+    background: var(--color-canvas);
 }
 .task-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 .task-tabs button {
-  min-height: 44px;
-  border-radius: 10px;
-  padding: 8px 12px;
-  font-size: 14px;
-  color: var(--color-muted);
-  background: white;
-  border: 1px solid var(--color-line);
+    min-height: 44px;
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 14px;
+    color: var(--color-muted);
+    background: white;
+    border: 1px solid var(--color-line);
 }
 .task-tabs button[aria-pressed="true"] {
-  color: var(--color-primary-strong);
-  background: var(--color-primary-soft);
-  border-color: var(--color-primary-border);
-  font-weight: 600;
+    color: var(--color-primary-strong);
+    background: var(--color-primary-soft);
+    border-color: var(--color-primary-border);
+    font-weight: 600;
 }
 button,
 a,
 summary {
-  touch-action: manipulation;
+    touch-action: manipulation;
 }
 button:not(:disabled),
 summary {
-  cursor: pointer;
+    cursor: pointer;
 }
 button:active:not(:disabled) {
-  filter: brightness(0.96);
+    filter: brightness(0.96);
 }
 .modal-body {
-  overscroll-behavior: contain;
-  overflow-wrap: anywhere;
+    overscroll-behavior: contain;
+    overflow-wrap: anywhere;
 }
 .modal-body label {
-  min-width: 0;
+    min-width: 0;
 }
 .modal-body input,
 .modal-body select {
-  min-width: 0;
-  max-width: 100%;
+    min-width: 0;
+    max-width: 100%;
 }
 .modal-footer {
-  padding-bottom: max(14px, env(safe-area-inset-bottom));
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
 }
 @media (min-width: 1024px) {
-  .mobile-records {
-    display: none;
-  }
+    .mobile-records {
+        display: none;
+    }
 }
 @media (max-width: 1023px) {
-  body {
-    background: #f5f7fa;
-  }
-  #mainContent {
-    padding-top: 16px;
-  }
-  .page-heading {
-    gap: 12px;
-    align-items: center;
-  }
-  .page-heading h1 {
-    font-size: 23px;
-  }
-  .page-heading-copy > div {
-    display: none;
-  }
-  .page-heading-copy > p {
-    font-size: 13px;
-  }
-  input:not([type="checkbox"]):not([type="radio"]),
-  select,
-  textarea {
-    font-size: 16px !important;
-    min-height: 44px;
-  }
-  button,
-  summary {
-    min-height: 44px;
-  }
-  .list-toolbar {
-    padding: 12px;
-    gap: 8px;
-  }
-  .list-toolbar label:has(input:not([type="date"])) {
-    order: -1;
-    width: 100%;
-    max-width: none;
-    min-width: 0;
-    flex-basis: 100%;
-  }
-  .list-toolbar > div:has(label) {
-    width: 100%;
-  }
-  .modal-body {
-    padding: 16px;
-  }
-  .modal-body fieldset {
-    border: 0;
-    padding: 0;
-    border-radius: 0;
-  }
-  .modal-body fieldset + fieldset {
-    border-top: 1px solid var(--color-line);
-    padding-top: 16px;
-  }
-  .modal-body legend {
-    padding: 0 0 8px;
-    font-size: 15px;
-  }
-  .modal-footer {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-  .modal-footer > button {
-    flex: 1;
-    font-size: 15px;
-  }
+    body {
+        background: #f5f7fa;
+    }
+    #mainContent {
+        padding-top: 16px;
+    }
+    .page-heading {
+        gap: 12px;
+        align-items: center;
+    }
+    .page-heading h1 {
+        font-size: 23px;
+    }
+    .page-heading-copy > div {
+        display: none;
+    }
+    .page-heading-copy > p {
+        font-size: 13px;
+    }
+    input:not([type="checkbox"]):not([type="radio"]),
+    select,
+    textarea {
+        font-size: 16px !important;
+        min-height: 44px;
+    }
+    button,
+    summary {
+        min-height: 44px;
+    }
+    .list-toolbar {
+        padding: 12px;
+        gap: 8px;
+    }
+    .list-toolbar label:has(input:not([type="date"])) {
+        order: -1;
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+        flex-basis: 100%;
+    }
+    .list-toolbar > div:has(label) {
+        width: 100%;
+    }
+    .modal-body {
+        padding: 16px;
+    }
+    .modal-body fieldset {
+        border: 0;
+        padding: 0;
+        border-radius: 0;
+    }
+    .modal-body fieldset + fieldset {
+        border-top: 1px solid var(--color-line);
+        padding-top: 16px;
+    }
+    .modal-body legend {
+        padding: 0 0 8px;
+        font-size: 15px;
+    }
+    .modal-footer {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+    .modal-footer > button {
+        flex: 1;
+        font-size: 15px;
+    }
 }
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-  }
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+    }
 }
 
 @layer base {
-  html {
-    font-size: 14px;
-    /* 滚动条槽位常驻：弹窗锁 body 滚动时内容宽度不变，表格不因列宽重排而抖动 */
-    scrollbar-gutter: stable;
-  }
+    html {
+        font-size: 14px;
+        /* 滚动条槽位常驻：弹窗锁 body 滚动时内容宽度不变，表格不因列宽重排而抖动 */
+        scrollbar-gutter: stable;
+    }
 
-  /* 自定义滚动条：桌面端细圆角贴合主题（浅色内容区 + 深色侧栏分别适配），
+    /* 自定义滚动条：桌面端细圆角贴合主题（浅色内容区 + 深色侧栏分别适配），
      移动端保留原生手感（overlay 滚动条本身即系统风格） */
-  @media (min-width: 1024px) {
-    * {
-      scrollbar-width: thin;
-      scrollbar-color: var(--color-line-strong) transparent;
+    @media (min-width: 1024px) {
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: var(--color-line-strong) transparent;
+        }
+
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            border: 3px solid transparent;
+            border-radius: 999px;
+            background-color: var(--color-line-strong);
+            background-clip: padding-box;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: var(--color-muted);
+        }
+        ::-webkit-scrollbar-corner {
+            background: transparent;
+        }
+
+        /* 深色侧栏内的滚动条用浅色半透明 */
+        aside ::-webkit-scrollbar-thumb {
+            border: 3px solid transparent;
+            background-color: rgba(255, 255, 255, 0.16);
+            background-clip: padding-box;
+        }
+        aside ::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(255, 255, 255, 0.28);
+        }
+        aside * {
+            scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+        }
     }
 
-    ::-webkit-scrollbar {
-      width: 10px;
-      height: 10px;
-    }
-    ::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    ::-webkit-scrollbar-thumb {
-      border: 3px solid transparent;
-      border-radius: 999px;
-      background-color: var(--color-line-strong);
-      background-clip: padding-box;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background-color: var(--color-muted);
-    }
-    ::-webkit-scrollbar-corner {
-      background: transparent;
+    body {
+        margin: 0;
+        font-family: var(--font-sans);
+        line-height: 1.5;
+        color: var(--color-ink);
+        background:
+            radial-gradient(circle at 82% -10%, rgba(79, 70, 229, 0.07), transparent 28rem), var(--color-canvas);
+        -webkit-font-smoothing: antialiased;
     }
 
-    /* 深色侧栏内的滚动条用浅色半透明 */
-    aside ::-webkit-scrollbar-thumb {
-      border: 3px solid transparent;
-      background-color: rgba(255, 255, 255, 0.16);
-      background-clip: padding-box;
+    ::selection {
+        background: rgba(79, 70, 229, 0.22);
     }
-    aside ::-webkit-scrollbar-thumb:hover {
-      background-color: rgba(255, 255, 255, 0.28);
+
+    :focus-visible {
+        outline: 3px solid rgba(79, 70, 229, 0.3);
+        outline-offset: 1px;
     }
-    aside * {
-      scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
-    }
-  }
-
-  body {
-    margin: 0;
-    font-family: var(--font-sans);
-    line-height: 1.5;
-    color: var(--color-ink);
-    background:
-      radial-gradient(
-        circle at 82% -10%,
-        rgba(79, 70, 229, 0.07),
-        transparent 28rem
-      ),
-      var(--color-canvas);
-    -webkit-font-smoothing: antialiased;
-  }
-
-  ::selection {
-    background: rgba(79, 70, 229, 0.22);
-  }
-
-  :focus-visible {
-    outline: 3px solid rgba(79, 70, 229, 0.3);
-    outline-offset: 1px;
-  }
 }
 
 @utility tnum {
-  font-variant-numeric: tabular-nums;
+    font-variant-numeric: tabular-nums;
 }

@@ -314,7 +314,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
     );
 }
 
-/* 编辑销售订单弹窗（数量变更需填写修改原因） */
+/* 编辑销售订单弹窗（订单不可删除；新数量不能低于累计已发） */
 function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void }) {
     const updateOrder = useUpdateOrder();
     const toast = useToast();
@@ -322,18 +322,16 @@ function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void 
     const [deliverStart, setDeliverStart] = useState(order.deliverStart);
     const [deliverEnd, setDeliverEnd] = useState(order.deliverEnd);
     const [remark, setRemark] = useState(order.remark);
-    const [reason, setReason] = useState("");
     const [errors, setErrors] = useState<Record<string, string>>({});
-    const qtyChanged = order ? Number(qty) !== order.qty : false;
 
     const submit = () => {
         if (!order) return;
         const nextErrors: Record<string, string> = {};
         if (!qty || Number(qty) <= 0) nextErrors.qty = "请填写订单数量";
+        if (Number(qty) < order.outbound) nextErrors.qty = `新数量不能低于累计已发 ${order.outbound} 件`;
         if (!deliverStart) nextErrors.deliverStart = "请选择交货起始日期";
         if (!deliverEnd) nextErrors.deliverEnd = "请选择交货截止日期";
         if (deliverStart && deliverEnd && deliverEnd < deliverStart) nextErrors.deliverEnd = "截止不能早于起始";
-        if (qtyChanged && reason.trim().length < 4) nextErrors.reason = "修改数量必须填写至少 4 个字的修改原因";
         setErrors(nextErrors);
         if (Object.keys(nextErrors).length)
             requestAnimationFrame(() =>
@@ -347,7 +345,6 @@ function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void 
                 deliverStart,
                 deliverEnd,
                 remark,
-                reason,
             },
             {
                 onSuccess: () => {
@@ -413,17 +410,10 @@ function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void 
                     <div className="sm:col-span-2">
                         <TextArea label="订单备注" value={remark} onChange={event => setRemark(event.target.value)} />
                     </div>
-                    {qtyChanged && (
-                        <div className="sm:col-span-2">
-                            <TextField
-                                label="修改原因"
-                                required
-                                placeholder="数量变更需要说明原因（至少 4 个字）"
-                                error={errors.reason}
-                                value={reason}
-                                onChange={event => setReason(event.target.value)}
-                            />
-                        </div>
+                    {order.outbound > 0 && (
+                        <p className="text-12 text-subtle sm:col-span-2">
+                            该订单累计已发 {order.outbound} 件，新数量不能低于此值。
+                        </p>
                     )}
                 </div>
             )}

@@ -9,10 +9,12 @@ info:
 
         ## 全局约定
         - **统一响应信封**：`{code, data, message}`；`code=0` 成功，非 0 业务失败（与 HTTP 状态码一致，业务错误用 4xx）。
-        - **鉴权**：除 `POST /auth/login` 外全部需要 `Authorization: Bearer <accessToken>`；token 失效返回 401（登录失败用 400，避免与 401 混淆）。
+        - **鉴权**：除 `POST /auth/login` 外全部需要 `Authorization: Bearer <accessToken>`；token 失效返回 401（登录失败用 400，避免与 401 混淆）。JWT 只携带身份（userId + 角色），权限实时查 sys_grant。
+        - **写操作按权限码校验 403**（各端点 description 标注 required 权限码）；**GET 端点登录即可读**（view 权限仅控制前端菜单可见性）。勾选菜单授权即蕴含其 view 动作。
         - **业务编码即 key**（db-scheme.md）：订单用 `order_no`、客户用 `customer_code`、BOM 用 `bom_code`、台账用 `no`、用户用 `account`；雪花 id 不出后端；`account` 创建后不可改。
-        - **库存无独立端点**：`stock = Σ入库 − Σ出库`，由前端基于两本台账推导；后端出库时按交期顺序做可发量校验。
+        - **库存无独立端点**：`stock = Σ入库 − Σ出库`，由前端基于两本台账推导；后端出库时按交期顺序做可发量校验（事务内完成，防并发超卖）。
         - **统计前端算**：工作台派生视图（待发货/缺口/趋势/TOP 客户）由前端基于各资源数据计算，后端只提供基础 CRUD。
+        - **操作留痕**：仅三种写操作记 op_log——登记发货、新建客户、新建销售订单（见 db-scheme §2.4）；权限变更记 sys_grant_log（§2.3）。
         - 日期均为 `yyyy-MM-dd`，时间 `HH:mm`（本地时区）。
 servers:
     - url: /api
@@ -29,7 +31,6 @@ tags:
     - name: outbound
     - name: users
     - name: roles
-    - name: system
 
 paths:
     /auth/login:
@@ -69,6 +70,27 @@ paths:
                 "200":
                     description: 成功
                     content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } }
+
+    /auth/password:
+        put:
+            tags: [auth]
+            summary: 修改自己的密码（不强制；初始密码 123456 建议尽快修改）
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [oldPassword, newPassword]
+                            properties:
+                                oldPassword: { type: string, format: password }
+                                newPassword: { type: string, format: password, minLength: 6, description: 新密码（≥6 位） }
+            responses:
+                "200":
+                    description: 成功（修改后当前 token 保持有效，用户可继续使用）
+                    content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } }
+                "400":
+                    description: 旧密码错误 / 新密码短于 6 位
 
     /auth/profile:
         get:
@@ -134,7 +156,8 @@ paths:
                                           data: { type: array, items: { $ref: "#/components/schemas/Order" } }
         post:
             tags: [orders]
-            summary: 新建销售订单（order_no 由服务端生成）
+            summary: 新建销售订单（order_no 由服务端生成；记 op_log）
+            description: '**required 权限**：`orders:create`（默认 admin / sales）。校验 customerCode、bomCode 存在，deliverEnd ≥ deliverStart。'
             requestBody:
                 required: true
                 content:
@@ -151,11 +174,14 @@ paths:
                                     - type: object
                                       properties:
                                           data: { $ref: "#/components/schemas/Order" }
+                "400":
+                    description: 校验失败（客户或成品不存在 / 交货截止早于起始 / 数量非法）
 
     /orders/{orderNo}:
         put:
             tags: [orders]
-            summary: 修改订单（改数量必须附 ≥4 字理由）
+            summary: 修改订单（订单不可删除；新数量必须 ≥ 累计已发）
+            description: '**required 权限**：`orders:edit`（默认 admin / sales）。'
             parameters:
                 - name: orderNo
                   in: path
@@ -178,13 +204,13 @@ paths:
                                       properties:
                                           data: { $ref: "#/components/schemas/Order" }
                 "400":
-                    description: 校验失败（如理由不足 4 字）
+                    description: 校验失败（新数量低于累计已发 / 交货截止早于起始 / 数量非法）
                     content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } }
 
     /customers:
         get:
             tags: [customers]
-            summary: 客户列表
+            summary: 客户列表（cooperation 由服务端聚合派生：近 6 个月有订单 = 合作中）
             responses:
                 "200":
                     description: 成功
@@ -198,7 +224,8 @@ paths:
                                           data: { type: array, items: { $ref: "#/components/schemas/Customer" } }
         post:
             tags: [customers]
-            summary: 新建客户（customer_code 服务端生成；phone 为完整号码，掩码展示由服务端生成）
+            summary: 新建客户（customer_code 服务端生成；phone 为完整号码，掩码由服务端生成；记 op_log）
+            description: '**required 权限**：`customers:create`（默认 admin / sales）。'
             requestBody:
                 required: true
                 content:
@@ -215,6 +242,39 @@ paths:
                                     - type: object
                                       properties:
                                           data: { $ref: "#/components/schemas/Customer" }
+                "400":
+                    description: 校验失败（名称少于 4 字 / 手机号格式错 / 负责人不存在或非销售角色）
+
+    /customers/{code}:
+        put:
+            tags: [customers]
+            summary: 编辑客户档案（联系人/电话/行政区划/详细地址/付款条件/负责人；客户不可删除）
+            description: '**required 权限**：`customers:create`（与新建同权，默认 admin / sales）。'
+            parameters:
+                - name: code
+                  in: path
+                  required: true
+                  schema: { type: string, description: customer_code }
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/UpdateCustomerInput" }
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema:
+                                allOf:
+                                    - $ref: "#/components/schemas/Envelope"
+                                    - type: object
+                                      properties:
+                                          data: { $ref: "#/components/schemas/Customer" }
+                "400":
+                    description: 校验失败（同新建）
+                "404":
+                    description: 客户不存在
 
     /boms:
         get:
@@ -233,7 +293,7 @@ paths:
                                           data: { type: array, items: { $ref: "#/components/schemas/Bom" } }
         post:
             tags: [boms]
-            summary: 新建 BOM（bom_code 按 ZM+品类码及品类序号宽度生成；品类模板由前端常量维护）
+            summary: 新建 BOM（bom_code 按 ZM+品类码及品类序号宽度生成；品类模板由前端常量维护，必填项不作服务端强校验）
             requestBody:
                 required: true
                 content:
@@ -250,6 +310,8 @@ paths:
                                     - type: object
                                       properties:
                                           data: { $ref: "#/components/schemas/Bom" }
+                "400":
+                    description: 校验失败（品类不存在 / 型号或规格为空）
 
     /inbound:
         get:
@@ -268,7 +330,8 @@ paths:
                                           data: { type: array, items: { $ref: "#/components/schemas/InboundRow" } }
         post:
             tags: [inbound]
-            summary: 检验入库登记
+            summary: 检验入库登记（登记人取当前登录用户，不经请求体）
+            description: '**required 权限**：`inbound:register`（默认 warehouse；super 全量）。'
             requestBody:
                 required: true
                 content:
@@ -305,7 +368,8 @@ paths:
                                           data: { type: array, items: { $ref: "#/components/schemas/OutboundRow" } }
         post:
             tags: [outbound]
-            summary: 登记发货（超出可发库存被拦截）
+            summary: 登记发货（超出可发库存被拦截；操作人取当前登录用户；记 op_log）
+            description: '**required 权限**：`outbound:ship`（默认 warehouse；super 全量）。'
             requestBody:
                 required: true
                 content:
@@ -342,7 +406,8 @@ paths:
                                           data: { type: array, items: { $ref: "#/components/schemas/WbUser" } }
         post:
             tags: [users]
-            summary: 新增用户（初始密码 123456，首次登录改密）
+            summary: 新增用户（初始密码统一 123456）
+            description: '**required 权限**：`permissions:manage`（默认 super）。'
             requestBody:
                 required: true
                 content:
@@ -366,6 +431,7 @@ paths:
         put:
             tags: [users]
             summary: 编辑用户（account 不可改；super 角色不可变更）
+            description: '**required 权限**：`permissions:manage`（默认 super）。'
             parameters:
                 - name: account
                   in: path
@@ -392,6 +458,7 @@ paths:
         patch:
             tags: [users]
             summary: 启用 / 停用用户（停用不删除；super 不可停用）
+            description: '**required 权限**：`permissions:manage`（默认 super）。'
             parameters:
                 - name: account
                   in: path
@@ -471,7 +538,8 @@ paths:
     /roles/{roleId}/grants:
         put:
             tags: [roles]
-            summary: 保存单角色授权（super 内置角色不可改）
+            summary: 保存单角色授权（super 内置角色不可改；写 sys_grant_log）
+            description: '**required 权限**：`permissions:manage`（默认 super）。'
             parameters:
                 - name: roleId
                   in: path
@@ -502,22 +570,6 @@ paths:
                                           data: { $ref: "#/components/schemas/RoleGrant" }
                 "403":
                     description: 超级管理员为内置角色，授权不可修改
-
-    /system-events:
-        get:
-            tags: [system]
-            summary: 系统事件列表
-            responses:
-                "200":
-                    description: 成功
-                    content:
-                        application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { type: array, items: { $ref: "#/components/schemas/SystemEvent" } }
 
 components:
     securitySchemes:
@@ -623,12 +675,12 @@ components:
 
         UpdateOrderInput:
             type: object
+            description: 订单不可删除；qty 变更时服务端校验新数量 ≥ 累计已发数量（Order.outbound）
             properties:
                 qty: { type: integer, minimum: 1 }
                 deliverStart: { type: string, format: date }
                 deliverEnd: { type: string, format: date }
                 remark: { type: string }
-                reason: { type: string, description: 修改数量时必填，≥4 字 }
 
         Customer:
             type: object
@@ -636,26 +688,46 @@ components:
                 code: { type: string, example: CUS-1024 }
                 name: { type: string }
                 contact: { type: string }
-                phone: { type: string, example: "138****6821", description: 掩码展示 }
-                phoneFull: { type: string, description: 完整号码（有权限可见） }
-                region: { type: string, example: 华东 }
-                city: { type: string }
-                address: { type: string }
-                status: { type: string, enum: [合作中, 待跟进] }
-                owner: { type: string, description: 所属销售 }
+                phone: { type: string, example: "138****6821", description: 掩码展示；完整号仅入库存储，API 一律不返回 }
+                province: { type: string, example: 广东省 }
+                city: { type: string, example: 深圳市 }
+                district: { type: string, example: 南山区, description: 县/区，直筒子市可空 }
+                town: { type: string, example: 粤海街道, description: 乡镇/街道，可空 }
+                address: { type: string, example: 示例街道 88 号, description: 详细地址，跟在四级行政区划之后 }
+                cooperation: { type: string, enum: [合作中, 待跟进], description: 聚合派生——近 6 个月有订单为合作中，否则待跟进（不落库） }
+                owner: { type: string, description: 所属销售姓名（后端 join） }
                 payTerms: { type: string, example: 月结 30 天 }
                 created: { type: string, format: date }
 
         CreateCustomerInput:
             type: object
-            required: [name, contact, phone, region, address]
+            required: [name, contact, phone, province, city, address, ownerAccount]
             properties:
                 name: { type: string, minLength: 4 }
                 contact: { type: string }
                 phone: { type: string, pattern: "^1\\d{10}$" }
-                region: { type: string }
+                province: { type: string, description: 省/直辖市（行政区划级联选择） }
+                city: { type: string }
+                district: { type: string, description: 县/区，可空 }
+                town: { type: string, description: 乡镇/街道，可空 }
                 address: { type: string }
-                remark: { type: string }
+                ownerAccount: { type: string, description: 所属销售账号（sys_user.account，须为 role=sales 的在职用户） }
+                payTerms: { type: string, description: 付款条件，可空 }
+
+        UpdateCustomerInput:
+            type: object
+            required: [name, contact, province, city, address, ownerAccount]
+            properties:
+                name: { type: string, minLength: 4 }
+                contact: { type: string }
+                phone: { type: string, pattern: "^1\\d{10}$", description: 留空表示不修改；填了则校验并替换 }
+                province: { type: string }
+                city: { type: string }
+                district: { type: string }
+                town: { type: string }
+                address: { type: string }
+                ownerAccount: { type: string }
+                payTerms: { type: string }
 
         Bom:
             type: object
@@ -684,28 +756,27 @@ components:
         InboundRow:
             type: object
             properties:
-                no: { type: string, example: RK-20260908-0025 }
+                no: { type: string, example: RK-20260910-0001 }
                 bomCode: { type: string }
                 qty: { type: integer }
                 date: { type: string, format: date }
                 time: { type: string, example: "10:40" }
-                inspector: { type: string, description: 检验登记人姓名 }
+                inspector: { type: string, description: 检验登记人姓名（服务端取当前登录用户，join sys_user） }
                 remark: { type: string }
 
         CreateInboundInput:
             type: object
-            required: [bomCode, qty, date, inspector]
+            required: [bomCode, qty, date]
             properties:
                 bomCode: { type: string }
                 qty: { type: integer, minimum: 1 }
                 date: { type: string, format: date }
-                inspector: { type: string }
                 remark: { type: string }
 
         OutboundRow:
             type: object
             properties:
-                no: { type: string, example: CK-20260908-0019 }
+                no: { type: string, example: CK-20260910-0001 }
                 orderNo: { type: string }
                 customer: { type: string }
                 customerCode: { type: string }
@@ -713,24 +784,23 @@ components:
                 qty: { type: integer }
                 date: { type: string, format: date }
                 time: { type: string }
-                operator: { type: string }
+                operator: { type: string, description: 操作人姓名（服务端取当前登录用户，join sys_user） }
                 remark: { type: string }
 
         CreateOutboundInput:
             type: object
-            required: [orderNo, qty, date, operator]
+            required: [orderNo, qty, date]
             properties:
                 orderNo: { type: string }
                 qty: { type: integer, minimum: 1 }
                 date: { type: string, format: date }
-                operator: { type: string }
                 remark: { type: string }
 
         CreateUserInput:
             type: object
             required: [name, account, role]
             properties:
-                name: { type: string }
+                name: { type: string, minLength: 1, maxLength: 20, description: 姓名（1-20 字符） }
                 account: { type: string, pattern: "^[A-Za-z0-9_]{3,}$" }
                 role: { $ref: "#/components/schemas/RoleId" }
 
@@ -738,17 +808,5 @@ components:
             type: object
             required: [name, role]
             properties:
-                name: { type: string }
+                name: { type: string, minLength: 1, maxLength: 20, description: 姓名（1-20 字符） }
                 role: { $ref: "#/components/schemas/RoleId" }
-
-        SystemEvent:
-            type: object
-            properties:
-                level: { type: string, example: 高优先级 }
-                levelTone: { type: string, enum: [danger, warning, info, neutral] }
-                module: { type: string }
-                item: { type: string }
-                ref: { type: string }
-                found: { type: string, example: "09-05 10:12" }
-                state: { type: string }
-                open: { type: boolean }

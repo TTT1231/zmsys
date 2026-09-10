@@ -44,19 +44,16 @@ const clone = (value: RoleGrant): RoleGrant => JSON.parse(JSON.stringify(value))
 const topMenuCount = (grant: RoleGrant) =>
     MENU_CATALOG.filter(menu => !menu.onlyFor && grant.menus.includes(menu.key)).length;
 
-const EVENT_TONE: Record<string, string> = { danger: "danger", warning: "pending", info: "ready", neutral: "progress" };
-const EVENT_STATE_TONE: Record<string, string> = { 待核对: "pending", 已拦截: "danger", 已生效: "success" };
-
 export function PermissionsPage() {
     const { can } = useApp();
     const { data, isLoading } = useWbSnapshot();
     const snap = data ?? EMPTY_SNAPSHOT;
+    const { data: grantLogData } = useGrantLog();
     const [tab, setTab] = useState<PermTab>("accounts");
 
     if (!can("permissions:view")) return <Navigate to="/workbench" replace />;
 
     const users = snap.users;
-    const events = snap.systemEvents;
     const roleCount = new Set(users.map(user => user.role)).size;
 
     return (
@@ -67,7 +64,7 @@ export function PermissionsPage() {
                 {[
                     { label: "用户总数", value: users.length, unit: "人" },
                     { label: "角色数量", value: roleCount, unit: "个" },
-                    { label: "待处理系统事件", value: events.filter(event => event.open).length, unit: "条" },
+                    { label: "权限变更记录", value: grantLogData?.length ?? 0, unit: "条" },
                 ].map(kpi => (
                     <div
                         key={kpi.label}
@@ -101,7 +98,6 @@ export function PermissionsPage() {
             {tab === "roles" && <RolesTab users={users} />}
             {tab === "matrix" && <MatrixTab />}
 
-            <SystemEventsPanel events={events} isLoading={isLoading} />
             <GrantLogPanel />
         </div>
     );
@@ -290,6 +286,7 @@ function UserDialog({ user, users, onClose }: { user: WbUser | null; users: WbUs
                     required
                     value={name}
                     error={errors.name}
+                    maxLength={20}
                     autoComplete="off"
                     onChange={event => setName(event.target.value)}
                 />
@@ -316,7 +313,7 @@ function UserDialog({ user, users, onClose }: { user: WbUser | null; users: WbUs
                         </option>
                     ))}
                 </SelectField>
-                {!user && <p className="text-12 text-subtle">初始密码由系统生成，首次登录需修改。</p>}
+                {!user && <p className="text-12 text-subtle">初始密码统一为 123456，首次登录后请及时修改。</p>}
             </div>
         </Modal>
     );
@@ -731,84 +728,7 @@ function MatrixTab() {
     );
 }
 
-/* ================= 系统事件 / 变更日志 ================= */
-
-function SystemEventsPanel({
-    events,
-    isLoading,
-}: {
-    events: Array<{
-        level: string;
-        levelTone: string;
-        module: string;
-        item: string;
-        ref: string;
-        found: string;
-        state: string;
-        open: boolean;
-    }>;
-    isLoading: boolean;
-}) {
-    return (
-        <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
-            <div className="flex items-center justify-between gap-3 border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
-                <h2 className="text-15 font-semibold text-ink">系统事件</h2>
-                <span className="text-12 text-subtle">
-                    待处理 {events.filter(event => event.open).length} / {events.length}
-                </span>
-            </div>
-            <div className="mobile-records">
-                <ListState loading={isLoading} empty={!events.length}>
-                    {events.map(event => (
-                        <RecordCard
-                            key={event.ref + event.item}
-                            title={event.item}
-                            subtitle={`${event.module} · ${event.ref}`}
-                            badge={<Badge tone={event.open ? "pending" : "success"}>{event.state}</Badge>}
-                        >
-                            <p>
-                                {event.level} · {event.found}
-                            </p>
-                        </RecordCard>
-                    ))}
-                </ListState>
-            </div>
-            <div className="hidden overflow-x-auto lg:block">
-                <table className="w-full min-w-190 border-collapse">
-                    <thead>
-                        <tr className="bg-soft text-left text-12 text-muted">
-                            <th className="px-5 py-2.5 font-semibold">级别</th>
-                            <th className="px-3 py-2.5 font-semibold">模块</th>
-                            <th className="px-3 py-2.5 font-semibold">事项</th>
-                            <th className="px-3 py-2.5 font-semibold">对象</th>
-                            <th className="px-3 py-2.5 font-semibold">发现时间</th>
-                            <th className="px-5 py-2.5 font-semibold">状态</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {events.map(event => (
-                            <tr
-                                key={event.ref + event.item}
-                                className="border-t border-line/70 transition hover:bg-row-hover"
-                            >
-                                <td className="px-5 py-3">
-                                    <Badge tone={EVENT_TONE[event.levelTone] ?? "progress"}>{event.level}</Badge>
-                                </td>
-                                <td className="px-3 py-3 text-13 text-td">{event.module}</td>
-                                <td className="px-3 py-3 text-13 text-td">{event.item}</td>
-                                <td className="px-3 py-3 tnum text-12.5 font-medium text-td-strong">{event.ref}</td>
-                                <td className="px-3 py-3 tnum text-13 text-td">{event.found}</td>
-                                <td className="px-5 py-3">
-                                    <Badge tone={EVENT_STATE_TONE[event.state] ?? "progress"}>{event.state}</Badge>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </section>
-    );
-}
+/* ================= 变更日志 ================= */
 
 function GrantLogPanel() {
     const { data } = useGrantLog();

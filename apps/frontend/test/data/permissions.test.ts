@@ -95,7 +95,7 @@ describe("buildNavSections", () => {
         const note = all.find(item => item.label === "变更记录");
         expect(note).toMatchObject({ tag: "说明" });
         expect(note?.to).toBeUndefined();
-        expect(note?.note).toContain("审计链");
+        expect(note?.note).toContain("三类操作");
         expect(all.find(item => item.to === "/orders")?.label).toBe("待发货订单");
     });
 

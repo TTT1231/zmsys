@@ -4,13 +4,14 @@ import { ROLE_META, useApp, type Role } from "@/context/AppContext";
 import { MENU_CATALOG, menuLabelFor } from "@/data/permissions";
 import { MobileBottomNav, Sidebar, Topbar } from "@/components/layout/Shell";
 import { PageLoading } from "@/components/ui/PageLoading";
+import { AppContentErrorBoundary, ErrorPage } from "@/pages/error/ErrorPage";
 
 // 工作台标题随登录角色；其余页面标题取菜单字典（含仓管在订单页的「待发货订单」别名）
 function resolveTitle(pathname: string, role: Role) {
     if (pathname.startsWith("/workbench")) return ROLE_META[role].label;
     if (pathname.startsWith("/search")) return "搜索";
     const menu = MENU_CATALOG.find(menu => menu.to && pathname.startsWith(menu.to));
-    return menu ? menuLabelFor(menu, role) : "智造管理系统";
+    return menu ? menuLabelFor(menu, role) : "页面不存在";
 }
 
 /* 登录后各页面的共享外壳：标题同步、认证/菜单守卫、侧边栏 + 内容区 + 移动端导航 */
@@ -26,7 +27,11 @@ export function AppLayout() {
         firstRender.current = false;
     });
 
-    const title = resolveTitle(location.pathname, role);
+    const activeMenu = MENU_CATALOG.find(
+        menu => menu.to && menu.key !== "workbench" && location.pathname.startsWith(menu.to),
+    );
+    const accessDenied = Boolean(activeMenu && !grant.menus.includes(activeMenu.key));
+    const title = accessDenied ? "没有访问权限" : resolveTitle(location.pathname, role);
 
     useEffect(() => {
         document.title = `${title} · 智造管理系统`;
@@ -35,15 +40,6 @@ export function AppLayout() {
     // 认证守卫：未登录进登录页；本地 token 校验中显示全屏加载画面（避免未授权请求）
     if (status === "guest") return <Navigate to="/login" replace />;
     if (status === "loading") return <PageLoading className="min-h-dvh bg-canvas" />;
-
-    // 集中菜单守卫：当前路径对应的菜单未授权时回自己角色的工作台
-    //（工作台自身不设守卫，/search 由搜索页按类目过滤）
-    const activeMenu = MENU_CATALOG.find(
-        menu => menu.to && menu.key !== "workbench" && location.pathname.startsWith(menu.to),
-    );
-    if (activeMenu && !grant.menus.includes(activeMenu.key)) {
-        return <Navigate to="/workbench" replace />;
-    }
 
     return (
         <div className="flex min-h-dvh">
@@ -59,12 +55,21 @@ export function AppLayout() {
                     id="mainContent"
                     className="mx-auto w-full max-w-390 flex-1 px-[clamp(16px,3vw,48px)] pt-6 pb-[calc(76px+env(safe-area-inset-bottom))] lg:pb-11"
                 >
-                    <Suspense fallback={<PageLoading />}>
-                        {/* key 只用 pathname(不含 search):改筛选参数不重播进入动画 */}
-                        <div key={location.pathname} className={firstRender.current ? "" : "animate-page-enter"}>
-                            <Outlet />
-                        </div>
-                    </Suspense>
+                    {accessDenied ? (
+                        <ErrorPage kind="forbidden" />
+                    ) : (
+                        <AppContentErrorBoundary>
+                            <Suspense fallback={<PageLoading />}>
+                                {/* key 只用 pathname(不含 search):改筛选参数不重播进入动画 */}
+                                <div
+                                    key={location.pathname}
+                                    className={firstRender.current ? "" : "animate-page-enter"}
+                                >
+                                    <Outlet />
+                                </div>
+                            </Suspense>
+                        </AppContentErrorBoundary>
+                    )}
                 </main>
             </div>
             <MobileBottomNav onOpenDrawer={() => setDrawerPath(location.pathname)} />

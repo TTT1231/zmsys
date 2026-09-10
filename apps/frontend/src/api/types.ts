@@ -37,12 +37,16 @@ export interface Customer {
     code: string;
     name: string;
     contact: string;
+    /** 脱敏号（如 138****6821）；完整号仅入库存储，API 不返回 */
     phone: string;
-    phoneFull: string;
-    region: string;
+    /** 行政区划四级（省/市/县区/乡镇），district/town 可空（直筒子市等） */
+    province: string;
     city: string;
+    district: string;
+    town: string;
     address: string;
-    status: "合作中" | "待跟进";
+    /** 合作状态（聚合派生：近 6 个月有订单 = 合作中，否则待跟进） */
+    cooperation: "合作中" | "待跟进";
     owner: string;
     payTerms: string;
     created: string;
@@ -80,17 +84,6 @@ export interface WbUser {
     last: string;
 }
 
-export interface SystemEvent {
-    level: string;
-    levelTone: "danger" | "warning" | "info" | "neutral";
-    module: string;
-    item: string;
-    ref: string;
-    found: string;
-    state: string;
-    open: boolean;
-}
-
 export interface OpLogEntry {
     date: string;
     time: string;
@@ -110,7 +103,6 @@ export interface Snapshot {
     outboundLedger: OutboundRow[];
     stock: Record<string, number>;
     users: WbUser[];
-    systemEvents: SystemEvent[];
 }
 
 /* ---------- 认证与授权 ---------- */
@@ -118,6 +110,11 @@ export interface Snapshot {
 export interface LoginInput {
     account: string;
     password: string;
+}
+
+export interface ChangePasswordInput {
+    oldPassword: string;
+    newPassword: string;
 }
 
 export interface LoginResult {
@@ -162,17 +159,35 @@ export interface UpdateOrderInput {
     deliverStart?: string;
     deliverEnd?: string;
     remark?: string;
-    /** 修改数量时必填，≥4 字符 */
-    reason?: string;
 }
 
 export interface CreateCustomerInput {
     name: string;
     contact: string;
     phone: string;
-    region: string;
+    /** 行政区划四级，district/town 可空 */
+    province: string;
+    city: string;
+    district: string;
+    town: string;
     address: string;
-    remark: string;
+    /** 所属销售（sys_user 账号，role=sales） */
+    ownerAccount: string;
+    /** 付款条件（可空，默认空串） */
+    payTerms: string;
+}
+
+export interface UpdateCustomerInput {
+    name: string;
+    contact: string;
+    phone: string;
+    province: string;
+    city: string;
+    district: string;
+    town: string;
+    address: string;
+    ownerAccount: string;
+    payTerms: string;
 }
 
 export interface CreateBomInput {
@@ -185,7 +200,6 @@ export interface CreateInboundInput {
     bomCode: string;
     qty: number;
     date: string;
-    inspector: string;
     remark: string;
 }
 
@@ -193,7 +207,6 @@ export interface CreateOutboundInput {
     orderNo: string;
     qty: number;
     date: string;
-    operator: string;
     remark: string;
 }
 

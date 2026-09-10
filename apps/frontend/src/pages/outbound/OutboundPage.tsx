@@ -80,7 +80,6 @@ export function OutboundModal({
     initialOrderNo?: string;
 }) {
     const { data } = useWbSnapshot();
-    const { user } = useApp();
     const snap = data ?? EMPTY_SNAPSHOT;
     const createOutbound = useCreateOutbound();
     const toast = useToast();
@@ -88,17 +87,10 @@ export function OutboundModal({
     const [orderNo, setOrderNo] = useState(initialOrderNo);
     const [qty, setQty] = useState("");
     const [date, setDate] = useState(todayIso);
-    const [operator, setOperator] = useState("");
     const [remark, setRemark] = useState("");
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    // 操作人 = 在职仓管；默认当前登录用户（仓管），否则首个可用
-    const operators = snap.users.filter(item => item.role === "warehouse" && item.active).map(item => item.name);
-    const effectiveOperator = operators.includes(operator)
-        ? operator
-        : operators.includes(user?.name ?? "")
-          ? user!.name
-          : (operators[0] ?? "");
+    // 操作人 = 当前登录用户（服务端落账，不经请求体）
 
     const stock = snap.stock;
     const orders = snap.orders;
@@ -124,7 +116,6 @@ export function OutboundModal({
         setOrderNo("");
         setQty("");
         setDate(todayIso());
-        setOperator("");
         setRemark("");
         setErrors({});
     };
@@ -147,7 +138,6 @@ export function OutboundModal({
                 orderNo: selectedOrder.orderNo,
                 qty: Number(qty),
                 date,
-                operator: effectiveOperator,
                 remark,
             },
             {
@@ -291,25 +281,6 @@ export function OutboundModal({
                     value={date}
                     onChange={event => setDate(event.target.value)}
                 />
-                <div className="sm:col-span-2">
-                    <span className="mb-1 block text-12.5 font-medium text-td">操作人</span>
-                    <div className="flex gap-1.5">
-                        {operators.map(item => (
-                            <button
-                                key={item}
-                                type="button"
-                                onClick={() => setOperator(item)}
-                                className={`h-9 rounded-full border px-3.5 text-12.5 font-medium transition ${
-                                    effectiveOperator === item
-                                        ? "border-primary bg-primary-soft text-primary-strong"
-                                        : "border-line bg-white text-muted hover:border-primary-border"
-                                }`}
-                            >
-                                {item}
-                            </button>
-                        ))}
-                    </div>
-                </div>
                 <div className="sm:col-span-2">
                     <TextArea
                         label="备注"

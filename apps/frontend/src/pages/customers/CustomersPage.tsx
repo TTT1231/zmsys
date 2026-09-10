@@ -9,8 +9,9 @@ import { PageHeading } from "@/components/ui/PageHeading";
 import { Badge, Button, TableLink } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { CustomerCell } from "@/components/ui/cells";
-import { SelectField, TextArea, TextField } from "@/components/ui/Field";
-import { useCreateCustomer, useWbRefresh, useWbSnapshot } from "@/data/queries";
+import { SelectField, TextField } from "@/components/ui/Field";
+import { RegionCascader, regionText, type RegionValue } from "@/components/ui/RegionCascader";
+import { useCreateCustomer, useUpdateCustomer, useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { EMPTY_SNAPSHOT } from "@/data/views";
@@ -24,64 +25,85 @@ const AVATAR_TONES = [
     "bg-accent-soft text-accent",
 ];
 
-function NewCustomerModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+/* 新建 / 编辑客户共用表单弹窗（编辑时传 customer 初值；电话留空表示不修改） */
+function CustomerFormModal({
+    customer,
+    snap,
+    onClose,
+}: {
+    customer: Customer | null;
+    snap: Snapshot;
+    onClose: () => void;
+}) {
     const createCustomer = useCreateCustomer();
+    const updateCustomer = useUpdateCustomer();
     const toast = useToast();
-    const [name, setName] = useState("");
-    const [contact, setContact] = useState("");
+    const pending = createCustomer.isPending || updateCustomer.isPending;
+    const [name, setName] = useState(customer?.name ?? "");
+    const [contact, setContact] = useState(customer?.contact ?? "");
     const [phone, setPhone] = useState("");
-    const [region, setRegion] = useState("华东");
-    const [address, setAddress] = useState("");
-    const [remark, setRemark] = useState("");
+    const [region, setRegion] = useState<RegionValue>(
+        customer
+            ? { province: customer.province, city: customer.city, district: customer.district, town: customer.town }
+            : { province: "", city: "", district: "", town: "" },
+    );
+    const [address, setAddress] = useState(customer?.address ?? "");
+    const [payTerms, setPayTerms] = useState(customer?.payTerms ?? "");
+    const { user } = useApp();
+    const [ownerAccount, setOwnerAccount] = useState(() => {
+        if (customer) return snap.users.find(item => item.name === customer.owner)?.account ?? "";
+        return user?.role === "sales" ? user.account : "";
+    });
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    const reset = () => {
-        setName("");
-        setContact("");
-        setPhone("");
-        setRegion("华东");
-        setAddress("");
-        setRemark("");
-        setErrors({});
-    };
+    // 在职销售作为客户负责人候选
+    const salesOptions = snap.users
+        .filter(item => item.role === "sales" && item.active)
+        .map(item => ({ value: item.account, label: `${item.name}（${item.account}）` }));
 
     const submit = () => {
         const nextErrors: Record<string, string> = {};
         if (name.trim().length < 4) nextErrors.name = "请填写公司名称（至少 4 个字）";
         if (!contact.trim()) nextErrors.contact = "请填写联系人";
-        if (!/^1\d{10}$/.test(phone)) nextErrors.phone = "请填写 11 位手机号";
+        // 新建必填手机号；编辑留空 = 不修改，填了才校验格式
+        if (!customer || phone) {
+            if (!/^1\d{10}$/.test(phone)) nextErrors.phone = "请填写 11 位手机号";
+        }
+        if (!region.province || !region.city) nextErrors.region = "请选择所在地区";
+        if (!ownerAccount) nextErrors.owner = "请选择客户负责人";
         setErrors(nextErrors);
         if (Object.keys(nextErrors).length)
             requestAnimationFrame(() =>
                 document.querySelector<HTMLElement>('[role="dialog"] [aria-invalid="true"]')?.focus(),
             );
         if (Object.keys(nextErrors).length > 0) return;
-        createCustomer.mutate(
-            {
-                name: name.trim(),
-                contact: contact.trim(),
-                phone,
-                region,
-                address,
-                remark,
-            },
-            {
-                onSuccess: customer => {
-                    toast(`客户档案 ${customer.code} 已创建`);
-                    onClose();
-                    reset();
-                },
-            },
-        );
+        const body = {
+            name: name.trim(),
+            contact: contact.trim(),
+            phone,
+            province: region.province,
+            city: region.city,
+            district: region.district,
+            town: region.town,
+            address,
+            ownerAccount,
+            payTerms: payTerms.trim(),
+        };
+        const onSuccess = (saved: Customer) => {
+            toast(customer ? `客户档案 ${saved.code} 已更新` : `客户档案 ${saved.code} 已创建`);
+            onClose();
+        };
+        if (customer) updateCustomer.mutate({ code: customer.code, ...body }, { onSuccess });
+        else createCustomer.mutate(body, { onSuccess });
     };
 
     return (
         <Modal
-            open={open}
+            open
             onClose={onClose}
-            title="新建客户档案"
-            subtitle="客户编码与名称由档案统一管理，订单从档案选择"
-            width={560}
+            title={customer ? "编辑客户档案" : "新建客户档案"}
+            subtitle={customer ? `${customer.code} · 建档 ${customer.created}` : "客户编码自动生成，订单从档案选择"}
+            width={640}
             footer={
                 <>
                     <button
@@ -93,11 +115,11 @@ function NewCustomerModal({ open, onClose }: { open: boolean; onClose: () => voi
                     </button>
                     <button
                         type="button"
-                        disabled={createCustomer.isPending}
+                        disabled={pending}
                         onClick={submit}
                         className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
                     >
-                        保存档案
+                        {pending ? "正在提交…" : "保存档案"}
                     </button>
                 </>
             }
@@ -111,7 +133,7 @@ function NewCustomerModal({ open, onClose }: { open: boolean; onClose: () => voi
                     value={name}
                     onChange={event => setName(event.target.value)}
                 />
-                <TextField label="客户编码" hint="保存后自动生成" disabled value="自动生成" />
+                {customer && <TextField label="客户编码" disabled value={customer.code} />}
                 <TextField
                     label="联系人"
                     required
@@ -122,31 +144,39 @@ function NewCustomerModal({ open, onClose }: { open: boolean; onClose: () => voi
                 />
                 <TextField
                     label="联系电话"
-                    required
-                    placeholder="11 位手机号"
+                    required={!customer}
+                    placeholder={customer ? "留空保持不变，输入新号替换" : "11 位手机号"}
                     error={errors.phone}
                     value={phone}
                     onChange={event => setPhone(event.target.value.replace(/\D/g, "").slice(0, 11))}
                 />
-                <SelectField label="所在地区" value={region} onChange={event => setRegion(event.target.value)}>
-                    {["华东", "华南", "华北", "西南"].map(item => (
-                        <option key={item}>{item}</option>
+                <SelectField
+                    label="客户负责人"
+                    required
+                    error={errors.owner}
+                    value={ownerAccount}
+                    onChange={event => setOwnerAccount(event.target.value)}
+                >
+                    <option value="">请选择销售</option>
+                    {salesOptions.map(item => (
+                        <option key={item.value} value={item.value}>
+                            {item.label}
+                        </option>
                     ))}
                 </SelectField>
                 <TextField
+                    label="付款条件"
+                    placeholder="如 月结 30 天"
+                    value={payTerms}
+                    onChange={event => setPayTerms(event.target.value)}
+                />
+                <RegionCascader value={region} onChange={setRegion} error={errors.region} />
+                <TextField
                     label="详细地址"
-                    placeholder="选填"
+                    placeholder="如 示例街道 88 号"
                     value={address}
                     onChange={event => setAddress(event.target.value)}
                 />
-                <div className="sm:col-span-2">
-                    <TextArea
-                        label="备注"
-                        placeholder="选填"
-                        value={remark}
-                        onChange={event => setRemark(event.target.value)}
-                    />
-                </div>
             </div>
         </Modal>
     );
@@ -156,12 +186,13 @@ export function CustomerDetailModal({
     customer,
     snap,
     onClose,
+    onEdit,
 }: {
     customer: Customer | null;
     snap: Snapshot;
     onClose: () => void;
+    onEdit?: (customer: Customer) => void;
 }) {
-    const toast = useToast();
     if (!customer) return null;
     const orders = snap.orders.filter(order => order.customerCode === customer.code);
     const pendingQty = orders.reduce((sum, order) => sum + Math.max(0, order.qty - order.outbound), 0);
@@ -176,13 +207,24 @@ export function CustomerDetailModal({
             subtitle={`${customer.code} · 建档 ${customer.created}`}
             width={560}
             footer={
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover"
-                >
-                    关闭
-                </button>
+                <>
+                    {onEdit && (
+                        <button
+                            type="button"
+                            onClick={() => onEdit(customer)}
+                            className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
+                        >
+                            编辑档案
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover"
+                    >
+                        关闭
+                    </button>
+                </>
             }
         >
             <div className="flex flex-col gap-4">
@@ -198,7 +240,7 @@ export function CustomerDetailModal({
                             {customer.code} · 建档 {customer.created}
                         </div>
                     </div>
-                    <Badge tone={customer.status === "合作中" ? "done" : "pending"}>{customer.status}</Badge>
+                    <Badge tone={customer.cooperation === "合作中" ? "done" : "pending"}>{customer.cooperation}</Badge>
                 </div>
                 <div className="grid grid-cols-2 gap-2.5">
                     <div className="rounded-xl border border-line px-3 py-2.5 text-center">
@@ -219,9 +261,9 @@ export function CustomerDetailModal({
                     {[
                         ["联系人", customer.contact],
                         ["联系电话", customer.phone],
-                        ["所在地区", `${customer.region} · ${customer.city}`],
+                        ["所在地区", regionText(customer)],
                         ["详细地址", customer.address || "—"],
-                        ["付款方式", customer.payTerms],
+                        ["付款方式", customer.payTerms || "—"],
                         ["客户负责人", customer.owner],
                         ["待交付数量", `${pendingQty.toLocaleString("zh-CN")} 件`],
                     ].map(([label, value]) => (
@@ -251,20 +293,6 @@ export function CustomerDetailModal({
                         ))}
                     </ol>
                 </div>
-                <button
-                    type="button"
-                    onClick={async () => {
-                        try {
-                            await navigator.clipboard.writeText(customer.phoneFull);
-                            toast("完整手机号已复制");
-                        } catch {
-                            toast("复制失败，请从客户信息中选择号码复制", true);
-                        }
-                    }}
-                    className="self-start rounded-input border border-line-strong px-3 py-2 text-12.5 font-medium text-primary-strong hover:border-primary-border"
-                >
-                    复制完整手机号
-                </button>
             </div>
         </Modal>
     );
@@ -277,12 +305,11 @@ export function CustomersPage() {
     // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
     const overlay = useDelayedFlag(isFetching && !isLoading);
     const [searchParams, setSearchParams] = useSearchParams();
-    const toast = useToast();
     const [statusFilter, setStatusFilter] = useState("全部状态");
     const [keyword, setKeyword] = useState("");
     const [page, setPage] = useState(1);
     const [pageSize] = useState(10);
-    const [newOpen, setNewOpen] = useState(false);
+    const [formTarget, setFormTarget] = useState<Customer | "new" | null>(null);
     const [detail, setDetail] = useState<Customer | null>(null);
 
     const snap = data ?? EMPTY_SNAPSHOT;
@@ -293,7 +320,7 @@ export function CustomersPage() {
         const kw = keyword.trim().toLowerCase();
         return customers
             .filter(customer => {
-                if (statusFilter !== "全部状态" && customer.status !== statusFilter) return false;
+                if (statusFilter !== "全部状态" && customer.cooperation !== statusFilter) return false;
                 if (kw && !`${customer.name} ${customer.code}`.toLowerCase().includes(kw)) return false;
                 return true;
             })
@@ -318,7 +345,7 @@ export function CustomersPage() {
 
     useEffect(() => {
         if (searchParams.get("new") === "customer") {
-            setNewOpen(true);
+            setFormTarget("new");
             setSearchParams({}, { replace: true });
         }
     }, [searchParams, setSearchParams]);
@@ -337,7 +364,7 @@ export function CustomersPage() {
                 title="客户档案"
                 actions={
                     canCreate ? (
-                        <Button icon="plus" onClick={() => setNewOpen(true)}>
+                        <Button icon="plus" onClick={() => setFormTarget("new")}>
                             新建客户
                         </Button>
                     ) : undefined
@@ -401,10 +428,10 @@ export function CustomersPage() {
                                         row.customer.name,
                                         row.customer.contact,
                                         row.customer.phone,
-                                        `${row.customer.region} · ${row.customer.city}`,
+                                        regionText(row.customer),
                                         String(row.orderCount),
                                         String(row.pendingQty),
-                                        row.customer.status,
+                                        row.customer.cooperation,
                                     ]),
                                 )
                             }
@@ -420,20 +447,14 @@ export function CustomersPage() {
                             <RecordCard
                                 key={customer.code}
                                 title={customer.name}
-                                subtitle={`${customer.code} · ${customer.region} ${customer.city}`}
+                                subtitle={`${customer.code} · ${regionText(customer)}`}
                                 badge={
-                                    <Badge tone={customer.status === "合作中" ? "success" : "pending"}>
-                                        {customer.status}
+                                    <Badge tone={customer.cooperation === "合作中" ? "success" : "pending"}>
+                                        {customer.cooperation}
                                     </Badge>
                                 }
                                 actions={
                                     <>
-                                        <a
-                                            className="inline-flex min-h-11 items-center rounded-btn border border-line px-3 text-primary"
-                                            href={`tel:${customer.phoneFull}`}
-                                        >
-                                            联系客户
-                                        </a>
                                         <Button onClick={() => setDetail(customer)}>查看档案</Button>
                                     </>
                                 }
@@ -494,25 +515,12 @@ export function CustomersPage() {
                                         </td>
                                         <td className="px-3 py-3 text-13 text-td">{row.customer.contact}</td>
                                         <td className="px-3 py-3">
-                                            <span className="flex items-center gap-1.5">
-                                                <span className="tnum text-13 text-td">{row.customer.phone}</span>
-                                                <button
-                                                    type="button"
-                                                    aria-label="复制完整手机号"
-                                                    onClick={() => {
-                                                        void navigator.clipboard?.writeText(row.customer.phoneFull);
-                                                        toast("完整手机号已复制");
-                                                    }}
-                                                    className="rounded-md p-1 text-subtle transition hover:bg-primary-soft hover:text-primary"
-                                                >
-                                                    <Icon name="copy" size={13} />
-                                                </button>
-                                            </span>
+                                            <span className="tnum text-13 text-td">{row.customer.phone}</span>
                                         </td>
                                         <td className="px-3 py-3">
                                             <span className="flex items-center gap-1.5 text-13 text-td">
                                                 <Icon name="location" size={14} className="text-subtle" />
-                                                {row.customer.region} · {row.customer.city}
+                                                {regionText(row.customer)}
                                             </span>
                                         </td>
                                         <td className="px-3 py-3 text-13 text-td tnum">
@@ -526,8 +534,8 @@ export function CustomersPage() {
                                         </td>
                                         <td className="px-3 py-3 tnum text-13 text-td">{row.lastOrderDate}</td>
                                         <td className="px-3 py-3">
-                                            <Badge tone={row.customer.status === "合作中" ? "done" : "pending"}>
-                                                {row.customer.status}
+                                            <Badge tone={row.customer.cooperation === "合作中" ? "done" : "pending"}>
+                                                {row.customer.cooperation}
                                             </Badge>
                                         </td>
                                         <td className="px-5 py-3 text-right">
@@ -543,8 +551,26 @@ export function CustomersPage() {
                 <div className="border-t border-line px-5 py-3.5 text-12.5 text-muted">共 {rows.length} 家客户</div>
             </section>
 
-            {canCreate && <NewCustomerModal open={newOpen} onClose={() => setNewOpen(false)} />}
-            <CustomerDetailModal customer={detail} snap={snap} onClose={() => setDetail(null)} />
+            {canCreate && formTarget !== null && (
+                <CustomerFormModal
+                    customer={formTarget === "new" ? null : formTarget}
+                    snap={snap}
+                    onClose={() => setFormTarget(null)}
+                />
+            )}
+            <CustomerDetailModal
+                customer={detail}
+                snap={snap}
+                onClose={() => setDetail(null)}
+                onEdit={
+                    canCreate
+                        ? customer => {
+                              setDetail(null);
+                              setFormTarget(customer);
+                          }
+                        : undefined
+                }
+            />
         </div>
     );
 }

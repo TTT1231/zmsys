@@ -6,6 +6,7 @@ import type {
     CreateInboundInput,
     CreateOrderInput,
     CreateOutboundInput,
+    UpdateCustomerInput,
     UpdateOrderInput,
 } from "@/api";
 import { db } from "../data/db";
@@ -33,7 +34,7 @@ export const orderHandlers = [
         const body = (await request.json().catch(() => null)) as UpdateOrderInput | null;
         if (!body) return fail("请求参数错误");
         try {
-            return ok(db.updateOrder({ orderNo: String(params.orderNo), ...body }, auth.actor));
+            return ok(db.updateOrder({ orderNo: String(params.orderNo), ...body }));
         } catch (error) {
             return fail(error instanceof Error ? error.message : "订单修改失败");
         }
@@ -44,17 +45,39 @@ export const customerHandlers = [
     http.get("/api/customers", ({ request }) => {
         const auth = authenticate(request);
         if (!auth) return fail("登录已过期，请重新登录", 401);
-        return ok(db.customers.map(customer => ({ ...customer })));
+        return ok(db.listCustomers());
     }),
 
     http.post("/api/customers", async ({ request }) => {
         const auth = authenticate(request);
         if (!auth) return fail("登录已过期，请重新登录", 401);
         const body = (await request.json().catch(() => null)) as CreateCustomerInput | null;
-        if (!body?.name?.trim()) return fail("请输入客户名称");
+        if (!body?.name || body.name.trim().length < 4) return fail("请填写公司名称（至少 4 个字）");
         if (!body?.contact?.trim()) return fail("请输入联系人");
         if (!/^1\d{10}$/.test(body?.phone ?? "")) return fail("请输入 11 位手机号");
-        return ok(db.createCustomer(body, auth.actor));
+        if (!body?.province?.trim() || !body?.city?.trim()) return fail("请选择所在地区");
+        if (!body?.ownerAccount?.trim()) return fail("请选择客户负责人");
+        try {
+            return ok(db.createCustomer(body));
+        } catch (error) {
+            return fail(error instanceof Error ? error.message : "客户创建失败");
+        }
+    }),
+
+    http.put("/api/customers/:code", async ({ request, params }) => {
+        const auth = authenticate(request);
+        if (!auth) return fail("登录已过期，请重新登录", 401);
+        const body = (await request.json().catch(() => null)) as UpdateCustomerInput | null;
+        if (!body?.name || body.name.trim().length < 4) return fail("请填写公司名称（至少 4 个字）");
+        if (!body?.contact?.trim()) return fail("请输入联系人");
+        if (!/^1\d{10}$/.test(body?.phone ?? "")) return fail("请输入 11 位手机号");
+        if (!body?.ownerAccount?.trim()) return fail("请选择客户负责人");
+        try {
+            return ok(db.updateCustomer(String(params.code), body));
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "客户更新失败";
+            return fail(message, message.includes("不存在") ? 404 : 400);
+        }
     }),
 ];
 
@@ -114,13 +137,5 @@ export const ledgerHandlers = [
         } catch (error) {
             return fail(error instanceof Error ? error.message : "发货登记失败");
         }
-    }),
-];
-
-export const eventHandlers = [
-    http.get("/api/system-events", ({ request }) => {
-        const auth = authenticate(request);
-        if (!auth) return fail("登录已过期，请重新登录", 401);
-        return ok(db.systemEvents.map(event => ({ ...event })));
     }),
 ];

@@ -43,7 +43,9 @@ export function SearchPage() {
             .includes(keyword),
     );
     const customers = snap.customers.filter(customer =>
-        `${customer.name} ${customer.code} ${customer.contact} ${customer.phoneFull}`.toLowerCase().includes(keyword),
+        `${customer.name} ${customer.code} ${customer.contact} ${customer.phone} ${customer.province}${customer.city}${customer.district}${customer.town}`
+            .toLowerCase()
+            .includes(keyword),
     );
     const boms = snap.boms.filter(bom => `${bom.code} ${bom.name} ${bom.spec}`.toLowerCase().includes(keyword));
     const count =

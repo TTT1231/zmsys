@@ -4,7 +4,7 @@
  * - 不变量：每 BOM Σ入库 − Σ出库 = 当前可用库存
  * - 仅授权（grants）落 localStorage 模拟后端持久化；Node 环境下自动跳过
  * - 无浏览器顶层 API，可被 node --test 直接导入 */
-import type { Bom, Customer, InboundRow, OpLogEntry, Order, OutboundRow, Snapshot, SystemEvent, WbUser } from "@/api";
+import type { Bom, Customer, InboundRow, OpLogEntry, Order, OutboundRow, Snapshot, WbUser } from "@/api";
 // 注意：本文件被 node --test 直跑（scripts/inventory.test.mjs），Node 不解析 "@/ 别名，
 // 因此运行时值导入保留相对路径 + .ts 扩展名；type 导入会被擦除，可用别名
 import type { GrantMap, RoleGrant, RoleId } from "@/data/permissions";
@@ -58,35 +58,35 @@ const CUSTOMER_SEEDS: Array<[string, string]> = [
     ["天津远达机电", "CUS-0427"],
 ];
 
-const CONTACT_SEEDS: Array<[string, string, string, string]> = [
-    // 联系人 / 电话 / 地区 / 城市
-    ["王建国", "138****6821", "华东", "苏州"],
-    ["李雪梅", "139****3417", "华南", "东莞"],
-    ["张伟", "137****9055", "华东", "苏州"],
-    ["陈静", "136****2764", "华东", "杭州"],
-    ["刘强", "135****8391", "华东", "宁波"],
-    ["赵敏", "158****6142", "华东", "上海"],
-    ["孙丽", "186****4529", "华南", "深圳"],
-    ["周涛", "150****7385", "华南", "广州"],
-    ["吴昊", "133****2968", "西南", "成都"],
-    ["郑爽", "155****5073", "华北", "天津"],
+const CONTACT_SEEDS: Array<[string, string, string, string, string, string]> = [
+    // 联系人 / 电话 / 省 / 市 / 县区 / 乡镇街道
+    ["王建国", "138****6821", "江苏省", "苏州市", "吴中区", "长桥街道"],
+    ["李雪梅", "139****3417", "广东省", "东莞市", "", "南城街道"],
+    ["张伟", "137****9055", "江苏省", "苏州市", "相城区", "元和街道"],
+    ["陈静", "136****2764", "浙江省", "杭州市", "西湖区", "文新街道"],
+    ["刘强", "135****8391", "浙江省", "宁波市", "鄞州区", "首南街道"],
+    ["赵敏", "158****6142", "上海市", "市辖区", "浦东新区", "张江镇"],
+    ["孙丽", "186****4529", "广东省", "深圳市", "南山区", "粤海街道"],
+    ["周涛", "150****7385", "广东省", "广州市", "天河区", "天园街道"],
+    ["吴昊", "133****2968", "四川省", "成都市", "武侯区", "簇桥街道"],
+    ["郑爽", "155****5073", "天津市", "市辖区", "津南区", "双港镇"],
 ];
 
 const buildCustomers = (): Customer[] =>
     CUSTOMER_SEEDS.map(([name, code], index) => {
-        const [contact, phone, region, city] = CONTACT_SEEDS[index];
-        const full = phone.replace("****", String(1000 + index * 137).slice(0, 4));
+        const [contact, phone, province, city, district, town] = CONTACT_SEEDS[index];
         return {
             code,
             name,
             contact,
             phone,
-            phoneFull: full,
-            region,
+            province,
             city,
-            address: `${city}${["高新区工业园 8 号", "经济开发区兴业路 21 号", "临港产业园 3 栋", "科技城创新大厦 12F"][index % 4]}`,
-            status: index === 8 || index === 9 ? "待跟进" : "合作中",
-            owner: "李晓梅",
+            district,
+            town,
+            address: ["兴园路 88 号", "兴业路 21 号", "科技园 3 栋", "创新大厦 12F"][index % 4],
+            cooperation: "待跟进", // 占位；真实值由 listCustomers 按订单聚合派生
+            owner: "陈洁",
             payTerms: "月结 30 天",
             created: addDays(ANCHOR, -(120 + index * 37)),
         };
@@ -564,6 +564,9 @@ function staticOrders(): SeededOrder[] {
         mk(83, 6, 11, 3, "ZMKW0001", 560, 560, 0),
         mk(82, 7, 20, 4, "ZMXK2005", 3000, 0, 1200),
         mk(81, 8, 17, 5, "ZMKW16001", 960, 0, 0),
+        // 两笔 7 个月前的已完成历史订单：让成都锐成 / 天津远达在合作状态派生中落为「待跟进」
+        mk(2, 215, 232, 8, "ZMKW0003", 400, 400, 0),
+        mk(1, 226, 243, 9, "ZMXK2010", 500, 500, 0),
     ];
 }
 
@@ -575,7 +578,8 @@ function buildOrders(boms: Bom[]): SeededOrder[] {
     ];
     const seeded: SeededOrder[] = plan.map((status, index) => {
         const seq = 80 - index;
-        const [customer, customerCode] = CUSTOMER_SEEDS[(seq * 7) % CUSTOMER_SEEDS.length];
+        // 近期订单只落在前 8 家客户：成都锐成 / 天津远达仅有 7 个月前的历史单，合作状态派生为「待跟进」
+        const [customer, customerCode] = CUSTOMER_SEEDS[(seq * 7) % 8];
         const bom = boms[(seq * 3) % boms.length];
         const qty = 300 + ((seq * 137) % 4200);
         const done = status === "已完成" ? qty : status === "可发货" ? Math.floor(qty * (0.2 + (seq % 5) * 0.15)) : 0;
@@ -685,48 +689,6 @@ class MockDb {
             password: MOCK_PASSWORD,
         },
     ];
-    systemEvents: SystemEvent[] = [
-        {
-            level: "高优先级",
-            levelTone: "danger",
-            module: "物料与 BOM",
-            item: "订单引用的 BOM 版本信息缺失",
-            ref: "ZM260830081",
-            found: `${addDays(ANCHOR, -3).slice(5)} 16:20`,
-            state: "待核对",
-            open: true,
-        },
-        {
-            level: "业务校验",
-            levelTone: "warning",
-            module: "成品出库",
-            item: "超出可发库存的发货被拦截",
-            ref: "ZM260903086",
-            found: `${addDays(ANCHOR, -2).slice(5)} 10:12`,
-            state: "已拦截",
-            open: true,
-        },
-        {
-            level: "配置变更",
-            levelTone: "info",
-            module: "系统管理",
-            item: "检验员角色菜单权限变更",
-            ref: "ROLE-INSPECTOR",
-            found: `${addDays(ANCHOR, -2).slice(5)} 09:30`,
-            state: "已生效",
-            open: true,
-        },
-        {
-            level: "提示",
-            levelTone: "neutral",
-            module: "客户档案",
-            item: "疑似重复客户资料待合并",
-            ref: "CUS-0906",
-            found: `${addDays(ANCHOR, -4).slice(5)} 14:05`,
-            state: "待核对",
-            open: false,
-        },
-    ];
     opLog: OpLogEntry[] = [];
     version = 1;
     grants: GrantMap = loadGrants();
@@ -776,6 +738,18 @@ class MockDb {
         return this.users.map(({ password: _password, ...user }) => ({ ...user }));
     }
 
+    /** 合作状态（聚合派生，不落库）：近 6 个月（183 天）有订单 = 合作中，否则待跟进 */
+    private cooperationOf(customerCode: string): "合作中" | "待跟进" {
+        const windowStart = addDays(ANCHOR, -183);
+        return this.orders.some(order => order.customerCode === customerCode && order.orderDate >= windowStart)
+            ? "合作中"
+            : "待跟进";
+    }
+
+    listCustomers(): Customer[] {
+        return this.customers.map(customer => ({ ...customer, cooperation: this.cooperationOf(customer.code) }));
+    }
+
     private timeOf(seedIndex: number) {
         return `${String(8 + (seedIndex % 9)).padStart(2, "0")}:${String((seedIndex * 17) % 60).padStart(2, "0")}`;
     }
@@ -823,7 +797,7 @@ class MockDb {
         raw.sort((a, b) => (a.date === b.date ? a.orderNo.localeCompare(b.orderNo) : a.date.localeCompare(b.date)));
         const counter = new Map<string, number>();
         return raw.map(row => {
-            const seq = (counter.get(row.date) || 18) + 1;
+            const seq = (counter.get(row.date) || 0) + 1;
             counter.set(row.date, seq);
             return { ...row, no: `CK-${row.date.replaceAll("-", "")}-${String(seq).padStart(4, "0")}` };
         });
@@ -885,55 +859,32 @@ class MockDb {
         raw.sort((a, b) => (a.date === b.date ? a.bomCode.localeCompare(b.bomCode) : a.date.localeCompare(b.date)));
         const counter = new Map<string, number>();
         return raw.map(row => {
-            const seq = (counter.get(row.date) || 24) + 1;
+            const seq = (counter.get(row.date) || 0) + 1;
             counter.set(row.date, seq);
             return { ...row, no: `RK-${row.date.replaceAll("-", "")}-${String(seq).padStart(4, "0")}` };
         });
     }
 
+    /* op_log 口径（db-scheme §2.4）：只记三种操作——登记发货 / 新建客户 / 新建销售订单 */
     private buildOpLog(): OpLogEntry[] {
         const entries: OpLogEntry[] = [];
         const push = (date: string, time: string, user: string, role: string, action: string, target: string) =>
             entries.push({ date, time, user, role, action, target });
         this.outboundLedger
-            .filter(row => row.date === ANCHOR)
+            .filter(row => row.date === ANCHOR || row.date === addDays(ANCHOR, -1) || row.date === addDays(ANCHOR, -2))
             .forEach(row =>
                 push(
-                    ANCHOR,
+                    row.date,
                     row.time,
                     row.operator,
                     row.operator === "周丽" ? "仓库管理员" : "检验员",
-                    "发货登记",
+                    "登记发货",
                     row.no,
                 ),
             );
-        this.inboundLedger
-            .filter(row => row.date === ANCHOR)
-            .forEach(row => push(ANCHOR, row.time, row.inspector, "检验员", "成品入库", row.no));
         const newestOrder = staticOrders()[0]?.orderNo ?? "—";
-        push(ANCHOR, "09:12", "李晓梅", "管理员", "新建销售订单", newestOrder);
-        push(ANCHOR, "08:47", "李晓梅", "管理员", "新建客户档案", "CUS-0906");
-        push(ANCHOR, "09:30", "系统管理员", "超级管理员", "权限变更", "ROLE-INSPECTOR");
-        [1, 2, 3].forEach(offset => {
-            const day = addDays(ANCHOR, -offset);
-            this.outboundLedger
-                .filter(row => row.date === day)
-                .slice(0, 3)
-                .forEach(row =>
-                    push(
-                        day,
-                        row.time,
-                        row.operator,
-                        row.operator === "周丽" ? "仓库管理员" : "检验员",
-                        "发货登记",
-                        row.no,
-                    ),
-                );
-            this.inboundLedger
-                .filter(row => row.date === day)
-                .slice(0, 2)
-                .forEach(row => push(day, row.time, row.inspector, "检验员", "成品入库", row.no));
-        });
+        push(ANCHOR, "09:12", "陈洁", "销售", "新建销售订单", newestOrder);
+        push(ANCHOR, "08:47", "陈洁", "销售", "新建客户档案", "CUS-0906");
         return entries.sort((a, b) =>
             a.date === b.date ? b.time.localeCompare(a.time) : b.date.localeCompare(a.date),
         );
@@ -968,6 +919,15 @@ class MockDb {
         return rest;
     }
 
+    /** 个人中心：修改自己的密码（旧密码校验 + 新密码 ≥6 位；不强制改密） */
+    changePassword(account: string, oldPassword: string, newPassword: string): void {
+        const user = this.users.find(item => item.account === account);
+        if (!user || !user.active) throw new Error("账号不存在或已停用");
+        if (user.password !== oldPassword) throw new Error("旧密码不正确");
+        if (newPassword.length < 6) throw new Error("新密码至少 6 位");
+        user.password = newPassword;
+    }
+
     // ---- 授权 ----
 
     getGrant(role: RoleId): RoleGrant {
@@ -997,12 +957,18 @@ class MockDb {
         },
         actor: Actor,
     ): Order {
+        const customer = this.customers.find(item => item.code === input.customerCode);
+        if (!customer) throw new Error("客户不存在");
+        if (!this.bomByCode(input.bomCode)) throw new Error("成品不存在");
+        if (input.deliverEnd < input.deliverStart) throw new Error("交货截止日期不能早于起始日期");
         const yyMMdd = input.orderDate.slice(2).replaceAll("-", "");
-        const maxSeq = this.orders.reduce((max, order) => Math.max(max, Number(order.orderNo.slice(-3)) || 0), 0);
+        // 按日递增取号：单号日期段来自 orderDate，序号取「同日已有订单」最大值 + 1
+        const sameDay = this.orders.filter(order => order.orderNo.startsWith(`ZM${yyMMdd}`));
+        const maxSeq = sameDay.reduce((max, order) => Math.max(max, Number(order.orderNo.slice(-3)) || 0), 0);
         const orderNo = `ZM${yyMMdd}${String(maxSeq + 1).padStart(3, "0")}`;
         const order: Order = {
             orderNo,
-            customer: input.customer,
+            customer: customer.name,
             customerCode: input.customerCode,
             bomCode: input.bomCode,
             qty: input.qty,
@@ -1025,21 +991,17 @@ class MockDb {
         return order;
     }
 
-    updateOrder(
-        input: {
-            orderNo: string;
-            qty?: number;
-            deliverStart?: string;
-            deliverEnd?: string;
-            remark?: string;
-            reason?: string;
-        },
-        actor: Actor,
-    ): Order {
+    updateOrder(input: {
+        orderNo: string;
+        qty?: number;
+        deliverStart?: string;
+        deliverEnd?: string;
+        remark?: string;
+    }): Order {
         const order = this.orders.find(item => item.orderNo === input.orderNo);
         if (!order) throw new Error("订单不存在");
-        if (input.qty !== undefined && input.qty !== order.qty && (input.reason || "").trim().length < 4) {
-            throw new Error("修改订单数量必须填写至少 4 个字的修改原因");
+        if (input.qty !== undefined && input.qty < order.outbound) {
+            throw new Error(`新数量不能低于累计已发 ${order.outbound} 件`);
         }
         const nextStart = input.deliverStart ?? order.deliverStart;
         const nextEnd = input.deliverEnd ?? order.deliverEnd;
@@ -1048,57 +1010,82 @@ class MockDb {
         order.deliverStart = nextStart;
         order.deliverEnd = nextEnd;
         if (input.remark !== undefined) order.remark = input.remark;
-        if (input.reason && input.reason.trim()) {
-            this.opLog.unshift({
-                date: ANCHOR,
-                time: nowTime(),
-                user: actor.name,
-                role: actor.roleLabel,
-                action: "修改销售订单",
-                target: `${order.orderNo}（${input.reason.trim()}）`,
-            });
-        }
         this.version += 1;
         return order;
     }
 
-    createCustomer(
-        input: { name: string; contact: string; phone: string; region: string; address: string; remark: string },
-        actor: Actor,
-    ): Customer {
+    /** 校验并解析所属销售账号 → 姓名（须为在职 sales 用户） */
+    private ownerNameOf(ownerAccount: string): string {
+        const owner = this.users.find(item => item.account === ownerAccount.trim() && item.active);
+        if (!owner || owner.role !== "sales") throw new Error("客户负责人须为在职销售账号");
+        return owner.name;
+    }
+
+    createCustomer(input: {
+        name: string;
+        contact: string;
+        phone: string;
+        province: string;
+        city: string;
+        district: string;
+        town: string;
+        address: string;
+        ownerAccount: string;
+        payTerms: string;
+    }): Customer {
+        const owner = this.ownerNameOf(input.ownerAccount);
         const maxSeq = this.customers.reduce((max, customer) => Math.max(max, Number(customer.code.slice(-4)) || 0), 0);
         const customer: Customer = {
             code: `CUS-${String(maxSeq + 1).padStart(4, "0")}`,
             name: input.name,
             contact: input.contact,
             phone: `${input.phone.slice(0, 3)}****${input.phone.slice(-4)}`,
-            phoneFull: input.phone,
-            region: input.region,
-            city:
-                input.region === "华东"
-                    ? "苏州"
-                    : input.region === "华南"
-                      ? "深圳"
-                      : input.region === "华北"
-                        ? "北京"
-                        : "成都",
+            province: input.province,
+            city: input.city,
+            district: input.district,
+            town: input.town,
             address: input.address,
-            status: "待跟进",
-            owner: actor.name,
-            payTerms: "月结 30 天",
+            cooperation: "待跟进",
+            owner,
+            payTerms: input.payTerms ?? "",
             created: ANCHOR,
         };
         this.customers.unshift(customer);
-        this.opLog.unshift({
-            date: ANCHOR,
-            time: nowTime(),
-            user: actor.name,
-            role: actor.roleLabel,
-            action: "新建客户档案",
-            target: customer.code,
-        });
         this.version += 1;
-        return customer;
+        return { ...customer, cooperation: this.cooperationOf(customer.code) };
+    }
+
+    updateCustomer(
+        code: string,
+        input: {
+            name: string;
+            contact: string;
+            phone: string;
+            province: string;
+            city: string;
+            district: string;
+            town: string;
+            address: string;
+            ownerAccount: string;
+            payTerms: string;
+        },
+    ): Customer {
+        const customer = this.customers.find(item => item.code === code);
+        if (!customer) throw new Error("客户不存在");
+        const owner = this.ownerNameOf(input.ownerAccount);
+        customer.name = input.name;
+        customer.contact = input.contact;
+        // 编辑时电话留空 = 不修改（库表存的是掩码，无法回填完整号）
+        if (input.phone) customer.phone = `${input.phone.slice(0, 3)}****${input.phone.slice(-4)}`;
+        customer.province = input.province;
+        customer.city = input.city;
+        customer.district = input.district;
+        customer.town = input.town;
+        customer.address = input.address;
+        customer.owner = owner;
+        customer.payTerms = input.payTerms ?? "";
+        this.version += 1;
+        return { ...customer, cooperation: this.cooperationOf(customer.code) };
     }
 
     createBom(input: { name: string; modelCode: string; specs: Record<string, string> }): Bom {
@@ -1118,50 +1105,37 @@ class MockDb {
         return bom;
     }
 
-    createInbound(
-        input: { bomCode: string; qty: number; date: string; inspector: string; remark: string },
-        actor: Actor,
-    ): InboundRow {
+    createInbound(input: { bomCode: string; qty: number; date: string; remark: string }, actor: Actor): InboundRow {
         const bom = this.bomByCode(input.bomCode);
         if (!bom) throw new Error("成品不存在");
         if (!Number.isSafeInteger(input.qty) || input.qty <= 0) throw new Error("请输入有效的入库数量");
         if (!input.date) throw new Error("请选择入库日期");
         const rows = this.inboundLedger.filter(row => row.date === input.date);
-        const seq = rows.length > 0 ? Math.max(...rows.map(row => Number(row.no.slice(-4)))) + 1 : 25;
+        const seq = rows.length > 0 ? Math.max(...rows.map(row => Number(row.no.slice(-4)))) + 1 : 1;
         const row: InboundRow = {
             no: `RK-${input.date.replaceAll("-", "")}-${String(seq).padStart(4, "0")}`,
             bomCode: input.bomCode,
             qty: input.qty,
             date: input.date,
             time: nowTime(),
-            inspector: input.inspector,
+            // 登记人取当前登录用户（不经请求体）
+            inspector: actor.name,
             remark: input.remark,
         };
         this.inboundLedger.push(row);
         this.stock.set(input.bomCode, (this.stock.get(input.bomCode) || 0) + input.qty);
-        this.opLog.unshift({
-            date: ANCHOR,
-            time: row.time,
-            user: actor.name,
-            role: actor.roleLabel,
-            action: "成品入库",
-            target: row.no,
-        });
         this.version += 1;
         return row;
     }
 
-    createOutbound(
-        input: { orderNo: string; qty: number; date: string; operator: string; remark: string },
-        actor: Actor,
-    ): OutboundRow {
+    createOutbound(input: { orderNo: string; qty: number; date: string; remark: string }, actor: Actor): OutboundRow {
         const order = this.orders.find(item => item.orderNo === input.orderNo);
         if (!order) throw new Error("订单不存在");
         if (!Number.isSafeInteger(input.qty) || input.qty <= 0) throw new Error("请输入有效的发货数量");
         if (!input.date) throw new Error("请选择出库日期");
         if (input.qty > maxShipOf(this.snapshot(), input.orderNo)) throw new Error("可发库存已变化，请重新核对数量");
         const orderRows = this.outboundLedger.filter(row => row.date === input.date);
-        const seq = orderRows.length > 0 ? Math.max(...orderRows.map(row => Number(row.no.slice(-4)))) + 1 : 19;
+        const seq = orderRows.length > 0 ? Math.max(...orderRows.map(row => Number(row.no.slice(-4)))) + 1 : 1;
         const row: OutboundRow = {
             no: `CK-${input.date.replaceAll("-", "")}-${String(seq).padStart(4, "0")}`,
             orderNo: order.orderNo,
@@ -1171,7 +1145,8 @@ class MockDb {
             qty: input.qty,
             date: input.date,
             time: nowTime(),
-            operator: input.operator,
+            // 操作人取当前登录用户（不经请求体）
+            operator: actor.name,
             remark: input.remark,
         };
         this.outboundLedger.push(row);
@@ -1182,7 +1157,7 @@ class MockDb {
             time: row.time,
             user: actor.name,
             role: actor.roleLabel,
-            action: "发货登记",
+            action: "登记发货",
             target: row.no,
         });
         this.version += 1;
@@ -1194,12 +1169,11 @@ class MockDb {
             version: this.version,
             orders: this.orders.map(order => ({ ...order })),
             boms: this.boms.map(bom => ({ ...bom, specs: { ...bom.specs } })),
-            customers: this.customers.map(customer => ({ ...customer })),
+            customers: this.listCustomers(),
             inboundLedger: this.inboundLedger.map(row => ({ ...row })),
             outboundLedger: this.outboundLedger.map(row => ({ ...row })),
             stock: Object.fromEntries(this.stock),
             users: this.listUsers(),
-            systemEvents: this.systemEvents.map(event => ({ ...event })),
         };
     }
 

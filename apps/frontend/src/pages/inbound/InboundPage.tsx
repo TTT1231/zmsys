@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { QtyCell } from "@/components/ui/cells";
-import { DateField, SelectField, TextArea, TextField } from "@/components/ui/Field";
+import { DateField, TextArea, TextField } from "@/components/ui/Field";
 import { useCreateInbound, useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
@@ -35,19 +35,13 @@ export function InboundModal({
     const toast = useToast();
     const boms = snap.boms;
     const stock = snap.stock;
-
-    // 检验登记人 = 在职仓管（后端用户数据）
-    const inspectors = snap.users.filter(user => user.role === "warehouse" && user.active).map(user => user.name);
+    // 检验登记人 = 当前登录用户（服务端落账，不经请求体）
 
     const [bomCode, setBomCode] = useState(initialBomCode);
     const [qty, setQty] = useState("");
     const [date, setDate] = useState(todayIso);
-    const [inspector, setInspector] = useState("");
     const [remark, setRemark] = useState("");
     const [errors, setErrors] = useState<Record<string, string>>({});
-
-    // 用户列表异步到达前 inspector 可能为空，落在首个可用登记人
-    const effectiveInspector = inspectors.includes(inspector) ? inspector : (inspectors[0] ?? "");
 
     const selectedBom = boms.find(bom => bom.code === bomCode);
     const currentStock = stock[bomCode] || 0;
@@ -57,7 +51,6 @@ export function InboundModal({
         setBomCode("");
         setQty("");
         setDate(todayIso());
-        setInspector("");
         setRemark("");
         setErrors({});
     };
@@ -75,7 +68,7 @@ export function InboundModal({
             );
         if (Object.keys(nextErrors).length > 0) return;
         createInbound.mutate(
-            { bomCode, qty: Number(qty), date, inspector: effectiveInspector, remark },
+            { bomCode, qty: Number(qty), date, remark },
             {
                 onError: error => toast(error.message, true),
                 onSuccess: row => {
@@ -144,15 +137,6 @@ export function InboundModal({
                     value={date}
                     onChange={event => setDate(event.target.value)}
                 />
-                <SelectField
-                    label="检验登记人"
-                    value={effectiveInspector}
-                    onChange={event => setInspector(event.target.value)}
-                >
-                    {inspectors.map(item => (
-                        <option key={item}>{item}</option>
-                    ))}
-                </SelectField>
                 <TextArea
                     label="备注"
                     placeholder="选填"

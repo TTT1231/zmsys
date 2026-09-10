@@ -14,7 +14,6 @@ export const EMPTY_SNAPSHOT: Snapshot = {
     outboundLedger: [],
     stock: {},
     users: [],
-    systemEvents: [],
 };
 
 export function bomByCode(snap: Pick<Snapshot, "boms">, code: string): Bom | undefined {

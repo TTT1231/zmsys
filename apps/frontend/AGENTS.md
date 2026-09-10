@@ -1,5 +1,10 @@
 # AGENTS.md
 
+## 包管理器
+
+- 包管理器默认用 pnpm，不用 npm。
+- 执行工具默认用 pnpm dlx（对应 npx 的场景），不用 npx。
+
 ## 业务流程
 
 系统定位：以订单驱动的**成品出入库管理**——维护`客户档案`、`销售订单`、`物料与BOM`（产品档案），记录成品进出台账。生产过程与原材料库存均在线下，系统不追踪：成品从"检验入库"进入系统，经"登记发货"离开系统。
@@ -35,33 +40,45 @@
 
 ```
 admin-manage/
-├── docs/                       # 数据库文档、规则文档
-├── mocks/                      # MSW mock
+├── docs/                       # 数据库文档、接口契约、编写规则
+│   ├── api/openapi.yaml        # 接口契约（与 src/api、mocks 三处同步）
+│   ├── db-scheme.md            # 数据库结构
+│   └── rules/                  # 编写规则（如 tailwindcss.md）
+├── mocks/                      # MSW mock（脱离后端独立运行的数据源）
 │   ├── browser.ts              # setupWorker
-│   ├── data/                   # 数据 mock：内存数据库 db.ts
-│   └── request/                # 请求 mock
-├── test/                       # 单元、组件测试
+│   ├── data/db.ts              # 内存数据库单例 + 种子数据 + 写操作规则校验
+│   └── request/                # 请求 mock，按域拆分：auth / business / system
+├── test/                       # 测试目录，镜像 src/（约定见下）
 └── src/
-    ├── http/                   # 请求基础设施
-    ├── api/                    # 业务 API 契约层
-    ├── components/             # 组件
+    ├── http/                   # 请求基础设施（client、拦截器、token、错误归一）
+    ├── api/                    # 业务 API 契约层（types.ts 是类型总入口）
+    ├── components/             # 组件：ui 通用 / layout 外壳部件 / charts 图表
     ├── context/                # 上下文（登录用户 / 角色授权 / login、logout、can()）
     ├── data/                   # 领域层（不发请求，职责详见 src/data/README.md）
     │   ├── queries.ts          # react-query 查询/变更封装
     │   ├── views.ts            # 派生视图纯函数（输入快照，工作台/列表页消费）
     │   ├── permissions.ts      # 角色/菜单/动作权限字典 + 纯派生工具（授权是后端数据）
     │   ├── categories.ts       # 物料分类配置（前端常量，不落库）
+    │   ├── bomSelection.ts     # BOM 规格逐级派生、固定规格与唯一匹配
     │   └── README.md           # 领域层职责与同步约定
     ├── layout/                 # 应用外壳（AppLayout：标题同步、认证/菜单守卫、侧边栏骨架）
-    ├── lib/                    # 工具函数
-    └── pages/                  # 页面模块（按业务域分目录：login、dashboard、user and etc..）
+    ├── lib/                    # 工具函数（日期、格式化、图标、路由 pending）
+    ├── pages/                  # 页面模块，按业务域分目录：workbench、inbound、outbound、orders、bom、customers、permissions、login、error
+    └── router.tsx              # 路由表、访问守卫与错误边界
 ```
+
+### 测试
+
+- **位置**：`test/` 镜像 `src/` 的路径建文件——`src/data/views.ts` → `test/data/views.test.ts`，`src/pages/error/ErrorPage.tsx` → `test/pages/error/ErrorPage.test.tsx`；mock 层测试放 `test/mocks/`。新增模块时同路径补测试。
+- **环境**：默认 node 环境（纯函数、校验规则类测试）；凡需要 DOM 的测试，在**文件首行**加 `// @vitest-environment jsdom`（组件测试，以及依赖 localStorage 等浏览器 API 的测试），组件测试另需 `import "@testing-library/jest-dom/vitest"`。
+- **配置**：`vitest.config.ts` 独立于 `vite.config.ts`，只加载 react 插件、不加载 tailwind，`@` 别名指向 `src`。
+- **文件头**：首行（jsdom 文件为第二行）用注释一句话写清该文件覆盖的场景。
 
 ### 契约
 
 - **登录鉴权**：`POST /auth/login` 换单 accessToken（localStorage `zm-token`），`GET /auth/profile` 下发用户 + 角色授权；401 由 http 层统一清 token 跳 `/login`。演示账号为 mock 种子用户（`mocks/data/db.ts`，密码均 `123456`）。
 - **权限渲染**：菜单/按钮字典在前端常量（`data/permissions.ts`），授权关系是后端数据（sys_grant），登录后经 profile 下发；角色授权编辑走 `PUT /roles/{roleId}/grants`。
-- **契约同步**：改接口须同步三处——`src/api/types.ts`、`src/mocks/request/`、`docs/api/openapi.yaml`。
+- **契约同步**：改接口须同步三处——`src/api/types.ts`、`mocks/request/`、`docs/api/openapi.yaml`。
 
 ## 常用命令
 

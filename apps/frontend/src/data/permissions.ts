@@ -60,7 +60,7 @@ export const MENU_CATALOG: MenuNode[] = [
         icon: "log",
         group: "业务导航",
         onlyFor: ["warehouse"],
-        note: "变更记录：保留操作人、时间与业务对象的完整审计链，记录不可删除、不可篡改；数量更正需填写修改原因。",
+        note: "变更记录：登记发货、新建客户、新建销售订单三类操作保留操作人与时间（op_log），记录不可删除、不可篡改。",
     },
 ];
 

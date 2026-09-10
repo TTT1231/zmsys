@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { GrantMap, RoleId } from "./permissions";
+import type { Snapshot, UpdateCustomerInput } from "@/api";
 import {
     createBom,
     createCustomer,
@@ -7,11 +8,17 @@ import {
     createOrder,
     createOutbound,
     createUser,
+    fetchBoms,
+    fetchCustomers,
     fetchGrantLog,
     fetchGrants,
-    fetchSnapshot,
+    fetchInboundLedger,
+    fetchOrders,
+    fetchOutboundLedger,
+    fetchUsers,
     saveRoleGrants,
     setUserActive as setUserActiveReq,
+    updateCustomer as updateCustomerReq,
     updateOrder as updateOrderReq,
     updateUser as updateUserReq,
 } from "@/api";
@@ -22,8 +29,38 @@ export const wbKeys = {
     grantLog: ["roles", "grants", "log"] as const,
 };
 
+/* 过渡实现：原 src/api/snapshot.ts 聚合逻辑内联于此，工作台与数据层后续统一重构。
+ * 并发拉取各资源端点；库存由出入库台账推导（Σ入库 − Σ出库）。 */
+async function fetchWbSnapshot(): Promise<Snapshot> {
+    const [orders, boms, customers, inboundLedger, outboundLedger, users] = await Promise.all([
+        fetchOrders(),
+        fetchBoms(),
+        fetchCustomers(),
+        fetchInboundLedger(),
+        fetchOutboundLedger(),
+        fetchUsers(),
+    ]);
+    const stock: Record<string, number> = {};
+    inboundLedger.forEach(row => {
+        stock[row.bomCode] = (stock[row.bomCode] ?? 0) + row.qty;
+    });
+    outboundLedger.forEach(row => {
+        stock[row.bomCode] = Math.max(0, (stock[row.bomCode] ?? 0) - row.qty);
+    });
+    return {
+        version: Date.now(),
+        orders,
+        boms,
+        customers,
+        inboundLedger,
+        outboundLedger,
+        stock,
+        users,
+    };
+}
+
 export function useWbSnapshot() {
-    return useQuery({ queryKey: wbKeys.all, queryFn: fetchSnapshot });
+    return useQuery({ queryKey: wbKeys.all, queryFn: fetchWbSnapshot });
 }
 
 /** 刷新快照:refetch 同一 query(全站共享,一处刷新全局生效)。
@@ -60,6 +97,8 @@ export const useUpdateOrder = () =>
     );
 
 export const useCreateCustomer = () => useWbMutation(createCustomer);
+export const useUpdateCustomer = () =>
+    useWbMutation((input: { code: string } & UpdateCustomerInput) => updateCustomerReq(input.code, input));
 export const useCreateBom = () => useWbMutation(createBom);
 export const useCreateInbound = () => useWbMutation(createInbound);
 export const useCreateOutbound = () => useWbMutation(createOutbound);
