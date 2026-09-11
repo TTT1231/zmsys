@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Navigate } from "react-router";
 import { ListState, RecordCard } from "@/components/ui/MobileList";
 import { Badge, Button, TableLink } from "@/components/ui/Badge";
@@ -742,30 +742,116 @@ function MatrixTab() {
 
 /* ================= 变更日志 ================= */
 
+/* 日志文本形如「角色【仓管】授权变更：新增 …」，拆出角色与动作类型分区展示 */
+const LOG_ACTIONS = ["授权变更", "授权确认", "授权保存"] as const;
+const LOG_ACTION_DOTS: Record<(typeof LOG_ACTIONS)[number], string> = {
+    授权变更: "bg-primary",
+    授权确认: "bg-success",
+    授权保存: "bg-line-strong",
+};
+
+/* 角色 → 图标：按职责选型（仓管管货物、销售跑发货） */
+const ROLE_ICONS: Record<RoleId, string> = {
+    super: "shield",
+    admin: "settings",
+    warehouse: "cube",
+    sales: "truck",
+    staff: "users",
+};
+
+function parseGrantLog(text: string) {
+    const roleMatch = text.match(/^角色【(.+?)】/);
+    const role = roleMatch?.[1] ?? "";
+    // 日志里的角色可能是中文名（页面备注）也可能是 role id（后端兜底文案）
+    const roleDef = ROLES.find(item => item.name === role || item.id === role);
+    const rest = roleMatch ? text.slice(roleMatch[0].length) : text;
+    const action = LOG_ACTIONS.find(word => rest.startsWith(word));
+    return {
+        role,
+        roleIcon: roleDef ? ROLE_ICONS[roleDef.id] : "users",
+        action: action ?? "授权记录",
+        detail: rest.replace(/^(授权变更|授权确认|授权保存)[：:]?\s*/, ""),
+        dot: (action && LOG_ACTION_DOTS[action]) || "bg-primary",
+    };
+}
+
+/* 明细高亮词表：菜单 / 操作名加浅底，增删动词按语义着色，非技术用户一眼看清改了什么 */
+const DETAIL_TERMS = [
+    ...MENU_CATALOG.flatMap(menu => [menu.label, ...(menu.children ?? []).map(child => child.label)]),
+    ...Object.values(ACTION_CATALOG).flatMap(actions => actions.map(action => action.label)),
+]
+    .filter((label, index, all) => all.indexOf(label) === index)
+    .sort((a, b) => b.length - a.length);
+const DETAIL_TERM_RE = new RegExp(
+    `${DETAIL_TERMS.map(label => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")}|新增|移除|未授权`,
+    "g",
+);
+const DETAIL_VERB_STYLES: Record<string, string> = {
+    新增: "font-semibold text-success",
+    移除: "font-semibold text-danger",
+    未授权: "font-semibold text-warning",
+};
+
+function renderDetail(text: string): ReactNode[] {
+    const nodes: ReactNode[] = [];
+    let last = 0;
+    for (const match of text.matchAll(DETAIL_TERM_RE)) {
+        if (match.index > last) nodes.push(text.slice(last, match.index));
+        const word = match[0];
+        nodes.push(
+            <span
+                key={match.index}
+                className={DETAIL_VERB_STYLES[word] ?? "rounded-sm bg-soft px-0.75 font-medium text-ink"}
+            >
+                {word}
+            </span>,
+        );
+        last = match.index + word.length;
+    }
+    if (last < text.length) nodes.push(text.slice(last));
+    return nodes;
+}
+
 function GrantLogPanel() {
     const { data } = useGrantLog();
     const logs = (data ?? []).slice(0, 8);
     return (
         <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
-            <div className="border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
+            <div className="flex items-center justify-between gap-3 border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
                 <h2 className="text-15 font-semibold text-ink">权限变更日志</h2>
+                {!!logs.length && <span className="text-11.5 text-subtle">最近 {logs.length} 条</span>}
             </div>
-            <div className="flex flex-col px-5 py-2">
-                {logs.length ? (
-                    logs.map((entry, index) => (
-                        <div
-                            key={`${entry.time}-${index}`}
-                            className="flex gap-3 border-b border-dashed border-line py-2.5 last:border-b-0"
-                        >
-                            <span className="tnum w-17.5 shrink-0 pt-px text-11.5 text-muted">{entry.time}</span>
-                            <span className="w-16 shrink-0 text-12 font-semibold text-ink">{entry.user}</span>
-                            <span className="text-12.5 leading-relaxed text-td">{entry.text}</span>
-                        </div>
-                    ))
-                ) : (
-                    <p className="py-4 text-12.5 text-subtle">暂无变更记录</p>
-                )}
-            </div>
+            {logs.length ? (
+                <div className="px-5 py-3">
+                    <ol className="flex flex-col border-l border-line pl-4">
+                        {logs.map((entry, index) => {
+                            const log = parseGrantLog(entry.text);
+                            return (
+                                <li key={`${entry.time}-${index}`} className="relative py-3">
+                                    <span className={`absolute top-5.75 -left-5.25 h-2 w-2 rounded-full ${log.dot}`} />
+                                    <div className="flex items-center gap-2.5">
+                                        <span className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg bg-primary-soft">
+                                            <Icon name={log.roleIcon} size={15} className="text-primary-strong" />
+                                        </span>
+                                        <span className="text-13 font-semibold whitespace-nowrap text-ink">
+                                            {log.role || "权限"}
+                                        </span>
+                                        <span className="text-12 whitespace-nowrap text-muted">· {log.action}</span>
+                                        <span className="ml-auto shrink-0 pl-2 text-11.5 whitespace-nowrap text-subtle">
+                                            {entry.user} · <span className="tnum">{entry.time}</span>
+                                        </span>
+                                    </div>
+                                    <p className="mt-1.5 pl-10 text-12.5 leading-relaxed text-td">
+                                        {renderDetail(log.detail)}
+                                    </p>
+                                </li>
+                            );
+                        })}
+                    </ol>
+                </div>
+            ) : (
+                <p className="px-5 py-4 text-12.5 text-subtle">暂无变更记录</p>
+            )}
         </section>
     );
 }
