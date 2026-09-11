@@ -28,128 +28,85 @@ const ERROR_PAGE_COPY: Record<ErrorPageKind, ErrorPageCopy> = {
     },
 };
 
-/** 用业务语义替代定位针：三种状态各自使用一张轻量、多色的线性插画。 */
+/* 各状态的主视觉：渐变代号数字 + 同色系光晕、虚线轨道与星点（纯装饰，语义由文案承载） */
+const KIND_META: Record<ErrorPageKind, { code: string; numerals: string; glow: string; deco: string }> = {
+    "not-found": {
+        code: "404",
+        numerals: "from-indigo-500 via-indigo-400 to-sky-400",
+        glow: "bg-indigo-400/25",
+        deco: "text-indigo-300",
+    },
+    forbidden: {
+        code: "403",
+        numerals: "from-amber-500 via-amber-400 to-orange-400",
+        glow: "bg-amber-400/25",
+        deco: "text-amber-300",
+    },
+    server: {
+        code: "500",
+        numerals: "from-rose-500 via-rose-400 to-orange-400",
+        glow: "bg-rose-400/25",
+        deco: "text-rose-300",
+    },
+};
+
 function ErrorArtwork({ kind }: { kind: ErrorPageKind }) {
+    const meta = KIND_META[kind];
     return (
-        <svg
-            aria-hidden="true"
-            className="mx-auto h-32 w-32"
-            viewBox="0 0 112 112"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-        >
-            {kind === "not-found" && (
-                <>
-                    <circle cx="56" cy="56" r="44" fill="var(--color-primary-soft)" />
-                    <circle cx="25" cy="29" r="5" fill="var(--color-warning-soft)" />
-                    <circle cx="88" cy="83" r="6" fill="var(--color-accent-soft)" />
-                    <path
-                        d="M35 23.5h30.5L77 35v53.5H35V23.5Z"
-                        fill="var(--color-surface)"
-                        stroke="var(--color-primary)"
-                        strokeWidth="3"
-                        strokeLinejoin="round"
-                    />
-                    <path
-                        d="M65.5 23.5V35H77"
-                        fill="var(--color-accent-soft)"
-                        stroke="var(--color-accent)"
-                        strokeWidth="3"
-                        strokeLinejoin="round"
-                    />
-                    <path
-                        d="M45 52h21M45 62h14"
-                        stroke="var(--color-line-strong)"
-                        strokeWidth="4"
-                        strokeLinecap="round"
-                    />
-                    <circle
-                        cx="65"
-                        cy="75"
-                        r="8.5"
-                        fill="var(--color-warning-soft)"
-                        stroke="var(--color-warning)"
-                        strokeWidth="3"
-                    />
-                    <path
-                        d="M65 71.5v.5M65 76v.5"
-                        stroke="var(--color-warning)"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                    />
-                </>
-            )}
-
-            {kind === "forbidden" && (
-                <>
-                    <circle cx="56" cy="56" r="44" fill="var(--color-warning-soft)" />
-                    <circle cx="26" cy="29" r="5" fill="var(--color-accent-soft)" />
-                    <circle cx="88" cy="82" r="6" fill="var(--color-primary-soft)" />
-                    <path
-                        d="M56 21.5 83 32v20.5c0 18.5-10.9 30-27 38-16.1-8-27-19.5-27-38V32l27-10.5Z"
-                        fill="var(--color-surface)"
-                        stroke="var(--color-warning)"
-                        strokeWidth="3"
-                        strokeLinejoin="round"
-                    />
-                    <rect
-                        x="44"
-                        y="51"
-                        width="24"
-                        height="21"
-                        rx="5"
-                        fill="var(--color-primary-soft)"
-                        stroke="var(--color-primary)"
-                        strokeWidth="3"
-                    />
-                    <path
-                        d="M49.5 51v-4a6.5 6.5 0 0 1 13 0v4"
-                        stroke="var(--color-primary)"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                    />
-                    <circle cx="56" cy="61.5" r="2.5" fill="var(--color-accent)" />
-                    <path d="M56 64v4" stroke="var(--color-accent)" strokeWidth="3" strokeLinecap="round" />
-                </>
-            )}
-
-            {kind === "server" && (
-                <>
-                    <circle cx="56" cy="56" r="44" fill="var(--color-danger-soft)" />
-                    <circle cx="24" cy="81" r="6" fill="var(--color-primary-soft)" />
-                    <circle cx="88" cy="29" r="5" fill="var(--color-warning-soft)" />
-                    <rect
-                        x="23"
-                        y="27"
-                        width="66"
-                        height="57"
-                        rx="12"
-                        fill="var(--color-surface)"
-                        stroke="var(--color-accent)"
-                        strokeWidth="3"
-                    />
-                    <path d="M23 44h66" stroke="var(--color-accent-soft)" strokeWidth="3" />
-                    <circle cx="35" cy="35.5" r="2.5" fill="var(--color-danger)" />
-                    <circle cx="43" cy="35.5" r="2.5" fill="var(--color-warning)" />
-                    <circle cx="51" cy="35.5" r="2.5" fill="var(--color-success)" />
-                    <path
-                        d="m56 51 12 22H44l12-22Z"
-                        fill="var(--color-danger-soft)"
-                        stroke="var(--color-danger)"
-                        strokeWidth="3"
-                        strokeLinejoin="round"
-                    />
-                    <path d="M56 58v7" stroke="var(--color-danger)" strokeWidth="3" strokeLinecap="round" />
-                    <circle cx="56" cy="69" r="1.5" fill="var(--color-danger)" />
-                </>
-            )}
-        </svg>
+        <div aria-hidden="true" className="relative mx-auto w-fit animate-rise select-none">
+            {/* 数字背后的同色系柔光 */}
+            <div
+                className={`absolute top-1/2 left-1/2 h-36 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl ${meta.glow}`}
+            />
+            {/* 虚线轨道与星点 */}
+            <svg
+                className={`absolute top-1/2 left-1/2 h-40 w-90 -translate-x-1/2 -translate-y-1/2 ${meta.deco}`}
+                viewBox="0 0 360 160"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+            >
+                <ellipse
+                    cx="180"
+                    cy="80"
+                    rx="168"
+                    ry="56"
+                    transform="rotate(-6 180 80)"
+                    stroke="currentColor"
+                    strokeOpacity="0.7"
+                    strokeWidth="2.5"
+                    strokeDasharray="2 9"
+                    strokeLinecap="round"
+                />
+                <path
+                    d="M30 42h12M36 36v12"
+                    stroke="currentColor"
+                    strokeOpacity="0.9"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                />
+                <path
+                    d="M318 118h10M323 113v10"
+                    stroke="currentColor"
+                    strokeOpacity="0.8"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                />
+                <circle cx="60" cy="122" r="3" fill="currentColor" fillOpacity="0.6" />
+                <circle cx="308" cy="34" r="2.5" fill="currentColor" fillOpacity="0.55" />
+                <circle cx="164" cy="16" r="2" fill="currentColor" fillOpacity="0.5" />
+            </svg>
+            <div
+                className={`relative bg-gradient-to-br ${meta.numerals} bg-clip-text text-88 leading-none font-bold tracking-[-0.05em] text-transparent`}
+            >
+                {meta.code}
+            </div>
+        </div>
     );
 }
 
 const actionClassName =
-    "inline-flex min-h-11 min-w-32 cursor-pointer items-center justify-center gap-2 rounded-btn px-5 text-13.5 font-semibold transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
-const primaryActionClassName = `${actionClassName} bg-primary text-white shadow-glow hover:bg-primary-hover`;
+    "inline-flex min-h-11 min-w-32 cursor-pointer items-center justify-center gap-2 rounded-btn px-5 text-13.5 font-semibold transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
+const primaryActionClassName = `${actionClassName} bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-glow hover:from-indigo-700 hover:to-indigo-600 active:scale-[0.98]`;
 
 /** 应用壳层内的统一错误状态页：用清晰的恢复动作替代技术诊断信息。 */
 export function ErrorPage({ kind }: ErrorPageProps) {
@@ -164,40 +121,51 @@ export function ErrorPage({ kind }: ErrorPageProps) {
     return (
         <section
             aria-labelledby="error-page-title"
-            className="flex min-h-[min(480px,calc(100dvh-9rem))] items-center justify-center py-10 sm:py-14"
+            className="relative flex min-h-[calc(100dvh-9rem)] items-center justify-center overflow-hidden py-10 sm:py-14"
         >
-            <div className="w-full max-w-lg px-5">
-                <div className="mx-auto text-center">
-                    <ErrorArtwork kind={kind} />
+            {/* 细网格背景，边缘径向渐隐（纯装饰） */}
+            <div
+                className="absolute inset-0"
+                style={{
+                    backgroundImage:
+                        "linear-gradient(rgba(16,24,40,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(16,24,40,0.05) 1px, transparent 1px)",
+                    backgroundSize: "46px 46px",
+                    maskImage: "radial-gradient(ellipse 70% 65% at 50% 42%, black 30%, transparent 75%)",
+                    WebkitMaskImage: "radial-gradient(ellipse 70% 65% at 50% 42%, black 30%, transparent 75%)",
+                }}
+                aria-hidden="true"
+            />
 
-                    <div role="alert" aria-live="assertive" className="mt-5">
-                        <h1
-                            ref={titleRef}
-                            id="error-page-title"
-                            tabIndex={-1}
-                            className="text-24 leading-tight font-semibold tracking-[-0.03em] text-ink outline-none"
+            <div className="relative w-full max-w-lg px-5 text-center">
+                <ErrorArtwork kind={kind} />
+
+                <div role="alert" aria-live="assertive" className="mt-6">
+                    <h1
+                        ref={titleRef}
+                        id="error-page-title"
+                        tabIndex={-1}
+                        className="text-24 leading-tight font-semibold tracking-[-0.03em] text-ink outline-none"
+                    >
+                        {copy.title}
+                    </h1>
+                    <p className="mx-auto mt-2 text-14 leading-6 text-muted">{copy.description}</p>
+                </div>
+
+                <div className="mt-8 flex justify-center">
+                    {kind === "server" ? (
+                        <button
+                            type="button"
+                            className={primaryActionClassName}
+                            onClick={() => window.location.reload()}
                         >
-                            {copy.title}
-                        </h1>
-                        <p className="mx-auto mt-2 text-14 leading-6 text-muted">{copy.description}</p>
-                    </div>
-
-                    <div className="mt-6 flex justify-center">
-                        {kind === "server" ? (
-                            <button
-                                type="button"
-                                className={primaryActionClassName}
-                                onClick={() => window.location.reload()}
-                            >
-                                <Icon name="refresh" size={17} />
-                                重新加载
-                            </button>
-                        ) : (
-                            <Link to="/workbench" replace className={primaryActionClassName}>
-                                回到工作台
-                            </Link>
-                        )}
-                    </div>
+                            <Icon name="refresh" size={17} />
+                            重新加载
+                        </button>
+                    ) : (
+                        <Link to="/workbench" replace className={primaryActionClassName}>
+                            回到工作台
+                        </Link>
+                    )}
                 </div>
             </div>
         </section>

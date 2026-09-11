@@ -1,0 +1,59 @@
+<svg viewBox="0 0 480 400" fill="none" xmlns="http://www.w3.org/2000/svg" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <defs>
+    <radialGradient id="lg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- 背景光晕与轨道 -->
+  <ellipse cx="225" cy="290" rx="185" ry="135" fill="url(#lg)"/>
+  <ellipse cx="225" cy="300" rx="195" ry="60" transform="rotate(-10 225 300)" stroke="#ffffff" stroke-opacity="0.3" stroke-width="2.5" stroke-dasharray="2 9"/>
+
+  <!-- 托盘/平台 -->
+  <path d="M85 352 L225 271 L366 352 L225 433 Z" fill="#ffffff" fill-opacity="0.1" stroke="#ffffff" stroke-opacity="0.5" stroke-width="2"/>
+  <path d="M85 352 L225 433 L225 447 L85 366 Z" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-opacity="0.5" stroke-width="2"/>
+  <path d="M225 433 L366 352 L366 366 L225 447 Z" fill="#ffffff" fill-opacity="0.08" stroke="#ffffff" stroke-opacity="0.5" stroke-width="2"/>
+
+  <!-- 箱 A（左下，顶面被 C 遮住） -->
+  <path d="M114.6 250 L170 282 L170 346 L114.6 314 Z" fill="#ffffff" fill-opacity="0.07" stroke="#ffffff" stroke-opacity="0.95" stroke-width="2.5"/>
+  <path d="M170 282 L225.4 250 L225.4 314 L170 346 Z" fill="#ffffff" fill-opacity="0.11" stroke="#ffffff" stroke-opacity="0.95" stroke-width="2.5"/>
+  <!-- 箱 A 侧面标签 -->
+  <path d="M126 257 L154 273 L154 295 L126 279 Z" stroke="#ffffff" stroke-opacity="0.55" stroke-width="2"/>
+  <path d="M130 265 L146 274 M130 273 L140 279" stroke="#ffffff" stroke-opacity="0.55" stroke-width="2"/>
+
+  <!-- 箱 B（右下） -->
+  <path d="M280.8 218 L336.2 250 L280.8 282 L225.4 250 Z" fill="#ffffff" fill-opacity="0.16" stroke="#ffffff" stroke-opacity="0.95" stroke-width="2.5"/>
+  <path d="M225.4 250 L280.8 282 L280.8 346 L225.4 314 Z" fill="#ffffff" fill-opacity="0.07" stroke="#ffffff" stroke-opacity="0.95" stroke-width="2.5"/>
+  <path d="M280.8 282 L336.2 250 L336.2 314 L280.8 346 Z" fill="#ffffff" fill-opacity="0.11" stroke="#ffffff" stroke-opacity="0.95" stroke-width="2.5"/>
+
+  <!-- 箱 C（堆在 A 上） -->
+  <path d="M170 154 L225.4 186 L170 218 L114.6 186 Z" fill="#ffffff" fill-opacity="0.16" stroke="#ffffff" stroke-opacity="0.95" stroke-width="2.5"/>
+  <path d="M114.6 186 L170 218 L170 282 L114.6 250 Z" fill="#ffffff" fill-opacity="0.07" stroke="#ffffff" stroke-opacity="0.95" stroke-width="2.5"/>
+  <path d="M170 218 L225.4 186 L225.4 250 L170 282 Z" fill="#ffffff" fill-opacity="0.11" stroke="#ffffff" stroke-opacity="0.95" stroke-width="2.5"/>
+  <!-- 箱 C 封箱胶带 -->
+  <path d="M142.3 170 L197.7 202 M142.3 202 L142.3 266" stroke="#ffffff" stroke-opacity="0.5" stroke-width="2"/>
+
+  <!-- 左上角小箱 -->
+  <path d="M95 134 L114.1 145 L95 156 L75.9 145 Z" fill="#ffffff" fill-opacity="0.14" stroke="#ffffff" stroke-opacity="0.6" stroke-width="2"/>
+  <path d="M75.9 145 L95 156 L95 178 L75.9 167 Z" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.6" stroke-width="2"/>
+  <path d="M95 156 L114.1 145 L114.1 167 L95 178 Z" fill="#ffffff" fill-opacity="0.1" stroke="#ffffff" stroke-opacity="0.6" stroke-width="2"/>
+
+  <!-- 单据（订单）与勾选徽章 -->
+  <rect x="308" y="76" width="88" height="108" rx="12" fill="#ffffff" fill-opacity="0.08" stroke="#ffffff" stroke-opacity="0.9" stroke-width="2.5"/>
+  <rect x="330" y="66" width="44" height="20" rx="7" fill="#ffffff" fill-opacity="0.16" stroke="#ffffff" stroke-opacity="0.9" stroke-width="2.5"/>
+  <path d="M322 104 L382 104 M322 124 L372 124 M322 144 L360 144" stroke="#ffffff" stroke-opacity="0.5" stroke-width="3"/>
+  <circle cx="396" cy="184" r="14" fill="#6ee7b7" stroke="#ffffff" stroke-width="3.5"/>
+  <path d="M389.5 183.5 L394.5 188.5 L402.5 178.5" stroke="#065f46" stroke-width="3"/>
+
+  <!-- 单据 → 箱子的流转虚线 -->
+  <path d="M308 170 C 264 196, 238 126, 188 146" stroke="#ffffff" stroke-opacity="0.55" stroke-width="2.5" stroke-dasharray="4 7"/>
+  <path d="M198 143 L188 146 L196 154" stroke="#ffffff" stroke-opacity="0.55" stroke-width="2.5"/>
+
+  <!-- 点缀星点 -->
+  <path d="M111 108 H125 M118 101 V115" stroke="#ffffff" stroke-opacity="0.7" stroke-width="2.5"/>
+  <path d="M387 248 H397 M392 243 V253" stroke="#ffffff" stroke-opacity="0.55" stroke-width="2"/>
+  <circle cx="152" cy="92" r="3" fill="#ffffff" fill-opacity="0.5"/>
+  <circle cx="402" cy="150" r="2.5" fill="#ffffff" fill-opacity="0.45"/>
+  <circle cx="96" cy="238" r="2" fill="#ffffff" fill-opacity="0.4"/>
+</svg>
