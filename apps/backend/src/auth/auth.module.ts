@@ -4,12 +4,12 @@ import { JwtModule, type JwtSignOptions } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
-import { RolesModule } from '../roles/roles.module';
+import { AccessControlModule } from '../access-control/access-control.module';
 import type { AppConfig } from '../configuration';
 
 @Module({
     imports: [
-        RolesModule,
+        AccessControlModule,
         JwtModule.registerAsync({
             inject: [ConfigService],
             useFactory: (config: ConfigService<AppConfig>) => ({

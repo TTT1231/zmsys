@@ -4,9 +4,18 @@ import { describe, expect, it } from 'vitest';
 import { PermissionsGuard } from './permissions.guard';
 import type { AuthUser } from '../types/auth-user';
 
-function createContext(user: AuthUser | undefined, metadata: unknown) {
+function createContext(
+    user: AuthUser | undefined,
+    permissionsMetadata: unknown,
+    flags: { isPublic?: boolean; authOnly?: boolean } = {},
+) {
     const reflector = {
-        getAllAndOverride: () => metadata,
+        getAllAndOverride: (key: string) => {
+            if (key === 'requiredPermissions') return permissionsMetadata;
+            if (key === 'isPublic') return flags.isPublic ?? false;
+            if (key === 'authenticatedOnly') return flags.authOnly ?? false;
+            return undefined;
+        },
     } as unknown as Reflector;
     const guard = new PermissionsGuard(reflector);
     const ctx = {
@@ -37,9 +46,19 @@ const staffUser: AuthUser = {
     permissions: new Set(['menu:workbench', 'orders:view']),
 };
 
-describe('PermissionsGuard', () => {
-    it('未声明权限码的端点仅需登录', () => {
+describe('PermissionsGuard（默认拒绝）', () => {
+    it('未声明任何访问策略的端点直接 403（漏写装饰器不放行）', () => {
         const { guard, ctx } = createContext(staffUser, undefined);
+        expect(() => guard.canActivate(ctx)).toThrow(new ForbiddenException('端点未声明访问策略，默认拒绝'));
+    });
+
+    it('@Public() 端点放行', () => {
+        const { guard, ctx } = createContext(undefined, undefined, { isPublic: true });
+        expect(guard.canActivate(ctx)).toBe(true);
+    });
+
+    it('@AuthenticatedOnly() 端点仅需登录（JWT 守卫已保证）', () => {
+        const { guard, ctx } = createContext(staffUser, undefined, { authOnly: true });
         expect(guard.canActivate(ctx)).toBe(true);
     });
 

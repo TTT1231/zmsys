@@ -1,114 +1,55 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# zmsys-backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+智造管理系统后端：NestJS（Fastify 适配器）+ Prisma 7（`@prisma/adapter-mariadb` 驱动适配，MySQL 8.0.16+）+ JWT 认证 + 权限码 RBAC。CommonJS 构建，pnpm 管理依赖。
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+数据库约束与 API 契约的权威文档在 `../admin-manage/docs/`（`db-scheme.md`、`db/mysql-8-schema.sql`、`api/openapi.yaml`），实现以文档为准。
 
-## Description
+## 环境准备
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+1. Node ≥ 24、pnpm 11（`packageManager` 已固定）。
+2. MySQL 8.0.16+（本机或 Docker）。**注意**：本机 MySQL 的 `system_time_zone` 若为本地化名称（如中文"中国标准时间"），MySQL 无法解析会导致 `NOW()`/`UTC_TIMESTAMP()` 相互矛盾——本项目所有时间戳由应用显式写入（见下"时区约定"），不依赖服务器时间函数；仍建议在 `my.ini` 固定 `default-time-zone = '+00:00'`。
+3. 复制 `.env.example` 为 `.env`，填写 `DB_*` 与 `JWT_SECRET`（≥32 字符，`openssl rand -hex 32`）。无需 `DATABASE_URL`——Prisma CLI 的连接串由 `prisma7.config.ts` 从 `DB_*` 自动组装。
 
 ```bash
-$ pnpm install
+pnpm install                 # postinstall 自动生成 Prisma Client
+pnpm prisma:deploy           # 应用全部迁移（手写 SQL，与基线逐字一致）
+pnpm prisma:seed             # 创建 guojun（超管）/ test（员工），初始密码 123456
+pnpm start:dev
 ```
 
-## Compile and run the project
+## 时区约定（重要）
 
-```bash
-# development
-$ pnpm run start
+- **数据库一律保存 UTC**：连接池由 `src/prisma/create-pool.ts` 统一创建，驱动 `timezone: 'Z'` + 每条池连接会话 `time_zone='+00:00'`。
+- **进程时区统一 UTC**：`src/process-tz.ts` 在入口最先导入。mariadb driver 读取 DATETIME 时按 Node 本地时区解释字面量（`timezone` 选项不影响读方向），本地时区为 +8 时读出即偏差 8 小时——进程设 UTC 后读写全链路一致。
+- **created_at 不用 `@default(now())`**：该默认值映射到 MySQL `DEFAULT CURRENT_TIMESTAMP`，取值依赖（可能错乱的）服务器时区。所有时间戳由应用 `new Date()` 显式写入，DDL 默认仅作手工 SQL 兜底。
+- API 返回带时区 ISO 8601；页面展示转换为 Asia/Shanghai。
 
-# watch mode
-$ pnpm run start:dev
+## 常用命令
 
-# production mode
-$ pnpm run start:prod
-```
+| 用途                                             | 命令                           |
+| ------------------------------------------------ | ------------------------------ |
+| 构建（prebuild 自动 prisma generate）            | `pnpm build`                   |
+| 启动开发                                         | `pnpm start:dev`               |
+| lint / 类型检查                                  | `pnpm lint` / `pnpm typecheck` |
+| 单元测试                                         | `pnpm test`                    |
+| E2E（重置 `*_test` 库 → 迁移 → seed → 真库用例） | `pnpm test:e2e`                |
+| 仅重置测试库                                     | `pnpm test:db:reset`           |
+| 冒烟（真实进程 + 优雅停机断言）                  | `pnpm smoke`                   |
+| Prisma generate / migrate dev / deploy / seed    | `pnpm prisma:generate` 等      |
 
-## Run tests
+E2E 安全护栏：`NODE_ENV=test` 且库名以 `_test` 结尾方允许运行，自动重建仅限 localhost；绝不触碰开发库。
 
-```bash
-# unit tests
-$ pnpm run test
+## 数据一致性基础设施
 
-# e2e tests
-$ pnpm run test:e2e
+业务模块开发前已就绪（均对应 `db-scheme.md §1.3` 契约）：
 
-# test coverage
-$ pnpm run test:cov
-```
+- **幂等**（`src/idempotency/`）：创建/取消/作废/调整/打印类 POST 携带 `Idempotency-Key`（8–128 可见 ASCII）；占位与业务写入同事务，重放原响应、异摘要 409。用法参照 `test/test-idempotency.controller.ts`。
+- **取号**（`src/sequence/`）：`biz_sequence` 行锁事务取号（禁止 MAX+1），订单/入库/出库/调整/客户五类编码格式化。
+- **事务重试**（`src/prisma/transaction.runner.ts`）：死锁/锁超时对**整个事务**指数退避重试（默认总尝试 3 次），耗尽抛 `TransactionRetryExhaustedError` → 503。事务回调必须可重入、禁止外部副作用。
+- **错误映射**（`src/common/filters/`）：P2002→409、P2025→404、锁冲突→503；500 记录原始异常与 requestId，不外泄细节。
+- **权限默认拒绝**：每个端点必须声明 `@Public()` / `@AuthenticatedOnly()` / `@Permissions([...])` 恰好之一，架构测试强制；漏写即 403。
+- **登录限流**：IP+账号 10 次/5 分钟，超限 429。
 
-## Deployment
+## 前端联调
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Observability
-
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
-
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
-
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observer](https://observer.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+契约 servers 为 Vite 代理（同源）；直连场景配置 `CORS_ORIGINS` 白名单。健康探针：`GET /api/health/live`、`GET /api/health/ready`。

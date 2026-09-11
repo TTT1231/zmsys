@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, NotFoundExc
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RolesService } from './roles.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SnowflakeGenerator } from '../common/snowflake';
 import type { AuthUser } from '../common/types/auth-user';
 
 /** 权限目录最小切片：普通菜单/动作 + 受保护菜单/动作 */
@@ -96,7 +97,8 @@ function createService(options?: { grantVersion?: bigint }) {
         // $transaction 直接执行回调，事务客户端即 mock 自身
         $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma)),
     } as unknown as PrismaService;
-    return { service: new RolesService(prisma), prisma };
+    const snowflake = { next: vi.fn().mockReturnValue(1n) } as unknown as SnowflakeGenerator;
+    return { service: new RolesService(prisma, snowflake), prisma, snowflake };
 }
 
 function saveInput(overrides: Record<string, unknown> = {}) {
@@ -200,7 +202,7 @@ describe('RolesService.saveGrant', () => {
 
     it('合法保存返回新版本授权并整组替换', async () => {
         const { prisma } = createService();
-        const result = await new RolesService(prisma).saveGrant(
+        const result = await new RolesService(prisma, { next: () => 1n } as unknown as SnowflakeGenerator).saveGrant(
             'admin',
             saveInput({
                 grant: {

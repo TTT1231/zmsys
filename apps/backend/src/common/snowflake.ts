@@ -39,6 +39,3 @@ export class SnowflakeGenerator {
         );
     }
 }
-
-const workerId = BigInt(Number.parseInt(process.env.SNOWFLAKE_WORKER_ID ?? '1', 10) || 1);
-export const snowflake = new SnowflakeGenerator(workerId);

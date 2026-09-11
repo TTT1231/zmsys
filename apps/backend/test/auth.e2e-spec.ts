@@ -1,9 +1,9 @@
 /**
- * 认证与授权底座集成测试：真实 HTTP 管线 + 真实数据库（zmdb 种子数据）。
+ * 认证与授权底座集成测试：真实 HTTP 管线 + 真实测试库（*_test 种子数据）。
  * 仅执行幂等操作（登录/读取），不修改种子账号状态；
- * 依赖 .env 的 DB_* 指向本地 MariaDB 且已执行 prisma db seed。
+ * 运行前置：pnpm test:db:reset（test:e2e 已串联）。
  */
-import 'dotenv/config';
+import './db-guard';
 import { Test } from '@nestjs/testing';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from '../src/app.module';

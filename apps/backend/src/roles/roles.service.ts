@@ -5,34 +5,22 @@ import {
     Injectable,
     NotFoundException,
 } from '@nestjs/common';
-import type { Prisma, SysPermission } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { ROLE_CODES, SUPER_ROLE_CODE, isRoleCode, type RoleCode } from '../constants';
-import { snowflake } from '../common/snowflake';
+import type { Tx } from '../prisma/transaction.runner';
+import { buildRoleGrant } from '../access-control/access-control.service';
+import { ROLE_CODES, SUPER_ROLE_CODE, isRoleCode } from '../constants';
+import { SnowflakeGenerator } from '../common/snowflake';
 import { formatBeijingStamp } from '../common/datetime';
 import type { AuthUser } from '../common/types/auth-user';
 import type { GrantLogEntry, GrantMap, RoleDef, RoleGrant } from './types';
 import type { SaveRoleGrantDto } from './dto/save-role-grant.dto';
 
-type Tx = Prisma.TransactionClient;
-
-/** 由权限码行构造契约的 RoleGrant 形态（menus + 按 menuKey 分组的 actions） */
-function buildRoleGrant(version: bigint, permissions: SysPermission[]): RoleGrant {
-    const menus: string[] = [];
-    const actions: Record<string, string[]> = {};
-    for (const permission of permissions) {
-        if (permission.kind === 'MENU') {
-            menus.push(permission.menuKey);
-        } else {
-            (actions[permission.menuKey] ??= []).push(permission.actionId ?? '');
-        }
-    }
-    return { version: Number(version), menus, actions };
-}
-
 @Injectable()
 export class RolesService {
-    constructor(private readonly prisma: PrismaService) {}
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly snowflake: SnowflakeGenerator,
+    ) {}
 
     async listRoles(): Promise<RoleDef[]> {
         const roles = await this.prisma.sysRole.findMany();
@@ -43,16 +31,7 @@ export class RolesService {
         });
     }
 
-    async getGrant(roleCode: RoleCode): Promise<RoleGrant> {
-        const role = await this.prisma.sysRole.findUnique({
-            where: { code: roleCode },
-        });
-        if (!role) {
-            throw new NotFoundException('角色不存在');
-        }
-        const permissions = await this.loadPermissionRows(roleCode);
-        return buildRoleGrant(role.grantVersion, permissions);
-    }
+    // 单角色授权查询 getGrant 已迁至 access-control 共享层（auth 与 roles 共用）
 
     async getGrantMap(): Promise<GrantMap> {
         const roles = await this.prisma.sysRole.findMany();
@@ -163,6 +142,7 @@ export class RolesService {
         ].sort();
 
         return this.prisma.$transaction(async (tx: Tx) => {
+            const now = new Date();
             await tx.$queryRaw`SELECT code FROM sys_role WHERE code = ${roleId} FOR UPDATE`;
             const role = await tx.sysRole.findUnique({ where: { code: roleId } });
             if (!role) {
@@ -185,11 +165,12 @@ export class RolesService {
             if (JSON.stringify(currentCodes) === JSON.stringify(permissionCodes)) {
                 await tx.sysGrantLog.create({
                     data: {
-                        id: snowflake.next(),
+                        id: this.snowflake.next(),
                         operatorId: BigInt(actor.id),
                         roleCode: roleId,
                         beforeVersion: role.grantVersion,
                         afterVersion: role.grantVersion,
+                        createdAt: now,
                         serverNote: `角色【${role.name}】授权保存（无变化）`,
                         clientReason: dto.note ?? '',
                         beforeJson: { permissions: currentCodes },
@@ -210,6 +191,7 @@ export class RolesService {
                         permissionCode: code,
                         grantSource: 'USER' as const,
                         grantedBy: BigInt(actor.id),
+                        grantedAt: now,
                     })),
                 });
             }
@@ -228,11 +210,12 @@ export class RolesService {
                 .join('，');
             await tx.sysGrantLog.create({
                 data: {
-                    id: snowflake.next(),
+                    id: this.snowflake.next(),
                     operatorId: BigInt(actor.id),
                     roleCode: roleId,
                     beforeVersion: role.grantVersion,
                     afterVersion: updated.grantVersion,
+                    createdAt: now,
                     serverNote: `角色【${role.name}】授权变更：${detail}`,
                     clientReason: dto.note ?? '',
                     beforeJson: { permissions: currentCodes },
@@ -245,16 +228,5 @@ export class RolesService {
                 permissionCodes.flatMap(code => (byCode.get(code) ? [byCode.get(code)!] : [])),
             );
         });
-    }
-
-    private async loadPermissionRows(roleCode: string): Promise<SysPermission[]> {
-        if (roleCode === SUPER_ROLE_CODE) {
-            return this.prisma.sysPermission.findMany();
-        }
-        const grants = await this.prisma.sysGrant.findMany({
-            where: { roleCode },
-            include: { permission: true },
-        });
-        return grants.map(grant => grant.permission);
     }
 }

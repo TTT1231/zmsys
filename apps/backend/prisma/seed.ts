@@ -4,23 +4,31 @@
  * id 1–9999 保留给固定参考数据；正式用户管理上线后新用户改用 Snowflake 主键。
  */
 import 'dotenv/config';
+import '../src/process-tz';
 import bcrypt from 'bcryptjs';
-import mariadb from 'mariadb';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../src/generated/prisma/client';
+import { createMariadbPool } from '../src/prisma/create-pool';
 
 const SEED_USERS = [
     { id: 1n, account: 'guojun', name: '郭均', roleCode: 'super' },
     { id: 2n, account: 'test', name: '测试员工', roleCode: 'staff' },
 ] as const;
 
+if (process.env.NODE_ENV === 'production' && process.env.SEED_ALLOW_DEFAULT_PASSWORD !== '1') {
+    throw new Error(
+        '生产环境 seed 使用契约默认初始密码 123456 需显式确认：设置 SEED_ALLOW_DEFAULT_PASSWORD=1 并在初始化后立即要求改密',
+    );
+}
+
 async function main(): Promise<void> {
-    const pool = mariadb.createPool({
+    // 与 PrismaService 共用同一 pool 工厂：保证 seed 写入同样遵守 UTC 会话时区约定
+    const pool = createMariadbPool({
         host: process.env.DB_HOST ?? 'localhost',
         port: Number.parseInt(process.env.DB_PORT ?? '3306', 10) || 3306,
         user: process.env.DB_USERNAME ?? 'root',
         password: process.env.DB_PASSWORD ?? '',
-        database: process.env.DB_DATABASE ?? 'zmdb',
+        name: process.env.DB_DATABASE ?? 'zmdb',
         connectionLimit: 2,
     });
     const prisma = new PrismaClient({ adapter: new PrismaMariaDb(pool) });
@@ -34,9 +42,10 @@ async function main(): Promise<void> {
                 console.log(`跳过已存在账号 ${seed.account}`);
                 continue;
             }
-            // 用户与变更日志同事务：失败可整体重跑
+            // 用户与变更日志同事务：失败可整体重跑；时间戳由应用写入（服务器时间函数不可信，见 schema.prisma 头注）
+            const now = new Date();
             await prisma.$transaction([
-                prisma.sysUser.create({ data: { ...seed, passwordHash } }),
+                prisma.sysUser.create({ data: { ...seed, passwordHash, createdAt: now } }),
                 prisma.sysUserChangeLog.create({
                     data: {
                         id: seed.id * 1000n,
@@ -44,6 +53,7 @@ async function main(): Promise<void> {
                         operatorId: seed.id,
                         eventType: 'CREATE',
                         afterVersion: 1n,
+                        createdAt: now,
                         reason: '系统初始化',
                         afterJson: { account: seed.account, name: seed.name, role: seed.roleCode, status: true },
                     },

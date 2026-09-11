@@ -1,6 +1,10 @@
 /** 应用配置结构：ConfigService<AppConfig> 据此提供 key 补全与编译期检查 */
 export interface AppConfig {
-    port: number;
+    nodeEnv: NodeEnv;
+    server: {
+        host: string;
+        port: number;
+    };
     database: {
         host: string;
         port: number;
@@ -14,32 +18,119 @@ export interface AppConfig {
         issuer: string;
         audience: string;
     };
+    snowflake: {
+        workerId: number;
+    };
+    cors: {
+        origins: string[];
+    };
 }
 
-const toInt = (value: string | undefined, fallback: number): number => {
-    const parsed = Number.parseInt(value ?? '', 10);
-    return Number.isFinite(parsed) ? parsed : fallback;
+type NodeEnv = 'development' | 'production' | 'test';
+
+const NODE_ENVS: readonly NodeEnv[] = ['development', 'production', 'test'];
+const SNOWFLAKE_WORKER_ID_MAX = 1023;
+
+/** 必填字符串：缺失即记录错误，不静默给默认值 */
+const required = (key: string, errors: string[]): string => {
+    const value = process.env[key]?.trim();
+    if (!value) {
+        errors.push(`缺少必填环境变量 ${key}`);
+    }
+    return value ?? '';
 };
 
+/** 可选整数：缺省用默认值，给了就必须落在 [min, max] */
+const optionalInt = (
+    key: string,
+    raw: string | undefined,
+    fallback: number,
+    min: number,
+    max: number,
+    errors: string[],
+): number => {
+    if (raw === undefined || raw === '') {
+        return fallback;
+    }
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+        errors.push(`${key} 必须是 ${min}-${max} 的整数，当前为 ${raw}`);
+        return fallback;
+    }
+    return parsed;
+};
+
+/**
+ * 启动即校验全部环境变量：先收集所有缺失/非法项再一次报错，
+ * 避免漏配拖到运行期才以难排查的方式暴露。
+ */
 export default (): AppConfig => {
-    if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
-        throw new Error('生产环境必须配置 JWT_SECRET');
+    const errors: string[] = [];
+
+    const nodeEnvRaw = process.env.NODE_ENV ?? 'development';
+    if (!NODE_ENVS.includes(nodeEnvRaw as NodeEnv)) {
+        errors.push(`NODE_ENV 必须是 ${NODE_ENVS.join('/')}，当前为 ${nodeEnvRaw}`);
+    }
+    const nodeEnv = nodeEnvRaw as NodeEnv;
+    const isProduction = nodeEnv === 'production';
+
+    const jwtSecret = required('JWT_SECRET', errors);
+    if (jwtSecret && jwtSecret.length < 32) {
+        errors.push(`JWT_SECRET 长度须不少于 32 字符，当前为 ${jwtSecret.length}`);
+    }
+
+    // 生产必须显式且全集群唯一；开发默认单实例 1
+    let workerIdFallback = 1;
+    if (isProduction && !process.env.SNOWFLAKE_WORKER_ID?.trim()) {
+        errors.push('生产环境必须显式配置 SNOWFLAKE_WORKER_ID（0-1023，全集群唯一）');
+        workerIdFallback = 0;
+    }
+    const workerId = optionalInt(
+        'SNOWFLAKE_WORKER_ID',
+        process.env.SNOWFLAKE_WORKER_ID,
+        workerIdFallback,
+        0,
+        SNOWFLAKE_WORKER_ID_MAX,
+        errors,
+    );
+
+    const serverPort = optionalInt('PORT', process.env.PORT, 5000, 1, 65535, errors);
+    const dbHost = required('DB_HOST', errors);
+    const dbPort = optionalInt('DB_PORT', process.env.DB_PORT, 3306, 1, 65535, errors);
+    const dbUser = required('DB_USERNAME', errors);
+    const dbPassword = required('DB_PASSWORD', errors);
+    const dbName = required('DB_DATABASE', errors);
+
+    // CORS 白名单：逗号分隔 origin 列表；开发默认放行本机 Vite 端口（契约 servers 为 Vite 代理/MSW）
+    const corsOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:5173,http://localhost:3000')
+        .split(',')
+        .map(origin => origin.trim())
+        .filter(origin => origin.length > 0);
+
+    if (errors.length > 0) {
+        throw new Error(`环境变量校验失败：\n- ${errors.join('\n- ')}`);
     }
 
     return {
-        port: toInt(process.env.PORT, 5000),
+        nodeEnv,
+        server: {
+            host: process.env.HOST?.trim() || '0.0.0.0',
+            port: serverPort,
+        },
         database: {
-            host: process.env.DB_HOST ?? 'localhost',
-            port: toInt(process.env.DB_PORT, 3306),
-            user: process.env.DB_USERNAME ?? 'root',
-            password: process.env.DB_PASSWORD ?? '',
-            name: process.env.DB_DATABASE ?? 'zmdb',
+            host: dbHost,
+            port: dbPort,
+            user: dbUser,
+            password: dbPassword,
+            name: dbName,
         },
         jwt: {
-            secret: process.env.JWT_SECRET ?? 'dev-only-insecure-secret',
-            expiresIn: process.env.JWT_EXPIRES_IN ?? '8h',
-            issuer: process.env.JWT_ISSUER ?? 'zmsys-backend',
-            audience: process.env.JWT_AUDIENCE ?? 'zmsys-admin',
+            secret: jwtSecret,
+            expiresIn: process.env.JWT_EXPIRES_IN?.trim() || '8h',
+            issuer: process.env.JWT_ISSUER?.trim() || 'zmsys-backend',
+            audience: process.env.JWT_AUDIENCE?.trim() || 'zmsys-admin',
         },
+        snowflake: { workerId },
+        cors: { origins: corsOrigins },
     };
 };

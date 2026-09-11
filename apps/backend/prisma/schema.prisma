@@ -1,6 +1,12 @@
 // 数据库约束的权威来源是 docs/db/mysql-8-schema.sql（基线建表脚本）。
 // Prisma 模型只负责客户端类型映射；迁移 SQL 手写，保留基线的
 // CHECK 约束、ascii_bin 字符集与 ON UPDATE 等数据库层约束。
+//
+// created_at 一律由应用显式写入（new Date()，Node 时钟），不标 @default(now())：
+// @default(now()) 会映射到 DB 端 DEFAULT CURRENT_TIMESTAMP，其取值依赖服务器
+// 会话时区——实测本机 MySQL（Windows 中文系统时区名无法解析，system_time_zone
+// 为乱码）NOW() 与 UTC_TIMESTAMP() 相互矛盾，服务器时间函数不可信。
+// DDL 中的 DEFAULT 仅作手工 SQL 兜底保留。
 
 generator client {
   provider = "prisma-client"
@@ -33,13 +39,19 @@ enum UserChangeEventType {
   PASSWORD_RESET
 }
 
+/// api_idempotency.state：占位与业务写入同事务，成功后转 SUCCEEDED 供重放（见 db-scheme.md §1.3）
+enum ApiIdempotencyState {
+  PROCESSING
+  SUCCEEDED
+}
+
 /// 固定角色目录；grant_version 是整组授权的乐观锁版本
 model SysRole {
   code         String     @id @db.VarChar(20)
   name         String     @unique @db.VarChar(32)
   locked       Boolean    @default(false)
   grantVersion BigInt     @default(1) @map("grant_version") @db.UnsignedBigInt
-  createdAt    DateTime   @default(now()) @map("created_at") @db.DateTime(3)
+  createdAt    DateTime   @map("created_at") @db.DateTime(3)
   updatedAt    DateTime   @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
   users        SysUser[]
   grants       SysGrant[]
@@ -49,21 +61,22 @@ model SysRole {
 
 /// 系统用户；id 为应用层 Snowflake 主键，token_version 控制旧 JWT 失效
 model SysUser {
-  id                BigInt               @id
-  account           String               @unique @db.VarChar(64)
-  passwordHash      String               @map("password_hash") @db.VarChar(255)
-  name              String               @db.VarChar(64)
-  roleCode          String               @map("role_code") @db.VarChar(20)
-  status            Boolean              @default(true)
-  tokenVersion      BigInt               @default(1) @map("token_version") @db.UnsignedBigInt
-  rowVersion        BigInt               @default(1) @map("row_version") @db.UnsignedBigInt
-  passwordChangedAt DateTime?            @map("password_changed_at") @db.DateTime(3)
-  lastLoginAt       DateTime?            @map("last_login_at") @db.DateTime(3)
-  createdAt         DateTime             @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt         DateTime             @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
-  role              SysRole              @relation(fields: [roleCode], references: [code])
-  changeLogs        SysUserChangeLog[]   @relation("SysUserChangeLogUser")
-  operatedLogs      SysUserChangeLog[]   @relation("SysUserChangeLogOperator")
+  id                 BigInt             @id
+  account            String             @unique @db.VarChar(64)
+  passwordHash       String             @map("password_hash") @db.VarChar(255)
+  name               String             @db.VarChar(64)
+  roleCode           String             @map("role_code") @db.VarChar(20)
+  status             Boolean            @default(true)
+  tokenVersion       BigInt             @default(1) @map("token_version") @db.UnsignedBigInt
+  rowVersion         BigInt             @default(1) @map("row_version") @db.UnsignedBigInt
+  passwordChangedAt  DateTime?          @map("password_changed_at") @db.DateTime(3)
+  lastLoginAt        DateTime?          @map("last_login_at") @db.DateTime(3)
+  createdAt          DateTime           @map("created_at") @db.DateTime(3)
+  updatedAt          DateTime           @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  role               SysRole            @relation(fields: [roleCode], references: [code])
+  changeLogs         SysUserChangeLog[] @relation("SysUserChangeLogUser")
+  operatedLogs       SysUserChangeLog[] @relation("SysUserChangeLogOperator")
+  idempotencyRecords ApiIdempotency[]
 
   @@index([roleCode, status])
   @@map("sys_user")
@@ -77,7 +90,7 @@ model SysPermission {
   actionId    String?        @map("action_id") @db.VarChar(40)
   label       String         @db.VarChar(64)
   isProtected Boolean        @default(false) @map("protected")
-  createdAt   DateTime       @default(now()) @map("created_at") @db.DateTime(3)
+  createdAt   DateTime       @map("created_at") @db.DateTime(3)
   grants      SysGrant[]
 
   @@unique([kind, menuKey, actionId])
@@ -86,12 +99,12 @@ model SysPermission {
 
 /// 角色授权；(role_code, permission_code) 为主键，整组替换式保存
 model SysGrant {
-  roleCode       String       @map("role_code") @db.VarChar(20)
-  permissionCode String       @map("permission_code") @db.VarChar(80)
-  grantSource    GrantSource  @default(USER) @map("grant_source")
-  grantedBy      BigInt?      @map("granted_by")
-  grantedAt      DateTime     @default(now()) @map("granted_at") @db.DateTime(3)
-  role           SysRole      @relation(fields: [roleCode], references: [code])
+  roleCode       String        @map("role_code") @db.VarChar(20)
+  permissionCode String        @map("permission_code") @db.VarChar(80)
+  grantSource    GrantSource   @default(USER) @map("grant_source")
+  grantedBy      BigInt?       @map("granted_by")
+  grantedAt      DateTime      @map("granted_at") @db.DateTime(3)
+  role           SysRole       @relation(fields: [roleCode], references: [code])
   permission     SysPermission @relation(fields: [permissionCode], references: [code])
 
   @@id([roleCode, permissionCode])
@@ -111,7 +124,7 @@ model SysGrantLog {
   clientReason  String   @default("") @map("client_reason") @db.VarChar(500)
   beforeJson    Json     @map("before_json")
   afterJson     Json     @map("after_json")
-  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  createdAt     DateTime @map("created_at") @db.DateTime(3)
 
   @@index([roleCode, createdAt(sort: Desc)])
   @@index([operatorId, createdAt(sort: Desc)])
@@ -120,20 +133,52 @@ model SysGrantLog {
 
 /// 用户变更日志：快照不得包含密码哈希（数据库 CHECK 兜底）
 model SysUserChangeLog {
-  id            BigInt             @id
-  userId        BigInt             @map("user_id")
-  operatorId    BigInt             @map("operator_id")
+  id            BigInt              @id
+  userId        BigInt              @map("user_id")
+  operatorId    BigInt              @map("operator_id")
   eventType     UserChangeEventType @map("event_type")
-  beforeVersion BigInt?            @map("before_version") @db.UnsignedBigInt
-  afterVersion  BigInt             @map("after_version") @db.UnsignedBigInt
-  reason        String             @default("") @db.VarChar(500)
-  beforeJson    Json?              @map("before_json")
-  afterJson     Json               @map("after_json")
-  createdAt     DateTime           @default(now()) @map("created_at") @db.DateTime(3)
-  user          SysUser            @relation("SysUserChangeLogUser", fields: [userId], references: [id])
-  operator      SysUser            @relation("SysUserChangeLogOperator", fields: [operatorId], references: [id])
+  beforeVersion BigInt?             @map("before_version") @db.UnsignedBigInt
+  afterVersion  BigInt              @map("after_version") @db.UnsignedBigInt
+  reason        String              @default("") @db.VarChar(500)
+  beforeJson    Json?               @map("before_json")
+  afterJson     Json                @map("after_json")
+  createdAt     DateTime            @map("created_at") @db.DateTime(3)
+  user          SysUser             @relation("SysUserChangeLogUser", fields: [userId], references: [id])
+  operator      SysUser             @relation("SysUserChangeLogOperator", fields: [operatorId], references: [id])
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([operatorId, createdAt(sort: Desc)])
   @@map("sys_user_change_log")
+}
+
+/// 幂等记录：(actor_id, operation_key, idempotency_key) 唯一（db-scheme.md §1.3）：
+/// 同 key 异摘要 409，同 key 成功后重放 response_json；占位与业务写入同事务
+model ApiIdempotency {
+  id             BigInt              @id
+  actorId        BigInt              @map("actor_id")
+  operationKey   String              @map("operation_key") @db.VarChar(120)
+  idempotencyKey String              @map("idempotency_key") @db.VarChar(128)
+  requestHash    Bytes               @map("request_hash") @db.Binary(32)
+  state          ApiIdempotencyState @default(PROCESSING)
+  httpStatus     Int?                @map("http_status") @db.UnsignedSmallInt
+  responseJson   Json?               @map("response_json")
+  resourceType   String?             @map("resource_type") @db.VarChar(40)
+  resourceCode   String?             @map("resource_code") @db.VarChar(64)
+  createdAt      DateTime            @map("created_at") @db.DateTime(3)
+  updatedAt      DateTime            @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  expiresAt      DateTime            @map("expires_at") @db.DateTime(3)
+  actor          SysUser             @relation(fields: [actorId], references: [id])
+
+  @@unique([actorId, operationKey, idempotencyKey], map: "uk_api_idempotency_request")
+  @@index([expiresAt], map: "idx_api_idempotency_expiry")
+  @@map("api_idempotency")
+}
+
+/// 业务编号序列：事务内 SELECT ... FOR UPDATE 递增取号，禁止 MAX+1（db-scheme.md §1.3）
+model BizSequence {
+  sequenceKey String   @id @db.VarChar(80)
+  nextValue   BigInt   @map("next_value") @db.UnsignedBigInt
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+
+  @@map("biz_sequence")
 }

@@ -4,10 +4,11 @@ import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcryptjs';
 import type { Prisma, SysUser } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import type { Tx } from '../prisma/transaction.runner';
 import { formatBeijingStamp } from '../common/datetime';
-import { snowflake } from '../common/snowflake';
-import { RolesService } from '../roles/roles.service';
-import type { WbUser } from '../roles/types';
+import { SnowflakeGenerator } from '../common/snowflake';
+import { AccessControlService } from '../access-control/access-control.service';
+import type { RoleGrant, WbUser } from '../access-control/types';
 import type { AuthUser } from '../common/types/auth-user';
 import type { JwtPayload } from './types';
 import type { LoginDto } from './dto/login.dto';
@@ -38,14 +39,13 @@ function toWbUser(user: SysUser, lastLoginAt: Date | null = user.lastLoginAt): W
     };
 }
 
-type Tx = Prisma.TransactionClient;
-
 @Injectable()
 export class AuthService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly jwtService: JwtService,
-        private readonly rolesService: RolesService,
+        private readonly accessControl: AccessControlService,
+        private readonly snowflake: SnowflakeGenerator,
     ) {}
 
     async login(dto: LoginDto): Promise<{ accessToken: string; user: WbUser }> {
@@ -74,10 +74,7 @@ export class AuthService {
         return { accessToken, user: toWbUser(user, now) };
     }
 
-    async getProfile(user: AuthUser): Promise<{
-        user: WbUser;
-        grant: Awaited<ReturnType<RolesService['getGrant']>>;
-    }> {
+    async getProfile(user: AuthUser): Promise<{ user: WbUser; grant: RoleGrant }> {
         // validate 已回查过一次；此处再读一次拿最新的 last_login_at 与 row_version
         const current = await this.prisma.sysUser.findUnique({
             where: { id: BigInt(user.id) },
@@ -85,7 +82,7 @@ export class AuthService {
         if (!current || !current.status) {
             throw new UnauthorizedException('登录已过期，请重新登录');
         }
-        const grant = await this.rolesService.getGrant(current.roleCode as WbUser['role']);
+        const grant = await this.accessControl.getGrant(current.roleCode as WbUser['role']);
         return { user: toWbUser(current), grant };
     }
 
@@ -93,6 +90,7 @@ export class AuthService {
     async updateProfile(user: AuthUser, dto: UpdateProfileDto): Promise<WbUser> {
         const userId = BigInt(user.id);
         return this.prisma.$transaction(async (tx: Tx) => {
+            const now = new Date();
             await tx.$queryRaw`SELECT id FROM sys_user WHERE id = ${userId} FOR UPDATE`;
             const current = await tx.sysUser.findUnique({ where: { id: userId } });
             if (!current) {
@@ -104,10 +102,11 @@ export class AuthService {
             });
             await tx.sysUserChangeLog.create({
                 data: {
-                    id: snowflake.next(),
+                    id: this.snowflake.next(),
                     userId,
                     operatorId: userId,
                     eventType: 'PROFILE_UPDATE',
+                    createdAt: now,
                     beforeVersion: current.rowVersion,
                     afterVersion: updated.rowVersion,
                     reason: '修改姓名',
@@ -127,6 +126,7 @@ export class AuthService {
         const userId = BigInt(user.id);
         const newHash = await bcrypt.hash(dto.newPassword, 10);
         await this.prisma.$transaction(async (tx: Tx) => {
+            const now = new Date();
             await tx.$queryRaw`SELECT id FROM sys_user WHERE id = ${userId} FOR UPDATE`;
             const current = await tx.sysUser.findUnique({ where: { id: userId } });
             if (!current) {
@@ -140,7 +140,7 @@ export class AuthService {
                 where: { id: userId },
                 data: {
                     passwordHash: newHash,
-                    passwordChangedAt: new Date(),
+                    passwordChangedAt: now,
                     tokenVersion: { increment: 1 },
                     rowVersion: { increment: 1 },
                 },
@@ -148,10 +148,11 @@ export class AuthService {
             // 密码事件只记录“已变更”及版本，不记录任何密码材料
             await tx.sysUserChangeLog.create({
                 data: {
-                    id: snowflake.next(),
+                    id: this.snowflake.next(),
                     userId,
                     operatorId: userId,
                     eventType: 'PASSWORD_CHANGE',
+                    createdAt: now,
                     beforeVersion: current.rowVersion,
                     afterVersion: updated.rowVersion,
                     reason: '自助修改密码',

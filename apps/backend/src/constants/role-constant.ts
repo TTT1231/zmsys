@@ -1,6 +1,9 @@
 /** Guard 元数据键：标记跳过 JWT 校验的公开端点 */
 export const IS_PUBLIC_KEY = 'isPublic';
 
+/** Guard 元数据键：声明“仅需登录、不校验权限码”的端点（默认拒绝策略的显式放行） */
+export const AUTH_ONLY_KEY = 'authenticatedOnly';
+
 /** Guard 元数据键：端点要求的权限码与 403 提示文案 */
 export const PERMISSIONS_KEY = 'requiredPermissions';
 

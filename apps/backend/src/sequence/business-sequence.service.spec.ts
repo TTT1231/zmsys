@@ -1,0 +1,87 @@
+import { describe, expect, it, vi } from 'vitest';
+import { BusinessSequenceService } from './business-sequence.service';
+import type { PrismaService } from '../prisma/prisma.service';
+import type { Tx } from '../prisma/transaction.runner';
+
+function createService() {
+    const prisma = {} as PrismaService;
+    const service = new BusinessSequenceService(prisma);
+    const executeRaw = vi.fn().mockResolvedValue(1);
+    const queryRaw = vi.fn().mockResolvedValue([{ next_value: 5n }]);
+    const tx = { $executeRaw: executeRaw, $queryRaw: queryRaw } as unknown as Tx;
+    return { service, executeRaw, queryRaw, tx };
+}
+
+describe('BusinessSequenceService.nextCode（契约编码格式化）', () => {
+    it('订单：ZM + yyMMdd + 至少 3 位序号', async () => {
+        const { service, queryRaw, tx } = createService();
+        queryRaw.mockResolvedValue([{ next_value: 1n }]);
+        await expect(service.nextCode(tx, 'order', '2026-09-11')).resolves.toBe('ZM260911001');
+        queryRaw.mockResolvedValue([{ next_value: 12n }]);
+        await expect(service.nextCode(tx, 'order', '2026-09-11')).resolves.toBe('ZM260911012');
+    });
+
+    it('序号超宽自然增长不截断（1000 仍为四位显示）', async () => {
+        const { service, queryRaw, tx } = createService();
+        queryRaw.mockResolvedValue([{ next_value: 1000n }]);
+        await expect(service.nextCode(tx, 'order', '2026-09-11')).resolves.toBe('ZM2609111000');
+    });
+
+    it('入库/出库/调整：前缀 + yyyyMMdd + 至少 4 位序号', async () => {
+        const { service, queryRaw, tx } = createService();
+        queryRaw.mockResolvedValue([{ next_value: 7n }]);
+        await expect(service.nextCode(tx, 'inbound', '2026-09-11')).resolves.toBe('RK-202609110007');
+        await expect(service.nextCode(tx, 'outbound', '2026-09-11')).resolves.toBe('CK-202609110007');
+        await expect(service.nextCode(tx, 'adjust', '2026-09-11')).resolves.toBe('TZ-202609110007');
+    });
+
+    it('客户：全局计数（忽略业务日期），CUS- + 至少 4 位', async () => {
+        const { service, queryRaw, tx } = createService();
+        queryRaw.mockResolvedValue([{ next_value: 42n }]);
+        await expect(service.nextCode(tx, 'customer', '不使用')).resolves.toBe('CUS-0042');
+    });
+
+    it('跨日期各自计数：sequence_key 含日期段', async () => {
+        const { service, executeRaw, tx } = createService();
+        await service.nextCode(tx, 'order', '2026-09-11');
+        // UPDATE 语句插值：next_value 在前、sequence_key 在后
+        expect(executeRaw).toHaveBeenNthCalledWith(1, expect.anything(), 6n, 'order:260911');
+        await service.nextCode(tx, 'customer', '2026-09-11');
+        expect(executeRaw).toHaveBeenNthCalledWith(2, expect.anything(), 6n, 'customer:global');
+    });
+
+    it('业务日期非法（非 yyyy-MM-dd）直接拒绝', async () => {
+        const { service, tx } = createService();
+        await expect(service.nextCode(tx, 'order', '20260911')).rejects.toThrow('yyyy-MM-dd');
+    });
+});
+
+describe('BusinessSequenceService.nextRaw（行锁取号）', () => {
+    it('序列行已存在：跳过初始化，FOR UPDATE 读 + 递增写回', async () => {
+        const { service, executeRaw, queryRaw, tx } = createService();
+        const seq = await service.nextRaw(tx, 'order:260911');
+        expect(seq).toBe(5n);
+        // 已存在时不执行 INSERT IGNORE，只有 UPDATE 一条写语句
+        expect(executeRaw).toHaveBeenCalledTimes(1);
+        expect(queryRaw).toHaveBeenCalledTimes(2);
+        // UPDATE 语句插值顺序：先 next_value 再 sequence_key
+        expect(executeRaw).toHaveBeenNthCalledWith(1, expect.anything(), 6n, 'order:260911');
+    });
+
+    it('序列行不存在：无锁探测 miss 后 INSERT IGNORE 初始化再行锁取号', async () => {
+        const { service, executeRaw, queryRaw, tx } = createService();
+        queryRaw
+            .mockResolvedValueOnce([]) // 探测 miss
+            .mockResolvedValueOnce([{ next_value: 1n }]); // 初始化后 FOR UPDATE 读
+        const seq = await service.nextRaw(tx, 'order:260912');
+        expect(seq).toBe(1n);
+        expect(executeRaw).toHaveBeenNthCalledWith(1, expect.anything(), 'order:260912');
+        expect(executeRaw).toHaveBeenNthCalledWith(2, expect.anything(), 2n, 'order:260912');
+    });
+
+    it('序列行初始化后不可见（防御）：抛错而非返回脏值', async () => {
+        const { service, queryRaw, tx } = createService();
+        queryRaw.mockResolvedValue([]);
+        await expect(service.nextRaw(tx, 'order:260911')).rejects.toThrow('取号失败');
+    });
+});

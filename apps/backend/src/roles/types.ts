@@ -1,5 +1,8 @@
 import type { RoleCode } from '../constants';
 
+/** RoleGrant / WbUser 为 auth 与 roles 共用的契约类型，已迁至 access-control 共享层 */
+export type { RoleGrant, WbUser } from '../access-control/types';
+
 /** GET /roles 条目 */
 export interface RoleDef {
     id: RoleCode;
@@ -7,24 +10,7 @@ export interface RoleDef {
     locked?: boolean;
 }
 
-/** /auth/profile 与 /roles/grants 的授权结构；actions 按 menuKey 分组 actionId */
-export interface RoleGrant {
-    version: number;
-    menus: string[];
-    actions: Record<string, string[]>;
-}
-
-export type GrantMap = Record<RoleCode, RoleGrant>;
-
-/** 用户展示对象（openapi WbUser）；version 即 sys_user.row_version */
-export interface WbUser {
-    version: number;
-    name: string;
-    account: string;
-    role: RoleCode;
-    active: boolean;
-    last: string;
-}
+export type GrantMap = Record<RoleCode, import('../access-control/types').RoleGrant>;
 
 /** GET /roles/grants/log 条目 */
 export interface GrantLogEntry {
