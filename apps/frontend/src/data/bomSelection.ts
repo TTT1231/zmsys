@@ -83,6 +83,30 @@ export function buildBomSelectorSchema(boms: Bom[], preferredSpecKeys: string[] 
 }
 
 /**
+ * 一次全展示模式：某字段在给定集合里的全部取值。
+ * 选项池只由集合决定，与已选值无关——选项不会因选择而减少或跳动。
+ */
+export function bomFieldOptions(boms: Bom[], field: BomSelectorField): string[] {
+    return unique(boms.map(bom => bomSelectorValue(bom, field)));
+}
+
+/**
+ * 一次全展示模式：按全部已选字段同时过滤（与选择顺序无关），未选字段不参与过滤。
+ */
+export function filterBomsBySelections(
+    boms: Bom[],
+    fields: BomSelectorField[],
+    selections: Record<string, string>,
+): Bom[] {
+    return boms.filter(bom =>
+        fields.every(field => {
+            const selected = selections[field.id];
+            return !selected || bomSelectorValue(bom, field) === selected;
+        }),
+    );
+}
+
+/**
  * 逐级收窄候选项。每轮只暴露当前仍有区分度的下一项；一旦唯一命中，后续冗余字段不再要求选择。
  */
 export function resolveBomSelection(

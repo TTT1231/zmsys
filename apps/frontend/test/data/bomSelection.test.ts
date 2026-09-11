@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import type { Bom } from "@/api";
 import {
     EMPTY_BOM_SPEC_VALUE,
+    bomFieldOptions,
     bomSelectorOptionLabel,
     buildBomSelectorSchema,
+    filterBomsBySelections,
     resolveBomSelection,
 } from "@/data/bomSelection";
 
@@ -106,5 +108,47 @@ describe("BOM cascading selection", () => {
         const result = resolveBomSelection(rows, schema.fields, { "spec:支架": "6.3支架：铜镀银" });
         const staticPlateStep = result.steps.find(step => step.field.label === "静片");
         expect(staticPlateStep?.options).toEqual(["6.3静片：铜镀银", "6.3静片：铜镀镍"]);
+    });
+});
+
+describe("BOM one-shot selection (quick find)", () => {
+    const specFieldsOf = (rows: Bom[], preferred: string[]) =>
+        buildBomSelectorSchema(rows, preferred).fields.filter(field => field.kind === "spec");
+
+    it("keeps every option of a field visible regardless of the current selections", () => {
+        const fields = specFieldsOf(oldSwitches, ["底座", "按钮", "弹簧", "支架", "静片", "弹片"]);
+        expect(fields.map(field => field.label)).toEqual(["底座", "按钮", "弹簧"]);
+        expect(Object.fromEntries(fields.map(field => [field.label, bomFieldOptions(oldSwitches, field)]))).toEqual({
+            底座: ["带CB", "不带CB"],
+            按钮: ["8.5mm", "8.9mm", "9.6mm"],
+            弹簧: ["0.25", "0.27"],
+        });
+    });
+
+    it("filters candidates by every selection at once, independent of pick order", () => {
+        const fields = specFieldsOf(oldSwitches, ["底座", "按钮", "弹簧"]);
+        expect(filterBomsBySelections(oldSwitches, fields, {})).toHaveLength(12);
+        expect(
+            filterBomsBySelections(oldSwitches, fields, { "spec:按钮": "8.5mm", "spec:底座": "带CB" }).map(
+                item => item.code,
+            ),
+        ).toEqual(["带CB-8.5mm-0", "带CB-8.5mm-1"]);
+        expect(
+            filterBomsBySelections(oldSwitches, fields, {
+                "spec:弹簧": "0.27",
+                "spec:底座": "带CB",
+                "spec:按钮": "8.9mm",
+            }).map(item => item.code),
+        ).toEqual(["带CB-8.9mm-1"]);
+        expect(filterBomsBySelections(oldSwitches, fields, { "spec:按钮": "10mm" })).toHaveLength(0);
+    });
+
+    it("treats missing spec values as a regular selectable option", () => {
+        const rows = [bom("A", "M1", { 方向: "" }), bom("B", "M2", { 方向: "正面" })];
+        const fields = specFieldsOf(rows, ["方向"]);
+        expect(bomFieldOptions(rows, fields[0]!)).toEqual([EMPTY_BOM_SPEC_VALUE, "正面"]);
+        expect(
+            filterBomsBySelections(rows, fields, { "spec:方向": EMPTY_BOM_SPEC_VALUE }).map(item => item.code),
+        ).toEqual(["A"]);
     });
 });

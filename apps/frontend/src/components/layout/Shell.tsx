@@ -219,13 +219,6 @@ export function Topbar({ title, onOpenDrawer }: { title: string; onOpenDrawer: (
                     <Icon name="menu" size={19} />
                 </button>
                 <strong className="block truncate text-15 font-semibold text-ink lg:hidden">{title}</strong>
-                <button
-                    type="button"
-                    onClick={() => navigate("/search")}
-                    className="hidden min-h-11 w-75 items-center gap-2 rounded-btn border border-line px-3 text-left text-muted lg:flex"
-                >
-                    <Icon name="search" size={17} /> 搜索订单、客户、产品
-                </button>
             </div>
 
             <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">

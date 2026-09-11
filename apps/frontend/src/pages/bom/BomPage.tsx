@@ -15,6 +15,12 @@ import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { useToast } from "@/components/ui/Toast";
 import { BOM_CATEGORIES, categoryOf, defaultsOf, nextBomCode } from "@/data/categories";
+import {
+    bomFieldOptions,
+    bomSelectorOptionLabel,
+    buildBomSelectorSchema,
+    filterBomsBySelections,
+} from "@/data/bomSelection";
 import type { Bom } from "@/api";
 
 const EMPTY_BOMS: Bom[] = [];
@@ -311,6 +317,7 @@ function NewBomModal({ open, onClose }: { open: boolean; onClose: () => void }) 
     );
 }
 
+/* 快速查找：品类选定后，规格选项一次全展示、选项池固定，匹配结果实时列出（不下钻、不跳变） */
 function QuickFindModal({
     open,
     onClose,
@@ -321,24 +328,44 @@ function QuickFindModal({
     onDetail: (bom: Bom) => void;
 }) {
     const { data } = useWbSnapshot();
-    const [name, setName] = useState("");
-    const [keyword, setKeyword] = useState("");
+    const [category, setCategory] = useState("");
+    const [selections, setSelections] = useState<Record<string, string>>({});
     const boms = data?.boms ?? EMPTY_BOMS;
-    const results = boms
-        .filter(bom => !name || bom.name === name)
-        .filter(
-            bom =>
-                !keyword.trim() ||
-                `${bom.code} ${bom.name} ${bom.spec}`.toLowerCase().includes(keyword.trim().toLowerCase()),
-        )
-        .slice(0, 6);
+    const categories = useMemo(() => [...new Set(boms.map(bom => bom.name))], [boms]);
+    const categoryBoms = useMemo(() => (category ? boms.filter(bom => bom.name === category) : []), [boms, category]);
+    const selectorSchema = useMemo(
+        () =>
+            buildBomSelectorSchema(
+                categoryBoms,
+                categoryOf(category)?.fields.map(field => field.key),
+            ),
+        [categoryBoms, category],
+    );
+    const specFields = useMemo(
+        () => selectorSchema.fields.filter(field => field.kind === "spec"),
+        [selectorSchema.fields],
+    );
+    const fieldOptions = useMemo(
+        () => specFields.map(field => ({ field, options: bomFieldOptions(categoryBoms, field) })),
+        [specFields, categoryBoms],
+    );
+    const matches = useMemo(
+        () => filterBomsBySelections(categoryBoms, specFields, selections),
+        [categoryBoms, specFields, selections],
+    );
+    const hasSelection = specFields.some(field => selections[field.id]);
+
+    const pickCategory = (next: string) => {
+        setCategory(next);
+        setSelections({});
+    };
 
     return (
         <Modal
             open={open}
             onClose={onClose}
             title="快速查找 BOM"
-            subtitle="按品类筛选或关键词搜索"
+            subtitle="品类与规格选项一次全部展示，匹配结果实时收窄"
             width={560}
             footer={
                 <button
@@ -350,37 +377,104 @@ function QuickFindModal({
                 </button>
             }
         >
-            <div className="grid gap-3 sm:grid-cols-3">
-                <SelectField label="品类" value={name} onChange={event => setName(event.target.value)}>
-                    <option value="">全部</option>
-                    {BOM_CATEGORIES.map(item => (
-                        <option key={item.name}>{item.name}</option>
+            <div className="flex flex-col gap-3">
+                <SelectField label="品类" value={category} onChange={event => pickCategory(event.target.value)}>
+                    <option value="">请选择品类</option>
+                    {categories.map(item => (
+                        <option key={item}>{item}</option>
                     ))}
                 </SelectField>
-                <label className="block sm:col-span-2">
-                    <span className="mb-1 block text-12.5 font-medium text-td">关键词</span>
-                    <input
-                        value={keyword}
-                        onChange={event => setKeyword(event.target.value)}
-                        placeholder="编码 / 型号 / 规格"
-                        className="w-full rounded-input border border-line-strong px-3 py-2 text-13 outline-none focus:border-primary"
-                    />
-                </label>
-            </div>
-            <div className="mt-3 flex flex-col gap-1.5">
-                {results.length === 0 && <p className="py-3 text-center text-12.5 text-subtle">没有匹配的 BOM</p>}
-                {results.map(bom => (
-                    <button
-                        key={bom.code}
-                        type="button"
-                        onClick={() => onDetail(bom)}
-                        className="rounded-btn border border-line px-3 py-2 text-left transition hover:border-primary-border hover:bg-primary-soft/40"
-                    >
-                        <span className="text-11.5 font-medium text-muted">{bom.name}</span>
-                        <span className="tnum ml-2 text-12.5 font-semibold text-primary-strong">{bom.code}</span>
-                        <span className="mt-0.5 block truncate text-11.5 text-muted">{bom.spec}</span>
-                    </button>
-                ))}
+
+                {!category && <p className="py-6 text-center text-12.5 text-subtle">请先选择品类，再按规格缩小范围</p>}
+
+                {category && (
+                    <>
+                        {fieldOptions.length > 0 && (
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                {fieldOptions.map(({ field, options }) => (
+                                    <SelectField
+                                        key={field.id}
+                                        label={field.label}
+                                        value={selections[field.id] ?? ""}
+                                        onChange={event =>
+                                            setSelections(current => ({ ...current, [field.id]: event.target.value }))
+                                        }
+                                    >
+                                        <option value="">全部{field.label}</option>
+                                        {options.map(option => (
+                                            <option key={option} value={option}>
+                                                {bomSelectorOptionLabel(option)}
+                                            </option>
+                                        ))}
+                                    </SelectField>
+                                ))}
+                            </div>
+                        )}
+
+                        {selectorSchema.fixedSpecs.length > 0 && (
+                            <div className="rounded-btn border border-line bg-panel px-3.5 py-3">
+                                <p className="text-11.5 font-semibold text-td">固定规格（无需选择）</p>
+                                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                    {selectorSchema.fixedSpecs.map(item => (
+                                        <span
+                                            key={item.key}
+                                            className="rounded-md bg-white px-2 py-1 text-11.5 text-muted shadow-xs"
+                                        >
+                                            {item.key}：{item.value}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <div>
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                                <p className="text-12 text-muted" aria-live="polite">
+                                    匹配 {num(matches.length)} 条 BOM
+                                </p>
+                                {hasSelection && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelections({})}
+                                        className="min-h-10 cursor-pointer rounded-btn border border-line-strong bg-white px-3 text-12 font-medium text-muted transition hover:border-primary-border hover:text-primary"
+                                    >
+                                        清空选择
+                                    </button>
+                                )}
+                            </div>
+                            <div className="flex max-h-70 flex-col gap-1.5 overflow-y-auto">
+                                {matches.length === 0 && (
+                                    <p className="py-3 text-center text-12.5 text-subtle">没有匹配的 BOM，请调整选择</p>
+                                )}
+                                {matches.map(bom => (
+                                    <button
+                                        key={bom.code}
+                                        type="button"
+                                        onClick={() => onDetail(bom)}
+                                        className={`cursor-pointer rounded-btn border px-3 py-2 text-left transition hover:border-primary-border hover:bg-primary-soft/40 ${
+                                            matches.length === 1
+                                                ? "border-primary-border bg-primary-soft/50"
+                                                : "border-line"
+                                        }`}
+                                    >
+                                        <span className="text-11.5 font-medium text-muted">
+                                            {bom.name} · {bom.modelCode}
+                                        </span>
+                                        <span className="tnum ml-2 text-12.5 font-semibold text-primary-strong">
+                                            {bom.code}
+                                        </span>
+                                        {matches.length === 1 && (
+                                            <span className="ml-2 rounded-full bg-white px-1.5 py-0.5 text-10.5 font-medium text-success">
+                                                已定位
+                                            </span>
+                                        )}
+                                        <span className="mt-0.5 block truncate text-11.5 text-muted">{bom.spec}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
         </Modal>
     );
