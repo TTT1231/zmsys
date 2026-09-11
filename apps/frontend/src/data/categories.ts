@@ -1,26 +1,12 @@
-/* 品类元数据：编码规则、已知规格的展示顺序与固定规格，直接维护前端常量，不落库。
- * 新建 BOM 的规格名/值允许自由添加，fields 不是输入格式约束；未登记在此处的新字段也会被订单选择器自动识别。
+/* 开发期 BOM 品类种子：真实后端以 bom_category + GET /bom-categories 为权威来源。
+ * mock 用本文件播种接口；前端不得把这里的值当成绕过服务端校验的依据。
  * - 编码规则：ZM + 品类码 + 序号（宽度见 seqWidth，默认 3 位），如 ZMXK2001（旋转）、ZMXK3001（XK3）、ZMKW0001（新微动，4 位）、ZMKW16001（老微动）、ZMKQ001（琴键）。
  * - defaultValue：品类常量属性（固定部件构成），新建时自动并入档，不参与规格摘要。
  * - initial：已知规格的历史推荐值，仅作元数据保留。 */
-export interface SpecFieldDef {
-    key: string;
-    label: string;
-    type: "select" | "text";
-    options?: string[];
-    required?: boolean;
-    placeholder?: string;
-    initial?: string;
-    defaultValue?: string;
-}
+import type { BomCategory, BomSpecField } from "@/api";
 
-export interface CategoryDef {
-    name: string;
-    codePrefix: string;
-    /** 编码序号宽度（默认 3 位），如新微动全组合用 4 位 */
-    seqWidth?: number;
-    fields: SpecFieldDef[];
-}
+export type SpecFieldDef = BomSpecField;
+export type CategoryDef = BomCategory;
 
 /* 新微动：支架与静片各只装 1 个，6.3 / 4.8 是互斥规格；值中保留规格与镀层，便于级联筛选。 */
 export const NEW_MICRO_SWITCH_BRACKET_OPTIONS = [
@@ -46,6 +32,7 @@ export function newMicroSwitchGaugeOf(value: string | undefined): "6.3" | "4.8" 
 
 export const BOM_CATEGORIES: CategoryDef[] = [
     {
+        key: "rotary-switch",
         name: "旋转开关",
         codePrefix: "XK2",
         fields: [
@@ -73,6 +60,7 @@ export const BOM_CATEGORIES: CategoryDef[] = [
         ],
     },
     {
+        key: "xk3",
         name: "XK3",
         codePrefix: "XK3",
         fields: [
@@ -107,6 +95,7 @@ export const BOM_CATEGORIES: CategoryDef[] = [
         ],
     },
     {
+        key: "new-micro-switch",
         name: "新微动",
         codePrefix: "KW",
         seqWidth: 4,
@@ -151,6 +140,7 @@ export const BOM_CATEGORIES: CategoryDef[] = [
         ],
     },
     {
+        key: "old-micro-switch",
         name: "老微动",
         codePrefix: "KW16",
         fields: [
@@ -169,6 +159,7 @@ export const BOM_CATEGORIES: CategoryDef[] = [
         ],
     },
     {
+        key: "piano-key-switch",
         name: "琴键开关",
         codePrefix: "KQ",
         fields: [

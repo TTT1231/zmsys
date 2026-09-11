@@ -15,7 +15,7 @@ export const ROLE_META: Record<Role, { label: string; roleName: string }> = {
     staff: { label: "员工工作台", roleName: "员工" },
 };
 
-const EMPTY_GRANT: RoleGrant = { menus: [], actions: {} };
+const EMPTY_GRANT: RoleGrant = { version: 0, menus: [], actions: {} };
 
 export type AuthStatus = "loading" | "authenticated" | "guest";
 
@@ -90,10 +90,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
 
     const logout = useCallback(async () => {
-        await logoutRequest();
-        setUser(null);
-        setGrant(EMPTY_GRANT);
-        setStatus("guest");
+        try {
+            await logoutRequest();
+        } catch {
+            // 退出以本地会话清理为准；token 已失效或网络失败都不能把用户困在登录态。
+        } finally {
+            setUser(null);
+            setGrant(EMPTY_GRANT);
+            setStatus("guest");
+        }
     }, []);
 
     const refreshProfile = useCallback(async () => {

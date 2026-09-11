@@ -51,15 +51,16 @@ function CustomerFormModal({
     const [payTerms, setPayTerms] = useState(customer?.payTerms ?? "");
     const { user } = useApp();
     const [ownerAccount, setOwnerAccount] = useState(() => {
-        if (customer) return snap.users.find(item => item.name === customer.owner)?.account ?? "";
+        if (customer) return customer.ownerAccount;
         return user?.role === "sales" ? user.account : "";
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     // 在职销售作为客户负责人候选
-    const salesOptions = snap.users
-        .filter(item => item.role === "sales" && item.active)
-        .map(item => ({ value: item.account, label: `${item.name}（${item.account}）` }));
+    const salesOptions = snap.customerOwnerOptions.map(item => ({
+        value: item.account,
+        label: `${item.name}（${item.account}）`,
+    }));
 
     const submit = () => {
         const nextErrors: Record<string, string> = {};
@@ -93,8 +94,9 @@ function CustomerFormModal({
             toast(customer ? `客户档案 ${saved.code} 已更新` : `客户档案 ${saved.code} 已创建`);
             onClose();
         };
-        if (customer) updateCustomer.mutate({ code: customer.code, ...body }, { onSuccess });
-        else createCustomer.mutate(body, { onSuccess });
+        if (customer) {
+            updateCustomer.mutate({ code: customer.code, expectedVersion: customer.version, ...body }, { onSuccess });
+        } else createCustomer.mutate(body, { onSuccess });
     };
 
     return (
@@ -357,6 +359,7 @@ export function CustomersPage() {
     };
 
     const canCreate = can("customers:create");
+    const canEdit = can("customers:edit");
 
     return (
         <div className="flex flex-col gap-5">
@@ -551,7 +554,7 @@ export function CustomersPage() {
                 <div className="border-t border-line px-5 py-3.5 text-12.5 text-muted">共 {rows.length} 家客户</div>
             </section>
 
-            {canCreate && formTarget !== null && (
+            {formTarget !== null && (formTarget === "new" ? canCreate : canEdit) && (
                 <CustomerFormModal
                     customer={formTarget === "new" ? null : formTarget}
                     snap={snap}
@@ -563,7 +566,7 @@ export function CustomersPage() {
                 snap={snap}
                 onClose={() => setDetail(null)}
                 onEdit={
-                    canCreate
+                    canEdit
                         ? customer => {
                               setDetail(null);
                               setFormTarget(customer);

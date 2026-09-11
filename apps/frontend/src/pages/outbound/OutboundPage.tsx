@@ -1,6 +1,6 @@
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard } from "@/components/ui/MobileList";
-import { useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
@@ -11,13 +11,13 @@ import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { CustomerCell, QtyCell } from "@/components/ui/cells";
 import { DateField, TextArea, TextField } from "@/components/ui/Field";
-import { useCreateOutbound, useWbRefresh, useWbSnapshot } from "@/data/queries";
+import { useCreateOutbound, usePrintOutbound, useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { EMPTY_SNAPSHOT, bomByCode, maxShipOf, remainingOf } from "@/data/views";
 import { todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/Toast";
-import type { OutboundRow, Snapshot } from "@/api";
+import type { OutboundPrintDocument, OutboundRow, Snapshot } from "@/api";
 
 const escapeHtml = (value: string) =>
     value.replace(
@@ -32,27 +32,29 @@ const escapeHtml = (value: string) =>
             })[ch] ?? ch,
     );
 
-/* 新窗口渲染出库单据并调起打印；打印窗口保留，便于另存 PDF */
-function printOutbound(row: OutboundRow, snap: Snapshot) {
-    const bom = bomByCode(snap, row.bomCode);
-    const win = window.open("", "_blank", "width=760,height=640");
-    if (!win) return;
-    win.document.title = `出库单 ${row.no}`;
+const outboundStateLabel = (row: OutboundRow) =>
+    row.state === "registered" ? "已登记 · 待打印" : row.state === "printed" ? "已打印 · 已安排发货" : "已作废";
+
+/* 后端成功登记打印版本后，再向预先打开的窗口渲染单据并调起浏览器打印。 */
+function renderOutboundDocument(document: OutboundPrintDocument, win: Window) {
+    win.document.title = `出库单 ${document.no}`;
     const items: Array<[string, string]> = [
-        ["出库单号", escapeHtml(row.no)],
-        ["关联订单", escapeHtml(row.orderNo)],
-        ["客户", escapeHtml(`${row.customer}（${row.customerCode}）`)],
-        ["BOM 编码", escapeHtml(row.bomCode)],
-        ["规格", escapeHtml(bom?.spec || "—")],
-        ["发货数量", escapeHtml(`${num(row.qty)} 件`)],
-        ["出库日期", escapeHtml(row.date)],
-        ["操作人", escapeHtml(row.operator)],
-        ["备注", escapeHtml(row.remark || "—")],
+        ["出库单号", escapeHtml(document.no)],
+        ["关联订单", escapeHtml(document.orderNo)],
+        ["客户", escapeHtml(`${document.customer}（${document.customerCode}）`)],
+        ["BOM 编码", escapeHtml(document.bomCode)],
+        ["规格", escapeHtml(document.bomSpec || "—")],
+        ["发货数量", escapeHtml(`${num(document.qty)} 件`)],
+        ["出库日期", escapeHtml(document.date)],
+        ["打印版本", escapeHtml(`第 ${document.printVersion} 版`)],
+        ["登记人", escapeHtml(document.operator)],
+        ["打印人", escapeHtml(document.printedBy)],
+        ["备注", escapeHtml(document.remark || "—")],
     ];
     const html = `
     <div style="font-family: Inter, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; max-width: 640px; margin: 32px auto; color: #101828;">
       <h1 style="margin: 0 0 4px; font-size: 20px;">出库单</h1>
-      <p style="margin: 0 0 16px; font-size: 12px; color: #667085;">智造管理系统 · 打印时间 ${new Date().toLocaleString()}</p>
+      <p style="margin: 0 0 16px; font-size: 12px; color: #667085;">智造管理系统 · 打印时间 ${new Date(document.printedAt).toLocaleString()}</p>
       <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
         ${items
             .map(
@@ -68,6 +70,68 @@ function printOutbound(row: OutboundRow, snap: Snapshot) {
     const doc = new DOMParser().parseFromString(html, "text/html");
     win.document.body.replaceChildren(...doc.body.childNodes);
     win.print();
+}
+
+function ReprintModal({
+    row,
+    pending,
+    onClose,
+    onConfirm,
+}: {
+    row: OutboundRow;
+    pending: boolean;
+    onClose: () => void;
+    onConfirm: (reason: string) => void;
+}) {
+    const [reason, setReason] = useState("");
+    const [error, setError] = useState("");
+    const formId = `reprint-${row.no}`;
+    const submit = (event: FormEvent) => {
+        event.preventDefault();
+        const value = reason.trim();
+        if (value.length < 2) {
+            setError("请填写重打原因（至少 2 个字）");
+            return;
+        }
+        setError("");
+        onConfirm(value);
+    };
+    const close = () => {
+        if (!pending) onClose();
+    };
+
+    return (
+        <Modal
+            open
+            onClose={close}
+            title="重打出库单"
+            subtitle={`${row.no} · 将生成第 ${row.printVersion + 1} 版`}
+            label="重打出库单"
+            width={440}
+            footer={
+                <>
+                    <Button variant="secondary" type="button" disabled={pending} onClick={close}>
+                        取消
+                    </Button>
+                    <Button type="submit" form={formId} disabled={pending}>
+                        {pending ? "正在登记打印…" : "确认重打"}
+                    </Button>
+                </>
+            }
+        >
+            <form id={formId} onSubmit={submit} aria-busy={pending}>
+                <TextArea
+                    label="重打原因"
+                    required
+                    value={reason}
+                    error={error}
+                    placeholder="例如：纸张破损、内容模糊"
+                    onChange={event => setReason(event.target.value)}
+                />
+                <p className="mt-2 text-12 text-muted">原打印版本永久保留，本次成功后旧版本显示为已取代。</p>
+            </form>
+        </Modal>
+    );
 }
 
 export function OutboundModal({
@@ -322,6 +386,8 @@ function OutboundDetailModal({ row, snap, onClose }: { row: OutboundRow | null; 
                     ["BOM 编码", row.bomCode],
                     ["发货数量", `${num(row.qty)} 件`],
                     ["出库日期", row.date],
+                    ["系统状态", outboundStateLabel(row)],
+                    ["打印版本", row.printVersion ? `第 ${row.printVersion} 版` : "尚未打印"],
                     ["操作人", row.operator],
                     ["备注", row.remark || "—"],
                 ].map(([label, value]) => (
@@ -339,6 +405,8 @@ export function OutboundPage() {
     const { can } = useApp();
     const { data, isLoading, isFetching } = useWbSnapshot();
     const { refresh } = useWbRefresh();
+    const printRequest = usePrintOutbound();
+    const toast = useToast();
     // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
     const overlay = useDelayedFlag(isFetching && !isLoading);
     const snap = data ?? EMPTY_SNAPSHOT;
@@ -349,6 +417,7 @@ export function OutboundPage() {
     const [pageSize] = useState(10);
     const [newOpen, setNewOpen] = useState(false);
     const [detail, setDetail] = useState<OutboundRow | null>(null);
+    const [reprintTarget, setReprintTarget] = useState<OutboundRow | null>(null);
 
     const rows = snap.outboundLedger;
     const boms = snap.boms;
@@ -371,6 +440,32 @@ export function OutboundPage() {
     const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize);
     const canRegister = can("outbound:ship");
     const canPrint = can("outbound:print");
+
+    const requestPrint = (row: OutboundRow, reason = "") => {
+        if (printRequest.isPending || row.state === "voided") return;
+        const win = window.open("", "_blank", "width=760,height=640");
+        if (!win) {
+            toast("浏览器拦截了打印窗口，请允许本站打开新窗口后重试", true);
+            return;
+        }
+        win.opener = null;
+        win.document.title = `正在生成出库单 ${row.no}`;
+        win.document.body.textContent = "正在登记打印版本并生成出库单…";
+        printRequest.mutate(
+            { no: row.no, expectedVersion: row.version, reason },
+            {
+                onError: error => {
+                    win.close();
+                    toast(error.message, true);
+                },
+                onSuccess: result => {
+                    setReprintTarget(null);
+                    if (!win.closed) renderOutboundDocument(result.document, win);
+                    toast(`${row.no} 第 ${result.printVersion} 版已登记打印`);
+                },
+            },
+        );
+    };
 
     useEffect(() => {
         if (searchParams.get("new") === "outbound") {
@@ -473,9 +568,22 @@ export function OutboundPage() {
                                 subtitle={`${row.orderNo} · ${row.date}`}
                                 badge={<strong className="text-primary">{num(row.qty)} 件</strong>}
                                 actions={
-                                    <Button variant="secondary" onClick={() => setDetail(row)}>
-                                        查看凭证
-                                    </Button>
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button variant="secondary" onClick={() => setDetail(row)}>
+                                            查看凭证
+                                        </Button>
+                                        {canPrint && row.state !== "voided" && (
+                                            <Button
+                                                variant="secondary"
+                                                disabled={printRequest.isPending}
+                                                onClick={() =>
+                                                    row.state === "printed" ? setReprintTarget(row) : requestPrint(row)
+                                                }
+                                            >
+                                                {row.state === "printed" ? "重打" : "打印"}
+                                            </Button>
+                                        )}
+                                    </div>
                                 }
                             >
                                 <p>{row.bomCode}</p>
@@ -538,13 +646,22 @@ export function OutboundPage() {
                                                 >
                                                     查看详情
                                                 </button>
-                                                {canPrint && (
+                                                {canPrint && row.state !== "voided" && (
                                                     <button
                                                         type="button"
-                                                        onClick={() => printOutbound(row, snap)}
-                                                        className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline"
+                                                        disabled={printRequest.isPending}
+                                                        onClick={() =>
+                                                            row.state === "printed"
+                                                                ? setReprintTarget(row)
+                                                                : requestPrint(row)
+                                                        }
+                                                        className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                                                     >
-                                                        打印
+                                                        {printRequest.isPending && printRequest.variables?.no === row.no
+                                                            ? "处理中…"
+                                                            : row.state === "printed"
+                                                              ? "重打"
+                                                              : "打印"}
                                                     </button>
                                                 )}
                                             </div>
@@ -569,6 +686,14 @@ export function OutboundPage() {
 
             {canRegister && <OutboundModal open={newOpen} onClose={() => setNewOpen(false)} />}
             <OutboundDetailModal row={detail} snap={snap} onClose={() => setDetail(null)} />
+            {reprintTarget && (
+                <ReprintModal
+                    row={reprintTarget}
+                    pending={printRequest.isPending}
+                    onClose={() => setReprintTarget(null)}
+                    onConfirm={reason => requestPrint(reprintTarget, reason)}
+                />
+            )}
         </div>
     );
 }

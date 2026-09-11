@@ -88,7 +88,6 @@ describe("mock db business write rules", () => {
         db.createOrder(
             {
                 customerCode: "CUS-1024",
-                customer: "华兴精密制造",
                 bomCode: db.boms[0]!.code,
                 qty: 5,
                 deliverStart: "2026-03-20",
@@ -113,15 +112,32 @@ describe("mock db business write rules", () => {
         const shipped = db.orders.find(order => order.outbound > 0);
         expect(shipped).toBeTruthy();
         if (!shipped) return;
-        expect(() => db.updateOrder({ orderNo: shipped.orderNo, qty: shipped.outbound - 1 })).toThrow(
-            "新数量不能低于累计已发",
-        );
+        expect(() =>
+            db.updateOrder(
+                {
+                    orderNo: shipped.orderNo,
+                    expectedVersion: shipped.version,
+                    qty: shipped.outbound - 1,
+                },
+                actor,
+            ),
+        ).toThrow("新数量不能低于累计已发");
         // 恰好等于已发量允许（就发这么多，订单结束）
-        expect(db.updateOrder({ orderNo: shipped.orderNo, qty: shipped.outbound }).qty).toBe(shipped.outbound);
-        expect(() => db.updateOrder({ orderNo: shipped.orderNo, deliverEnd: "2020-01-01" })).toThrow(
-            "交货截止日期不能早于起始日期",
-        );
-        expect(() => db.updateOrder({ orderNo: "ZM-NOPE", qty: 1 })).toThrow("订单不存在");
+        expect(
+            db.updateOrder({ orderNo: shipped.orderNo, expectedVersion: shipped.version, qty: shipped.outbound }, actor)
+                .qty,
+        ).toBe(shipped.outbound);
+        expect(() =>
+            db.updateOrder(
+                {
+                    orderNo: shipped.orderNo,
+                    expectedVersion: shipped.version,
+                    deliverEnd: "2020-01-01",
+                },
+                actor,
+            ),
+        ).toThrow("交货截止日期不能早于起始日期");
+        expect(() => db.updateOrder({ orderNo: "ZM-NOPE", expectedVersion: 1, qty: 1 }, actor)).toThrow("订单不存在");
     });
 
     it("creates and updates customers with region fields, masked phone and derived cooperation", () => {
@@ -141,7 +157,7 @@ describe("mock db business write rules", () => {
             ownerAccount: "chen_jie",
             payTerms: "月结 30 天",
         };
-        const customer = db.createCustomer(payload);
+        const customer = db.createCustomer(payload, actor);
         expect(customer.code).toBe(`CUS-${String(seqBefore + 1).padStart(4, "0")}`);
         expect(customer.phone).toBe("138****5678");
         expect(customer).not.toHaveProperty("phoneFull");
@@ -152,25 +168,35 @@ describe("mock db business write rules", () => {
         expect(customer.cooperation).toBe("待跟进");
 
         // 编辑：电话留空保持原掩码；付款条件与联系人可改
-        const updated = db.updateCustomer(customer.code, {
-            ...payload,
-            name: "新客户精密制造有限公司",
-            contact: "李女士",
-            phone: "",
-            payTerms: "月结 60 天",
-        });
+        const updated = db.updateCustomer(
+            customer.code,
+            {
+                ...payload,
+                expectedVersion: customer.version,
+                name: "新客户精密制造有限公司",
+                contact: "李女士",
+                phone: "",
+                payTerms: "月结 60 天",
+            },
+            actor,
+        );
         expect(updated.contact).toBe("李女士");
         expect(updated.phone).toBe("138****5678");
         expect(updated.payTerms).toBe("月结 60 天");
 
         // 负责人须为在职销售
-        expect(() => db.updateCustomer(customer.code, { ...payload, ownerAccount: "sys_admin" })).toThrow("在职销售");
+        expect(() =>
+            db.updateCustomer(
+                customer.code,
+                { ...payload, expectedVersion: updated.version, ownerAccount: "sys_admin" },
+                actor,
+            ),
+        ).toThrow("在职销售");
 
         // 有近期订单后派生为合作中
-        db.createOrder(
+        const recentOrder = db.createOrder(
             {
                 customerCode: customer.code,
-                customer: customer.name,
                 bomCode: db.boms[0]!.code,
                 qty: 5,
                 deliverStart: "2026-03-20",
@@ -181,6 +207,8 @@ describe("mock db business write rules", () => {
             actor,
         );
         expect(db.listCustomers().find(item => item.code === customer.code)?.cooperation).toBe("合作中");
+        db.cancelOrder(recentOrder.orderNo, recentOrder.version, "测试取消", actor);
+        expect(db.listCustomers().find(item => item.code === customer.code)?.cooperation).toBe("待跟进");
     });
 
     it("validates account format and uniqueness when creating users", () => {
@@ -193,28 +221,301 @@ describe("mock db business write rules", () => {
     });
 
     it("keeps super role immutable and super account always active", () => {
-        db.updateUser(SUPER_ACCOUNT, { name: "超管改名", role: "staff" });
+        const initialSuper = db.listUsers().find(item => item.account === SUPER_ACCOUNT)!;
+        db.updateUser(SUPER_ACCOUNT, { expectedVersion: initialSuper.version, name: "超管改名", role: "staff" }, actor);
         const superUser = db.listUsers().find(item => item.account === SUPER_ACCOUNT)!;
         expect(superUser.name).toBe("超管改名");
         expect(superUser.role).toBe("super"); // 角色不被覆盖
-        expect(() => db.setUserActive(SUPER_ACCOUNT, false)).toThrow("超级管理员不可停用");
-        db.updateUser(SUPER_ACCOUNT, { name: "系统管理员", role: "super" }); // 还原种子展示名
+        expect(() =>
+            db.setUserActive(SUPER_ACCOUNT, { expectedVersion: superUser.version, active: false }, actor),
+        ).toThrow("超级管理员不可停用");
+        db.updateUser(SUPER_ACCOUNT, { expectedVersion: superUser.version, name: "系统管理员", role: "super" }, actor); // 还原种子展示名
         const staff = db.createUser({ name: "可停用", account: "test_pause_01", role: "staff" });
-        expect(db.setUserActive(staff.account, false).active).toBe(false);
-        expect(db.setUserActive(staff.account, true).active).toBe(true);
+        const inactive = db.setUserActive(staff.account, { expectedVersion: staff.version, active: false }, actor);
+        expect(inactive.active).toBe(false);
+        expect(db.setUserActive(staff.account, { expectedVersion: inactive.version, active: true }, actor).active).toBe(
+            true,
+        );
     });
 
     it("saves role grants and appends grant log", () => {
         const original = structuredClone(db.getGrant("warehouse"));
-        const changed = { menus: [...original.menus, "customers"], actions: { ...original.actions } };
+        const changed = {
+            version: original.version,
+            menus: [...original.menus, "customers"],
+            actions: { ...original.actions },
+        };
         const logBefore = db.grantLog.length;
-        db.saveGrants("warehouse", changed, "测试授权变更", actor);
+        const saved = db.saveGrants("warehouse", changed, original.version, "测试授权变更", actor);
         expect(db.getGrant("warehouse").menus).toContain("customers");
         expect(db.grantLog.length).toBe(logBefore + 1);
         expect(db.grantLog[0]!.text).toBe("测试授权变更");
-        // 空备注不写日志；恢复原授权，避免影响其他用例
-        db.saveGrants("warehouse", original, "", actor);
-        expect(db.grantLog.length).toBe(logBefore + 1);
-        expect(db.getGrant("warehouse")).toEqual(original);
+        // 即使未填写补充说明也记录保存动作；恢复原授权，避免影响其他用例
+        db.saveGrants("warehouse", original, saved.version, "", actor);
+        expect(db.grantLog.length).toBe(logBefore + 2);
+        expect(db.getGrant("warehouse")).toMatchObject({ menus: original.menus, actions: original.actions });
+    });
+});
+
+describe("mock db backend constraint contract", () => {
+    const superActor = { account: "sys_admin", role: "super" as const, name: "系统管理员", roleLabel: "超级管理员" };
+
+    it("invalidates every previously issued JWT version after a password change", () => {
+        const user = db.createUser({ name: "改密测试", account: "password_version_01", role: "staff" });
+        const oldToken = db.issueToken(user.account);
+        expect(db.resolveToken(oldToken)?.account).toBe(user.account);
+
+        db.changePassword(user.account, "123456", "new-password-01");
+        expect(db.resolveToken(oldToken)).toBeNull();
+        expect(db.verifyLogin(user.account, "123456")).toBeNull();
+        expect(db.verifyLogin(user.account, "new-password-01")?.account).toBe(user.account);
+        expect(db.resolveToken(db.issueToken(user.account))?.account).toBe(user.account);
+    });
+
+    it("validates the backend BOM schema and rejects canonical duplicates", () => {
+        const created = db.createBom({
+            name: "琴键开关",
+            modelCode: "AUDIT-MODEL-01",
+            specs: { 类型: "四键焊线", 弹簧: "0.3" },
+        });
+        expect(created.code).toMatch(/^ZMKQ\d{3,}$/);
+
+        expect(() =>
+            db.createBom({
+                name: "琴键开关",
+                modelCode: " audit-model-01 ",
+                specs: { 弹簧: "0.3", 类型: "四键焊线" },
+            }),
+        ).toThrow(`BOM 已存在：${created.code}`);
+
+        expect(() => db.createBom({ name: "琴键开关", modelCode: "AUDIT-MISSING", specs: { 弹簧: "0.3" } })).toThrow(
+            "请填写规格：类型",
+        );
+        expect(() =>
+            db.createBom({
+                name: "琴键开关",
+                modelCode: "AUDIT-UNKNOWN",
+                specs: { 类型: "四键焊线", 未定义字段: "值" },
+            }),
+        ).toThrow("未定义的字段");
+
+        const fixed = db.createBom({
+            name: "旋转开关",
+            modelCode: "AUDIT-FIXED-01",
+            specs: { 脚位: "二脚", 档位: "一档", 杆子高度: "客户端错误值" },
+        });
+        expect(fixed.specs.杆子高度).toBe("4.8");
+    });
+
+    it("allows same-day inbound correction with audit, rejects stale versions, and voids without deletion", () => {
+        const bomCode = db.boms[0]!.code;
+        const initialStock = db.stockOf(bomCode);
+        const logBefore = db.inboundChangeLog.length;
+        const inbound = db.createInbound({ bomCode, qty: 10, date: ANCHOR, remark: "原记录" }, superActor);
+        const updated = db.updateInbound(
+            inbound.no,
+            {
+                expectedVersion: inbound.version,
+                bomCode,
+                qty: 12,
+                date: ANCHOR,
+                remark: "已修正",
+                reason: "数量录错",
+            },
+            superActor,
+        );
+        expect(updated).toMatchObject({ qty: 12, version: 2, status: "active" });
+        expect(db.stockOf(bomCode)).toBe(initialStock + 12);
+        expect(db.inboundChangeLog[0]).toMatchObject({ inboundNo: inbound.no, action: "update", reason: "数量录错" });
+        expect(() =>
+            db.updateInbound(
+                inbound.no,
+                { expectedVersion: 1, bomCode, qty: 13, date: ANCHOR, remark: "", reason: "并发旧值" },
+                superActor,
+            ),
+        ).toThrow("其他人修改");
+
+        const voided = db.voidInbound(inbound.no, updated.version, "整单录错", superActor);
+        expect(voided).toMatchObject({ status: "voided", version: 3 });
+        expect(db.inboundLedger.some(row => row.no === inbound.no)).toBe(true);
+        expect(db.stockOf(bomCode)).toBe(initialStock);
+        expect(db.inboundChangeLog).toHaveLength(logBefore + 2);
+
+        const historical = db.inboundLedger.find(
+            row => row.status === "active" && row.createdAt.slice(0, 10) !== ANCHOR,
+        )!;
+        expect(() =>
+            db.updateInbound(
+                historical.no,
+                {
+                    expectedVersion: historical.version,
+                    bomCode: historical.bomCode,
+                    qty: historical.qty,
+                    date: historical.date,
+                    remark: historical.remark ?? "",
+                    reason: "跨日修正",
+                },
+                superActor,
+            ),
+        ).toThrow("只能修正北京时间当天");
+    });
+
+    it("uses immutable stock adjustments for cross-day corrections", () => {
+        const bomCode = db.boms[0]!.code;
+        const initialStock = db.stockOf(bomCode);
+        expect(() =>
+            db.createStockAdjustment(
+                { bomCode, qtyDelta: -(initialStock + 1), date: ANCHOR, reason: "错误扣减" },
+                superActor,
+            ),
+        ).toThrow("库存不能小于 0");
+        const positive = db.createStockAdjustment(
+            { bomCode, qtyDelta: 5, date: ANCHOR, reason: "历史入库少记" },
+            superActor,
+        );
+        expect(db.stockOf(bomCode)).toBe(initialStock + 5);
+        const reversal = db.createStockAdjustment(
+            { bomCode, qtyDelta: -5, date: ANCHOR, reason: "调整单再次录错" },
+            superActor,
+        );
+        expect(positive.no).not.toBe(reversal.no);
+        expect(db.stockOf(bomCode)).toBe(initialStock);
+    });
+
+    it("blocks order cancellation while an unprinted shipment exists, then reverses that shipment before cancel", () => {
+        const candidate = readyToShip(db.snapshot()).find(row => row.maxShip >= 1)!;
+        const order = db.orders.find(item => item.orderNo === candidate.orderNo)!;
+        const initialOutbound = order.outbound;
+        const initialStock = db.stockOf(order.bomCode);
+        const initialOrderVersion = order.version;
+        const eventCount = db.outboundQuantityEvents.length;
+        const shipment = db.createOutbound({ orderNo: order.orderNo, qty: 1, date: ANCHOR, remark: "" }, superActor);
+
+        expect(order.version).toBe(initialOrderVersion + 1);
+        expect(() => db.cancelOrder(order.orderNo, order.version, "客户取消", superActor)).toThrow("请先作废");
+        const voided = db.voidOutbound(shipment.no, shipment.version, "登记错误", superActor);
+        expect(voided.state).toBe("voided");
+        expect(order.outbound).toBe(initialOutbound);
+        expect(db.stockOf(order.bomCode)).toBe(initialStock);
+        expect(db.outboundQuantityEvents.slice(eventCount)).toMatchObject([
+            { shipmentNo: shipment.no, qtyDelta: 1 },
+            { shipmentNo: shipment.no, qtyDelta: -1, correctionOf: `${shipment.no}-E01` },
+        ]);
+
+        const cancelled = db.cancelOrder(order.orderNo, order.version, "客户取消剩余", superActor);
+        expect(cancelled.lifecycleStatus).toBe("cancelled");
+        expect(db.remainingOf(cancelled)).toBe(0);
+        expect(db.salesOrderChangeLog[0]).toMatchObject({ event: "cancel", orderNo: order.orderNo });
+    });
+
+    it("does not relabel a fully shipped order as cancelled", () => {
+        const completed = db.orders.find(order => order.lifecycleStatus === "active" && order.outbound >= order.qty)!;
+        expect(() => db.cancelOrder(completed.orderNo, completed.version, "客户取消", superActor)).toThrow(
+            "没有剩余数量",
+        );
+        expect(completed.lifecycleStatus).toBe("active");
+    });
+
+    it("treats printing as release, versions reprints, and preserves printed quantity when cancelling the remainder", () => {
+        const candidate = readyToShip(db.snapshot()).find(row => row.maxShip >= 1)!;
+        const order = db.orders.find(item => item.orderNo === candidate.orderNo)!;
+        const outboundBefore = order.outbound;
+        const shipment = db.createOutbound({ orderNo: order.orderNo, qty: 1, date: ANCHOR, remark: "" }, superActor);
+        const registeredVersion = shipment.version;
+        const first = db.printOutbound(shipment.no, registeredVersion, "", superActor);
+        expect(first).toMatchObject({ printVersion: 1, outbound: { state: "printed", version: 2 } });
+        expect(first.document).toMatchObject({
+            no: shipment.no,
+            printVersion: 1,
+            printedBy: superActor.name,
+            bomCode: shipment.bomCode,
+        });
+        expect(db.outboundPrintLog[0]!.documentSnapshot).toEqual(first.document);
+        expect(() => db.voidOutbound(shipment.no, registeredVersion, "旧请求", superActor)).toThrow("其他人处理");
+        expect(() => db.printOutbound(shipment.no, first.outbound.version, "", superActor)).toThrow("重打必须填写原因");
+
+        const second = db.printOutbound(shipment.no, first.outbound.version, "纸张破损", superActor);
+        expect(second.printVersion).toBe(2);
+        expect(db.outboundPrintLog.filter(row => row.shipmentNo === shipment.no).map(row => row.printVersion)).toEqual([
+            2, 1,
+        ]);
+        const cancelled = db.cancelOrder(order.orderNo, order.version, "取消剩余数量", superActor);
+        expect(cancelled.lifecycleStatus).toBe("cancelled");
+        expect(cancelled.outbound).toBe(outboundBefore + 1);
+        expect(db.printOutbound(shipment.no, second.outbound.version, "取消后补打存档", superActor).printVersion).toBe(
+            3,
+        );
+    });
+
+    it("allows only confirmed super emergency void of a printed shipment", () => {
+        const candidate = readyToShip(db.snapshot()).find(row => row.maxShip >= 1)!;
+        const order = db.orders.find(item => item.orderNo === candidate.orderNo)!;
+        const initialOutbound = order.outbound;
+        const initialStock = db.stockOf(order.bomCode);
+        const shipment = db.createOutbound({ orderNo: order.orderNo, qty: 1, date: ANCHOR, remark: "" }, superActor);
+        const printed = db.printOutbound(shipment.no, shipment.version, "", superActor).outbound;
+        expect(() =>
+            db.emergencyVoidOutbound(printed.no, printed.version, "客户临时叫停", false, true, superActor),
+        ).toThrow("必须确认货物尚未离开");
+
+        const voided = db.emergencyVoidOutbound(printed.no, printed.version, "客户临时叫停", true, true, superActor);
+        expect(voided.state).toBe("voided");
+        expect(order.outbound).toBe(initialOutbound);
+        expect(db.stockOf(order.bomCode)).toBe(initialStock);
+        expect(db.outboundStateLog[0]).toMatchObject({
+            event: "void-emergency",
+            detail: { goodsNotDeparted: true, paperInvalidated: true },
+        });
+    });
+
+    it("atomically transfers every customer before deactivating a sales owner", () => {
+        const sales = db.listUsers().find(user => user.account === "chen_jie")!;
+        const ownedBefore = db.customers.filter(customer => customer.ownerAccount === sales.account);
+        expect(ownedBefore.length).toBeGreaterThan(0);
+        const replacement = db.createUser({ name: "接任销售", account: "replacement_sales_01", role: "sales" });
+        const historyBefore = db.customerOwnerHistory.length;
+        const token = db.issueToken(sales.account);
+
+        expect(() =>
+            db.setUserActive(sales.account, { expectedVersion: sales.version, active: false }, superActor),
+        ).toThrow("请先选择接任销售");
+        expect(db.customers.filter(customer => customer.ownerAccount === sales.account)).toHaveLength(
+            ownedBefore.length,
+        );
+
+        const inactive = db.setUserActive(
+            sales.account,
+            {
+                expectedVersion: sales.version,
+                active: false,
+                replacementOwnerAccount: replacement.account,
+                transferReason: "原负责人离职",
+            },
+            superActor,
+        );
+        expect(inactive.active).toBe(false);
+        expect(db.resolveToken(token)).toBeNull();
+        expect(db.customers.filter(customer => customer.ownerAccount === sales.account)).toHaveLength(0);
+        expect(db.customers.filter(customer => customer.ownerAccount === replacement.account)).toHaveLength(
+            ownedBefore.length,
+        );
+        expect(db.customerOwnerHistory.length).toBe(historyBefore + ownedBefore.length);
+    });
+
+    it("does not grant protected operations and records no-op grant saves without version churn", () => {
+        const current = structuredClone(db.getGrant("staff"));
+        const forbidden = {
+            ...current,
+            menus: [...current.menus, "permissions"],
+            actions: { ...current.actions, permissions: ["view"] },
+        };
+        expect(() => db.saveGrants("staff", forbidden, current.version, "越权测试", superActor)).toThrow("受保护");
+        expect(db.getGrant("staff")).toEqual(current);
+
+        const logBefore = db.grantLog.length;
+        const noOp = db.saveGrants("staff", current, current.version, "", superActor);
+        expect(noOp.version).toBe(current.version);
+        expect(db.grantLog).toHaveLength(logBefore + 1);
+        expect(db.grantLog[0]!.text).toContain("无变化");
     });
 });

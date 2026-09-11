@@ -1,10 +1,34 @@
-import type { CreateInboundInput, InboundRow } from "./types";
+import type {
+    CreateInboundInput,
+    CreateStockAdjustmentInput,
+    InboundRow,
+    StockAdjustmentRow,
+    UpdateInboundInput,
+    VoidInboundInput,
+} from "./types";
 import { requestClient } from "@/http";
+import { idempotencyConfig } from "./idempotency";
 
 export function fetchInboundLedger(): Promise<InboundRow[]> {
     return requestClient.get<InboundRow[]>("/inbound");
 }
 
 export function createInbound(input: CreateInboundInput): Promise<InboundRow> {
-    return requestClient.post<InboundRow>("/inbound", input);
+    return requestClient.post<InboundRow>("/inbound", input, idempotencyConfig());
+}
+
+export function updateInbound(no: string, input: UpdateInboundInput): Promise<InboundRow> {
+    return requestClient.put<InboundRow>(`/inbound/${no}`, input);
+}
+
+export function voidInbound(no: string, input: VoidInboundInput): Promise<InboundRow> {
+    return requestClient.post<InboundRow>(`/inbound/${no}/void`, input, idempotencyConfig());
+}
+
+export function fetchStockAdjustments(): Promise<StockAdjustmentRow[]> {
+    return requestClient.get<StockAdjustmentRow[]>("/stock-adjustments");
+}
+
+export function createStockAdjustment(input: CreateStockAdjustmentInput): Promise<StockAdjustmentRow> {
+    return requestClient.post<StockAdjustmentRow>("/stock-adjustments", input, idempotencyConfig());
 }

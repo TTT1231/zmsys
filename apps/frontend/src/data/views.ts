@@ -9,11 +9,14 @@ export const EMPTY_SNAPSHOT: Snapshot = {
     version: 0,
     orders: [],
     boms: [],
+    bomCategories: [],
     customers: [],
     inboundLedger: [],
     outboundLedger: [],
+    stockAdjustments: [],
     stock: {},
     users: [],
+    customerOwnerOptions: [],
 };
 
 export function bomByCode(snap: Pick<Snapshot, "boms">, code: string): Bom | undefined {
@@ -25,10 +28,13 @@ export function stockOf(snap: Pick<Snapshot, "stock">, bomCode: string): number 
 }
 
 export function remainingOf(order: Order): number {
+    if (order.lifecycleStatus === "cancelled") return 0;
     return Math.max(0, order.qty - order.outbound);
 }
 
 export function orderStatusOf(snap: Pick<Snapshot, "stock">, order: Order): OrderStatus {
+    if (order.lifecycleStatus === "cancelled")
+        return { label: order.outbound > 0 ? "部分发货后取消" : "已取消", key: "cancelled" };
     if (order.outbound >= order.qty) return { label: "已完成", key: "done" };
     if (order.outbound > 0) return { label: "部分发货", key: "progress" };
     if (stockOf(snap, order.bomCode) > 0) return { label: "可发货", key: "ready" };
@@ -121,19 +127,23 @@ export function dailyTrend(snap: Snapshot, days: number): TrendRow[] {
             row.orderedCount += 1;
         }
     });
-    snap.inboundLedger.forEach(row => {
-        const bucket = index.get(row.date);
-        if (bucket) {
-            bucket.inboundQty += row.qty;
-            bucket.inboundCount += 1;
-        }
-    });
-    snap.outboundLedger.forEach(row => {
-        const bucket = index.get(row.date);
-        if (bucket) {
-            bucket.outboundQty += row.qty;
-            bucket.outboundCount += 1;
-        }
-    });
+    snap.inboundLedger
+        .filter(row => row.status === "active")
+        .forEach(row => {
+            const bucket = index.get(row.date);
+            if (bucket) {
+                bucket.inboundQty += row.qty;
+                bucket.inboundCount += 1;
+            }
+        });
+    snap.outboundLedger
+        .filter(row => row.state !== "voided")
+        .forEach(row => {
+            const bucket = index.get(row.date);
+            if (bucket) {
+                bucket.outboundQty += row.qty;
+                bucket.outboundCount += 1;
+            }
+        });
     return result;
 }

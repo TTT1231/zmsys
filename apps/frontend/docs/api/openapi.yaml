@@ -1,42 +1,55 @@
 openapi: 3.1.0
 info:
     title: 智造管理系统 API
-    version: 0.1.0
+    version: 0.2.0
     description: |
-        前后端对接契约。与以下三处保持一致，修改时须同步：
-        - TS 类型：`src/api/types.ts`（契约类型中心）
-        - Mock 实现：`src/mocks/request/`（可执行契约，MSW handlers）
+        后端实现基线。修改接口时必须同步 `src/api/types.ts`、`mocks/request/` 与本文件。
 
-        ## 全局约定
-        - **统一响应信封**：`{code, data, message}`；`code=0` 成功，非 0 业务失败（与 HTTP 状态码一致，业务错误用 4xx）。
-        - **鉴权**：除 `POST /auth/login` 外全部需要 `Authorization: Bearer <accessToken>`；token 失效返回 401（登录失败用 400，避免与 401 混淆）。JWT 只携带身份（userId + 角色），权限实时查 sys_grant。
-        - **写操作按权限码校验 403**（各端点 description 标注 required 权限码）；**GET 端点登录即可读**（view 权限仅控制前端菜单可见性）。勾选菜单授权即蕴含其 view 动作。
-        - **业务编码即 key**（db-scheme.md）：订单用 `order_no`、客户用 `customer_code`、BOM 用 `bom_code`、台账用 `no`、用户用 `account`；雪花 id 不出后端；`account` 创建后不可改。
-        - **库存无独立端点**：`stock = Σ入库 − Σ出库`，由前端基于两本台账推导；后端出库时按交期顺序做可发量校验（事务内完成，防并发超卖）。
-        - **统计前端算**：工作台派生视图（待发货/缺口/趋势/TOP 客户）由前端基于各资源数据计算，后端只提供基础 CRUD。
-        - **操作留痕**：仅三种写操作记 op_log——登记发货、新建客户、新建销售订单（见 db-scheme §2.4）；权限变更记 sys_grant_log（§2.3）。
-        - 日期均为 `yyyy-MM-dd`，时间 `HH:mm`（本地时区）。
+        ## 鉴权与授权
+        - 登录以账号和密码换取 JWT。JWT 本身不存数据库，后端用密钥验证签名、有效期、签发者和受众。
+        - JWT 至少包含 `sub`（用户 id 字符串）、`ver`（签发时的 token_version）、`iat`、`exp`、`jti`。
+        - 除登录和幂等退出外，每次请求均按 `sub` 查询当前 `sys_user`，校验启用状态及 `ver=token_version`，并使用数据库中的当前角色和实时授权；不得信任旧角色 claim。
+        - 改密、停用和角色变更会递增 token_version。改密成功后旧 JWT 立即失效，客户端清除 token 并重新登录。
+        - 每个端点都校验其描述中的权限码；前端菜单和按钮隐藏不是安全边界。
+
+        ## 数据一致性
+        - 响应统一为 `{code, data, message}`；成功 `code=0`，失败 code 与 HTTP 4xx/5xx 一致。
+        - 创建、取消、作废、库存调整及打印类 POST 必须携带 `Idempotency-Key`。同一用户、操作和 key 的相同请求重放原成功响应；请求体不同返回 409。
+        - 可变资源使用 `expectedVersion` 做乐观锁；版本或并发业务状态冲突返回 409。
+        - 业务编码由后端通过 `biz_sequence` 事务取号，禁止使用 `MAX(code)+1`。
+        - 库存 = 有效入库合计 + 库存调整合计 - 有效出库净额。出库登记、作废、打印与订单取消按固定顺序加行锁并在一个事务提交。
+        - 业务日期使用 `yyyy-MM-dd`；系统时间使用带时区 ISO 8601，数据库保存 UTC。
+        - 当前前端由基础资源的完整计算窗口派生工作台数据；启用服务端分页前必须提供对应聚合端点，不能以分页局部数据计算库存。
 servers:
     - url: /api
-      description: 开发环境（Vite 代理 / MSW 拦截）
+      description: Vite 代理或 MSW
 security:
     - bearerAuth: []
 
 tags:
     - name: auth
+      description: JWT 会话与个人资料
     - name: orders
+      description: 销售订单及取消
     - name: customers
+      description: 客户档案与负责人候选
     - name: boms
+      description: 成品/BOM 档案与后端规格目录
     - name: inbound
+      description: 成品入库、当天修正和库存调整
     - name: outbound
+      description: 出库登记、打印、作废与紧急撤销
     - name: users
+      description: 系统用户与离岗移交
     - name: roles
+      description: 固定角色、实时授权与授权日志
 
 paths:
     /auth/login:
         post:
             tags: [auth]
-            summary: 登录（无需鉴权）
+            operationId: login
+            summary: 账号密码登录
             security: []
             requestBody:
                 required: true
@@ -48,116 +61,86 @@ paths:
                     description: 登录成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data:
-                                              type: object
-                                              properties:
-                                                  accessToken: { type: string }
-                                                  user: { $ref: "#/components/schemas/WbUser" }
-                "400":
-                    description: 账号或密码错误 / 账号被停用
-                    content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } }
+                            schema: { $ref: "#/components/schemas/LoginEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
 
     /auth/logout:
         post:
             tags: [auth]
-            summary: 登出（客户端清除 token）
+            operationId: logout
+            summary: 幂等退出
+            description: JWT 不在数据库保存；端点始终允许客户端完成本地 token 清理，即使 token 已过期也返回成功。
+            security: []
             responses:
-                "200":
-                    description: 成功
-                    content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } }
+                "200": { $ref: "#/components/responses/SuccessWithoutData" }
 
     /auth/password:
         put:
             tags: [auth]
-            summary: 修改自己的密码（不强制；初始密码 123456 建议尽快修改）
+            operationId: changePassword
+            summary: 自助修改密码
+            description: 修改密码不是首次登录强制操作。服务端验证旧密码，更新强哈希并递增 token_version；成功后当前及其他旧 JWT 全部失效，用户重新登录。
             requestBody:
                 required: true
                 content:
                     application/json:
-                        schema:
-                            type: object
-                            required: [oldPassword, newPassword]
-                            properties:
-                                oldPassword: { type: string, format: password }
-                                newPassword: { type: string, format: password, minLength: 6, description: 新密码（≥6 位） }
+                        schema: { $ref: "#/components/schemas/ChangePasswordInput" }
             responses:
-                "200":
-                    description: 成功（修改后当前 token 保持有效，用户可继续使用）
-                    content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } }
-                "400":
-                    description: 旧密码错误 / 新密码短于 6 位
+                "200": { $ref: "#/components/responses/SuccessWithoutData" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
 
     /auth/profile:
         get:
             tags: [auth]
-            summary: 当前登录用户信息 + 角色授权
+            operationId: getProfile
+            summary: 当前用户与实时角色授权
             responses:
                 "200":
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { $ref: "#/components/schemas/ProfileResult" }
-                "401":
-                    description: token 失效
-                    content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } }
+                            schema: { $ref: "#/components/schemas/ProfileEnvelope" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
         put:
             tags: [auth]
-            summary: 个人中心：更新自己的姓名
+            operationId: updateProfile
+            summary: 修改自己的姓名
+            description: 只更新 name 单字段，不允许自行修改账号、角色或状态。
             requestBody:
+                required: true
                 content:
                     application/json:
-                        schema:
-                            type: object
-                            required: [name]
-                            properties:
-                                name: { type: string, description: 新姓名（1-20 字符）, example: 张三 }
+                        schema: { $ref: "#/components/schemas/UpdateProfileInput" }
             responses:
                 "200":
-                    description: 成功（返回脱敏后的用户信息）
+                    description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { $ref: "#/components/schemas/WbUser" }
-                "400":
-                    description: 姓名为空 / 超过 20 字符
-                    content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } }
-                "401":
-                    description: token 失效
-                    content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } }
+                            schema: { $ref: "#/components/schemas/UserEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
 
     /orders:
         get:
             tags: [orders]
+            operationId: listOrders
             summary: 销售订单列表
+            description: 权限 `orders:view`。取消订单仍返回用于历史审计。
             responses:
                 "200":
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { type: array, items: { $ref: "#/components/schemas/Order" } }
+                            schema: { $ref: "#/components/schemas/OrderListEnvelope" }
+                "403": { $ref: "#/components/responses/Forbidden" }
         post:
             tags: [orders]
-            summary: 新建销售订单（order_no 由服务端生成；记 op_log）
-            description: '**required 权限**：`orders:create`（默认 admin / sales）。校验 customerCode、bomCode 存在，deliverEnd ≥ deliverStart。'
+            operationId: createOrder
+            summary: 新建销售订单
+            description: 权限 `orders:create`。客户名称和 BOM 快照由服务端查询；订单号按 orderDate 每日事务取号。
+            parameters:
+                - $ref: "#/components/parameters/IdempotencyKey"
             requestBody:
                 required: true
                 content:
@@ -168,25 +151,19 @@ paths:
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { $ref: "#/components/schemas/Order" }
-                "400":
-                    description: 校验失败（客户或成品不存在 / 交货截止早于起始 / 数量非法）
+                            schema: { $ref: "#/components/schemas/OrderEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "409": { $ref: "#/components/responses/Conflict" }
 
     /orders/{orderNo}:
         put:
             tags: [orders]
-            summary: 修改订单（订单不可删除；新数量必须 ≥ 累计已发）
-            description: '**required 权限**：`orders:edit`（默认 admin / sales）。'
+            operationId: updateOrder
+            summary: 修改销售订单
+            description: 权限 `orders:edit`。订单不可删除；新数量不得小于该订单有效出库净额；已取消订单不可修改。
             parameters:
-                - name: orderNo
-                  in: path
-                  required: true
-                  schema: { type: string }
+                - $ref: "#/components/parameters/OrderNo"
             requestBody:
                 required: true
                 content:
@@ -197,35 +174,57 @@ paths:
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { $ref: "#/components/schemas/Order" }
-                "400":
-                    description: 校验失败（新数量低于累计已发 / 交货截止早于起始 / 数量非法）
-                    content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } }
+                            schema: { $ref: "#/components/schemas/OrderEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
 
-    /customers:
-        get:
-            tags: [customers]
-            summary: 客户列表（cooperation 由服务端聚合派生：近 6 个月有订单 = 合作中）
+    /orders/{orderNo}/cancel:
+        post:
+            tags: [orders]
+            operationId: cancelOrder
+            summary: 取消全部剩余未发数量
+            description: 权限 `orders:cancel`。保留已打印发货数量；若存在已登记未打印的出库单，必须先作废。已全部发货的订单没有剩余量可取消。取消后不再参与欠量、合作状态或库存分配。
+            parameters:
+                - $ref: "#/components/parameters/OrderNo"
+                - $ref: "#/components/parameters/IdempotencyKey"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/CancelOrderInput" }
             responses:
                 "200":
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { type: array, items: { $ref: "#/components/schemas/Customer" } }
+                            schema: { $ref: "#/components/schemas/OrderEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
+
+    /customers:
+        get:
+            tags: [customers]
+            operationId: listCustomers
+            summary: 客户档案列表
+            description: 权限 `customers:view`，仅 super/admin/sales。手机号只返回掩码；合作状态按近 6 个日历月的活动订单派生。
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/CustomerListEnvelope" }
+                "403": { $ref: "#/components/responses/Forbidden" }
         post:
             tags: [customers]
-            summary: 新建客户（customer_code 服务端生成；phone 为完整号码，掩码由服务端生成；记 op_log）
-            description: '**required 权限**：`customers:create`（默认 admin / sales）。'
+            operationId: createCustomer
+            summary: 新建客户档案
+            description: 权限 `customers:create`。负责人必须是启用中的销售；客户编码全局事务取号。
+            parameters:
+                - $ref: "#/components/parameters/IdempotencyKey"
             requestBody:
                 required: true
                 content:
@@ -236,25 +235,19 @@ paths:
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { $ref: "#/components/schemas/Customer" }
-                "400":
-                    description: 校验失败（名称少于 4 字 / 手机号格式错 / 负责人不存在或非销售角色）
+                            schema: { $ref: "#/components/schemas/CustomerEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "409": { $ref: "#/components/responses/Conflict" }
 
     /customers/{code}:
         put:
             tags: [customers]
-            summary: 编辑客户档案（联系人/电话/行政区划/详细地址/付款条件/负责人；客户不可删除）
-            description: '**required 权限**：`customers:create`（与新建同权，默认 admin / sales）。'
+            operationId: updateCustomer
+            summary: 编辑客户档案
+            description: 权限 `customers:edit`。客户不可删除；负责人变化写历史。phone 为空表示保留原号码。
             parameters:
-                - name: code
-                  in: path
-                  required: true
-                  schema: { type: string, description: customer_code }
+                - $ref: "#/components/parameters/CustomerCode"
             requestBody:
                 required: true
                 content:
@@ -265,35 +258,60 @@ paths:
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { $ref: "#/components/schemas/Customer" }
-                "400":
-                    description: 校验失败（同新建）
-                "404":
-                    description: 客户不存在
+                            schema: { $ref: "#/components/schemas/CustomerEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
 
-    /boms:
+    /customer-owner-options:
         get:
-            tags: [boms]
-            summary: BOM 列表
+            tags: [customers]
+            operationId: listCustomerOwnerOptions
+            summary: 客户负责人候选
+            description: 权限 `customers:view`。仅返回启用中销售的 name/account，不暴露用户管理信息。
             responses:
                 "200":
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { type: array, items: { $ref: "#/components/schemas/Bom" } }
+                            schema: { $ref: "#/components/schemas/CustomerOwnerOptionListEnvelope" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+
+    /bom-categories:
+        get:
+            tags: [boms]
+            operationId: listBomCategories
+            summary: 后端权威 BOM 品类与规格目录
+            description: 权限 `bom:view`。前端不得自行决定有效品类、固定规格或编码前缀。
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/BomCategoryListEnvelope" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+
+    /boms:
+        get:
+            tags: [boms]
+            operationId: listBoms
+            summary: BOM/成品档案列表
+            description: 权限 `bom:view`。
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/BomListEnvelope" }
+                "403": { $ref: "#/components/responses/Forbidden" }
         post:
             tags: [boms]
-            summary: 新建 BOM（bom_code 按 ZM+品类码及品类序号宽度生成；品类模板由前端常量维护，必填项不作服务端强校验）
+            operationId: createBom
+            summary: 新建唯一 BOM
+            description: 权限 `bom:create`。服务端按品类目录验证必填、选项、固定规格和跨字段规则；规范化后相同品类+型号+规格返回 409 及已有 bomCode。
+            parameters:
+                - $ref: "#/components/parameters/IdempotencyKey"
             requestBody:
                 required: true
                 content:
@@ -304,34 +322,31 @@ paths:
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { $ref: "#/components/schemas/Bom" }
-                "400":
-                    description: 校验失败（品类不存在 / 型号或规格为空）
+                            schema: { $ref: "#/components/schemas/BomEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "409": { $ref: "#/components/responses/Conflict" }
 
     /inbound:
         get:
             tags: [inbound]
-            summary: 入库台账（只增不改）
+            operationId: listInbound
+            summary: 入库台账
+            description: 权限 `inbound:view`。包含 active/voided，便于审计。
             responses:
                 "200":
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { type: array, items: { $ref: "#/components/schemas/InboundRow" } }
+                            schema: { $ref: "#/components/schemas/InboundListEnvelope" }
+                "403": { $ref: "#/components/responses/Forbidden" }
         post:
             tags: [inbound]
-            summary: 检验入库登记（登记人取当前登录用户，不经请求体）
-            description: '**required 权限**：`inbound:register`（默认 warehouse；super 全量）。'
+            operationId: createInbound
+            summary: 检验入库登记
+            description: 权限 `inbound:register`，默认 warehouse/super。登记人和创建时间取服务端鉴权上下文。
+            parameters:
+                - $ref: "#/components/parameters/IdempotencyKey"
             requestBody:
                 required: true
                 content:
@@ -342,34 +357,115 @@ paths:
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { $ref: "#/components/schemas/InboundRow" }
-                "400":
-                    description: 校验失败（成品不存在 / 数量非法）
+                            schema: { $ref: "#/components/schemas/InboundEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "409": { $ref: "#/components/responses/Conflict" }
 
-    /outbound:
-        get:
-            tags: [outbound]
-            summary: 出库台账（只增不改）
+    /inbound/{no}:
+        put:
+            tags: [inbound]
+            operationId: updateInbound
+            summary: 修正当天录入的入库
+            description: 权限 `inbound:edit`，默认 warehouse/super。当天按 createdAt 的北京时间自然日判断，不按业务日期；原登记人和创建时间不变，before/after 与原因写不可变日志。
+            parameters:
+                - $ref: "#/components/parameters/InboundNo"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/UpdateInboundInput" }
             responses:
                 "200":
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { type: array, items: { $ref: "#/components/schemas/OutboundRow" } }
+                            schema: { $ref: "#/components/schemas/InboundEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
+
+    /inbound/{no}/void:
+        post:
+            tags: [inbound]
+            operationId: voidInbound
+            summary: 作废当天录入的入库
+            description: 权限 `inbound:edit`，默认 warehouse/super。不是物理删除；作废后不计库存并写 before/after 审计日志。
+            parameters:
+                - $ref: "#/components/parameters/InboundNo"
+                - $ref: "#/components/parameters/IdempotencyKey"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/VoidResourceInput" }
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/InboundEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
+
+    /stock-adjustments:
+        get:
+            tags: [inbound]
+            operationId: listStockAdjustments
+            summary: 不可变库存调整列表
+            description: 权限 `inbound:view`。
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/StockAdjustmentListEnvelope" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+        post:
+            tags: [inbound]
+            operationId: createStockAdjustment
+            summary: 新增跨日库存调整
+            description: 受保护权限 `inbound:adjust`，仅 super。只能追加；负向调整后库存不得小于 0。
+            parameters:
+                - $ref: "#/components/parameters/IdempotencyKey"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/CreateStockAdjustmentInput" }
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/StockAdjustmentEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "409": { $ref: "#/components/responses/Conflict" }
+
+    /outbound:
+        get:
+            tags: [outbound]
+            operationId: listOutbound
+            summary: 出库单列表
+            description: 权限 `outbound:view`。返回 registered/printed/voided 单头；原数量事件和冲销事件不被改删。
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/OutboundListEnvelope" }
+                "403": { $ref: "#/components/responses/Forbidden" }
         post:
             tags: [outbound]
-            summary: 登记发货（超出可发库存被拦截；操作人取当前登录用户；记 op_log）
-            description: '**required 权限**：`outbound:ship`（默认 warehouse；super 全量）。'
+            operationId: createOutbound
+            summary: 登记发货
+            description: 权限 `outbound:ship`，默认 warehouse/super。事务锁 BOM 和订单并重新计算可发量；创建 REGISTERED 单头及正向数量事件。
+            parameters:
+                - $ref: "#/components/parameters/IdempotencyKey"
             requestBody:
                 required: true
                 content:
@@ -380,34 +476,106 @@ paths:
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { $ref: "#/components/schemas/OutboundRow" }
-                "400":
-                    description: 校验失败（可发库存已变化等）
+                            schema: { $ref: "#/components/schemas/OutboundEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "409": { $ref: "#/components/responses/Conflict" }
 
-    /users:
-        get:
-            tags: [users]
-            summary: 用户列表
+    /outbound/{no}/void:
+        post:
+            tags: [outbound]
+            operationId: voidOutbound
+            summary: 作废未打印出库
+            description: 权限 `outbound:void`，默认 warehouse/super。仅 REGISTERED 可操作；追加等额负向冲销并恢复订单已发量和库存。
+            parameters:
+                - $ref: "#/components/parameters/OutboundNo"
+                - $ref: "#/components/parameters/IdempotencyKey"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/VoidResourceInput" }
             responses:
                 "200":
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { type: array, items: { $ref: "#/components/schemas/WbUser" } }
+                            schema: { $ref: "#/components/schemas/OutboundEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
+
+    /outbound/{no}/print:
+        post:
+            tags: [outbound]
+            operationId: printOutbound
+            summary: 正式打印并安排发货
+            description: 权限 `outbound:print`，默认 admin/super。首次打印把 REGISTERED 置为 PRINTED；重打生成下一打印版本且必须说明原因。订单后来取消剩余量不影响历史已打印出库的重打。打印就是系统正式放行点，不另设司机或签字确认状态。
+            parameters:
+                - $ref: "#/components/parameters/OutboundNo"
+                - $ref: "#/components/parameters/IdempotencyKey"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/PrintOutboundInput" }
+            responses:
+                "200":
+                    description: 返回已落库的打印版本、出库状态及与服务端审计日志完全一致的文档快照；客户端只据此渲染。
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/OutboundPrintEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
+
+    /outbound/{no}/emergency-void:
+        post:
+            tags: [outbound]
+            operationId: emergencyVoidOutbound
+            summary: 紧急撤销已打印出库
+            description: 受保护权限 `outbound:emergency-void`，仅 super。必须确认货物尚未离开且全部纸质单已作废；货物已离开后只能走销售退货。
+            parameters:
+                - $ref: "#/components/parameters/OutboundNo"
+                - $ref: "#/components/parameters/IdempotencyKey"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/EmergencyVoidOutboundInput" }
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/OutboundEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
+
+    /users:
+        get:
+            tags: [users]
+            operationId: listUsers
+            summary: 用户列表
+            description: 受保护权限 `permissions:view`，仅 super。
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/UserListEnvelope" }
+                "403": { $ref: "#/components/responses/Forbidden" }
         post:
             tags: [users]
-            summary: 新增用户（初始密码统一 123456）
-            description: '**required 权限**：`permissions:manage`（默认 super）。'
+            operationId: createUser
+            summary: 新增普通用户
+            description: 受保护权限 `permissions:manage`，仅 super。初始密码为 123456 的强哈希；不得通过接口新增 super。
+            parameters:
+                - $ref: "#/components/parameters/IdempotencyKey"
             requestBody:
                 required: true
                 content:
@@ -418,25 +586,19 @@ paths:
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { $ref: "#/components/schemas/WbUser" }
-                "400":
-                    description: 账号已存在 / 账号格式不合法（字母数字下划线 ≥3 位）
+                            schema: { $ref: "#/components/schemas/UserEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "409": { $ref: "#/components/responses/Conflict" }
 
     /users/{account}:
         put:
             tags: [users]
-            summary: 编辑用户（account 不可改；super 角色不可变更）
-            description: '**required 权限**：`permissions:manage`（默认 super）。'
+            operationId: updateUser
+            summary: 编辑用户姓名或角色
+            description: 受保护权限 `permissions:manage`，仅 super。account 不可改；销售转岗且仍负责客户时，必须原子批量移交给另一名启用销售。
             parameters:
-                - name: account
-                  in: path
-                  required: true
-                  schema: { type: string }
+                - $ref: "#/components/parameters/Account"
             requestBody:
                 required: true
                 content:
@@ -447,366 +609,744 @@ paths:
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { $ref: "#/components/schemas/WbUser" }
+                            schema: { $ref: "#/components/schemas/UserEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
 
     /users/{account}/status:
         patch:
             tags: [users]
-            summary: 启用 / 停用用户（停用不删除；super 不可停用）
-            description: '**required 权限**：`permissions:manage`（默认 super）。'
+            operationId: setUserStatus
+            summary: 启用或停用用户
+            description: 受保护权限 `permissions:manage`，仅 super。super 不可停用；停用销售且仍负责客户时必须在同一事务移交。
             parameters:
-                - name: account
-                  in: path
-                  required: true
-                  schema: { type: string }
+                - $ref: "#/components/parameters/Account"
             requestBody:
                 required: true
                 content:
                     application/json:
-                        schema:
-                            type: object
-                            required: [active]
-                            properties:
-                                active: { type: boolean }
+                        schema: { $ref: "#/components/schemas/SetUserStatusInput" }
             responses:
                 "200":
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { $ref: "#/components/schemas/WbUser" }
+                            schema: { $ref: "#/components/schemas/UserEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
 
     /roles:
         get:
             tags: [roles]
-            summary: 角色定义（含内置标记）
+            operationId: listRoles
+            summary: 固定角色目录
+            description: 受保护权限 `permissions:view`，仅 super。
             responses:
                 "200":
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { type: array, items: { $ref: "#/components/schemas/RoleDef" } }
+                            schema: { $ref: "#/components/schemas/RoleListEnvelope" }
+                "403": { $ref: "#/components/responses/Forbidden" }
 
     /roles/grants:
         get:
             tags: [roles]
-            summary: 全量角色授权（权限矩阵 / 角色编辑页聚合读取）
+            operationId: listRoleGrants
+            summary: 全量角色授权
+            description: 受保护权限 `permissions:view`，仅 super。
             responses:
                 "200":
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data:
-                                              type: object
-                                              additionalProperties: { $ref: "#/components/schemas/RoleGrant" }
+                            schema: { $ref: "#/components/schemas/GrantMapEnvelope" }
+                "403": { $ref: "#/components/responses/Forbidden" }
 
     /roles/grants/log:
         get:
             tags: [roles]
+            operationId: listRoleGrantLogs
             summary: 授权变更日志
+            description: 受保护权限 `permissions:view`，仅 super。
             responses:
                 "200":
                     description: 成功
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { type: array, items: { $ref: "#/components/schemas/GrantLogEntry" } }
+                            schema: { $ref: "#/components/schemas/GrantLogListEnvelope" }
+                "403": { $ref: "#/components/responses/Forbidden" }
 
     /roles/{roleId}/grants:
         put:
             tags: [roles]
-            summary: 保存单角色授权（super 内置角色不可改；写 sys_grant_log）
-            description: '**required 权限**：`permissions:manage`（默认 super）。'
+            operationId: updateRoleGrant
+            summary: 原子替换单个角色授权
+            description: 受保护权限 `permissions:manage`，仅 super。内置 super 授权不可改；动作必须同时包含父菜单与 view；受保护动作不可授予其他角色。
             parameters:
-                - name: roleId
-                  in: path
-                  required: true
-                  schema: { $ref: "#/components/schemas/RoleId" }
+                - $ref: "#/components/parameters/RoleIdParam"
             requestBody:
                 required: true
                 content:
                     application/json:
-                        schema:
-                            type: object
-                            required: [grant]
-                            properties:
-                                grant: { $ref: "#/components/schemas/RoleGrant" }
-                                note:
-                                    type: string
-                                    description: 变更说明（前端 diff 生成），服务端记入授权日志
+                        schema: { $ref: "#/components/schemas/SaveRoleGrantInput" }
             responses:
                 "200":
-                    description: 成功
+                    description: 成功；无变化保存不递增版本，但仍记录 no-op 安全事件。
                     content:
                         application/json:
-                            schema:
-                                allOf:
-                                    - $ref: "#/components/schemas/Envelope"
-                                    - type: object
-                                      properties:
-                                          data: { $ref: "#/components/schemas/RoleGrant" }
-                "403":
-                    description: 超级管理员为内置角色，授权不可修改
+                            schema: { $ref: "#/components/schemas/RoleGrantEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
 
 components:
     securitySchemes:
         bearerAuth:
             type: http
             scheme: bearer
+            bearerFormat: JWT
+
+    parameters:
+        IdempotencyKey:
+            name: Idempotency-Key
+            in: header
+            required: true
+            description: 8–128 个可见 ASCII 字符；同一次逻辑请求的网络重试必须复用同一个值。
+            schema: { type: string, minLength: 8, maxLength: 128, pattern: "^[!-~]+$" }
+        OrderNo:
+            name: orderNo
+            in: path
+            required: true
+            schema: { type: string, pattern: "^ZM[0-9]{6}[0-9]{3,}$" }
+        CustomerCode:
+            name: code
+            in: path
+            required: true
+            schema: { type: string, pattern: "^CUS-[0-9]{4,}$" }
+        InboundNo:
+            name: no
+            in: path
+            required: true
+            schema: { type: string, pattern: "^RK-[0-9]{8}-[0-9]{4,}$" }
+        OutboundNo:
+            name: no
+            in: path
+            required: true
+            schema: { type: string, pattern: "^CK-[0-9]{8}-[0-9]{4,}$" }
+        Account:
+            name: account
+            in: path
+            required: true
+            schema: { type: string, pattern: "^[A-Za-z0-9_]{3,64}$" }
+        RoleIdParam:
+            name: roleId
+            in: path
+            required: true
+            schema: { $ref: "#/components/schemas/RoleId" }
+
+    responses:
+        SuccessWithoutData:
+            description: 成功
+            content:
+                application/json:
+                    schema: { $ref: "#/components/schemas/NullEnvelope" }
+        BadRequest:
+            description: 参数或业务格式校验失败
+            content:
+                application/json:
+                    schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        Unauthorized:
+            description: JWT 缺失、无效、过期、版本失效或账号已停用
+            content:
+                application/json:
+                    schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        Forbidden:
+            description: 当前实时角色授权不包含所需权限码
+            content:
+                application/json:
+                    schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        NotFound:
+            description: 资源不存在
+            content:
+                application/json:
+                    schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        Conflict:
+            description: expectedVersion 过期、状态竞争、幂等键冲突、库存变化或唯一约束冲突
+            content:
+                application/json:
+                    schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
     schemas:
         Envelope:
             type: object
             required: [code, data, message]
             properties:
-                code: { type: integer, description: 0 成功，非 0 失败 }
+                code: { type: integer }
+                data: true
                 message: { type: string }
-                data: {}
+
+        ErrorEnvelope:
+            type: object
+            required: [code, data, message]
+            properties:
+                code: { type: integer, minimum: 400 }
+                data: { type: "null" }
+                message: { type: string }
+
+        NullEnvelope:
+            type: object
+            required: [code, data, message]
+            properties:
+                code: { type: integer, const: 0 }
+                data: { type: "null" }
+                message: { type: string, const: ok }
 
         RoleId:
             type: string
             enum: [super, admin, warehouse, sales, staff]
 
-        RoleDef:
-            type: object
-            properties:
-                id: { $ref: "#/components/schemas/RoleId" }
-                name: { type: string, example: 仓管 }
-                locked:
-                    type: boolean
-                    description: 内置角色（super），授权不可编辑
+        CreateRoleId:
+            type: string
+            enum: [admin, warehouse, sales, staff]
 
-        RoleGrant:
+        WbUser:
             type: object
-            description: 一个角色的授权（对应 sys_grant 按 role 下发的行集）
-            required: [menus, actions]
+            required: [version, name, account, role, active, last]
             properties:
-                menus:
-                    type: array
-                    items: { type: string }
-                    description: 可见菜单 key（含子菜单 key）
-                actions:
-                    type: object
-                    additionalProperties:
-                        type: array
-                        items: { type: string }
-                    description: 菜单 → 动作 id 列表（如 outbound → [view, ship]）
-
-        GrantLogEntry:
-            type: object
-            properties:
-                time: { type: string, example: "09-08 20:01" }
-                user: { type: string }
-                text: { type: string }
+                version: { type: integer, minimum: 1 }
+                name: { type: string, minLength: 1, maxLength: 20 }
+                account: { type: string, pattern: "^[A-Za-z0-9_]{3,64}$" }
+                role: { $ref: "#/components/schemas/RoleId" }
+                active: { type: boolean }
+                last: { type: string, description: 最近登录展示值；从未登录为破折号 }
 
         LoginInput:
             type: object
+            additionalProperties: false
             required: [account, password]
             properties:
-                account: { type: string, example: li_xiaomei }
-                password: { type: string, format: password }
+                account: { type: string, minLength: 3, maxLength: 64 }
+                password: { type: string, format: password, minLength: 1, maxLength: 128 }
+
+        ChangePasswordInput:
+            type: object
+            additionalProperties: false
+            required: [oldPassword, newPassword]
+            properties:
+                oldPassword: { type: string, format: password, minLength: 1, maxLength: 128 }
+                newPassword: { type: string, format: password, minLength: 6, maxLength: 128 }
+
+        UpdateProfileInput:
+            type: object
+            additionalProperties: false
+            required: [name]
+            properties:
+                name: { type: string, minLength: 1, maxLength: 20 }
+
+        LoginResult:
+            type: object
+            required: [accessToken, user]
+            properties:
+                accessToken: { type: string }
+                user: { $ref: "#/components/schemas/WbUser" }
 
         ProfileResult:
             type: object
+            required: [user, grant]
             properties:
                 user: { $ref: "#/components/schemas/WbUser" }
                 grant: { $ref: "#/components/schemas/RoleGrant" }
 
-        WbUser:
+        RoleDef:
             type: object
-            description: 用户（对应 sys_user；不含密码）
+            required: [id, name]
             properties:
-                id: { type: integer, description: 演示用自增；真实后端不出雪花 id }
+                id: { $ref: "#/components/schemas/RoleId" }
                 name: { type: string }
-                account: { type: string }
-                role: { $ref: "#/components/schemas/RoleId" }
-                active: { type: boolean }
-                last: { type: string, example: "09-08 20:01", description: 最近登录 }
+                locked: { type: boolean }
+
+        RoleGrant:
+            type: object
+            required: [version, menus, actions]
+            properties:
+                version: { type: integer, minimum: 1 }
+                menus:
+                    type: array
+                    uniqueItems: true
+                    items: { type: string }
+                actions:
+                    type: object
+                    additionalProperties:
+                        type: array
+                        uniqueItems: true
+                        items: { type: string }
+
+        SaveRoleGrantInput:
+            type: object
+            additionalProperties: false
+            required: [grant, expectedVersion, note]
+            properties:
+                grant: { $ref: "#/components/schemas/RoleGrant" }
+                expectedVersion: { type: integer, minimum: 1 }
+                note: { type: string, maxLength: 500 }
+
+        GrantLogEntry:
+            type: object
+            required: [time, user, text]
+            properties:
+                time: { type: string }
+                user: { type: string }
+                text: { type: string }
 
         Order:
             type: object
+            required: [version, orderNo, customer, customerCode, bomCode, qty, outbound, orderDate, deliverStart, deliverEnd, remark, lifecycleStatus]
             properties:
-                orderNo: { type: string, example: ZM260903086 }
-                customer: { type: string }
+                version: { type: integer, minimum: 1 }
+                orderNo: { type: string }
+                customer: { type: string, description: 下单时客户名称快照 }
                 customerCode: { type: string }
                 bomCode: { type: string }
-                qty: { type: integer }
-                outbound: { type: integer, description: 累计已出库数量 }
+                qty: { type: integer, minimum: 1 }
+                outbound: { type: integer, minimum: 0, description: 有效出库净额 }
                 orderDate: { type: string, format: date }
-                deliverStart: { type: string, format: date, description: 交货起始日期 }
-                deliverEnd: { type: string, format: date, description: 交货截止日期（排序/逾期口径） }
+                deliverStart: { type: string, format: date }
+                deliverEnd: { type: string, format: date }
                 remark: { type: string }
+                lifecycleStatus: { type: string, enum: [active, cancelled] }
+                cancelledAt: { type: string, format: date-time }
+                cancelledBy: { type: string }
+                cancelReason: { type: string }
 
         CreateOrderInput:
             type: object
-            required: [customerCode, customer, bomCode, qty, deliverStart, deliverEnd, orderDate]
+            additionalProperties: false
+            required: [customerCode, bomCode, qty, deliverStart, deliverEnd, orderDate, remark]
             properties:
                 customerCode: { type: string }
-                customer: { type: string }
                 bomCode: { type: string }
                 qty: { type: integer, minimum: 1 }
                 deliverStart: { type: string, format: date }
-                deliverEnd: { type: string, format: date }
+                deliverEnd: { type: string, format: date, description: 必须不早于 deliverStart }
                 orderDate: { type: string, format: date }
-                remark: { type: string }
+                remark: { type: string, maxLength: 2000 }
 
         UpdateOrderInput:
             type: object
-            description: 订单不可删除；qty 变更时服务端校验新数量 ≥ 累计已发数量（Order.outbound）
+            additionalProperties: false
+            required: [expectedVersion]
+            minProperties: 2
             properties:
+                expectedVersion: { type: integer, minimum: 1 }
                 qty: { type: integer, minimum: 1 }
                 deliverStart: { type: string, format: date }
                 deliverEnd: { type: string, format: date }
-                remark: { type: string }
+                remark: { type: string, maxLength: 2000 }
+
+        CancelOrderInput:
+            type: object
+            additionalProperties: false
+            required: [expectedVersion, reason]
+            properties:
+                expectedVersion: { type: integer, minimum: 1 }
+                reason: { type: string, minLength: 2, maxLength: 500 }
 
         Customer:
             type: object
+            required: [version, code, name, contact, phone, province, city, district, town, address, cooperation, owner, ownerAccount, payTerms, created]
             properties:
-                code: { type: string, example: CUS-1024 }
-                name: { type: string }
-                contact: { type: string }
-                phone: { type: string, example: "138****6821", description: 掩码展示；完整号仅入库存储，API 一律不返回 }
-                province: { type: string, example: 广东省 }
-                city: { type: string, example: 深圳市 }
-                district: { type: string, example: 南山区, description: 县/区，直筒子市可空 }
-                town: { type: string, example: 粤海街道, description: 乡镇/街道，可空 }
-                address: { type: string, example: 示例街道 88 号, description: 详细地址，跟在四级行政区划之后 }
-                cooperation: { type: string, enum: [合作中, 待跟进], description: 聚合派生——近 6 个月有订单为合作中，否则待跟进（不落库） }
-                owner: { type: string, description: 所属销售姓名（后端 join） }
-                payTerms: { type: string, example: 月结 30 天 }
-                created: { type: string, format: date }
-
-        CreateCustomerInput:
-            type: object
-            required: [name, contact, phone, province, city, address, ownerAccount]
-            properties:
-                name: { type: string, minLength: 4 }
-                contact: { type: string }
-                phone: { type: string, pattern: "^1\\d{10}$" }
-                province: { type: string, description: 省/直辖市（行政区划级联选择） }
-                city: { type: string }
-                district: { type: string, description: 县/区，可空 }
-                town: { type: string, description: 乡镇/街道，可空 }
-                address: { type: string }
-                ownerAccount: { type: string, description: 所属销售账号（sys_user.account，须为 role=sales 的在职用户） }
-                payTerms: { type: string, description: 付款条件，可空 }
-
-        UpdateCustomerInput:
-            type: object
-            required: [name, contact, province, city, address, ownerAccount]
-            properties:
-                name: { type: string, minLength: 4 }
-                contact: { type: string }
-                phone: { type: string, pattern: "^1\\d{10}$", description: 留空表示不修改；填了则校验并替换 }
+                version: { type: integer, minimum: 1 }
+                code: { type: string }
+                name: { type: string, minLength: 4, maxLength: 80 }
+                contact: { type: string, minLength: 1, maxLength: 32 }
+                phone: { type: string, pattern: "^1[0-9]{2}\\*{4}[0-9]{4}$" }
                 province: { type: string }
                 city: { type: string }
                 district: { type: string }
                 town: { type: string }
                 address: { type: string }
+                cooperation: { type: string, enum: [合作中, 待跟进] }
+                owner: { type: string }
                 ownerAccount: { type: string }
                 payTerms: { type: string }
+                created: { type: string, format: date }
+
+        CreateCustomerInput:
+            type: object
+            additionalProperties: false
+            required: [name, contact, phone, province, city, district, town, address, ownerAccount, payTerms]
+            properties:
+                name: { type: string, minLength: 4, maxLength: 80 }
+                contact: { type: string, minLength: 1, maxLength: 32 }
+                phone: { type: string, pattern: "^1[0-9]{10}$" }
+                province: { type: string, minLength: 1, maxLength: 64 }
+                city: { type: string, minLength: 1, maxLength: 64 }
+                district: { type: string, maxLength: 64 }
+                town: { type: string, maxLength: 96 }
+                address: { type: string, minLength: 1, maxLength: 300 }
+                ownerAccount: { type: string }
+                payTerms: { type: string, maxLength: 160 }
+
+        UpdateCustomerInput:
+            type: object
+            additionalProperties: false
+            required: [expectedVersion, name, contact, phone, province, city, district, town, address, ownerAccount, payTerms]
+            properties:
+                expectedVersion: { type: integer, minimum: 1 }
+                name: { type: string, minLength: 4, maxLength: 80 }
+                contact: { type: string, minLength: 1, maxLength: 32 }
+                phone: { type: string, pattern: "^(|1[0-9]{10})$", description: 空字符串表示不修改 }
+                province: { type: string, minLength: 1, maxLength: 64 }
+                city: { type: string, minLength: 1, maxLength: 64 }
+                district: { type: string, maxLength: 64 }
+                town: { type: string, maxLength: 96 }
+                address: { type: string, minLength: 1, maxLength: 300 }
+                ownerAccount: { type: string }
+                payTerms: { type: string, maxLength: 160 }
+
+        CustomerOwnerOption:
+            type: object
+            required: [name, account]
+            properties:
+                name: { type: string }
+                account: { type: string }
+
+        BomSpecField:
+            type: object
+            required: [key, label, type]
+            properties:
+                key: { type: string }
+                label: { type: string }
+                type: { type: string, enum: [select, text] }
+                options: { type: array, items: { type: string } }
+                required: { type: boolean }
+                placeholder: { type: string }
+                initial: { type: string }
+                defaultValue: { type: string }
+
+        BomCategory:
+            type: object
+            required: [key, name, codePrefix, fields]
+            properties:
+                key: { type: string }
+                name: { type: string }
+                codePrefix: { type: string }
+                seqWidth: { type: integer, minimum: 3, maximum: 8 }
+                fields: { type: array, items: { $ref: "#/components/schemas/BomSpecField" } }
 
         Bom:
             type: object
+            required: [code, name, modelCode, specs, spec, created, unit]
             properties:
-                code: { type: string, example: ZMXK2001 }
-                name: { type: string, example: 旋转开关, description: 品类 }
-                modelCode: { type: string, example: 2-1 }
-                specs:
-                    type: object
-                    additionalProperties: { type: string }
-                    description: 品类规格键值对（对应库表 spec JSON）
-                spec: { type: string, description: 规格摘要（列表/搜索用） }
+                code: { type: string }
+                name: { type: string }
+                modelCode: { type: string }
+                specs: { type: object, additionalProperties: { type: string } }
+                spec: { type: string }
                 created: { type: string, format: date }
-                unit: { type: string, example: 个 }
+                unit: { type: string }
 
         CreateBomInput:
             type: object
+            additionalProperties: false
             required: [name, modelCode, specs]
             properties:
-                name: { type: string, description: 品类名，须在前端品类模板中存在 }
-                modelCode: { type: string }
-                specs:
-                    type: object
-                    additionalProperties: { type: string }
+                name: { type: string, description: 必须匹配启用的后端品类名称 }
+                modelCode: { type: string, minLength: 1, maxLength: 64 }
+                specs: { type: object, additionalProperties: { type: string } }
 
         InboundRow:
             type: object
+            required: [no, bomCode, qty, date, time, inspector, status, version, createdAt]
             properties:
-                no: { type: string, example: RK-20260910-0001 }
+                no: { type: string }
                 bomCode: { type: string }
-                qty: { type: integer }
+                qty: { type: integer, minimum: 1 }
                 date: { type: string, format: date }
-                time: { type: string, example: "10:40" }
-                inspector: { type: string, description: 检验登记人姓名（服务端取当前登录用户，join sys_user） }
+                time: { type: string }
+                inspector: { type: string }
                 remark: { type: string }
+                status: { type: string, enum: [active, voided] }
+                version: { type: integer, minimum: 1 }
+                createdAt: { type: string, format: date-time }
+                updatedBy: { type: string }
+                updatedAt: { type: string, format: date-time }
 
         CreateInboundInput:
             type: object
-            required: [bomCode, qty, date]
+            additionalProperties: false
+            required: [bomCode, qty, date, remark]
             properties:
                 bomCode: { type: string }
                 qty: { type: integer, minimum: 1 }
                 date: { type: string, format: date }
-                remark: { type: string }
+                remark: { type: string, maxLength: 500 }
+
+        UpdateInboundInput:
+            type: object
+            additionalProperties: false
+            required: [expectedVersion, bomCode, qty, date, remark, reason]
+            properties:
+                expectedVersion: { type: integer, minimum: 1 }
+                bomCode: { type: string }
+                qty: { type: integer, minimum: 1 }
+                date: { type: string, format: date }
+                remark: { type: string, maxLength: 500 }
+                reason: { type: string, minLength: 2, maxLength: 500 }
+
+        VoidResourceInput:
+            type: object
+            additionalProperties: false
+            required: [expectedVersion, reason]
+            properties:
+                expectedVersion: { type: integer, minimum: 1 }
+                reason: { type: string, minLength: 2, maxLength: 500 }
+
+        StockAdjustmentRow:
+            type: object
+            required: [no, bomCode, qtyDelta, date, time, operator, reason]
+            properties:
+                no: { type: string }
+                bomCode: { type: string }
+                qtyDelta: { type: integer, not: { const: 0 } }
+                date: { type: string, format: date }
+                time: { type: string }
+                operator: { type: string }
+                reason: { type: string }
+                relatedInboundNo: { type: string }
+
+        CreateStockAdjustmentInput:
+            type: object
+            additionalProperties: false
+            required: [bomCode, qtyDelta, date, reason]
+            properties:
+                bomCode: { type: string }
+                qtyDelta: { type: integer, not: { const: 0 } }
+                date: { type: string, format: date }
+                reason: { type: string, minLength: 2, maxLength: 500 }
+                relatedInboundNo: { type: string }
 
         OutboundRow:
             type: object
+            required: [no, orderNo, customer, customerCode, bomCode, qty, date, time, operator, state, version, printVersion]
             properties:
-                no: { type: string, example: CK-20260910-0001 }
+                no: { type: string }
                 orderNo: { type: string }
                 customer: { type: string }
                 customerCode: { type: string }
                 bomCode: { type: string }
-                qty: { type: integer }
+                qty: { type: integer, minimum: 1 }
                 date: { type: string, format: date }
                 time: { type: string }
-                operator: { type: string, description: 操作人姓名（服务端取当前登录用户，join sys_user） }
+                operator: { type: string }
                 remark: { type: string }
+                state: { type: string, enum: [registered, printed, voided] }
+                version: { type: integer, minimum: 1 }
+                printVersion: { type: integer, minimum: 0 }
+                voidReason: { type: string }
 
         CreateOutboundInput:
             type: object
-            required: [orderNo, qty, date]
+            additionalProperties: false
+            required: [orderNo, qty, date, remark]
             properties:
                 orderNo: { type: string }
                 qty: { type: integer, minimum: 1 }
                 date: { type: string, format: date }
+                remark: { type: string, maxLength: 500 }
+
+        PrintOutboundInput:
+            type: object
+            additionalProperties: false
+            required: [expectedVersion]
+            properties:
+                expectedVersion: { type: integer, minimum: 1 }
+                reason: { type: string, maxLength: 500, description: 首次打印可空；重打至少 2 字 }
+
+        EmergencyVoidOutboundInput:
+            type: object
+            additionalProperties: false
+            required: [expectedVersion, reason, goodsNotDeparted, paperInvalidated]
+            properties:
+                expectedVersion: { type: integer, minimum: 1 }
+                reason: { type: string, minLength: 2, maxLength: 500 }
+                goodsNotDeparted: { type: boolean, const: true }
+                paperInvalidated: { type: boolean, const: true }
+
+        OutboundPrintResult:
+            type: object
+            required: [outbound, printVersion, document]
+            properties:
+                outbound: { $ref: "#/components/schemas/OutboundRow" }
+                printVersion: { type: integer, minimum: 1 }
+                document: { $ref: "#/components/schemas/OutboundPrintDocument" }
+
+        OutboundPrintDocument:
+            type: object
+            required: [no, printVersion, orderNo, customer, customerCode, bomCode, bomSpec, qty, date, operator, remark, printedBy, printedAt]
+            properties:
+                no: { type: string }
+                printVersion: { type: integer, minimum: 1 }
+                orderNo: { type: string }
+                customer: { type: string }
+                customerCode: { type: string }
+                bomCode: { type: string }
+                bomSpec: { type: string }
+                qty: { type: integer, minimum: 1 }
+                date: { type: string, format: date }
+                operator: { type: string, description: 出库登记人 }
                 remark: { type: string }
+                printedBy: { type: string }
+                printedAt: { type: string, format: date-time }
 
         CreateUserInput:
             type: object
+            additionalProperties: false
             required: [name, account, role]
             properties:
-                name: { type: string, minLength: 1, maxLength: 20, description: 姓名（1-20 字符） }
-                account: { type: string, pattern: "^[A-Za-z0-9_]{3,}$" }
-                role: { $ref: "#/components/schemas/RoleId" }
+                name: { type: string, minLength: 1, maxLength: 20 }
+                account: { type: string, pattern: "^[A-Za-z0-9_]{3,64}$" }
+                role: { $ref: "#/components/schemas/CreateRoleId" }
 
         UpdateUserInput:
             type: object
-            required: [name, role]
+            additionalProperties: false
+            required: [expectedVersion, name, role]
             properties:
-                name: { type: string, minLength: 1, maxLength: 20, description: 姓名（1-20 字符） }
+                expectedVersion: { type: integer, minimum: 1 }
+                name: { type: string, minLength: 1, maxLength: 20 }
                 role: { $ref: "#/components/schemas/RoleId" }
+                replacementOwnerAccount: { type: string, description: 销售离岗且仍有客户时必填 }
+                transferReason: { type: string, minLength: 2, maxLength: 500 }
+
+        SetUserStatusInput:
+            type: object
+            additionalProperties: false
+            required: [expectedVersion, active]
+            properties:
+                expectedVersion: { type: integer, minimum: 1 }
+                active: { type: boolean }
+                replacementOwnerAccount: { type: string, description: 停用销售且仍有客户时必填 }
+                transferReason: { type: string, minLength: 2, maxLength: 500 }
+
+        LoginEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/LoginResult" }, message: { const: ok } }
+        ProfileEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/ProfileResult" }, message: { const: ok } }
+        OrderEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/Order" }, message: { const: ok } }
+        OrderListEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { type: array, items: { $ref: "#/components/schemas/Order" } }, message: { const: ok } }
+        CustomerEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/Customer" }, message: { const: ok } }
+        CustomerListEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { type: array, items: { $ref: "#/components/schemas/Customer" } }, message: { const: ok } }
+        CustomerOwnerOptionListEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { type: array, items: { $ref: "#/components/schemas/CustomerOwnerOption" } }, message: { const: ok } }
+        BomEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/Bom" }, message: { const: ok } }
+        BomListEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { type: array, items: { $ref: "#/components/schemas/Bom" } }, message: { const: ok } }
+        BomCategoryListEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { type: array, items: { $ref: "#/components/schemas/BomCategory" } }, message: { const: ok } }
+        InboundEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/InboundRow" }, message: { const: ok } }
+        InboundListEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { type: array, items: { $ref: "#/components/schemas/InboundRow" } }, message: { const: ok } }
+        StockAdjustmentEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/StockAdjustmentRow" }, message: { const: ok } }
+        StockAdjustmentListEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { type: array, items: { $ref: "#/components/schemas/StockAdjustmentRow" } }, message: { const: ok } }
+        OutboundEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/OutboundRow" }, message: { const: ok } }
+        OutboundListEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { type: array, items: { $ref: "#/components/schemas/OutboundRow" } }, message: { const: ok } }
+        OutboundPrintEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/OutboundPrintResult" }, message: { const: ok } }
+        UserEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/WbUser" }, message: { const: ok } }
+        UserListEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { type: array, items: { $ref: "#/components/schemas/WbUser" } }, message: { const: ok } }
+        RoleListEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { type: array, items: { $ref: "#/components/schemas/RoleDef" } }, message: { const: ok } }
+        RoleGrantEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/RoleGrant" }, message: { const: ok } }
+        GrantMapEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { type: object, additionalProperties: { $ref: "#/components/schemas/RoleGrant" } }, message: { const: ok } }
+        GrantLogListEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { type: array, items: { $ref: "#/components/schemas/GrantLogEntry" } }, message: { const: ok } }

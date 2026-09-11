@@ -10,7 +10,7 @@ import { ToastProvider } from "@/components/ui/Toast";
 import { UserMenu } from "@/components/layout/UserMenu";
 
 const user: WbUser = {
-    id: 1,
+    version: 1,
     name: "张三",
     account: "zhangsan",
     role: "sales",

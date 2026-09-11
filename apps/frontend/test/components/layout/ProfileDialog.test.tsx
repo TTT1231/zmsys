@@ -6,13 +6,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { WbUser } from "@/api";
-import { updateProfile } from "@/api";
+import { changePassword, updateProfile } from "@/api";
 import { ApiError } from "@/http";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ProfileDialog } from "@/components/layout/ProfileDialog";
 
 const user: WbUser = {
-    id: 2,
+    version: 1,
     name: "李销售",
     account: "li_xiaomei",
     role: "sales",
@@ -20,11 +20,13 @@ const user: WbUser = {
     last: "09-07 09:12",
 };
 
-const { refreshProfileSpy } = vi.hoisted(() => ({
+const { logoutSpy, refreshProfileSpy } = vi.hoisted(() => ({
+    logoutSpy: vi.fn().mockResolvedValue(undefined),
     refreshProfileSpy: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/api", () => ({
+    changePassword: vi.fn(),
     updateProfile: vi.fn(),
 }));
 
@@ -32,12 +34,13 @@ vi.mock("@/context/AppContext", async importOriginal => {
     const actual = await importOriginal<typeof import("@/context/AppContext")>();
     return {
         ...actual,
-        useApp: () => ({ user, role: "sales" as const, refreshProfile: refreshProfileSpy }),
+        useApp: () => ({ user, role: "sales" as const, refreshProfile: refreshProfileSpy, logout: logoutSpy }),
     };
 });
 
 beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(changePassword).mockResolvedValue(null);
     vi.mocked(updateProfile).mockResolvedValue({ ...user, name: "李新名" });
 });
 
@@ -87,5 +90,19 @@ describe("ProfileDialog", () => {
         fireEvent.click(screen.getByRole("button", { name: "保存" }));
         await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("姓名最多 20 个字符"));
         expect(refreshProfileSpy).not.toHaveBeenCalled();
+    });
+
+    it("invalidates the session and returns to login state after changing password", async () => {
+        renderDialog();
+        fireEvent.change(screen.getByLabelText("旧密码"), { target: { value: "123456" } });
+        fireEvent.change(screen.getByLabelText("新密码（至少 6 位）"), { target: { value: "new-password" } });
+        fireEvent.change(screen.getByLabelText("确认新密码"), { target: { value: "new-password" } });
+        fireEvent.click(screen.getByRole("button", { name: "修改密码" }));
+
+        await waitFor(() =>
+            expect(changePassword).toHaveBeenCalledWith({ oldPassword: "123456", newPassword: "new-password" }),
+        );
+        await waitFor(() => expect(logoutSpy).toHaveBeenCalledTimes(1));
+        expect(screen.getByRole("status")).toHaveTextContent("密码已修改，请重新登录");
     });
 });

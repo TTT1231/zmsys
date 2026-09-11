@@ -20,7 +20,14 @@ vi.mock("@/api", () => ({
     logout: vi.fn(),
 }));
 
-const user: WbUser = { id: 3, name: "王仓管", account: "ck01", role: "warehouse", active: true, last: "03-09 08:00" };
+const user: WbUser = {
+    version: 1,
+    name: "王仓管",
+    account: "ck01",
+    role: "warehouse",
+    active: true,
+    last: "03-09 08:00",
+};
 const profile = { user, grant: DEFAULT_GRANTS.warehouse };
 const loginResult: LoginResult = { accessToken: "tok.1", user };
 
@@ -115,6 +122,17 @@ describe("AppProvider login / logout", () => {
         await captured.current!.logout();
         await waitFor(() => expect(statusOf()).toBe("guest"));
         expect(screen.getByTestId("can-register").textContent).toBe("false");
+    });
+
+    it("still clears local auth state when the logout request fails", async () => {
+        setToken("tok.1");
+        vi.mocked(fetchProfile).mockResolvedValue(profile);
+        renderApp();
+        await waitFor(() => expect(statusOf()).toBe("authenticated"));
+        vi.mocked(logoutRequest).mockRejectedValue(new Error("network"));
+
+        await expect(captured.current!.logout()).resolves.toBeUndefined();
+        await waitFor(() => expect(statusOf()).toBe("guest"));
     });
 
     it("skips refreshProfile without token", async () => {

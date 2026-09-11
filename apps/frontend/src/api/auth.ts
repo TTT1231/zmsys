@@ -10,6 +10,8 @@ export async function login(input: LoginInput): Promise<LoginResult> {
 export async function logout(): Promise<void> {
     try {
         await requestClient.post("/auth/logout");
+    } catch {
+        // 本地退出必须成功；服务端 token 已失效或网络不可用都不应阻止清理会话。
     } finally {
         clearToken();
     }

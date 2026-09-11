@@ -1,9 +1,10 @@
-/* API 契约类型中心：与 docs/api/openapi.yaml、src/mocks/handlers 三方对齐 */
+/* API 契约类型中心：与 docs/api/openapi.yaml、mocks/request 三方对齐 */
 import type { RoleGrant, RoleId } from "@/data/permissions";
 
 /* ---------- 业务实体（对应 db-scheme.md 各表，业务码为唯一 API key） ---------- */
 
-export type StatusKey = "done" | "progress" | "ready" | "pending";
+export type StatusKey = "done" | "progress" | "ready" | "pending" | "cancelled";
+export type OrderLifecycleStatus = "active" | "cancelled";
 
 export interface OrderStatus {
     label: string;
@@ -11,6 +12,7 @@ export interface OrderStatus {
 }
 
 export interface Order {
+    version: number;
     orderNo: string;
     customer: string;
     customerCode: string;
@@ -21,6 +23,30 @@ export interface Order {
     deliverStart: string; // 交货起始日期
     deliverEnd: string; // 交货截止日期（排序/逾期口径）
     remark: string;
+    lifecycleStatus: OrderLifecycleStatus;
+    cancelledAt?: string;
+    cancelledBy?: string;
+    cancelReason?: string;
+}
+
+export interface BomSpecField {
+    key: string;
+    label: string;
+    type: "select" | "text";
+    options?: string[];
+    required?: boolean;
+    placeholder?: string;
+    initial?: string;
+    defaultValue?: string;
+}
+
+/** 后端权威 BOM 品类目录 */
+export interface BomCategory {
+    key: string;
+    name: string;
+    codePrefix: string;
+    seqWidth?: number;
+    fields: BomSpecField[];
 }
 
 export interface Bom {
@@ -34,6 +60,7 @@ export interface Bom {
 }
 
 export interface Customer {
+    version: number;
     code: string;
     name: string;
     contact: string;
@@ -48,6 +75,7 @@ export interface Customer {
     /** 合作状态（聚合派生：近 6 个月有订单 = 合作中，否则待跟进） */
     cooperation: "合作中" | "待跟进";
     owner: string;
+    ownerAccount: string;
     payTerms: string;
     created: string;
 }
@@ -60,6 +88,11 @@ export interface InboundRow {
     time: string;
     inspector: string;
     remark?: string;
+    status: "active" | "voided";
+    version: number;
+    createdAt: string;
+    updatedBy?: string;
+    updatedAt?: string;
 }
 
 export interface OutboundRow {
@@ -73,15 +106,59 @@ export interface OutboundRow {
     time: string;
     operator: string;
     remark?: string;
+    state: "registered" | "printed" | "voided";
+    version: number;
+    printVersion: number;
+    voidReason?: string;
+}
+
+export interface StockAdjustmentRow {
+    no: string;
+    bomCode: string;
+    qtyDelta: number;
+    date: string;
+    time: string;
+    operator: string;
+    reason: string;
+    relatedInboundNo?: string;
+}
+
+export interface OutboundPrintResult {
+    outbound: OutboundRow;
+    printVersion: number;
+    document: OutboundPrintDocument;
+}
+
+/** 后端已落打印日志并计算哈希的纸质单快照；前端只能据此渲染，不再自行拼接当前主数据。 */
+export interface OutboundPrintDocument {
+    no: string;
+    printVersion: number;
+    orderNo: string;
+    customer: string;
+    customerCode: string;
+    bomCode: string;
+    bomSpec: string;
+    qty: number;
+    date: string;
+    operator: string;
+    remark: string;
+    printedBy: string;
+    printedAt: string;
 }
 
 export interface WbUser {
-    id: number;
+    version: number;
     name: string;
     account: string;
     role: RoleId;
     active: boolean;
     last: string;
+}
+
+/** 客户编辑页的最小负责人候选；接口只返回启用中的销售，不暴露登录时间等用户管理信息。 */
+export interface CustomerOwnerOption {
+    name: string;
+    account: string;
 }
 
 export interface OpLogEntry {
@@ -98,11 +175,14 @@ export interface Snapshot {
     version: number;
     orders: Order[];
     boms: Bom[];
+    bomCategories: BomCategory[];
     customers: Customer[];
     inboundLedger: InboundRow[];
     outboundLedger: OutboundRow[];
+    stockAdjustments: StockAdjustmentRow[];
     stock: Record<string, number>;
     users: WbUser[];
+    customerOwnerOptions: CustomerOwnerOption[];
 }
 
 /* ---------- 认证与授权 ---------- */
@@ -145,7 +225,6 @@ export interface GrantLogEntry {
 
 export interface CreateOrderInput {
     customerCode: string;
-    customer: string;
     bomCode: string;
     qty: number;
     deliverStart: string;
@@ -155,10 +234,16 @@ export interface CreateOrderInput {
 }
 
 export interface UpdateOrderInput {
+    expectedVersion: number;
     qty?: number;
     deliverStart?: string;
     deliverEnd?: string;
     remark?: string;
+}
+
+export interface CancelOrderInput {
+    expectedVersion: number;
+    reason: string;
 }
 
 export interface CreateCustomerInput {
@@ -178,6 +263,7 @@ export interface CreateCustomerInput {
 }
 
 export interface UpdateCustomerInput {
+    expectedVersion: number;
     name: string;
     contact: string;
     phone: string;
@@ -203,6 +289,28 @@ export interface CreateInboundInput {
     remark: string;
 }
 
+export interface UpdateInboundInput {
+    expectedVersion: number;
+    bomCode: string;
+    qty: number;
+    date: string;
+    remark: string;
+    reason: string;
+}
+
+export interface VoidInboundInput {
+    expectedVersion: number;
+    reason: string;
+}
+
+export interface CreateStockAdjustmentInput {
+    bomCode: string;
+    qtyDelta: number;
+    date: string;
+    reason: string;
+    relatedInboundNo?: string;
+}
+
 export interface CreateOutboundInput {
     orderNo: string;
     qty: number;
@@ -210,15 +318,42 @@ export interface CreateOutboundInput {
     remark: string;
 }
 
+export interface VoidOutboundInput {
+    expectedVersion: number;
+    reason: string;
+}
+
+export interface PrintOutboundInput {
+    expectedVersion: number;
+    reason?: string;
+}
+
+export interface EmergencyVoidOutboundInput {
+    expectedVersion: number;
+    reason: string;
+    goodsNotDeparted: true;
+    paperInvalidated: true;
+}
+
 export interface CreateUserInput {
     name: string;
     account: string;
-    role: RoleId;
+    role: Exclude<RoleId, "super">;
 }
 
 export interface UpdateUserInput {
+    expectedVersion: number;
     name: string;
     role: RoleId;
+    replacementOwnerAccount?: string;
+    transferReason?: string;
+}
+
+export interface SetUserStatusInput {
+    expectedVersion: number;
+    active: boolean;
+    replacementOwnerAccount?: string;
+    transferReason?: string;
 }
 
 /* ---------- 前端派生视图行（服务端不出统计端点，前端基于快照计算） ---------- */

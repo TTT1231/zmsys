@@ -1,16 +1,28 @@
 /* Mock 内存数据库（原 src/data/store.ts 迁移）
  * - 日期锚点动态取「今天」，种子数据按相对天数生成，演示数据始终新鲜
  * - mulberry32 固定种子：同一天内刷新结果一致
- * - 不变量：每 BOM Σ入库 − Σ出库 = 当前可用库存
+ * - 不变量：每 BOM Σ有效入库 + Σ库存调整 − Σ有效出库净额 = 当前可用库存
  * - 仅授权（grants）落 localStorage 模拟后端持久化；Node 环境下自动跳过
  * - 无浏览器顶层 API，可被 node --test 直接导入 */
-import type { Bom, Customer, InboundRow, OpLogEntry, Order, OutboundRow, Snapshot, WbUser } from "@/api";
+import type {
+    Bom,
+    Customer,
+    InboundRow,
+    OpLogEntry,
+    Order,
+    OutboundPrintDocument,
+    OutboundRow,
+    Snapshot,
+    StockAdjustmentRow,
+    WbUser,
+} from "@/api";
 // 注意：本文件被 node --test 直跑（scripts/inventory.test.mjs），Node 不解析 "@/ 别名，
 // 因此运行时值导入保留相对路径 + .ts 扩展名；type 导入会被擦除，可用别名
 import type { GrantMap, RoleGrant, RoleId } from "@/data/permissions";
-import { ROLES, buildDefaultGrants } from "../../src/data/permissions.ts";
+import { ACTION_CATALOG, MENU_CATALOG, ROLES, buildDefaultGrants } from "../../src/data/permissions.ts";
 import type { GrantLogEntry } from "@/api";
 import {
+    BOM_CATEGORIES,
     categoryOf,
     defaultsOf,
     NEW_MICRO_SWITCH_BRACKET_OPTIONS,
@@ -18,12 +30,24 @@ import {
     newMicroSwitchGaugeOf,
     nextBomCode,
 } from "../../src/data/categories.ts";
-import { addDays, nowStamp, nowTime, todayIso } from "../../src/lib/date.ts";
+import { addDays, addMonths, nowStamp, nowTime, todayIso } from "../../src/lib/date.ts";
 import { maxShipOf } from "../../src/data/views.ts";
 
 export const ANCHOR = todayIso();
 
 const clampDate = (isoDate: string, min: string, max: string) => (isoDate < min ? min : isoDate > max ? max : isoDate);
+
+const isIsoDate = (value: string) => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return false;
+    const [, year, month, day] = match.map(Number);
+    const parsed = new Date(Date.UTC(year, month - 1, day));
+    return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
+};
+
+const assertIsoDate = (value: string, label: string) => {
+    if (!isIsoDate(value)) throw new Error(`${label}格式不正确`);
+};
 
 // 确定性 PRNG（mulberry32）
 function mulberry32(seed: number) {
@@ -41,8 +65,71 @@ const randInt = (min: number, max: number) => min + Math.floor(rng() * (max - mi
 
 /** 操作人（来自当前 token），写台账/日志时落名 */
 export interface Actor {
+    account?: string;
+    role?: RoleId;
     name: string;
     roleLabel: string;
+}
+
+interface InboundChangeLog {
+    inboundNo: string;
+    action: "update" | "void";
+    before: InboundRow;
+    after: InboundRow;
+    reason: string;
+    operator: string;
+    time: string;
+}
+
+interface CustomerOwnerHistory {
+    customerCode: string;
+    fromAccount: string;
+    toAccount: string;
+    reason: string;
+    operator: string;
+    time: string;
+}
+
+interface SalesOrderChangeLog {
+    orderNo: string;
+    event: "create" | "update" | "cancel";
+    before: Order | null;
+    after: Order;
+    reason: string;
+    operator: string;
+    time: string;
+}
+
+interface OutboundQuantityEvent {
+    eventNo: string;
+    shipmentNo: string;
+    qtyDelta: number;
+    correctionOf?: string;
+    reason?: string;
+    operator: string;
+    time: string;
+}
+
+interface OutboundStateLog {
+    shipmentNo: string;
+    event: "register" | "print" | "reprint" | "void-pre-print" | "void-emergency";
+    beforeState: OutboundRow["state"] | null;
+    afterState: OutboundRow["state"];
+    beforeVersion: number | null;
+    afterVersion: number;
+    reason: string;
+    operator: string;
+    time: string;
+    detail?: Record<string, boolean | number | string>;
+}
+
+interface OutboundPrintLog {
+    shipmentNo: string;
+    printVersion: number;
+    printedBy: string;
+    reason: string;
+    documentSnapshot: OutboundPrintDocument;
+    printedAt: string;
 }
 
 const CUSTOMER_SEEDS: Array<[string, string]> = [
@@ -76,6 +163,7 @@ const buildCustomers = (): Customer[] =>
     CUSTOMER_SEEDS.map(([name, code], index) => {
         const [contact, phone, province, city, district, town] = CONTACT_SEEDS[index];
         return {
+            version: 1,
             code,
             name,
             contact,
@@ -87,6 +175,7 @@ const buildCustomers = (): Customer[] =>
             address: ["兴园路 88 号", "兴业路 21 号", "科技园 3 栋", "创新大厦 12F"][index % 4],
             cooperation: "待跟进", // 占位；真实值由 listCustomers 按订单聚合派生
             owner: "陈洁",
+            ownerAccount: "chen_jie",
             payTerms: "月结 30 天",
             created: addDays(ANCHOR, -(120 + index * 37)),
         };
@@ -489,6 +578,23 @@ const specOf = (bom: Pick<Bom, "name" | "modelCode" | "specs">) => {
     return [bom.modelCode, ...parts].filter(Boolean).join(" · ");
 };
 
+const normalizeText = (value: string) => value.normalize("NFKC").trim();
+
+const normalizedSpecs = (specs: Record<string, string>) =>
+    Object.fromEntries(
+        Object.entries(specs)
+            .map(([key, value]) => [normalizeText(key), normalizeText(value)] as const)
+            .filter(([key, value]) => key && value)
+            .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)),
+    );
+
+const bomIdentityOf = (input: Pick<Bom, "name" | "modelCode" | "specs">) =>
+    JSON.stringify([
+        normalizeText(input.name),
+        normalizeText(input.modelCode).replace(/[a-z]/g, char => char.toUpperCase()),
+        normalizedSpecs(input.specs),
+    ]);
+
 const buildBoms = (): Bom[] => {
     const rotary = categoryOf("旋转开关")!;
     const rotaryBoms: Bom[] = ROTARY_ROWS.map((row, index) => {
@@ -544,6 +650,7 @@ function staticOrders(): SeededOrder[] {
     ): SeededOrder => {
         const orderDate = addDays(ANCHOR, -orderDaysAgo);
         return {
+            version: 1,
             orderNo: `ZM${orderDate.slice(2).replaceAll("-", "")}${String(seq).padStart(3, "0")}`,
             customer: CUSTOMER_SEEDS[customerIndex][0],
             customerCode: CUSTOMER_SEEDS[customerIndex][1],
@@ -554,6 +661,7 @@ function staticOrders(): SeededOrder[] {
             deliverStart: addDays(orderDate, Math.max(1, deliverInDays - 5)),
             deliverEnd: addDays(orderDate, deliverInDays),
             remark: "",
+            lifecycleStatus: "active",
             seedStock,
         };
     };
@@ -585,6 +693,7 @@ function buildOrders(boms: Bom[]): SeededOrder[] {
         const done = status === "已完成" ? qty : status === "可发货" ? Math.floor(qty * (0.2 + (seq % 5) * 0.15)) : 0;
         const orderDate = addDays(ANCHOR, -9 - Math.floor(index / 2));
         return {
+            version: 1,
             orderNo: `ZM${orderDate.slice(2).replaceAll("-", "")}${String(seq).padStart(3, "0")}`,
             customer,
             customerCode,
@@ -595,6 +704,7 @@ function buildOrders(boms: Bom[]): SeededOrder[] {
             deliverStart: addDays(orderDate, 7 + (seq % 4)),
             deliverEnd: addDays(orderDate, 12 + (seq % 8)),
             remark: "",
+            lifecycleStatus: "active",
             seedStock: status === "可发货" ? done : 0,
         };
     });
@@ -604,9 +714,9 @@ function buildOrders(boms: Bom[]): SeededOrder[] {
 /* ---- 内存库（handler 侧单例） ---- */
 const MOCK_PASSWORD = "123456";
 const GRANT_LS_KEY = "zm-permissions";
-const GRANT_LS_VERSION = 2;
+const GRANT_LS_VERSION = 3;
 
-type DbUser = WbUser & { password: string };
+type DbUser = WbUser & { password: string; tokenVersion: number };
 
 class MockDb {
     orders: Order[] = [];
@@ -614,79 +724,94 @@ class MockDb {
     customers: Customer[] = [];
     inboundLedger: InboundRow[] = [];
     outboundLedger: OutboundRow[] = [];
+    stockAdjustments: StockAdjustmentRow[] = [];
+    inboundChangeLog: InboundChangeLog[] = [];
+    customerOwnerHistory: CustomerOwnerHistory[] = [];
+    salesOrderChangeLog: SalesOrderChangeLog[] = [];
+    outboundQuantityEvents: OutboundQuantityEvent[] = [];
+    outboundStateLog: OutboundStateLog[] = [];
+    outboundPrintLog: OutboundPrintLog[] = [];
     stock = new Map<string, number>();
     users: DbUser[] = [
         {
-            id: 1,
+            version: 1,
             name: "系统管理员",
             account: "sys_admin",
             role: "super",
             active: true,
             last: `${addDays(ANCHOR, 0).slice(5)} 08:12`,
             password: MOCK_PASSWORD,
+            tokenVersion: 1,
         },
         {
-            id: 2,
+            version: 1,
             name: "李晓梅",
             account: "li_xiaomei",
             role: "admin",
             active: true,
             last: `${addDays(ANCHOR, 0).slice(5)} 09:40`,
             password: MOCK_PASSWORD,
+            tokenVersion: 1,
         },
         {
-            id: 3,
+            version: 1,
             name: "陈志强",
             account: "chen_zhiqiang",
             role: "admin",
             active: true,
             last: `${addDays(ANCHOR, -1).slice(5)} 17:22`,
             password: MOCK_PASSWORD,
+            tokenVersion: 1,
         },
         {
-            id: 4,
+            version: 1,
             name: "周丽",
             account: "zhou_li",
             role: "warehouse",
             active: true,
             last: `${addDays(ANCHOR, 0).slice(5)} 08:55`,
             password: MOCK_PASSWORD,
+            tokenVersion: 1,
         },
         {
-            id: 5,
+            version: 1,
             name: "王师傅",
             account: "wang_shifu",
             role: "warehouse",
             active: true,
             last: `${addDays(ANCHOR, -2).slice(5)} 16:03`,
             password: MOCK_PASSWORD,
+            tokenVersion: 1,
         },
         {
-            id: 6,
+            version: 1,
             name: "赵师傅",
             account: "zhao_shifu",
             role: "warehouse",
             active: true,
             last: `${addDays(ANCHOR, -3).slice(5)} 11:20`,
             password: MOCK_PASSWORD,
+            tokenVersion: 1,
         },
         {
-            id: 7,
+            version: 1,
             name: "陈洁",
             account: "chen_jie",
             role: "sales",
             active: true,
             last: `${addDays(ANCHOR, 0).slice(5)} 09:12`,
             password: MOCK_PASSWORD,
+            tokenVersion: 1,
         },
         {
-            id: 8,
+            version: 1,
             name: "刘敏",
             account: "liu_min",
             role: "staff",
             active: true,
             last: `${addDays(ANCHOR, -4).slice(5)} 15:44`,
             password: MOCK_PASSWORD,
+            tokenVersion: 1,
         },
     ];
     opLog: OpLogEntry[] = [];
@@ -718,6 +843,13 @@ class MockDb {
         this.orders = orders.map(({ seedStock: _seedStock, ...order }) => order);
 
         this.outboundLedger = this.buildOutboundLedger();
+        this.outboundQuantityEvents = this.outboundLedger.map(row => ({
+            eventNo: `${row.no}-E01`,
+            shipmentNo: row.no,
+            qtyDelta: row.qty,
+            operator: row.operator,
+            time: `${row.date}T${row.time}:00+08:00`,
+        }));
         this.inboundLedger = this.buildInboundLedger();
         this.opLog = this.buildOpLog();
     }
@@ -731,17 +863,22 @@ class MockDb {
     }
 
     remainingOf(order: Order) {
-        return Math.max(0, order.qty - order.outbound);
+        return order.lifecycleStatus === "cancelled" ? 0 : Math.max(0, order.qty - order.outbound);
     }
 
     listUsers(): WbUser[] {
-        return this.users.map(({ password: _password, ...user }) => ({ ...user }));
+        return this.users.map(({ password: _password, tokenVersion: _tokenVersion, ...user }) => ({ ...user }));
     }
 
-    /** 合作状态（聚合派生，不落库）：近 6 个月（183 天）有订单 = 合作中，否则待跟进 */
+    /** 合作状态（聚合派生，不落库）：近 6 个日历月有活动订单 = 合作中，否则待跟进 */
     private cooperationOf(customerCode: string): "合作中" | "待跟进" {
-        const windowStart = addDays(ANCHOR, -183);
-        return this.orders.some(order => order.customerCode === customerCode && order.orderDate >= windowStart)
+        const windowStart = addMonths(ANCHOR, -6);
+        return this.orders.some(
+            order =>
+                order.customerCode === customerCode &&
+                order.lifecycleStatus === "active" &&
+                order.orderDate >= windowStart,
+        )
             ? "合作中"
             : "待跟进";
     }
@@ -790,6 +927,9 @@ class MockDb {
                     date,
                     time: this.timeOf(raw.length * 3 + partIndex),
                     operator: OPERATORS[raw.length % OPERATORS.length],
+                    state: "printed",
+                    version: 2,
+                    printVersion: 1,
                 });
             });
         });
@@ -852,6 +992,9 @@ class MockDb {
                     date,
                     time: this.timeOf(raw.length * 5 + i),
                     inspector: INSPECTORS[raw.length % INSPECTORS.length],
+                    status: "active",
+                    version: 1,
+                    createdAt: `${date}T${this.timeOf(raw.length * 5 + i)}:00+08:00`,
                 });
             }
         });
@@ -900,14 +1043,16 @@ class MockDb {
     }
 
     issueToken(account: string): string {
-        return `mock.${account}.${Date.now().toString(36)}`;
+        const user = this.users.find(item => item.account === account);
+        if (!user || !user.active) throw new Error("账号不存在或已停用");
+        return `mock.${account}.${user.tokenVersion}.${Date.now().toString(36)}`;
     }
 
     resolveToken(token: string): DbUser | null {
-        const [, account] = token.split(".");
-        if (!account) return null;
+        const [prefix, account, tokenVersion] = token.split(".");
+        if (prefix !== "mock" || !account || !tokenVersion) return null;
         const user = this.users.find(item => item.account === account);
-        return user && user.active ? user : null;
+        return user && user.active && String(user.tokenVersion) === tokenVersion ? user : null;
     }
 
     /** 个人中心：仅允许更新自己的姓名（账号/角色/状态为管理员域） */
@@ -915,7 +1060,8 @@ class MockDb {
         const user = this.users.find(item => item.account === account);
         if (!user || !user.active) throw new Error("账号不存在或已停用");
         user.name = name;
-        const { password: _password, ...rest } = user;
+        user.version += 1;
+        const { password: _password, tokenVersion: _tokenVersion, ...rest } = user;
         return rest;
     }
 
@@ -926,6 +1072,8 @@ class MockDb {
         if (user.password !== oldPassword) throw new Error("旧密码不正确");
         if (newPassword.length < 6) throw new Error("新密码至少 6 位");
         user.password = newPassword;
+        user.tokenVersion += 1;
+        user.version += 1;
     }
 
     // ---- 授权 ----
@@ -934,12 +1082,55 @@ class MockDb {
         return this.grants[role];
     }
 
-    saveGrants(role: RoleId, grant: RoleGrant, note: string, actor: Actor) {
-        this.grants = { ...this.grants, [role]: grant };
-        persistGrants(this.grants);
-        if (note.trim()) {
-            this.grantLog.unshift({ time: `${todayIso().slice(5)} ${nowTime()}`, user: actor.name, text: note.trim() });
+    saveGrants(role: RoleId, grant: RoleGrant, expectedVersion: number, note: string, actor: Actor) {
+        const current = this.grants[role];
+        if (current.version !== expectedVersion) throw new Error("角色授权已被其他人修改，请刷新后重试");
+        const knownMenus = new Set(
+            MENU_CATALOG.flatMap(menu => [menu.key, ...(menu.children ?? []).map(child => child.key)]),
+        );
+        if (grant.menus.some(menu => !knownMenus.has(menu))) throw new Error("授权中包含未知菜单");
+        if (grant.menus.some(menu => menu === "permissions" || menu.startsWith("permissions-"))) {
+            throw new Error("受保护的用户与权限菜单只能由超级管理员持有");
         }
+        for (const [menu, actions] of Object.entries(grant.actions)) {
+            const catalog = (ACTION_CATALOG as Record<string, readonly { id: string; protected?: boolean }[]>)[menu];
+            if (!catalog || actions.some(action => !catalog.some(item => item.id === action))) {
+                throw new Error("授权中包含未知操作");
+            }
+            if (actions.some(action => catalog.find(item => item.id === action)?.protected)) {
+                throw new Error("受保护权限只能由超级管理员持有");
+            }
+            if (actions.length > 0 && (!grant.menus.includes(menu) || !actions.includes("view"))) {
+                throw new Error("操作权限必须同时包含父菜单和查看权限");
+            }
+        }
+        const normalized = {
+            version: current.version,
+            menus: [...new Set(grant.menus)],
+            actions: Object.fromEntries(
+                Object.entries(grant.actions).map(([menu, actions]) => [menu, [...new Set(actions)]]),
+            ),
+        };
+        const unchanged =
+            JSON.stringify({ menus: normalized.menus, actions: normalized.actions }) ===
+            JSON.stringify({ menus: current.menus, actions: current.actions });
+        if (unchanged) {
+            this.grantLog.unshift({
+                time: `${todayIso().slice(5)} ${nowTime()}`,
+                user: actor.name,
+                text: note.trim() || `角色【${role}】授权保存（无变化）`,
+            });
+            return structuredClone(current);
+        }
+        const saved = structuredClone({ ...normalized, version: current.version + 1 });
+        this.grants = { ...this.grants, [role]: saved };
+        persistGrants(this.grants);
+        this.grantLog.unshift({
+            time: `${todayIso().slice(5)} ${nowTime()}`,
+            user: actor.name,
+            text: note.trim() || `角色【${role}】授权保存（无补充原因）`,
+        });
+        return saved;
     }
 
     // ---- 变更操作（校验与单号规则同旧版，日志落操作人） ----
@@ -947,7 +1138,6 @@ class MockDb {
     createOrder(
         input: {
             customerCode: string;
-            customer: string;
             bomCode: string;
             qty: number;
             deliverStart: string;
@@ -960,6 +1150,10 @@ class MockDb {
         const customer = this.customers.find(item => item.code === input.customerCode);
         if (!customer) throw new Error("客户不存在");
         if (!this.bomByCode(input.bomCode)) throw new Error("成品不存在");
+        if (!Number.isSafeInteger(input.qty) || input.qty <= 0) throw new Error("请输入有效的订单数量");
+        assertIsoDate(input.orderDate, "订单日期");
+        assertIsoDate(input.deliverStart, "交货起始日期");
+        assertIsoDate(input.deliverEnd, "交货截止日期");
         if (input.deliverEnd < input.deliverStart) throw new Error("交货截止日期不能早于起始日期");
         const yyMMdd = input.orderDate.slice(2).replaceAll("-", "");
         // 按日递增取号：单号日期段来自 orderDate，序号取「同日已有订单」最大值 + 1
@@ -967,6 +1161,7 @@ class MockDb {
         const maxSeq = sameDay.reduce((max, order) => Math.max(max, Number(order.orderNo.slice(-3)) || 0), 0);
         const orderNo = `ZM${yyMMdd}${String(maxSeq + 1).padStart(3, "0")}`;
         const order: Order = {
+            version: 1,
             orderNo,
             customer: customer.name,
             customerCode: input.customerCode,
@@ -977,8 +1172,18 @@ class MockDb {
             deliverStart: input.deliverStart,
             deliverEnd: input.deliverEnd,
             remark: input.remark,
+            lifecycleStatus: "active",
         };
         this.orders.unshift(order);
+        this.salesOrderChangeLog.unshift({
+            orderNo,
+            event: "create",
+            before: null,
+            after: { ...order },
+            reason: "",
+            operator: actor.name,
+            time: new Date().toISOString(),
+        });
         this.opLog.unshift({
             date: ANCHOR,
             time: nowTime(),
@@ -988,75 +1193,92 @@ class MockDb {
             target: orderNo,
         });
         this.version += 1;
-        return order;
+        return { ...order };
     }
 
-    updateOrder(input: {
-        orderNo: string;
-        qty?: number;
-        deliverStart?: string;
-        deliverEnd?: string;
-        remark?: string;
-    }): Order {
+    updateOrder(
+        input: {
+            orderNo: string;
+            expectedVersion: number;
+            qty?: number;
+            deliverStart?: string;
+            deliverEnd?: string;
+            remark?: string;
+        },
+        actor: Actor,
+    ): Order {
         const order = this.orders.find(item => item.orderNo === input.orderNo);
         if (!order) throw new Error("订单不存在");
+        if (order.version !== input.expectedVersion) throw new Error("订单已被其他人修改，请刷新后重试");
+        if (order.lifecycleStatus === "cancelled") throw new Error("已取消订单不可修改");
+        if (input.qty !== undefined && (!Number.isSafeInteger(input.qty) || input.qty <= 0)) {
+            throw new Error("请输入有效的订单数量");
+        }
         if (input.qty !== undefined && input.qty < order.outbound) {
             throw new Error(`新数量不能低于累计已发 ${order.outbound} 件`);
         }
         const nextStart = input.deliverStart ?? order.deliverStart;
         const nextEnd = input.deliverEnd ?? order.deliverEnd;
+        assertIsoDate(nextStart, "交货起始日期");
+        assertIsoDate(nextEnd, "交货截止日期");
         if (nextEnd < nextStart) throw new Error("交货截止日期不能早于起始日期");
+        const before = { ...order };
         if (input.qty !== undefined) order.qty = input.qty;
         order.deliverStart = nextStart;
         order.deliverEnd = nextEnd;
         if (input.remark !== undefined) order.remark = input.remark;
+        order.version += 1;
+        this.salesOrderChangeLog.unshift({
+            orderNo: order.orderNo,
+            event: "update",
+            before,
+            after: { ...order },
+            reason: "",
+            operator: actor.name,
+            time: new Date().toISOString(),
+        });
         this.version += 1;
-        return order;
+        return { ...order };
     }
 
-    /** 校验并解析所属销售账号 → 姓名（须为在职 sales 用户） */
-    private ownerNameOf(ownerAccount: string): string {
+    cancelOrder(orderNo: string, expectedVersion: number, reason: string, actor: Actor): Order {
+        const order = this.orders.find(item => item.orderNo === orderNo);
+        if (!order) throw new Error("订单不存在");
+        if (order.version !== expectedVersion) throw new Error("订单已被其他人修改，请刷新后重试");
+        if (order.lifecycleStatus === "cancelled") return { ...order };
+        if (reason.trim().length < 2) throw new Error("请填写取消原因（至少 2 个字）");
+        const pendingShipments = this.outboundLedger.filter(
+            row => row.orderNo === orderNo && row.state === "registered",
+        );
+        if (pendingShipments.length > 0) throw new Error("存在已登记但未打印的出库单，请先作废后再取消订单");
+        if (order.outbound >= order.qty) throw new Error("订单已全部发货，没有剩余数量可以取消");
+        const before = { ...order };
+        order.lifecycleStatus = "cancelled";
+        order.cancelReason = reason.trim();
+        order.cancelledBy = actor.name;
+        order.cancelledAt = new Date().toISOString();
+        order.version += 1;
+        this.salesOrderChangeLog.unshift({
+            orderNo: order.orderNo,
+            event: "cancel",
+            before,
+            after: { ...order },
+            reason: reason.trim(),
+            operator: actor.name,
+            time: order.cancelledAt,
+        });
+        this.version += 1;
+        return { ...order };
+    }
+
+    /** 校验并解析所属销售账号（须为在职 sales 用户） */
+    private ownerOf(ownerAccount: string): DbUser {
         const owner = this.users.find(item => item.account === ownerAccount.trim() && item.active);
         if (!owner || owner.role !== "sales") throw new Error("客户负责人须为在职销售账号");
-        return owner.name;
+        return owner;
     }
 
-    createCustomer(input: {
-        name: string;
-        contact: string;
-        phone: string;
-        province: string;
-        city: string;
-        district: string;
-        town: string;
-        address: string;
-        ownerAccount: string;
-        payTerms: string;
-    }): Customer {
-        const owner = this.ownerNameOf(input.ownerAccount);
-        const maxSeq = this.customers.reduce((max, customer) => Math.max(max, Number(customer.code.slice(-4)) || 0), 0);
-        const customer: Customer = {
-            code: `CUS-${String(maxSeq + 1).padStart(4, "0")}`,
-            name: input.name,
-            contact: input.contact,
-            phone: `${input.phone.slice(0, 3)}****${input.phone.slice(-4)}`,
-            province: input.province,
-            city: input.city,
-            district: input.district,
-            town: input.town,
-            address: input.address,
-            cooperation: "待跟进",
-            owner,
-            payTerms: input.payTerms ?? "",
-            created: ANCHOR,
-        };
-        this.customers.unshift(customer);
-        this.version += 1;
-        return { ...customer, cooperation: this.cooperationOf(customer.code) };
-    }
-
-    updateCustomer(
-        code: string,
+    createCustomer(
         input: {
             name: string;
             contact: string;
@@ -1069,10 +1291,72 @@ class MockDb {
             ownerAccount: string;
             payTerms: string;
         },
+        actor: Actor,
+    ): Customer {
+        if (input.name.trim().length < 4 || input.name.trim().length > 80) throw new Error("客户名称须为 4-80 个字符");
+        if (!input.contact.trim() || input.contact.trim().length > 32) throw new Error("联系人须为 1-32 个字符");
+        if (!/^1\d{10}$/.test(input.phone)) throw new Error("请输入 11 位手机号");
+        if (!input.province.trim() || !input.city.trim() || !input.address.trim())
+            throw new Error("请完善所在地区与地址");
+        const owner = this.ownerOf(input.ownerAccount);
+        const maxSeq = this.customers.reduce((max, customer) => Math.max(max, Number(customer.code.slice(-4)) || 0), 0);
+        const customer: Customer = {
+            version: 1,
+            code: `CUS-${String(maxSeq + 1).padStart(4, "0")}`,
+            name: input.name,
+            contact: input.contact,
+            phone: `${input.phone.slice(0, 3)}****${input.phone.slice(-4)}`,
+            province: input.province,
+            city: input.city,
+            district: input.district,
+            town: input.town,
+            address: input.address,
+            cooperation: "待跟进",
+            owner: owner.name,
+            ownerAccount: owner.account,
+            payTerms: input.payTerms ?? "",
+            created: ANCHOR,
+        };
+        this.customers.unshift(customer);
+        this.opLog.unshift({
+            date: ANCHOR,
+            time: nowTime(),
+            user: actor.name,
+            role: actor.roleLabel,
+            action: "新建客户档案",
+            target: customer.code,
+        });
+        this.version += 1;
+        return { ...customer, cooperation: this.cooperationOf(customer.code) };
+    }
+
+    updateCustomer(
+        code: string,
+        input: {
+            expectedVersion: number;
+            name: string;
+            contact: string;
+            phone: string;
+            province: string;
+            city: string;
+            district: string;
+            town: string;
+            address: string;
+            ownerAccount: string;
+            payTerms: string;
+        },
+        actor: Actor,
     ): Customer {
         const customer = this.customers.find(item => item.code === code);
         if (!customer) throw new Error("客户不存在");
-        const owner = this.ownerNameOf(input.ownerAccount);
+        if (customer.version !== input.expectedVersion) throw new Error("客户已被其他人修改，请刷新后重试");
+        if (input.name.trim().length < 4 || input.name.trim().length > 80) throw new Error("客户名称须为 4-80 个字符");
+        if (!input.contact.trim() || input.contact.trim().length > 32) throw new Error("联系人须为 1-32 个字符");
+        if (input.phone && !/^1\d{10}$/.test(input.phone)) throw new Error("请输入 11 位手机号");
+        if (!input.province.trim() || !input.city.trim() || !input.address.trim())
+            throw new Error("请完善所在地区与地址");
+        const owner = this.ownerOf(input.ownerAccount);
+        const previousOwner = customer.ownerAccount;
         customer.name = input.name;
         customer.contact = input.contact;
         // 编辑时电话留空 = 不修改（库表存的是掩码，无法回填完整号）
@@ -1082,19 +1366,61 @@ class MockDb {
         customer.district = input.district;
         customer.town = input.town;
         customer.address = input.address;
-        customer.owner = owner;
+        customer.owner = owner.name;
+        customer.ownerAccount = owner.account;
         customer.payTerms = input.payTerms ?? "";
+        customer.version += 1;
+        if (previousOwner !== owner.account) {
+            this.customerOwnerHistory.unshift({
+                customerCode: customer.code,
+                fromAccount: previousOwner,
+                toAccount: owner.account,
+                reason: "单个客户负责人变更",
+                operator: actor.name,
+                time: new Date().toISOString(),
+            });
+        }
         this.version += 1;
         return { ...customer, cooperation: this.cooperationOf(customer.code) };
     }
 
     createBom(input: { name: string; modelCode: string; specs: Record<string, string> }): Bom {
-        const code = nextBomCode(input.name, this.boms);
+        const name = normalizeText(input.name);
+        const modelCode = normalizeText(input.modelCode);
+        const category = categoryOf(name);
+        if (!category) throw new Error("品类不存在");
+        if (!modelCode) throw new Error("请输入型号");
+        if (modelCode.length > 64) throw new Error("型号最多 64 个字符");
+        if (!input.specs || Array.isArray(input.specs) || typeof input.specs !== "object") {
+            throw new Error("规格必须是对象");
+        }
+        if (Object.values(input.specs).some(value => typeof value !== "string")) throw new Error("规格值必须是字符串");
+        const allowedKeys = new Set(category.fields.map(field => field.key));
+        if (Object.keys(input.specs).some(key => !allowedKeys.has(normalizeText(key)))) {
+            throw new Error("规格中包含当前品类未定义的字段");
+        }
+        // 固定规格以后端目录为准，客户端同名值不能覆盖。
+        const specs = normalizedSpecs({ ...input.specs, ...defaultsOf(category) });
+        for (const field of category.fields) {
+            const value = specs[field.key];
+            if (field.required && !value) throw new Error(`请填写规格：${field.label}`);
+            if (value && field.options && !field.options.includes(value)) throw new Error(`规格值无效：${field.label}`);
+        }
+        if (!Object.keys(specs).length) throw new Error("请至少填写一项规格");
+        if (name === "新微动") {
+            const bracket = newMicroSwitchGaugeOf(specs["支架"]);
+            const plate = newMicroSwitchGaugeOf(specs["静片"]);
+            if (!bracket || bracket !== plate) throw new Error("新微动的支架与静片必须使用相同的 6.3/4.8 规格");
+        }
+        const identity = bomIdentityOf({ name, modelCode, specs });
+        const duplicate = this.boms.find(bom => bomIdentityOf(bom) === identity);
+        if (duplicate) throw new Error(`BOM 已存在：${duplicate.code}`);
+        const code = nextBomCode(name, this.boms);
         const bom: Bom = {
             code,
-            name: input.name,
-            modelCode: input.modelCode,
-            specs: { ...input.specs },
+            name,
+            modelCode,
+            specs,
             spec: "",
             created: ANCHOR,
             unit: "个",
@@ -1102,14 +1428,14 @@ class MockDb {
         bom.spec = specOf(bom);
         this.boms.unshift(bom);
         this.version += 1;
-        return bom;
+        return { ...bom, specs: { ...bom.specs } };
     }
 
     createInbound(input: { bomCode: string; qty: number; date: string; remark: string }, actor: Actor): InboundRow {
         const bom = this.bomByCode(input.bomCode);
         if (!bom) throw new Error("成品不存在");
         if (!Number.isSafeInteger(input.qty) || input.qty <= 0) throw new Error("请输入有效的入库数量");
-        if (!input.date) throw new Error("请选择入库日期");
+        assertIsoDate(input.date, "入库日期");
         const rows = this.inboundLedger.filter(row => row.date === input.date);
         const seq = rows.length > 0 ? Math.max(...rows.map(row => Number(row.no.slice(-4)))) + 1 : 1;
         const row: InboundRow = {
@@ -1121,18 +1447,131 @@ class MockDb {
             // 登记人取当前登录用户（不经请求体）
             inspector: actor.name,
             remark: input.remark,
+            status: "active",
+            version: 1,
+            createdAt: `${ANCHOR}T${nowTime()}:00+08:00`,
         };
         this.inboundLedger.push(row);
         this.stock.set(input.bomCode, (this.stock.get(input.bomCode) || 0) + input.qty);
         this.version += 1;
-        return row;
+        return { ...row };
+    }
+
+    private assertInboundEditable(row: InboundRow) {
+        const createdDate = row.createdAt.includes("T") ? row.createdAt.slice(0, 10) : row.date;
+        if (createdDate !== ANCHOR) throw new Error("只能修正北京时间当天录入的入库记录");
+        if (row.status === "voided") throw new Error("已作废入库记录不可再次修改");
+    }
+
+    updateInbound(
+        no: string,
+        input: { expectedVersion: number; bomCode: string; qty: number; date: string; remark: string; reason: string },
+        actor: Actor,
+    ): InboundRow {
+        const row = this.inboundLedger.find(item => item.no === no);
+        if (!row) throw new Error("入库记录不存在");
+        this.assertInboundEditable(row);
+        if (row.version !== input.expectedVersion) throw new Error("入库记录已被其他人修改，请刷新后重试");
+        if (!Number.isSafeInteger(input.qty) || input.qty <= 0) throw new Error("请输入有效的入库数量");
+        if (input.reason.trim().length < 2) throw new Error("请填写修正原因（至少 2 个字）");
+        assertIsoDate(input.date, "入库日期");
+        if (!this.bomByCode(input.bomCode)) throw new Error("成品不存在");
+        const oldStock = this.stock.get(row.bomCode) ?? 0;
+        const nextOldStock = row.bomCode === input.bomCode ? oldStock + input.qty - row.qty : oldStock - row.qty;
+        if (nextOldStock < 0) throw new Error("修正后库存将小于 0，请先核对相关出库记录");
+        const before = { ...row };
+        if (row.bomCode !== input.bomCode) {
+            this.stock.set(row.bomCode, nextOldStock);
+            this.stock.set(input.bomCode, (this.stock.get(input.bomCode) ?? 0) + input.qty);
+        } else {
+            this.stock.set(row.bomCode, nextOldStock);
+        }
+        row.bomCode = input.bomCode;
+        row.qty = input.qty;
+        row.date = input.date;
+        row.remark = input.remark;
+        row.version += 1;
+        row.updatedBy = actor.name;
+        row.updatedAt = new Date().toISOString();
+        this.inboundChangeLog.unshift({
+            inboundNo: row.no,
+            action: "update",
+            before,
+            after: { ...row },
+            reason: input.reason.trim(),
+            operator: actor.name,
+            time: row.updatedAt,
+        });
+        this.version += 1;
+        return { ...row };
+    }
+
+    voidInbound(no: string, expectedVersion: number, reason: string, actor: Actor): InboundRow {
+        const row = this.inboundLedger.find(item => item.no === no);
+        if (!row) throw new Error("入库记录不存在");
+        this.assertInboundEditable(row);
+        if (row.version !== expectedVersion) throw new Error("入库记录已被其他人修改，请刷新后重试");
+        if (reason.trim().length < 2) throw new Error("请填写作废原因（至少 2 个字）");
+        const nextStock = (this.stock.get(row.bomCode) ?? 0) - row.qty;
+        if (nextStock < 0) throw new Error("作废后库存将小于 0，请先核对相关出库记录");
+        const before = { ...row };
+        this.stock.set(row.bomCode, nextStock);
+        row.status = "voided";
+        row.version += 1;
+        row.updatedBy = actor.name;
+        row.updatedAt = new Date().toISOString();
+        this.inboundChangeLog.unshift({
+            inboundNo: row.no,
+            action: "void",
+            before,
+            after: { ...row },
+            reason: reason.trim(),
+            operator: actor.name,
+            time: row.updatedAt,
+        });
+        this.version += 1;
+        return { ...row };
+    }
+
+    createStockAdjustment(
+        input: { bomCode: string; qtyDelta: number; date: string; reason: string; relatedInboundNo?: string },
+        actor: Actor,
+    ): StockAdjustmentRow {
+        if (!this.bomByCode(input.bomCode)) throw new Error("成品不存在");
+        if (!Number.isSafeInteger(input.qtyDelta) || input.qtyDelta === 0) throw new Error("调整数量必须是非零整数");
+        if (input.reason.trim().length < 2) throw new Error("请填写调整原因（至少 2 个字）");
+        assertIsoDate(input.date, "调整日期");
+        if (input.relatedInboundNo) {
+            const related = this.inboundLedger.find(row => row.no === input.relatedInboundNo);
+            if (!related) throw new Error("关联入库单不存在");
+            if (related.bomCode !== input.bomCode) throw new Error("库存调整与关联入库单的 BOM 必须一致");
+        }
+        const nextStock = (this.stock.get(input.bomCode) ?? 0) + input.qtyDelta;
+        if (nextStock < 0) throw new Error("调整后库存不能小于 0");
+        const sameDay = this.stockAdjustments.filter(row => row.date === input.date);
+        const seq = sameDay.length + 1;
+        const row: StockAdjustmentRow = {
+            no: `TZ-${input.date.replaceAll("-", "")}-${String(seq).padStart(4, "0")}`,
+            bomCode: input.bomCode,
+            qtyDelta: input.qtyDelta,
+            date: input.date,
+            time: nowTime(),
+            operator: actor.name,
+            reason: input.reason.trim(),
+            relatedInboundNo: input.relatedInboundNo,
+        };
+        this.stockAdjustments.push(row);
+        this.stock.set(input.bomCode, nextStock);
+        this.version += 1;
+        return { ...row };
     }
 
     createOutbound(input: { orderNo: string; qty: number; date: string; remark: string }, actor: Actor): OutboundRow {
         const order = this.orders.find(item => item.orderNo === input.orderNo);
         if (!order) throw new Error("订单不存在");
+        if (order.lifecycleStatus === "cancelled") throw new Error("订单已取消，不能登记发货");
         if (!Number.isSafeInteger(input.qty) || input.qty <= 0) throw new Error("请输入有效的发货数量");
-        if (!input.date) throw new Error("请选择出库日期");
+        assertIsoDate(input.date, "出库日期");
         if (input.qty > maxShipOf(this.snapshot(), input.orderNo)) throw new Error("可发库存已变化，请重新核对数量");
         const orderRows = this.outboundLedger.filter(row => row.date === input.date);
         const seq = orderRows.length > 0 ? Math.max(...orderRows.map(row => Number(row.no.slice(-4)))) + 1 : 1;
@@ -1148,10 +1587,32 @@ class MockDb {
             // 操作人取当前登录用户（不经请求体）
             operator: actor.name,
             remark: input.remark,
+            state: "registered",
+            version: 1,
+            printVersion: 0,
         };
         this.outboundLedger.push(row);
-        order.outbound = Math.min(order.qty, order.outbound + input.qty);
-        this.stock.set(order.bomCode, Math.max(0, (this.stock.get(order.bomCode) || 0) - input.qty));
+        this.outboundQuantityEvents.push({
+            eventNo: `${row.no}-E01`,
+            shipmentNo: row.no,
+            qtyDelta: row.qty,
+            operator: actor.name,
+            time: new Date().toISOString(),
+        });
+        this.outboundStateLog.unshift({
+            shipmentNo: row.no,
+            event: "register",
+            beforeState: null,
+            afterState: "registered",
+            beforeVersion: null,
+            afterVersion: row.version,
+            reason: "",
+            operator: actor.name,
+            time: new Date().toISOString(),
+        });
+        order.outbound += input.qty;
+        order.version += 1;
+        this.stock.set(order.bomCode, (this.stock.get(order.bomCode) ?? 0) - input.qty);
         this.opLog.unshift({
             date: ANCHOR,
             time: row.time,
@@ -1161,7 +1622,149 @@ class MockDb {
             target: row.no,
         });
         this.version += 1;
-        return row;
+        return { ...row };
+    }
+
+    voidOutbound(no: string, expectedVersion: number, reason: string, actor: Actor): OutboundRow {
+        const row = this.outboundLedger.find(item => item.no === no);
+        if (!row) throw new Error("出库单不存在");
+        if (row.version !== expectedVersion) throw new Error("出库单已被其他人处理，请刷新后重试");
+        if (row.state !== "registered") throw new Error("只有未打印的出库单可以由仓管作废");
+        if (reason.trim().length < 2) throw new Error("请填写作废原因（至少 2 个字）");
+        const order = this.orders.find(item => item.orderNo === row.orderNo)!;
+        const beforeVersion = row.version;
+        row.state = "voided";
+        row.voidReason = reason.trim();
+        row.version += 1;
+        order.outbound -= row.qty;
+        order.version += 1;
+        this.stock.set(row.bomCode, (this.stock.get(row.bomCode) ?? 0) + row.qty);
+        this.outboundQuantityEvents.push({
+            eventNo: `${row.no}-E02`,
+            shipmentNo: row.no,
+            qtyDelta: -row.qty,
+            correctionOf: `${row.no}-E01`,
+            reason: reason.trim(),
+            operator: actor.name,
+            time: new Date().toISOString(),
+        });
+        this.outboundStateLog.unshift({
+            shipmentNo: row.no,
+            event: "void-pre-print",
+            beforeState: "registered",
+            afterState: "voided",
+            beforeVersion,
+            afterVersion: row.version,
+            reason: reason.trim(),
+            operator: actor.name,
+            time: new Date().toISOString(),
+        });
+        this.version += 1;
+        return { ...row };
+    }
+
+    printOutbound(no: string, expectedVersion: number, reason: string, actor: Actor) {
+        const row = this.outboundLedger.find(item => item.no === no);
+        if (!row) throw new Error("出库单不存在");
+        if (row.version !== expectedVersion) throw new Error("出库单已被其他人处理，请刷新后重试");
+        if (row.state === "voided") throw new Error("已作废出库单不能打印");
+        const order = this.orders.find(item => item.orderNo === row.orderNo)!;
+        if (order.lifecycleStatus === "cancelled" && row.state === "registered") {
+            throw new Error("订单已取消，不能首次打印出库单");
+        }
+        if (row.state === "printed" && reason.trim().length < 2) throw new Error("重打必须填写原因");
+        const beforeState = row.state;
+        const beforeVersion = row.version;
+        row.state = "printed";
+        row.printVersion += 1;
+        row.version += 1;
+        order.version += 1;
+        const printedAt = new Date().toISOString();
+        const document: OutboundPrintDocument = {
+            no: row.no,
+            printVersion: row.printVersion,
+            orderNo: row.orderNo,
+            customer: row.customer,
+            customerCode: row.customerCode,
+            bomCode: row.bomCode,
+            bomSpec: this.bomByCode(row.bomCode)?.spec ?? "",
+            qty: row.qty,
+            date: row.date,
+            operator: row.operator,
+            remark: row.remark ?? "",
+            printedBy: actor.name,
+            printedAt,
+        };
+        this.outboundPrintLog.unshift({
+            shipmentNo: row.no,
+            printVersion: row.printVersion,
+            printedBy: actor.name,
+            reason: reason.trim(),
+            documentSnapshot: { ...document },
+            printedAt,
+        });
+        this.outboundStateLog.unshift({
+            shipmentNo: row.no,
+            event: beforeState === "printed" ? "reprint" : "print",
+            beforeState,
+            afterState: "printed",
+            beforeVersion,
+            afterVersion: row.version,
+            reason: reason.trim(),
+            operator: actor.name,
+            time: printedAt,
+            detail: { printVersion: row.printVersion },
+        });
+        this.version += 1;
+        return { outbound: { ...row }, printVersion: row.printVersion, document };
+    }
+
+    emergencyVoidOutbound(
+        no: string,
+        expectedVersion: number,
+        reason: string,
+        goodsNotDeparted: boolean,
+        paperInvalidated: boolean,
+        actor: Actor,
+    ): OutboundRow {
+        const row = this.outboundLedger.find(item => item.no === no);
+        if (!row) throw new Error("出库单不存在");
+        if (row.version !== expectedVersion) throw new Error("出库单已被其他人处理，请刷新后重试");
+        if (row.state !== "printed") throw new Error("只有已打印出库单需要紧急撤销");
+        if (!goodsNotDeparted || !paperInvalidated) throw new Error("必须确认货物尚未离开且纸质单已作废");
+        if (reason.trim().length < 2) throw new Error("请填写紧急撤销原因（至少 2 个字）");
+        const order = this.orders.find(item => item.orderNo === row.orderNo)!;
+        const beforeVersion = row.version;
+        row.state = "voided";
+        row.voidReason = reason.trim();
+        row.version += 1;
+        order.outbound -= row.qty;
+        order.version += 1;
+        this.stock.set(row.bomCode, (this.stock.get(row.bomCode) ?? 0) + row.qty);
+        const voidedAt = new Date().toISOString();
+        this.outboundQuantityEvents.push({
+            eventNo: `${row.no}-E02`,
+            shipmentNo: row.no,
+            qtyDelta: -row.qty,
+            correctionOf: `${row.no}-E01`,
+            reason: reason.trim(),
+            operator: actor.name,
+            time: voidedAt,
+        });
+        this.outboundStateLog.unshift({
+            shipmentNo: row.no,
+            event: "void-emergency",
+            beforeState: "printed",
+            afterState: "voided",
+            beforeVersion,
+            afterVersion: row.version,
+            reason: reason.trim(),
+            operator: actor.name,
+            time: voidedAt,
+            detail: { goodsNotDeparted, paperInvalidated },
+        });
+        this.version += 1;
+        return { ...row };
     }
 
     snapshot(): Snapshot {
@@ -1169,11 +1772,16 @@ class MockDb {
             version: this.version,
             orders: this.orders.map(order => ({ ...order })),
             boms: this.boms.map(bom => ({ ...bom, specs: { ...bom.specs } })),
+            bomCategories: structuredClone(BOM_CATEGORIES),
             customers: this.listCustomers(),
             inboundLedger: this.inboundLedger.map(row => ({ ...row })),
             outboundLedger: this.outboundLedger.map(row => ({ ...row })),
+            stockAdjustments: this.stockAdjustments.map(row => ({ ...row })),
             stock: Object.fromEntries(this.stock),
             users: this.listUsers(),
+            customerOwnerOptions: this.listUsers()
+                .filter(user => user.role === "sales" && user.active)
+                .map(({ name, account }) => ({ name, account })),
         };
     }
 
@@ -1184,39 +1792,105 @@ class MockDb {
         if (!/^[A-Za-z0-9_]{3,}$/.test(input.account.trim())) {
             throw new Error("账号需为字母/数字/下划线，至少 3 位");
         }
-        const nextId = Math.max(0, ...this.users.map(user => user.id)) + 1;
+        if (input.role === "super") throw new Error("不能通过接口新增超级管理员");
+        if (!(ROLES.map(role => role.id) as string[]).includes(input.role)) throw new Error("角色不存在");
+        if (!input.name.trim() || input.name.trim().length > 20) throw new Error("姓名须为 1-20 个字符");
         const user: DbUser = {
-            id: nextId,
+            version: 1,
             name: input.name,
             account: input.account.trim(),
             role: input.role,
             active: true,
             last: "—",
             password: MOCK_PASSWORD,
+            tokenVersion: 1,
         };
         this.users.push(user);
         this.version += 1;
-        const { password: _password, ...rest } = user;
+        const { password: _password, tokenVersion: _tokenVersion, ...rest } = user;
         return { ...rest };
     }
 
-    updateUser(account: string, input: { name: string; role: WbUser["role"] }): WbUser {
+    private transferCustomers(fromAccount: string, toAccount: string, reason: string, actor: Actor) {
+        const replacement = this.ownerOf(toAccount);
+        if (replacement.account === fromAccount) throw new Error("接任销售不能是原负责人");
+        if (reason.trim().length < 2) throw new Error("请填写客户移交原因（至少 2 个字）");
+        this.customers
+            .filter(customer => customer.ownerAccount === fromAccount)
+            .forEach(customer => {
+                customer.owner = replacement.name;
+                customer.ownerAccount = replacement.account;
+                customer.version += 1;
+                this.customerOwnerHistory.unshift({
+                    customerCode: customer.code,
+                    fromAccount,
+                    toAccount: replacement.account,
+                    reason: reason.trim(),
+                    operator: actor.name,
+                    time: new Date().toISOString(),
+                });
+            });
+    }
+
+    updateUser(
+        account: string,
+        input: {
+            expectedVersion: number;
+            name: string;
+            role: WbUser["role"];
+            replacementOwnerAccount?: string;
+            transferReason?: string;
+        },
+        actor: Actor,
+    ): WbUser {
         const user = this.users.find(item => item.account === account);
         if (!user) throw new Error("用户不存在");
+        if (user.version !== input.expectedVersion) throw new Error("用户已被其他人修改，请刷新后重试");
+        if (input.role === "super" && user.role !== "super") throw new Error("不能将用户修改为超级管理员");
+        if (!(ROLES.map(role => role.id) as string[]).includes(input.role)) throw new Error("角色不存在");
+        if (user.role === "sales" && input.role !== "sales") {
+            const count = this.customers.filter(customer => customer.ownerAccount === account).length;
+            if (count > 0) {
+                if (!input.replacementOwnerAccount) throw new Error(`该销售仍负责 ${count} 个客户，请先选择接任销售`);
+                this.transferCustomers(account, input.replacementOwnerAccount, input.transferReason ?? "", actor);
+            }
+        }
+        const roleChanged = user.role !== "super" && user.role !== input.role;
         user.name = input.name;
         if (user.role !== "super") user.role = input.role;
+        if (roleChanged) user.tokenVersion += 1;
+        user.version += 1;
         this.version += 1;
-        const { password: _password, ...rest } = user;
+        const { password: _password, tokenVersion: _tokenVersion, ...rest } = user;
         return { ...rest };
     }
 
-    setUserActive(account: string, active: boolean): WbUser {
+    setUserActive(
+        account: string,
+        input: {
+            expectedVersion: number;
+            active: boolean;
+            replacementOwnerAccount?: string;
+            transferReason?: string;
+        },
+        actor: Actor,
+    ): WbUser {
         const user = this.users.find(item => item.account === account);
         if (!user) throw new Error("用户不存在");
+        if (user.version !== input.expectedVersion) throw new Error("用户已被其他人修改，请刷新后重试");
         if (user.role === "super") throw new Error("超级管理员不可停用");
-        user.active = active;
+        if (!input.active && user.role === "sales") {
+            const count = this.customers.filter(customer => customer.ownerAccount === account).length;
+            if (count > 0) {
+                if (!input.replacementOwnerAccount) throw new Error(`该销售仍负责 ${count} 个客户，请先选择接任销售`);
+                this.transferCustomers(account, input.replacementOwnerAccount, input.transferReason ?? "", actor);
+            }
+        }
+        if (user.active !== input.active) user.tokenVersion += 1;
+        user.active = input.active;
+        user.version += 1;
         this.version += 1;
-        const { password: _password, ...rest } = user;
+        const { password: _password, tokenVersion: _tokenVersion, ...rest } = user;
         return { ...rest };
     }
 }

@@ -119,11 +119,9 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
             );
         if (Object.keys(nextErrors).length > 0) return;
 
-        const customer = customers.find(item => item.code === customerCode)!;
         createOrder.mutate(
             {
                 customerCode,
-                customer: customer.name,
                 bomCode: selectedBom!.code,
                 qty: Number(qty),
                 deliverStart,
@@ -341,6 +339,7 @@ function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void 
         updateOrder.mutate(
             {
                 orderNo: order.orderNo,
+                expectedVersion: order.version,
                 qty: Number(qty),
                 deliverStart,
                 deliverEnd,

@@ -11,6 +11,15 @@ export const addDays = (isoDate: string, n: number) => {
     return toIso(date);
 };
 
+/** 日历月偏移；目标月份没有原日期时取该月最后一天（与 MySQL DATE_SUB 月语义对齐）。 */
+export const addMonths = (isoDate: string, n: number) => {
+    const [year, month, day] = isoDate.split("-").map(Number);
+    const targetFirst = new Date(year, month - 1 + n, 1);
+    const lastDay = new Date(targetFirst.getFullYear(), targetFirst.getMonth() + 1, 0).getDate();
+    targetFirst.setDate(Math.min(day, lastDay));
+    return toIso(targetFirst);
+};
+
 /** 当前时间 HH:mm（mock 台账/日志写入用） */
 export const nowTime = () => {
     const date = new Date();

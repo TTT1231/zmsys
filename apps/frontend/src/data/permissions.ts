@@ -26,6 +26,8 @@ export interface MenuNode {
 export interface ActionDef {
     id: string;
     label: string;
+    /** 受保护动作只能由超级管理员持有，不能授权给其他角色 */
+    protected?: boolean;
 }
 
 export const MENU_CATALOG: MenuNode[] = [
@@ -60,21 +62,24 @@ export const MENU_CATALOG: MenuNode[] = [
         icon: "log",
         group: "业务导航",
         onlyFor: ["warehouse"],
-        note: "变更记录：登记发货、新建客户、新建销售订单三类操作保留操作人与时间（op_log），记录不可删除、不可篡改。",
+        note: "审计记录：业务创建、订单变更、入库修正、库存调整、出库作废/打印及负责人移交均保留操作人与时间，不可删除、不可篡改。",
     },
 ];
 
-/* 操作字典：id 与页面按钮一一对应；更正记录（inbound/outbound 的 edit）等
- * UI 落地前不入字典，避免矩阵展示不存在的能力 */
+/* 操作字典：id 同时用于后端接口授权和页面按钮；即使页面入口尚未上线，
+ * 也必须先在这里固定权限码，避免后端出现无授权保护的写接口。 */
 export const ACTION_CATALOG = {
     orders: [
         { id: "view", label: "查看" },
         { id: "create", label: "新建订单" },
         { id: "edit", label: "编辑订单" },
+        { id: "cancel", label: "取消订单" },
     ],
     customers: [
         { id: "view", label: "查看" },
         { id: "create", label: "新建客户" },
+        { id: "edit", label: "编辑客户" },
+        { id: "bulk-transfer", label: "批量移交负责人", protected: true },
     ],
     bom: [
         { id: "view", label: "查看" },
@@ -83,15 +88,19 @@ export const ACTION_CATALOG = {
     inbound: [
         { id: "view", label: "查看台账" },
         { id: "register", label: "检验入库" },
+        { id: "edit", label: "当天修正/作废" },
+        { id: "adjust", label: "跨日库存调整", protected: true },
     ],
     outbound: [
         { id: "view", label: "查看台账" },
         { id: "ship", label: "登记发货" },
+        { id: "void", label: "作废未打印出库" },
         { id: "print", label: "打印出库单" },
+        { id: "emergency-void", label: "紧急撤销已打印出库", protected: true },
     ],
     permissions: [
-        { id: "view", label: "查看" },
-        { id: "manage", label: "用户与角色管理" },
+        { id: "view", label: "查看", protected: true },
+        { id: "manage", label: "用户与角色管理", protected: true },
     ],
 } as const satisfies Record<string, readonly ActionDef[]>;
 
@@ -116,6 +125,8 @@ export const ROLES: Array<{ id: RoleId; name: string; locked?: boolean }> = [
 export const ROLE_IDS = ROLES.map(role => role.id);
 
 export interface RoleGrant {
+    /** 后端整组授权的乐观锁版本 */
+    version: number;
     menus: string[];
     actions: Record<string, string[]>;
 }
@@ -128,6 +139,7 @@ const allActions = (menu: keyof typeof ACTION_CATALOG) => ACTION_CATALOG[menu].m
 export function buildDefaultGrants(): GrantMap {
     return {
         super: {
+            version: 1,
             menus: MENU_CATALOG.flatMap(menu =>
                 menu.onlyFor ? [] : [menu.key, ...(menu.children ?? []).map(child => child.key)],
             ),
@@ -139,35 +151,39 @@ export function buildDefaultGrants(): GrantMap {
             ),
         },
         admin: {
+            version: 1,
             menus: ["workbench", "orders", "customers", "bom", "inbound", "outbound"],
             actions: {
                 orders: allActions("orders"),
-                customers: allActions("customers"),
+                customers: ["view", "create", "edit"],
                 bom: allActions("bom"),
                 inbound: ["view"],
                 outbound: ["view", "print"],
             },
         },
         warehouse: {
+            version: 1,
             menus: ["workbench", "orders", "bom", "inbound", "outbound"],
             actions: {
                 orders: ["view"],
                 bom: ["view"],
-                inbound: ["view", "register"],
-                outbound: ["view", "ship"],
+                inbound: ["view", "register", "edit"],
+                outbound: ["view", "ship", "void"],
             },
         },
         sales: {
+            version: 1,
             menus: ["workbench", "orders", "customers", "bom", "inbound", "outbound"],
             actions: {
                 orders: allActions("orders"),
-                customers: allActions("customers"),
+                customers: ["view", "create", "edit"],
                 bom: allActions("bom"),
                 inbound: ["view"],
                 outbound: ["view"],
             },
         },
         staff: {
+            version: 1,
             menus: ["workbench", "orders", "bom", "inbound", "outbound"],
             actions: {
                 orders: ["view"],
@@ -201,9 +217,14 @@ export function menuLabelFor(menu: MenuNode, role: RoleId): string {
 const ACTION_SHORT: Record<string, string> = {
     create: "新建",
     edit: "编辑",
+    cancel: "取消",
+    "bulk-transfer": "移交",
     register: "入库",
+    adjust: "调整",
     ship: "发货",
+    void: "作废",
     print: "打印",
+    "emergency-void": "紧急撤销",
     manage: "管理",
 };
 

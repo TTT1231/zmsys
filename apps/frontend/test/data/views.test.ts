@@ -29,6 +29,7 @@ const bom = (over: Partial<Bom> = {}): Bom => ({
 });
 
 const order = (over: Partial<Order> = {}): Order => ({
+    version: 1,
     orderNo: "ZM260315001",
     customer: "华兴精密",
     customerCode: "CUS-1024",
@@ -39,6 +40,7 @@ const order = (over: Partial<Order> = {}): Order => ({
     deliverStart: "2026-03-15",
     deliverEnd: "2026-03-20",
     remark: "",
+    lifecycleStatus: "active",
     ...over,
 });
 
@@ -215,7 +217,17 @@ describe("dailyTrend", () => {
                     order({ orderDate: "2026-03-01", qty: 50 }),
                 ],
                 inboundLedger: [
-                    { no: "RK-1", bomCode: "ZMXK001", qty: 4, date: "2026-03-14", time: "09:00", inspector: "测试" },
+                    {
+                        no: "RK-1",
+                        bomCode: "ZMXK001",
+                        qty: 4,
+                        date: "2026-03-14",
+                        time: "09:00",
+                        inspector: "测试",
+                        status: "active",
+                        version: 1,
+                        createdAt: "2026-03-14T09:00:00+08:00",
+                    },
                 ],
                 outboundLedger: [
                     {
@@ -228,6 +240,9 @@ describe("dailyTrend", () => {
                         date: TODAY,
                         time: "10:00",
                         operator: "测试",
+                        state: "printed",
+                        version: 2,
+                        printVersion: 1,
                     },
                 ],
             }),

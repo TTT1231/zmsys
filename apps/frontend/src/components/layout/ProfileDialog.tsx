@@ -11,7 +11,7 @@ import { useToast } from "@/components/ui/Toast";
    姓名保存走 PUT /auth/profile,成功后 refreshProfile 让顶栏与全站即时同步。
    调用方条件挂载(打开即 mount),内部初始值即最新用户数据 */
 export function ProfileDialog({ onClose }: { onClose: () => void }) {
-    const { user, role, refreshProfile } = useApp();
+    const { user, role, refreshProfile, logout } = useApp();
     const toast = useToast();
     const [name, setName] = useState(user?.name ?? "");
     const [saving, setSaving] = useState(false);
@@ -59,10 +59,8 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
         setChangingPwd(true);
         try {
             await changePassword({ oldPassword, newPassword });
-            toast("密码已修改");
-            setOldPassword("");
-            setNewPassword("");
-            setConfirmPassword("");
+            toast("密码已修改，请重新登录");
+            await logout();
         } catch (error) {
             toast(isApiError(error) ? error.message : "密码修改失败，请稍后重试", true);
         } finally {

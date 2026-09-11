@@ -12,7 +12,10 @@ export function fetchGrants(): Promise<GrantMap> {
 }
 
 /** 保存单角色授权；note 为前端 diffGrants 生成的人话变更说明，服务端记入授权日志 */
-export function saveRoleGrants(roleId: RoleId, input: { grant: RoleGrant; note: string }): Promise<RoleGrant> {
+export function saveRoleGrants(
+    roleId: RoleId,
+    input: { grant: RoleGrant; expectedVersion: number; note: string },
+): Promise<RoleGrant> {
     return requestClient.put<RoleGrant>(`/roles/${roleId}/grants`, input);
 }
 

@@ -9,7 +9,7 @@ export const authHandlers = [
         if (!body?.account?.trim() || !body?.password) return fail("请输入账号与密码");
         const user = db.verifyLogin(body.account, body.password);
         if (!user) return fail("账号或密码错误");
-        const { password: _password, ...safe } = user;
+        const { password: _password, tokenVersion: _tokenVersion, ...safe } = user;
         return ok({ accessToken: db.issueToken(safe.account), user: safe });
     }),
 
@@ -32,7 +32,7 @@ export const authHandlers = [
         return ok(db.updateUserName(auth.user.account, name));
     }),
 
-    // 个人中心：修改自己的密码（不强制；成功后 token 保持有效）
+    // 个人中心：修改自己的密码（不强制；成功后旧 token 失效，用户重新登录）
     http.put("/api/auth/password", async ({ request }) => {
         const auth = authenticate(request);
         if (!auth) return fail("登录已过期，请重新登录", 401);

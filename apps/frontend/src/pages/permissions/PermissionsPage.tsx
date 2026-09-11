@@ -123,7 +123,7 @@ function AccountsTab({ users, isLoading }: { users: WbUser[]; isLoading: boolean
                     <ListState loading={isLoading} empty={!users.length}>
                         {users.map(user => (
                             <RecordCard
-                                key={user.id}
+                                key={user.account}
                                 title={user.name}
                                 subtitle={`${user.account} · ${roleNameOf(user.role)}`}
                                 badge={
@@ -164,7 +164,10 @@ function AccountsTab({ users, isLoading }: { users: WbUser[]; isLoading: boolean
                         </thead>
                         <tbody>
                             {users.map(user => (
-                                <tr key={user.id} className="border-t border-line/70 transition hover:bg-row-hover">
+                                <tr
+                                    key={user.account}
+                                    className="border-t border-line/70 transition hover:bg-row-hover"
+                                >
                                     <td className="px-5 py-3">
                                         <div className="flex items-center gap-2.5">
                                             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-soft text-13 font-semibold text-primary-strong">
@@ -211,7 +214,8 @@ function UserActiveToggle({ user, asSwitch }: { user: WbUser; asSwitch?: boolean
     if (user.role === "super") {
         return <Badge tone="success">启用</Badge>;
     }
-    const toggle = () => setActive.mutate({ account: user.account, active: !user.active });
+    const toggle = () =>
+        setActive.mutate({ account: user.account, expectedVersion: user.version, active: !user.active });
     if (asSwitch) {
         return (
             <button
@@ -256,8 +260,12 @@ function UserDialog({ user, users, onClose }: { user: WbUser | null; users: WbUs
         const onSuccess = () => onClose();
         if (user) {
             // account 创建后不可改，仅更新姓名与角色
-            updateUser.mutate({ account: user.account, name: name.trim(), role }, { onSuccess });
+            updateUser.mutate(
+                { account: user.account, expectedVersion: user.version, name: name.trim(), role },
+                { onSuccess },
+            );
         } else {
+            if (role === "super") return;
             createUser.mutate({ name: name.trim(), account: account.trim(), role }, { onSuccess });
         }
     };
@@ -307,13 +315,13 @@ function UserDialog({ user, users, onClose }: { user: WbUser | null; users: WbUs
                     disabled={user?.role === "super"}
                     onChange={event => setRole(event.target.value as RoleId)}
                 >
-                    {ROLES.map(item => (
+                    {ROLES.filter(item => item.id !== "super" || user?.role === "super").map(item => (
                         <option key={item.id} value={item.id}>
                             {item.name}
                         </option>
                     ))}
                 </SelectField>
-                {!user && <p className="text-12 text-subtle">初始密码统一为 123456，首次登录后请及时修改。</p>}
+                {!user && <p className="text-12 text-subtle">初始密码统一为 123456，用户可登录后按需修改。</p>}
             </div>
         </Modal>
     );
@@ -329,7 +337,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
     const [activeRole, setActiveRole] = useState<RoleId>("admin");
     const [draft, setDraft] = useState<RoleGrant | null>(null);
     const locked = ROLES.find(role => role.id === activeRole)?.locked ?? false;
-    const effective = draft ?? grants[activeRole] ?? { menus: [], actions: {} };
+    const effective = draft ?? grants[activeRole] ?? { version: 0, menus: [], actions: {} };
 
     const selectRole = (id: RoleId) => {
         if (id === activeRole) return;
@@ -389,7 +397,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
             grant.actions = Object.fromEntries(
                 Object.keys(ACTION_CATALOG).map(menu => [
                     menu,
-                    checked ? (actionsOf(menu) ?? []).map(action => action.id) : [],
+                    checked ? (actionsOf(menu) ?? []).filter(action => !action.protected).map(action => action.id) : [],
                 ]),
             );
         });
@@ -573,16 +581,20 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                                 return (
                                                     <label
                                                         key={action.id}
-                                                        className={`inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-12.5 transition ${
-                                                            checked
-                                                                ? "border-primary-border bg-primary-soft font-semibold text-primary-strong"
-                                                                : "border-line bg-white text-td"
+                                                        className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 text-12.5 transition ${
+                                                            "protected" in action && action.protected
+                                                                ? "cursor-not-allowed border-line bg-soft text-subtle opacity-60"
+                                                                : "cursor-pointer " +
+                                                                  (checked
+                                                                      ? "border-primary-border bg-primary-soft font-semibold text-primary-strong"
+                                                                      : "border-line bg-white text-td")
                                                         }`}
                                                     >
                                                         <input
                                                             type="checkbox"
                                                             className="sr-only"
                                                             checked={checked}
+                                                            disabled={"protected" in action && action.protected}
                                                             onChange={event =>
                                                                 toggleAction(menuKey, action.id, event.target.checked)
                                                             }
@@ -610,7 +622,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                 {users
                                     .filter(user => user.role === activeRole)
                                     .map(user => (
-                                        <div key={user.id} className="flex items-center gap-2.5 py-2.5">
+                                        <div key={user.account} className="flex items-center gap-2.5 py-2.5">
                                             <span className="flex h-7.5 w-7.5 items-center justify-center rounded-full bg-primary-soft text-12 font-semibold text-primary-strong">
                                                 {user.name.slice(0, 1)}
                                             </span>

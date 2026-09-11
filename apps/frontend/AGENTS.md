@@ -33,8 +33,9 @@
 
 - **库存台账只由仓管写入**（超级管理员兜底），管理员、销售只读，保证账实数据出于一门。
 - **客户资料只对销售线可见**（超级管理员/管理员/销售）：仓管发货只需订单信息，员工不可见。
-- **操作与单据分离**：仓管可登记发货但不能打印出库单；管理员可打印出库单但不能登记发货。
-- **出入库台账不可删**：记录不允许删除，写权限仅限新增和修改，保证流水可追溯。
+- **操作与单据分离**：仓管可登记发货但不能打印出库单；管理员可打印出库单但不能登记发货。打印前重新校验订单和出库状态，打印即正式安排发货。
+- **入库当天可修正**：仓管、超级管理员可修改或作废北京时间当天录入的入库记录，每次操作必须填写原因并保存修改前后快照；二者规则一致，超级管理员不能越过当天限制。跨日发现错误时，只有超级管理员可新增库存调整单，原入库记录不再修改。
+- **出库不原地修改**：未打印的错误出库可由仓管或超级管理员作废并追加冲销流水；打印后原则上视为已安排发货，只有超级管理员在确认货物尚未离开且纸质单已作废时可紧急撤销。货物已离开后只能走销售退货，不得改删原出库。
 
 ## 项目结构
 
@@ -58,7 +59,7 @@ admin-manage/
     │   ├── queries.ts          # react-query 查询/变更封装
     │   ├── views.ts            # 派生视图纯函数（输入快照，工作台/列表页消费）
     │   ├── permissions.ts      # 角色/菜单/动作权限字典 + 纯派生工具（授权是后端数据）
-    │   ├── categories.ts       # 物料分类配置（前端常量，不落库）
+    │   ├── categories.ts       # 开发期物料分类 mock 种子（真实后端目录为权威）
     │   ├── bomSelection.ts     # BOM 规格逐级派生、固定规格与唯一匹配
     │   └── README.md           # 领域层职责与同步约定
     ├── layout/                 # 应用外壳（AppLayout：标题同步、认证/菜单守卫、侧边栏骨架）
@@ -76,7 +77,8 @@ admin-manage/
 
 ### 契约
 
-- **登录鉴权**：`POST /auth/login` 换单 accessToken（localStorage `zm-token`），`GET /auth/profile` 下发用户 + 角色授权；401 由 http 层统一清 token 跳 `/login`。演示账号为 mock 种子用户（`mocks/data/db.ts`，密码均 `123456`）。
+- **登录鉴权**：`POST /auth/login` 换取 JWT accessToken（localStorage `zm-token`，token 本身不入库），`GET /auth/profile` 下发用户 + 实时角色授权；改密、停用或角色变更递增后端 `token_version` 使旧 JWT 失效，401 由 http 层统一清 token 跳 `/login`。演示账号为 mock 种子用户（`mocks/data/db.ts`，密码均 `123456`）。
+- **BOM 权威目录**：真实后端的 `bom_category` 与 `GET /bom-categories` 是品类、规格和编码规则的唯一权威；前端 `data/categories.ts` 只用于当前 mock 播种。
 - **权限渲染**：菜单/按钮字典在前端常量（`data/permissions.ts`），授权关系是后端数据（sys_grant），登录后经 profile 下发；角色授权编辑走 `PUT /roles/{roleId}/grants`。
 - **契约同步**：改接口须同步三处——`src/api/types.ts`、`mocks/request/`、`docs/api/openapi.yaml`。
 

@@ -43,20 +43,20 @@ describe("buildDefaultGrants", () => {
         // 超级管理员：全部菜单（含 permissions 子项）与全部动作
         expect(grants.super.menus).toContain("permissions");
         expect(grants.super.menus).toContain("permissions-accounts");
-        expect(grants.super.actions.outbound).toEqual(["view", "ship", "print"]);
+        expect(grants.super.actions.outbound).toEqual(["view", "ship", "void", "print", "emergency-void"]);
         expect(grants.super.actions.permissions).toEqual(["view", "manage"]);
         // 管理员：出入库只读 + 打印，无用户权限
         expect(grants.admin.menus).not.toContain("permissions");
         expect(grants.admin.actions.inbound).toEqual(["view"]);
         expect(grants.admin.actions.outbound).toEqual(["view", "print"]);
-        expect(grants.admin.actions.orders).toEqual(["view", "create", "edit"]);
+        expect(grants.admin.actions.orders).toEqual(["view", "create", "edit", "cancel"]);
         // 仓管：可写台账不可打印，无客户档案
         expect(grants.warehouse.menus).not.toContain("customers");
-        expect(grants.warehouse.actions.inbound).toEqual(["view", "register"]);
-        expect(grants.warehouse.actions.outbound).toEqual(["view", "ship"]);
+        expect(grants.warehouse.actions.inbound).toEqual(["view", "register", "edit"]);
+        expect(grants.warehouse.actions.outbound).toEqual(["view", "ship", "void"]);
         // 销售：业务三模块全量，出入库只读且不可打印
         expect(grants.sales.menus).not.toContain("permissions");
-        expect(grants.sales.actions.customers).toEqual(["view", "create"]);
+        expect(grants.sales.actions.customers).toEqual(["view", "create", "edit"]);
         expect(grants.sales.actions.outbound).toEqual(["view"]);
         // 员工：所有可见模块仅查看
         expect(grants.staff.menus).not.toContain("customers");
@@ -79,12 +79,12 @@ describe("menuTagFor", () => {
         expect(menuTagFor("orders", grantOf("staff"))).toBe("只读");
         expect(menuTagFor("outbound", grantOf("super"))).toBe("全部权限");
         expect(menuTagFor("outbound", grantOf("admin"))).toBe("查看+打印");
-        expect(menuTagFor("outbound", grantOf("warehouse"))).toBe("查看+发货");
+        expect(menuTagFor("outbound", grantOf("warehouse"))).toBe("查看+发货 / 作废");
         expect(menuTagFor("unknown-menu", grantOf("super"))).toBe("");
     });
 
     it("returns empty string when menu has no granted actions", () => {
-        expect(menuTagFor("orders", { menus: ["orders"], actions: { orders: [] } })).toBe("");
+        expect(menuTagFor("orders", { version: 1, menus: ["orders"], actions: { orders: [] } })).toBe("");
     });
 });
 
@@ -95,7 +95,7 @@ describe("buildNavSections", () => {
         const note = all.find(item => item.label === "变更记录");
         expect(note).toMatchObject({ tag: "说明" });
         expect(note?.to).toBeUndefined();
-        expect(note?.note).toContain("三类操作");
+        expect(note?.note).toContain("审计记录");
         expect(all.find(item => item.to === "/orders")?.label).toBe("待发货订单");
     });
 
@@ -120,21 +120,25 @@ describe("buildNavSections", () => {
 
 describe("diffGrants", () => {
     it("describes added and removed actions with catalog labels", () => {
-        const before = { menus: ["orders"], actions: { orders: ["view"] } };
-        const after = { menus: ["orders"], actions: { orders: ["view", "create"] } };
+        const before = { version: 1, menus: ["orders"], actions: { orders: ["view"] } };
+        const after = { version: 2, menus: ["orders"], actions: { orders: ["view", "create"] } };
         expect(diffGrants(before, after)).toBe("新增 销售订单：新建订单");
         expect(diffGrants(after, before)).toBe("移除 销售订单：新建订单");
     });
 
     it("describes menu level changes with brackets", () => {
-        const before = { menus: ["orders", "customers"], actions: { orders: ["view"] } };
-        const after = { menus: ["orders"], actions: { orders: ["view"] } };
+        const before = { version: 1, menus: ["orders", "customers"], actions: { orders: ["view"] } };
+        const after = { version: 2, menus: ["orders"], actions: { orders: ["view"] } };
         expect(diffGrants(before, after)).toBe("移除 菜单【客户档案】");
     });
 
     it("combines add and remove parts in order", () => {
-        const before = { menus: ["orders"], actions: { orders: ["view"], customers: ["view", "create"] } };
-        const after = { menus: ["orders"], actions: { orders: ["view", "edit"], customers: ["view"] } };
+        const before = {
+            version: 1,
+            menus: ["orders"],
+            actions: { orders: ["view"], customers: ["view", "create"] },
+        };
+        const after = { version: 2, menus: ["orders"], actions: { orders: ["view", "edit"], customers: ["view"] } };
         expect(diffGrants(before, after)).toBe("新增 销售订单：编辑订单，移除 客户档案：新建客户");
     });
 
@@ -144,8 +148,8 @@ describe("diffGrants", () => {
     });
 
     it("labels sub-menu keys with parent prefix", () => {
-        const before = { menus: ["permissions"], actions: {} };
-        const after = { menus: ["permissions", "permissions-accounts", "permissions-roles"], actions: {} };
+        const before = { version: 1, menus: ["permissions"], actions: {} };
+        const after = { version: 2, menus: ["permissions", "permissions-accounts", "permissions-roles"], actions: {} };
         expect(diffGrants(before, after)).toBe("新增 菜单【用户与权限 · 账号管理、用户与权限 · 角色与权限】");
     });
 });
