@@ -1,7 +1,6 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// 数据库约束的权威来源是 docs/db/mysql-8-schema.sql（基线建表脚本）。
+// Prisma 模型只负责客户端类型映射；迁移 SQL 手写，保留基线的
+// CHECK 约束、ascii_bin 字符集与 ON UPDATE 等数据库层约束。
 
 generator client {
   provider = "prisma-client"
@@ -12,10 +11,129 @@ datasource db {
   provider = "mysql"
 }
 
-// 临时验证模型：仅用于跑通 migrate → generate → 查询整条链路，验证后请替换为真实业务模型
-model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
+/// sys_grant.grant_source：初始播种行 vs 界面修改行（见 db-scheme.md §3.3）
+enum GrantSource {
+  BOOTSTRAP
+  USER
+}
+
+/// sys_permission.kind：菜单码 `menu:<menuKey>` 或动作码 `<menuKey>:<actionId>`
+enum PermissionKind {
+  MENU
+  ACTION
+}
+
+/// sys_user_change_log.event_type
+enum UserChangeEventType {
+  CREATE
+  PROFILE_UPDATE
+  ROLE_CHANGE
+  STATUS_CHANGE
+  PASSWORD_CHANGE
+  PASSWORD_RESET
+}
+
+/// 固定角色目录；grant_version 是整组授权的乐观锁版本
+model SysRole {
+  code         String     @id @db.VarChar(20)
+  name         String     @unique @db.VarChar(32)
+  locked       Boolean    @default(false)
+  grantVersion BigInt     @default(1) @map("grant_version") @db.UnsignedBigInt
+  createdAt    DateTime   @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt    DateTime   @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  users        SysUser[]
+  grants       SysGrant[]
+
+  @@map("sys_role")
+}
+
+/// 系统用户；id 为应用层 Snowflake 主键，token_version 控制旧 JWT 失效
+model SysUser {
+  id                BigInt               @id
+  account           String               @unique @db.VarChar(64)
+  passwordHash      String               @map("password_hash") @db.VarChar(255)
+  name              String               @db.VarChar(64)
+  roleCode          String               @map("role_code") @db.VarChar(20)
+  status            Boolean              @default(true)
+  tokenVersion      BigInt               @default(1) @map("token_version") @db.UnsignedBigInt
+  rowVersion        BigInt               @default(1) @map("row_version") @db.UnsignedBigInt
+  passwordChangedAt DateTime?            @map("password_changed_at") @db.DateTime(3)
+  lastLoginAt       DateTime?            @map("last_login_at") @db.DateTime(3)
+  createdAt         DateTime             @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt         DateTime             @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  role              SysRole              @relation(fields: [roleCode], references: [code])
+  changeLogs        SysUserChangeLog[]   @relation("SysUserChangeLogUser")
+  operatedLogs      SysUserChangeLog[]   @relation("SysUserChangeLogOperator")
+
+  @@index([roleCode, status])
+  @@map("sys_user")
+}
+
+/// 权限目录由后端维护；protected=1 的权限只允许 super 持有
+model SysPermission {
+  code        String         @id @db.VarChar(80)
+  kind        PermissionKind
+  menuKey     String         @map("menu_key") @db.VarChar(40)
+  actionId    String?        @map("action_id") @db.VarChar(40)
+  label       String         @db.VarChar(64)
+  isProtected Boolean        @default(false) @map("protected")
+  createdAt   DateTime       @default(now()) @map("created_at") @db.DateTime(3)
+  grants      SysGrant[]
+
+  @@unique([kind, menuKey, actionId])
+  @@map("sys_permission")
+}
+
+/// 角色授权；(role_code, permission_code) 为主键，整组替换式保存
+model SysGrant {
+  roleCode       String       @map("role_code") @db.VarChar(20)
+  permissionCode String       @map("permission_code") @db.VarChar(80)
+  grantSource    GrantSource  @default(USER) @map("grant_source")
+  grantedBy      BigInt?      @map("granted_by")
+  grantedAt      DateTime     @default(now()) @map("granted_at") @db.DateTime(3)
+  role           SysRole      @relation(fields: [roleCode], references: [code])
+  permission     SysPermission @relation(fields: [permissionCode], references: [code])
+
+  @@id([roleCode, permissionCode])
+  @@index([permissionCode])
+  @@index([grantedBy])
+  @@map("sys_grant")
+}
+
+/// 授权变更日志：no-op 保存也要记录，版本不递增时 after_version == before_version
+model SysGrantLog {
+  id            BigInt   @id
+  operatorId    BigInt   @map("operator_id")
+  roleCode      String   @map("role_code") @db.VarChar(20)
+  beforeVersion BigInt   @map("before_version") @db.UnsignedBigInt
+  afterVersion  BigInt   @map("after_version") @db.UnsignedBigInt
+  serverNote    String   @map("server_note") @db.VarChar(1000)
+  clientReason  String   @default("") @map("client_reason") @db.VarChar(500)
+  beforeJson    Json     @map("before_json")
+  afterJson     Json     @map("after_json")
+  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  @@index([roleCode, createdAt(sort: Desc)])
+  @@index([operatorId, createdAt(sort: Desc)])
+  @@map("sys_grant_log")
+}
+
+/// 用户变更日志：快照不得包含密码哈希（数据库 CHECK 兜底）
+model SysUserChangeLog {
+  id            BigInt             @id
+  userId        BigInt             @map("user_id")
+  operatorId    BigInt             @map("operator_id")
+  eventType     UserChangeEventType @map("event_type")
+  beforeVersion BigInt?            @map("before_version") @db.UnsignedBigInt
+  afterVersion  BigInt             @map("after_version") @db.UnsignedBigInt
+  reason        String             @default("") @db.VarChar(500)
+  beforeJson    Json?              @map("before_json")
+  afterJson     Json               @map("after_json")
+  createdAt     DateTime           @default(now()) @map("created_at") @db.DateTime(3)
+  user          SysUser            @relation("SysUserChangeLogUser", fields: [userId], references: [id])
+  operator      SysUser            @relation("SysUserChangeLogOperator", fields: [operatorId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([operatorId, createdAt(sort: Desc)])
+  @@map("sys_user_change_log")
 }
