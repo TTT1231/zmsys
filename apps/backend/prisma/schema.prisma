@@ -373,8 +373,7 @@ model SalesOrderTable {
   qty                 Int                        @db.UnsignedInt
   lifecycleStatus     SalesOrderLifecycleStatus  @default(ACTIVE) @map("lifecycle_status")
   orderDate           DateTime                   @map("order_date") @db.Date
-  deliverStartDate    DateTime                   @map("deliver_start_date") @db.Date
-  deliverEndDate      DateTime                   @map("deliver_end_date") @db.Date
+  deliverDate         DateTime                   @map("deliver_date") @db.Date
   remark              String                     @db.Text
   customerNameSnapshot String                    @map("customer_name_snapshot") @db.VarChar(160)
   bomNameSnapshot     String                     @map("bom_name_snapshot") @db.VarChar(64)
@@ -397,7 +396,7 @@ model SalesOrderTable {
   shipments           OutboundShipment[]
   changeLogs          SalesOrderChangeLog[]
 
-  @@index([bomId, lifecycleStatus, deliverEndDate, orderNo], map: "idx_sales_order_bom_queue")
+  @@index([bomId, lifecycleStatus, deliverDate, orderNo], map: "idx_sales_order_bom_queue")
   @@index([customerId, orderDate], map: "idx_sales_order_customer_date")
   @@map("sales_order_table")
 }

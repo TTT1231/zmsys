@@ -1,6 +1,7 @@
 -- 业务数据层：14 张业务表 + 2 个聚合视图 + bom_category 内置品类种子。
 -- 内容与 docs/db/mysql-8-schema.sql 逐字一致，仅截取本批次对象（自 bom_category 起）。
 -- 外键全部 RESTRICT；request_key 唯一键即幂等键的业务行落地（db-scheme.md §1.3）。
+-- 订单交货日期为单个日历日 deliver_date（2026-09-12 契约变更，替换原起止两列）。
 
 CREATE TABLE bom_category (
     id BIGINT NOT NULL,
@@ -152,8 +153,7 @@ CREATE TABLE sales_order_table (
     qty INT UNSIGNED NOT NULL,
     lifecycle_status ENUM('ACTIVE', 'CANCELLED') NOT NULL DEFAULT 'ACTIVE',
     order_date DATE NOT NULL,
-    deliver_start_date DATE NOT NULL,
-    deliver_end_date DATE NOT NULL,
+    deliver_date DATE NOT NULL,
     remark TEXT NOT NULL,
     customer_name_snapshot VARCHAR(160) NOT NULL,
     bom_name_snapshot VARCHAR(64) NOT NULL,
@@ -171,7 +171,7 @@ CREATE TABLE sales_order_table (
     PRIMARY KEY (id),
     UNIQUE KEY uk_sales_order_no (order_no),
     UNIQUE KEY uk_sales_order_request (request_key),
-    KEY idx_sales_order_bom_queue (bom_id, lifecycle_status, deliver_end_date, order_no),
+    KEY idx_sales_order_bom_queue (bom_id, lifecycle_status, deliver_date, order_no),
     KEY idx_sales_order_customer_date (customer_id, order_date),
     CONSTRAINT fk_sales_order_customer FOREIGN KEY (customer_id) REFERENCES custom_table (id)
         ON DELETE RESTRICT ON UPDATE RESTRICT,
@@ -184,7 +184,6 @@ CREATE TABLE sales_order_table (
     CONSTRAINT fk_sales_order_updater FOREIGN KEY (updated_by) REFERENCES sys_user (id)
         ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT ck_sales_order_qty CHECK (qty > 0),
-    CONSTRAINT ck_sales_order_delivery CHECK (deliver_end_date >= deliver_start_date),
     CONSTRAINT ck_sales_order_bom_snapshot CHECK (JSON_TYPE(bom_spec_snapshot) = 'OBJECT'),
     CONSTRAINT ck_sales_order_cancel CHECK (
         (lifecycle_status = 'ACTIVE' AND cancelled_at IS NULL AND cancelled_by IS NULL AND cancel_reason IS NULL)
@@ -503,3 +502,9 @@ CREATE TABLE op_log (
         ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT ck_op_log_detail CHECK (JSON_TYPE(detail_json) = 'OBJECT')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- 生产运行账号权限原则（实际账号名由部署环境替换）：
+-- 1. 不授予 custom_table / bom_table / sales_order_table / sys_user 的 DELETE。
+-- 2. inbound_ledger 仅由带当天窗口、版本检查和审计日志的业务事务 UPDATE；不授予 DELETE。
+-- 3. 不授予 stock_adjustment / outbound_ledger / 各日志表的 UPDATE 或 DELETE。
+-- 4. 仅迁移账号拥有 ALTER / DROP / REFERENCES。
