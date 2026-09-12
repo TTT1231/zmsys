@@ -1132,10 +1132,17 @@ class MockDb {
     }
 
     resolveToken(token: string): DbUser | null {
-        const [prefix, account, tokenVersion] = token.split(".");
-        if (prefix !== "mock" || !account || !tokenVersion) return null;
-        const user = this.users.find(item => item.account === account);
-        return user && user.active && String(user.tokenVersion) === tokenVersion ? user : null;
+        const segments = token.split(".");
+        if (segments.length === 4 && segments[0] === "mock") {
+            const user = this.users.find(item => item.account === segments[1]);
+            return user && user.active && String(user.tokenVersion) === segments[2] ? user : null;
+        }
+        // 混合联调模式：登录已切真实后端（三段式 JWT），尚未迁移的业务 mock 无法解析
+        // 真实身份，按 super 视图兜底让业务页可用；业务端点迁到真实后端后移除此兜底。
+        if (segments.length === 3) {
+            return this.users.find(item => item.role === "super" && item.active) ?? null;
+        }
+        return null;
     }
 
     /** 个人中心：仅允许更新自己的姓名（账号/角色/状态为管理员域） */
