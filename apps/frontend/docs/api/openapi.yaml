@@ -733,12 +733,12 @@ components:
             name: no
             in: path
             required: true
-            schema: { type: string, pattern: "^RK-[0-9]{8}-[0-9]{4,}$" }
+            schema: { type: string, pattern: "^RK[0-9]{8}[0-9]{2,}$" }
         OutboundNo:
             name: no
             in: path
             required: true
-            schema: { type: string, pattern: "^CK-[0-9]{8}-[0-9]{4,}$" }
+            schema: { type: string, pattern: "^CK[0-9]{8}[0-9]{2,}$" }
         Account:
             name: account
             in: path
