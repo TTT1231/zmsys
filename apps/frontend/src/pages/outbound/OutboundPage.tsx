@@ -53,7 +53,7 @@ function renderOutboundDocument(document: OutboundPrintDocument, win: Window) {
         ["规格", escapeHtml(document.bomSpec || "—")],
         ["发货数量", escapeHtml(`${num(document.qty)} 件`)],
         ["出库日期", escapeHtml(document.date)],
-        ["打印版本", escapeHtml(`第 ${document.printVersion} 版`)],
+        ["打印次数", escapeHtml(`第 ${document.printVersion} 次`)],
         ["登记人", escapeHtml(document.operator)],
         ["打印人", escapeHtml(document.printedBy)],
         ["备注", escapeHtml(document.remark || "—")],
@@ -112,7 +112,7 @@ function ReprintModal({
             open
             onClose={close}
             title="重打出库单"
-            subtitle={`${row.no} · 将生成第 ${row.printVersion + 1} 版`}
+            subtitle={`${row.no} · 将重新打印（第 ${row.printVersion + 1} 次）`}
             label="重打出库单"
             width={440}
             footer={
@@ -121,7 +121,7 @@ function ReprintModal({
                         取消
                     </Button>
                     <Button type="submit" form={formId} disabled={pending}>
-                        {pending ? "正在登记打印…" : "确认重打"}
+                        {pending ? "正在打印…" : "确认重打"}
                     </Button>
                 </>
             }
@@ -135,7 +135,7 @@ function ReprintModal({
                     placeholder="例如：纸张破损、内容模糊"
                     onChange={event => setReason(event.target.value)}
                 />
-                <p className="mt-2 text-12 text-muted">原打印版本永久保留，本次成功后旧版本显示为已取代。</p>
+                <p className="mt-2 text-12 text-muted">重打会出一张新单，旧单自动作废，以最新一联为准。</p>
             </form>
         </Modal>
     );
@@ -198,7 +198,7 @@ function VoidOutboundModal({
                     onChange={event => setReason(event.target.value)}
                 />
                 <p className="mt-2 text-12 text-muted">
-                    作废后库存与订单已发量立即回退，原单永久保留；请重新登记正确的出库单。
+                    作废后这批货的数量会自动退回库存和订单；原单保留作凭证，重新登记一张正确的就行。
                 </p>
             </form>
         </Modal>
@@ -288,7 +288,7 @@ function EmergencyVoidModal({
                     </label>
                 </div>
                 <p className="text-12 text-muted">
-                    紧急撤销仅限超级管理员，用于打印后、发货前的纠错；撤销后库存与订单已发量立即回退。
+                    用于已打印、货还没发走时的纠错（仅超级管理员）；撤销后数量自动退回库存和订单。
                 </p>
             </form>
         </Modal>
@@ -547,8 +547,8 @@ function OutboundDetailModal({ row, snap, onClose }: { row: OutboundRow | null; 
                     ["BOM 编码", row.bomCode],
                     ["发货数量", `${num(row.qty)} 件`],
                     ["出库日期", row.date],
-                    ["系统状态", outboundStateLabel(row)],
-                    ["打印版本", row.printVersion ? `第 ${row.printVersion} 版` : "尚未打印"],
+                    ["状态", outboundStateLabel(row)],
+                    ["打印情况", row.printVersion ? `第 ${row.printVersion} 次打印` : "还未打印"],
                     ["操作人", row.operator],
                     ["备注", row.remark || "—"],
                     ...(row.state === "voided" ? [["作废原因", row.voidReason || "—"]] : []),
@@ -620,7 +620,7 @@ export function OutboundPage() {
         }
         win.opener = null;
         win.document.title = `正在生成出库单 ${row.no}`;
-        win.document.body.textContent = "正在登记打印版本并生成出库单…";
+        win.document.body.textContent = "正在生成出库单…";
         printRequest.mutate(
             { no: row.no, expectedVersion: row.version, reason },
             {
@@ -631,7 +631,7 @@ export function OutboundPage() {
                 onSuccess: result => {
                     setReprintTarget(null);
                     if (!win.closed) renderOutboundDocument(result.document, win);
-                    toast(`${row.no} 第 ${result.printVersion} 版已登记打印`);
+                    toast(`${row.no} 已${result.printVersion > 1 ? "重新" : ""}打印`);
                 },
             },
         );
@@ -958,7 +958,7 @@ export function OutboundPage() {
                                 onError: error => toast(error.message, true),
                                 onSuccess: updated => {
                                     setVoidTarget(null);
-                                    toast(`出库单 ${updated.no} 已作废，库存与订单已发量已回退`);
+                                    toast(`出库单 ${updated.no} 已作废，数量已退回库存和订单`);
                                 },
                             },
                         )
@@ -977,7 +977,7 @@ export function OutboundPage() {
                                 onError: error => toast(error.message, true),
                                 onSuccess: updated => {
                                     setEmergencyTarget(null);
-                                    toast(`出库单 ${updated.no} 已紧急撤销，库存与订单已发量已回退`);
+                                    toast(`出库单 ${updated.no} 已紧急撤销，数量已退回库存和订单`);
                                 },
                             },
                         )

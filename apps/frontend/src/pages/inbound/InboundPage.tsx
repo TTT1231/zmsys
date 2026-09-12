@@ -346,7 +346,7 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
             {
                 onError: error => toast(error.message, true),
                 onSuccess: updated => {
-                    toast(`入库单 ${updated.no} 已修正，版本 ${updated.version}`);
+                    toast(`入库单 ${updated.no} 已修正`);
                     onClose();
                 },
             },
@@ -358,7 +358,7 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
             open
             onClose={onClose}
             title="修正入库记录"
-            subtitle={`${row.no} · 当天录入，版本 ${row.version}`}
+            subtitle={`${row.no} · 今天登记的入库`}
             label="修正入库记录"
             width={600}
             footer={
@@ -411,7 +411,7 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
                     onChange={event => setReason(event.target.value)}
                 />
                 <p className="text-12 text-muted sm:col-span-2">
-                    仅限当天录入的记录修正；每次修正版本 +1 并保留前后快照，可继续修正或作废。
+                    今天登记的记录可以直接修改；发现还有错可以再改，也可以作废。
                 </p>
             </div>
         </Modal>
@@ -451,7 +451,7 @@ function VoidInboundModal({
             open
             onClose={close}
             title="作废入库记录"
-            subtitle={`${row.no} · 当天录入`}
+            subtitle={`${row.no} · 今天登记的入库`}
             label="作废入库记录"
             width={440}
             footer={
@@ -475,7 +475,7 @@ function VoidInboundModal({
                     onChange={event => setReason(event.target.value)}
                 />
                 <p className="mt-2 text-12 text-muted">
-                    仅限当天录入的记录作废；作废后库存立即扣回，原记录永久保留，可重新登记正确的入库。
+                    作废后这批数量会自动退回库存；记录保留作凭证，重新登记一条正确的就行。
                 </p>
             </form>
         </Modal>
