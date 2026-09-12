@@ -45,6 +45,7 @@
 - 禁止使用“查询最大编码 + 1”。统一使用 `biz_sequence` 行：在事务中 `SELECT ... FOR UPDATE` 后递增并取号。
 - 最终业务编码仍有唯一索引兜底；唯一冲突或死锁必须做有限次数、带抖动的事务级重试。
 - `Idempotency-Key` 长度为 8–128 个 ASCII 字符。后端先以 `(actor_id, operation_key, idempotency_key)` 写入/锁定 `api_idempotency`；相同 key 但请求摘要不同返回 409，相同请求在首次提交后重放原响应，不能再次执行业务事务。
+- 业务表的 `request_key` 不存原始 `Idempotency-Key`：幂等唯一域含 `actor_id`，而业务表的 `request_key` 唯一键是全局的，两个用户各自首次使用同一原始 key 会相撞。统一存幂等三元组 `(actor_id, operation_key, idempotency_key)` 以 `\n` 连接后的 SHA-256 十六进制（定长 64，落在 8–128 ASCII 约束内）。
 - 幂等占位与业务写入处于同一事务：首请求回滚时占位也回滚，允许安全重试；首请求提交但响应丢失时，重试从 `response_json` 返回原结果。幂等记录至少保留 24 小时，清理只按 `expires_at` 删除过期记录。
 
 ### 1.4 约束执行边界
@@ -72,6 +73,8 @@
 | 登录/个人资料/改密 | 个人姓名只做单字段原子更新；改密锁用户并递增 `token_version` 与 `row_version`，旧 JWT 立即失效，客户端清除 token 并重新登录 |
 
 所有需要多行锁的流程都按“BOM → 订单 → 流水”“用户 id 升序 → 客户 id 升序”的固定顺序取锁，降低死锁概率。发生死锁时只能重试整个事务，不能只重试最后一条 SQL。
+
+事务统一以 READ COMMITTED 隔离级别运行：并发控制以行锁（锁定读）为主体。幂等占位查询（普通读）总是先于业务行锁发生，REPEATABLE READ 的事务级快照会让行锁之后的聚合读（如 `v_bom_stock`）仍取旧快照；READ COMMITTED 每条语句取新快照，锁定读之后的普通读能看到最新已提交行。
 
 ## 3. 系统与权限表
 
