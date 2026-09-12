@@ -1510,6 +1510,8 @@ class MockDb {
         if (!bom) throw new Error("成品不存在");
         if (!Number.isSafeInteger(input.qty) || input.qty <= 0) throw new Error("请输入有效的入库数量");
         assertIsoDate(input.date, "入库日期");
+        // 当天录入当天入库（db-scheme §7）：日期由前端固定为今天，后端同样拒绝非当天日期
+        if (input.date !== ANCHOR) throw new Error("入库日期固定为当天，不能选择其他日期");
         const rows = this.inboundLedger.filter(row => row.date === input.date);
         // 单号 = RK + yyMMdd + 两位日序号（前缀 RK+6 位日期共 8 字符，序号自第 8 位起解析，超宽自然增长）
         const seq = rows.length > 0 ? Math.max(...rows.map(row => Number(row.no.slice(8)))) + 1 : 1;
@@ -1550,6 +1552,7 @@ class MockDb {
         if (!Number.isSafeInteger(input.qty) || input.qty <= 0) throw new Error("请输入有效的入库数量");
         if (input.reason.trim().length < 2) throw new Error("请填写修正原因（至少 2 个字）");
         assertIsoDate(input.date, "入库日期");
+        if (input.date !== ANCHOR) throw new Error("入库日期固定为当天，不能选择其他日期");
         if (!this.bomByCode(input.bomCode)) throw new Error("成品不存在");
         const oldStock = this.stock.get(row.bomCode) ?? 0;
         const nextOldStock = row.bomCode === input.bomCode ? oldStock + input.qty - row.qty : oldStock - row.qty;

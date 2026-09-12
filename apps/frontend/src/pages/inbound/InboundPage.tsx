@@ -1,7 +1,6 @@
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard } from "@/components/ui/MobileList";
-import { SearchSelect } from "@/components/ui/SearchSelect";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
@@ -11,14 +10,148 @@ import { Button } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { QtyCell } from "@/components/ui/cells";
-import { DateField, TextArea, TextField } from "@/components/ui/Field";
+import { SelectField, TextArea, TextField } from "@/components/ui/Field";
 import { useCreateInbound, useUpdateInbound, useVoidInbound, useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { EMPTY_SNAPSHOT, bomByCode } from "@/data/views";
 import { todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/Toast";
+import { categoryOf } from "@/data/categories";
+import { bomSelectorOptionLabel, buildBomSelectorSchema, resolveBomSelection } from "@/data/bomSelection";
 import type { InboundRow, Snapshot } from "@/api";
+
+/**
+ * 成品选择（与销售订单新建弹窗同一套逐维收敛模式）：品类 → 逐维下拉 →
+ * 候选收敛到唯一 BOM 时自动生效。避免一次性渲染全部 BOM 选项造成卡顿。
+ */
+function InboundBomPicker({
+    boms,
+    value,
+    onChange,
+    error,
+}: {
+    boms: Snapshot["boms"];
+    value: string;
+    onChange: (bomCode: string) => void;
+    error?: string;
+}) {
+    const currentBom = boms.find(bom => bom.code === value);
+    const [category, setCategory] = useState(currentBom?.name ?? "");
+    const [bomSelections, setBomSelections] = useState<Record<string, string>>({});
+
+    const categories = useMemo(() => [...new Set(boms.map(bom => bom.name))], [boms]);
+    const categoryBoms = useMemo(() => (category ? boms.filter(bom => bom.name === category) : []), [boms, category]);
+    const selectorSchema = useMemo(
+        () =>
+            buildBomSelectorSchema(
+                categoryBoms,
+                categoryOf(category)?.fields.map(field => field.key),
+            ),
+        [categoryBoms, category],
+    );
+    const resolution = useMemo(
+        () => resolveBomSelection(categoryBoms, selectorSchema.fields, bomSelections),
+        [categoryBoms, selectorSchema.fields, bomSelections],
+    );
+    const selectedBom =
+        !resolution.pending && resolution.candidates.length === 1 ? resolution.candidates[0] : undefined;
+
+    const onChangeRef = useRef(onChange);
+    useEffect(() => {
+        onChangeRef.current = onChange;
+    }, [onChange]);
+    useEffect(() => {
+        if (selectedBom && selectedBom.code !== value) onChangeRef.current(selectedBom.code);
+    }, [selectedBom, value]);
+
+    const pickCategory = (nextCategory: string) => {
+        setCategory(nextCategory);
+        setBomSelections({});
+    };
+    const pickBomDimension = (fieldId: string, nextValue: string) => {
+        const fieldIndex = selectorSchema.fields.findIndex(field => field.id === fieldId);
+        setBomSelections(current => {
+            const next: Record<string, string> = {};
+            selectorSchema.fields.slice(0, fieldIndex).forEach(field => {
+                if (current[field.id]) next[field.id] = current[field.id];
+            });
+            if (nextValue) next[fieldId] = nextValue;
+            return next;
+        });
+    };
+
+    const effectiveBom = selectedBom ?? currentBom;
+    return (
+        <div className="col-span-full flex flex-col gap-3">
+            <SelectField
+                label="品类"
+                required
+                error={error}
+                value={category}
+                onChange={event => pickCategory(event.target.value)}
+            >
+                <option value="">请选择品类</option>
+                {categories.map(item => (
+                    <option key={item}>{item}</option>
+                ))}
+            </SelectField>
+            {resolution.steps.map(step => (
+                <SelectField
+                    key={step.field.id}
+                    label={step.field.label}
+                    required
+                    value={bomSelections[step.field.id] ?? ""}
+                    onChange={event => pickBomDimension(step.field.id, event.target.value)}
+                >
+                    <option value="">请选择{step.field.label}</option>
+                    {step.options.map(option => (
+                        <option key={option} value={option}>
+                            {bomSelectorOptionLabel(option)}
+                        </option>
+                    ))}
+                </SelectField>
+            ))}
+            {category && selectorSchema.fixedSpecs.length > 0 && (
+                <div className="rounded-btn border border-line bg-panel px-3 py-2.5">
+                    <p className="text-11.5 font-semibold text-td">固定规格（无需选择）</p>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {selectorSchema.fixedSpecs.map(item => (
+                            <span
+                                key={item.key}
+                                className="rounded-md bg-white px-2 py-1 text-11.5 text-muted shadow-xs"
+                            >
+                                {item.key}：{item.value}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
+            {category && !selectedBom && categoryBoms.length > 0 && (
+                <p className="text-12 text-muted" aria-live="polite">
+                    当前匹配 {num(resolution.candidates.length)} 条 BOM，继续选择下一项即可自动定位。
+                </p>
+            )}
+            {effectiveBom && (
+                <div
+                    className="rounded-btn border border-primary-border bg-primary-soft/70 px-3.5 py-3"
+                    aria-live="polite"
+                >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="tnum text-14 font-semibold text-primary-strong">{effectiveBom.code}</span>
+                        <span className="rounded-full bg-white px-2 py-1 text-11 font-medium text-success">
+                            {selectedBom ? "已匹配" : "当前成品"}
+                        </span>
+                    </div>
+                    <p className="mt-1 text-12.5 text-td">
+                        {effectiveBom.name} · {effectiveBom.modelCode}
+                    </p>
+                    <p className="mt-1 break-words text-11.5 text-muted">{effectiveBom.spec}</p>
+                </div>
+            )}
+        </div>
+    );
+}
 
 export function InboundModal({
     open,
@@ -39,7 +172,6 @@ export function InboundModal({
 
     const [bomCode, setBomCode] = useState(initialBomCode);
     const [qty, setQty] = useState("");
-    const [date, setDate] = useState(todayIso);
     const [remark, setRemark] = useState("");
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -50,7 +182,6 @@ export function InboundModal({
     const reset = () => {
         setBomCode("");
         setQty("");
-        setDate(todayIso());
         setRemark("");
         setErrors({});
     };
@@ -58,7 +189,6 @@ export function InboundModal({
     const submit = () => {
         if (createInbound.isPending) return;
         const nextErrors: Record<string, string> = {};
-        if (!date) nextErrors.date = "请选择入库日期";
         if (!bomCode) nextErrors.bomCode = "请选择成品";
         if (!qty || Number(qty) <= 0) nextErrors.qty = "请填写入库数量";
         setErrors(nextErrors);
@@ -68,7 +198,8 @@ export function InboundModal({
             );
         if (Object.keys(nextErrors).length > 0) return;
         createInbound.mutate(
-            { bomCode, qty: Number(qty), date, remark },
+            // 入库日期固定为当天（当天录入当天入库，杜绝误选日期）
+            { bomCode, qty: Number(qty), date: todayIso(), remark },
             {
                 onError: error => toast(error.message, true),
                 onSuccess: row => {
@@ -108,19 +239,7 @@ export function InboundModal({
             }
         >
             <div className="grid gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                    <SearchSelect
-                        label="成品"
-                        required
-                        error={errors.bomCode}
-                        value={bomCode}
-                        onChange={setBomCode}
-                        options={boms.map(bom => ({
-                            value: bom.code,
-                            label: `${bom.code} · ${bom.spec}`,
-                        }))}
-                    />
-                </div>
+                <InboundBomPicker boms={boms} value={bomCode} onChange={setBomCode} error={errors.bomCode} />
                 <TextField
                     label="入库数量（件）"
                     required
@@ -130,13 +249,10 @@ export function InboundModal({
                     value={qty}
                     onChange={event => setQty(event.target.value.replace(/\D/g, ""))}
                 />
-                <DateField
-                    label="入库日期"
-                    error={errors.date}
-                    required
-                    value={date}
-                    onChange={event => setDate(event.target.value)}
-                />
+                <div className="rounded-btn border border-line bg-panel px-3.5 py-2.5">
+                    <p className="text-11.5 text-muted">入库日期（固定为今天）</p>
+                    <p className="tnum text-13.5 font-medium text-ink">{todayIso()}</p>
+                </div>
                 <TextArea
                     label="备注"
                     placeholder="选填"
@@ -204,7 +320,6 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
     const toast = useToast();
     const [bomCode, setBomCode] = useState(row.bomCode);
     const [qty, setQty] = useState(String(row.qty));
-    const [date, setDate] = useState(row.date);
     const [remark, setRemark] = useState(row.remark ?? "");
     const [reason, setReason] = useState("");
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -214,7 +329,6 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
         const nextErrors: Record<string, string> = {};
         if (!bomCode) nextErrors.bomCode = "请选择成品";
         if (!qty || Number(qty) <= 0) nextErrors.qty = "请填写入库数量";
-        if (!date) nextErrors.date = "请选择入库日期";
         if (reason.trim().length < 2) nextErrors.reason = "请填写修正原因（至少 2 个字）";
         setErrors(nextErrors);
         if (Object.keys(nextErrors).length) return;
@@ -224,7 +338,8 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
                 expectedVersion: row.version,
                 bomCode,
                 qty: Number(qty),
-                date,
+                // 入库日期固定为当天（仅当天记录可修正，日期不再可改）
+                date: todayIso(),
                 remark,
                 reason: reason.trim(),
             },
@@ -267,19 +382,7 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
             }
         >
             <div className="grid gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                    <SearchSelect
-                        label="成品（选错型号时在此更正）"
-                        required
-                        error={errors.bomCode}
-                        value={bomCode}
-                        onChange={setBomCode}
-                        options={snap.boms.map(bom => ({
-                            value: bom.code,
-                            label: `${bom.code} · ${bom.spec}`,
-                        }))}
-                    />
-                </div>
+                <InboundBomPicker boms={snap.boms} value={bomCode} onChange={setBomCode} error={errors.bomCode} />
                 <TextField
                     label="入库数量（件）"
                     required
@@ -289,13 +392,10 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
                     value={qty}
                     onChange={event => setQty(event.target.value.replace(/\D/g, ""))}
                 />
-                <DateField
-                    label="入库日期"
-                    required
-                    error={errors.date}
-                    value={date}
-                    onChange={event => setDate(event.target.value)}
-                />
+                <div className="rounded-btn border border-line bg-panel px-3.5 py-2.5">
+                    <p className="text-11.5 text-muted">入库日期（固定为今天）</p>
+                    <p className="tnum text-13.5 font-medium text-ink">{todayIso()}</p>
+                </div>
                 <TextArea
                     label="备注"
                     placeholder="选填"
