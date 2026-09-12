@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcryptjs';
 import type { Prisma, SysUser } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { TransactionRunner } from '../prisma/transaction.runner';
 import type { Tx } from '../prisma/transaction.runner';
 import { formatBeijingStamp } from '../common/datetime';
 import { SnowflakeGenerator } from '../common/snowflake';
@@ -46,6 +47,7 @@ export class AuthService {
         private readonly jwtService: JwtService,
         private readonly accessControl: AccessControlService,
         private readonly snowflake: SnowflakeGenerator,
+        private readonly txRunner: TransactionRunner,
     ) {}
 
     async login(dto: LoginDto): Promise<{ accessToken: string; user: WbUser }> {
@@ -89,7 +91,7 @@ export class AuthService {
     /** 个人姓名只做单字段原子更新；递增 row_version 并同事务写变更日志 */
     async updateProfile(user: AuthUser, dto: UpdateProfileDto): Promise<WbUser> {
         const userId = BigInt(user.id);
-        return this.prisma.$transaction(async (tx: Tx) => {
+        return this.txRunner.run(async (tx: Tx) => {
             const now = new Date();
             await tx.$queryRaw`SELECT id FROM sys_user WHERE id = ${userId} FOR UPDATE`;
             const current = await tx.sysUser.findUnique({ where: { id: userId } });
@@ -125,7 +127,7 @@ export class AuthService {
     async changePassword(user: AuthUser, dto: ChangePasswordDto): Promise<null> {
         const userId = BigInt(user.id);
         const newHash = await bcrypt.hash(dto.newPassword, 10);
-        await this.prisma.$transaction(async (tx: Tx) => {
+        await this.txRunner.run(async (tx: Tx) => {
             const now = new Date();
             await tx.$queryRaw`SELECT id FROM sys_user WHERE id = ${userId} FOR UPDATE`;
             const current = await tx.sysUser.findUnique({ where: { id: userId } });

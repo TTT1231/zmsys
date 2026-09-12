@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { TransactionRunner } from '../prisma/transaction.runner';
 import { AccessControlService } from '../access-control/access-control.service';
 import { SnowflakeGenerator } from '../common/snowflake';
 
@@ -20,7 +21,7 @@ function createAuthService(user: unknown) {
     } as unknown as JwtService;
     const accessControl = {} as AccessControlService;
     const snowflake = { next: vi.fn().mockReturnValue(1n) } as unknown as SnowflakeGenerator;
-    return { service: new AuthService(prisma, jwtService, accessControl, snowflake) };
+    return { service: new AuthService(prisma, jwtService, accessControl, snowflake, new TransactionRunner(prisma)) };
 }
 
 const activeUser = {

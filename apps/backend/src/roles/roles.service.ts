@@ -6,6 +6,7 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { TransactionRunner } from '../prisma/transaction.runner';
 import type { Tx } from '../prisma/transaction.runner';
 import { buildRoleGrant } from '../access-control/access-control.service';
 import { ROLE_CODES, SUPER_ROLE_CODE, isRoleCode } from '../constants';
@@ -20,6 +21,7 @@ export class RolesService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly snowflake: SnowflakeGenerator,
+        private readonly txRunner: TransactionRunner,
     ) {}
 
     async listRoles(): Promise<RoleDef[]> {
@@ -141,7 +143,7 @@ export class RolesService {
             ...Object.entries(actions).flatMap(([menuKey, ids]) => ids.map(id => `${menuKey}:${id}`)),
         ].sort();
 
-        return this.prisma.$transaction(async (tx: Tx) => {
+        return this.txRunner.run(async (tx: Tx) => {
             const now = new Date();
             await tx.$queryRaw`SELECT code FROM sys_role WHERE code = ${roleId} FOR UPDATE`;
             const role = await tx.sysRole.findUnique({ where: { code: roleId } });

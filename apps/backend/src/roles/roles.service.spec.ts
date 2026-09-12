@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, NotFoundExc
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RolesService } from './roles.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { TransactionRunner } from '../prisma/transaction.runner';
 import { SnowflakeGenerator } from '../common/snowflake';
 import type { AuthUser } from '../common/types/auth-user';
 
@@ -98,7 +99,7 @@ function createService(options?: { grantVersion?: bigint }) {
         $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma)),
     } as unknown as PrismaService;
     const snowflake = { next: vi.fn().mockReturnValue(1n) } as unknown as SnowflakeGenerator;
-    return { service: new RolesService(prisma, snowflake), prisma, snowflake };
+    return { service: new RolesService(prisma, snowflake, new TransactionRunner(prisma)), prisma, snowflake };
 }
 
 function saveInput(overrides: Record<string, unknown> = {}) {
@@ -202,7 +203,11 @@ describe('RolesService.saveGrant', () => {
 
     it('合法保存返回新版本授权并整组替换', async () => {
         const { prisma } = createService();
-        const result = await new RolesService(prisma, { next: () => 1n } as unknown as SnowflakeGenerator).saveGrant(
+        const result = await new RolesService(
+            prisma,
+            { next: () => 1n } as unknown as SnowflakeGenerator,
+            new TransactionRunner(prisma),
+        ).saveGrant(
             'admin',
             saveInput({
                 grant: {

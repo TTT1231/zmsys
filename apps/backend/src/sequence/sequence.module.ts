@@ -1,10 +1,9 @@
 import { Module } from '@nestjs/common';
-import { TransactionRunner } from '../prisma/transaction.runner';
 import { BusinessSequenceService } from './business-sequence.service';
 
-/** 业务取号基础设施：一并导出共享 TransactionRunner */
+/** 业务取号基础设施；共享 TransactionRunner 由全局 PrismaModule 提供 */
 @Module({
-    providers: [BusinessSequenceService, TransactionRunner],
-    exports: [BusinessSequenceService, TransactionRunner],
+    providers: [BusinessSequenceService],
+    exports: [BusinessSequenceService],
 })
 export class SequenceModule {}

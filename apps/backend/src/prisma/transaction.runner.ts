@@ -87,6 +87,14 @@ export interface TransactionRunnerOptions {
  * 非可重试错误（业务 404/409 等）原样抛出；重试耗尽抛 TransactionRetryExhaustedError。
  * 事务回调必须可重入且不得包含邮件、网络请求等外部副作用——重试可能使回调执行多次，
  * 只有数据库写入随回滚一起撤销。
+ *
+ * 隔离级别 READ COMMITTED 由 create-pool 在连接层统一设置（sessionVariables）。
+ * 不走 $transaction 的 isolationLevel 选项：实测 @prisma/adapter-mariadb 静默忽略
+ * 该选项，事务仍以服务器默认 REPEATABLE READ 运行。选 READ COMMITTED 的原因：
+ * 幂等占位查询（普通读）总是先于业务行锁发生，RR 的事务级快照会让行锁之后的
+ * 聚合读（v_bom_stock 等）仍取旧快照；RC 每条语句取新快照，锁定读（FOR UPDATE）
+ * 之后的普通读能看到最新已提交行，且间隙锁更少、死锁更少。db-scheme.md §2 的
+ * 并发控制以行锁为主体，不依赖 RR 快照一致性。
  */
 @Injectable()
 export class TransactionRunner {
