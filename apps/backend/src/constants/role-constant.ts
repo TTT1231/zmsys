@@ -11,6 +11,10 @@ export const PERMISSIONS_KEY = 'requiredPermissions';
 export const ROLE_CODES = ['super', 'admin', 'warehouse', 'sales', 'staff'] as const;
 export type RoleCode = (typeof ROLE_CODES)[number];
 
+/** 可通过接口分配的角色（openapi CreateRoleId）：新增与改派均不得选 super */
+export const CREATE_ROLE_CODES = ['admin', 'warehouse', 'sales', 'staff'] as const;
+export type CreateRoleCode = (typeof CREATE_ROLE_CODES)[number];
+
 export const isRoleCode = (value: string): value is RoleCode => (ROLE_CODES as readonly string[]).includes(value);
 
 /** super 为内置锁定角色，服务端固定视为全量权限，不依赖 sys_grant 行 */

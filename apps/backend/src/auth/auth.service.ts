@@ -2,13 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcryptjs';
-import type { Prisma, SysUser } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionRunner } from '../prisma/transaction.runner';
 import type { Tx } from '../prisma/transaction.runner';
-import { formatBeijingStamp } from '../common/datetime';
 import { SnowflakeGenerator } from '../common/snowflake';
 import { AccessControlService } from '../access-control/access-control.service';
+import { toWbUser, userSnapshot } from '../access-control/wb-user';
 import type { RoleGrant, WbUser } from '../access-control/types';
 import type { AuthUser } from '../common/types/auth-user';
 import type { JwtPayload } from './types';
@@ -18,27 +17,6 @@ import type { UpdateProfileDto } from './dto/update-profile.dto';
 
 /** 账号不存在时也执行一次同代价比较，避免响应时间泄露账号是否存在 */
 const DUMMY_HASH = bcrypt.hashSync('timing-attack-dummy-password', 10);
-
-/** 日志与响应快照统一形态：绝不包含密码哈希（数据库 CHECK 兜底） */
-function userSnapshot(user: SysUser): Prisma.InputJsonValue {
-    return {
-        account: user.account,
-        name: user.name,
-        role: user.roleCode,
-        status: user.status,
-    };
-}
-
-function toWbUser(user: SysUser, lastLoginAt: Date | null = user.lastLoginAt): WbUser {
-    return {
-        version: Number(user.rowVersion),
-        name: user.name,
-        account: user.account,
-        role: user.roleCode as WbUser['role'],
-        active: user.status,
-        last: formatBeijingStamp(lastLoginAt),
-    };
-}
 
 @Injectable()
 export class AuthService {

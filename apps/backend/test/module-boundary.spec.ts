@@ -7,8 +7,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// 业务模块目录清单：新增业务模块（如 users）时在此登记
-const BUSINESS_MODULES = ['auth', 'roles'] as const;
+// 业务模块目录清单：新增业务模块时在此登记
+const BUSINESS_MODULES = ['auth', 'roles', 'users'] as const;
 
 const SRC_ROOT = join(__dirname, '..', 'src');
 

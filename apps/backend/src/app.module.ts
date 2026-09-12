@@ -9,6 +9,7 @@ import { IdempotencyModule } from './idempotency/idempotency.module';
 import { SequenceModule } from './sequence/sequence.module';
 import { AuthModule } from './auth/auth.module';
 import { RolesModule } from './roles/roles.module';
+import { UsersModule } from './users/users.module';
 import { HealthModule } from './health/health.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
@@ -25,6 +26,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
         SequenceModule,
         AuthModule,
         RolesModule,
+        UsersModule,
         HealthModule,
     ],
     providers: [

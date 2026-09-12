@@ -24,7 +24,8 @@ const METHOD_METADATA = 'method';
 /** 基础设施路由（不在业务契约内） */
 const INFRA_WHITELIST = new Set(['GET /health/live', 'GET /health/ready']);
 
-const METHOD_NAMES = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'ALL'] as const;
+/** 与 @nestjs/common RequestMethod 枚举数值一一对应（DELETE=3、PATCH=4），错位会把 PATCH 误报为 DELETE */
+const METHOD_NAMES = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'ALL'] as const;
 
 const contractExists = existsSync(CONTRACT_PATH);
 
