@@ -6,7 +6,7 @@ import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
 import { useApp } from "@/context/AppContext";
 import { PageHeading } from "@/components/ui/PageHeading";
-import { Button } from "@/components/ui/Badge";
+import { Badge, Button } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { CustomerCell, QtyCell } from "@/components/ui/cells";
@@ -577,6 +577,7 @@ export function OutboundPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const [keyword, setKeyword] = useState("");
     const [category, setCategory] = useState("全部品类");
+    const [statusFilter, setStatusFilter] = useState("全部状态");
     const [page, setPage] = useState(1);
     const [pageSize] = useState(10);
     const [newOpen, setNewOpen] = useState(false);
@@ -593,10 +594,11 @@ export function OutboundPage() {
     const filtered = useMemo(() => {
         const kw = keyword.trim().toLowerCase();
         return rows.filter(row => {
+            if (statusFilter !== "全部状态" && outboundStateLabel(row) !== statusFilter) return false;
             if (category !== "全部品类" && bomCategory.get(row.bomCode) !== category) return false;
             return !kw || `${row.no} ${row.orderNo} ${row.customer} ${row.bomCode}`.toLowerCase().includes(kw);
         });
-    }, [rows, keyword, category, bomCategory]);
+    }, [rows, keyword, category, statusFilter, bomCategory]);
 
     const sorted = useMemo(
         () =>
@@ -672,6 +674,19 @@ export function OutboundPage() {
                         />
                     </label>
                     <select
+                        value={statusFilter}
+                        onChange={event => {
+                            setStatusFilter(event.target.value);
+                            setPage(1);
+                        }}
+                        aria-label="按状态筛选"
+                        className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
+                    >
+                        {["全部状态", "已登记 · 待打印", "已打印 · 已安排发货", "已作废"].map(option => (
+                            <option key={option}>{option}</option>
+                        ))}
+                    </select>
+                    <select
                         value={category}
                         onChange={event => {
                             setCategory(event.target.value);
@@ -694,6 +709,7 @@ export function OutboundPage() {
                             onClick={() => {
                                 setKeyword("");
                                 setCategory("全部品类");
+                                setStatusFilter("全部状态");
                                 setPage(1);
                             }}
                         >
@@ -735,7 +751,13 @@ export function OutboundPage() {
                                 key={row.no}
                                 title={row.customer}
                                 subtitle={`${row.orderNo} · ${row.date}`}
-                                badge={<strong className="text-primary">{num(row.qty)} 件</strong>}
+                                badge={
+                                    row.state === "voided" ? (
+                                        <Badge tone="danger">已作废</Badge>
+                                    ) : (
+                                        <strong className="text-primary">{num(row.qty)} 件</strong>
+                                    )
+                                }
                                 actions={
                                     <div className="flex flex-wrap gap-2">
                                         <Button variant="secondary" onClick={() => setDetail(row)}>
@@ -767,7 +789,12 @@ export function OutboundPage() {
                             >
                                 <p>{row.bomCode}</p>
                                 <p className="mt-2 text-13 text-muted">
-                                    {row.no} · {row.operator}
+                                    {row.state === "voided" ? (
+                                        <span className="line-through decoration-danger/50">{row.no}</span>
+                                    ) : (
+                                        row.no
+                                    )}{" "}
+                                    · {row.operator}
                                 </p>
                             </RecordCard>
                         ))}
@@ -785,21 +812,33 @@ export function OutboundPage() {
                                     <th className="px-3 py-2.5 font-semibold">BOM 编码</th>
                                     <th className="px-3 py-2.5 text-right font-semibold">发货数量</th>
                                     <th className="px-3 py-2.5 font-semibold">出库日期</th>
-                                    <th className="px-3 py-2.5 font-semibold">操作人</th>
+                                    <th className="px-3 py-2.5 text-13 font-semibold">操作人</th>
+                                    <th className="px-3 py-2.5 font-semibold">状态</th>
                                     <th className="px-5 py-2.5 text-right font-semibold">操作</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {pageRows.length === 0 && (
                                     <tr>
-                                        <td colSpan={7} className="px-5 py-14 text-center text-13 text-subtle">
+                                        <td colSpan={8} className="px-5 py-14 text-center text-13 text-subtle">
                                             没有找到匹配的出库记录
                                         </td>
                                     </tr>
                                 )}
                                 {pageRows.map(row => (
-                                    <tr key={row.no} className="border-t border-line/70 transition hover:bg-row-hover">
-                                        <td className="px-5 py-3 tnum text-13 font-semibold text-td-strong">
+                                    <tr
+                                        key={row.no}
+                                        className={
+                                            row.state === "voided"
+                                                ? "border-t border-line/70 bg-danger-soft/60"
+                                                : "border-t border-line/70 transition hover:bg-row-hover"
+                                        }
+                                    >
+                                        <td
+                                            className={`px-5 py-3 tnum text-13 font-semibold text-td-strong${
+                                                row.state === "voided" ? " line-through decoration-danger/50" : ""
+                                            }`}
+                                        >
                                             {row.no}
                                         </td>
                                         <td className="px-3 py-3">
@@ -816,6 +855,15 @@ export function OutboundPage() {
                                         </td>
                                         <td className="px-3 py-3 tnum text-13 text-td">{row.date}</td>
                                         <td className="px-3 py-3 text-13 text-td">{row.operator}</td>
+                                        <td className="px-3 py-3">
+                                            {row.state === "voided" ? (
+                                                <Badge tone="danger">已作废</Badge>
+                                            ) : row.state === "printed" ? (
+                                                <Badge tone="progress">已打印 · 已安排发货</Badge>
+                                            ) : (
+                                                <Badge tone="pending">已登记 · 待打印</Badge>
+                                            )}
+                                        </td>
                                         <td className="px-5 py-3 text-right">
                                             <div className="flex items-center justify-end gap-3">
                                                 <button
