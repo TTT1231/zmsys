@@ -937,7 +937,7 @@ class MockDb {
         return raw.map(row => {
             const seq = (counter.get(row.date) || 0) + 1;
             counter.set(row.date, seq);
-            return { ...row, no: `CK-${row.date.replaceAll("-", "")}-${String(seq).padStart(4, "0")}` };
+            return { ...row, no: `CK${row.date.slice(2).replaceAll("-", "")}${String(seq).padStart(2, "0")}` };
         });
     }
 
@@ -1002,7 +1002,7 @@ class MockDb {
         return raw.map(row => {
             const seq = (counter.get(row.date) || 0) + 1;
             counter.set(row.date, seq);
-            return { ...row, no: `RK-${row.date.replaceAll("-", "")}-${String(seq).padStart(4, "0")}` };
+            return { ...row, no: `RK${row.date.slice(2).replaceAll("-", "")}${String(seq).padStart(2, "0")}` };
         });
     }
 
@@ -1426,9 +1426,10 @@ class MockDb {
         if (!Number.isSafeInteger(input.qty) || input.qty <= 0) throw new Error("请输入有效的入库数量");
         assertIsoDate(input.date, "入库日期");
         const rows = this.inboundLedger.filter(row => row.date === input.date);
-        const seq = rows.length > 0 ? Math.max(...rows.map(row => Number(row.no.slice(-4)))) + 1 : 1;
+        // 单号 = RK + yyMMdd + 两位日序号（前缀 RK+6 位日期共 8 字符，序号自第 8 位起解析，超宽自然增长）
+        const seq = rows.length > 0 ? Math.max(...rows.map(row => Number(row.no.slice(8)))) + 1 : 1;
         const row: InboundRow = {
-            no: `RK-${input.date.replaceAll("-", "")}-${String(seq).padStart(4, "0")}`,
+            no: `RK${input.date.slice(2).replaceAll("-", "")}${String(seq).padStart(2, "0")}`,
             bomCode: input.bomCode,
             qty: input.qty,
             date: input.date,
@@ -1563,9 +1564,10 @@ class MockDb {
         assertIsoDate(input.date, "出库日期");
         if (input.qty > maxShipOf(this.snapshot(), input.orderNo)) throw new Error("可发库存已变化，请重新核对数量");
         const orderRows = this.outboundLedger.filter(row => row.date === input.date);
-        const seq = orderRows.length > 0 ? Math.max(...orderRows.map(row => Number(row.no.slice(-4)))) + 1 : 1;
+        // 单号 = CK + yyMMdd + 两位日序号（前缀 CK+6 位日期共 8 字符，序号自第 8 位起解析，超宽自然增长）
+        const seq = orderRows.length > 0 ? Math.max(...orderRows.map(row => Number(row.no.slice(8)))) + 1 : 1;
         const row: OutboundRow = {
-            no: `CK-${input.date.replaceAll("-", "")}-${String(seq).padStart(4, "0")}`,
+            no: `CK${input.date.slice(2).replaceAll("-", "")}${String(seq).padStart(2, "0")}`,
             orderNo: order.orderNo,
             customer: order.customer,
             customerCode: order.customerCode,

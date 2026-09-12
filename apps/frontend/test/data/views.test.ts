@@ -217,7 +217,7 @@ describe("dailyTrend", () => {
                 ],
                 inboundLedger: [
                     {
-                        no: "RK-1",
+                        no: "RK26031401",
                         bomCode: "ZMXK001",
                         qty: 4,
                         date: "2026-03-14",
@@ -230,7 +230,7 @@ describe("dailyTrend", () => {
                 ],
                 outboundLedger: [
                     {
-                        no: "CK-1",
+                        no: "CK26031401",
                         orderNo: "ZM260315001",
                         customer: "华兴精密",
                         customerCode: "CUS-1024",
