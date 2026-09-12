@@ -11,3 +11,12 @@ const stampFormatter = new Intl.DateTimeFormat('zh-CN', {
 export function formatBeijingStamp(date: Date | null): string {
     return date ? stampFormatter.format(date).replace('/', '-') : '—';
 }
+
+/**
+ * DATE 列（order_date / business_date 等）的契约格式 yyyy-MM-dd（openapi format: date）。
+ * Prisma 经 UTC 会话把 DATE 读为 UTC 午夜 Date（进程时区也统一 UTC），直接按 UTC 拆解；
+ * 不经此转换直接返回 Date 会输出完整 ISO 时间，不符合契约。
+ */
+export function formatDateColumn(date: Date): string {
+    return date.toISOString().slice(0, 10);
+}
