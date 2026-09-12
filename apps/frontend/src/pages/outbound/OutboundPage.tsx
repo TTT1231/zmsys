@@ -40,7 +40,7 @@ const escapeHtml = (value: string) =>
     );
 
 const outboundStateLabel = (row: OutboundRow) =>
-    row.state === "registered" ? "已登记 · 待打印" : row.state === "printed" ? "已打印 · 已安排发货" : "已作废";
+    row.state === "registered" ? "已登记" : row.state === "printed" ? "已打印" : "已作废";
 
 /* 后端成功登记打印版本后，再向预先打开的窗口渲染单据并调起浏览器打印。 */
 function renderOutboundDocument(document: OutboundPrintDocument, win: Window) {
@@ -682,7 +682,7 @@ export function OutboundPage() {
                         aria-label="按状态筛选"
                         className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
                     >
-                        {["全部状态", "已登记 · 待打印", "已打印 · 已安排发货", "已作废"].map(option => (
+                        {["全部状态", "已登记", "已打印", "已作废"].map(option => (
                             <option key={option}>{option}</option>
                         ))}
                     </select>
@@ -859,9 +859,9 @@ export function OutboundPage() {
                                             {row.state === "voided" ? (
                                                 <Badge tone="danger">已作废</Badge>
                                             ) : row.state === "printed" ? (
-                                                <Badge tone="progress">已打印 · 已安排发货</Badge>
+                                                <Badge tone="progress">已打印</Badge>
                                             ) : (
-                                                <Badge tone="pending">已登记 · 待打印</Badge>
+                                                <Badge tone="pending">已登记</Badge>
                                             )}
                                         </td>
                                         <td className="px-5 py-3 text-right">

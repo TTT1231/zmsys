@@ -962,6 +962,30 @@ class MockDb {
                 },
             );
         }
+        // 演示已登记未打印：挂在活动订单名下（已完成订单的出库必须均已打印），
+        // 数量不超过该订单剩余欠量，同样不参与库存/订单已发的种子设定
+        const activeOrder = this.orders.find(
+            order => order.lifecycleStatus === "active" && order.qty - order.outbound >= 2,
+        );
+        if (activeOrder) {
+            const half = Math.max(1, Math.floor((activeOrder.qty - activeOrder.outbound) / 2));
+            [half, activeOrder.qty - activeOrder.outbound - half].forEach((qty, index) => {
+                numbered.push({
+                    orderNo: activeOrder.orderNo,
+                    customer: activeOrder.customer,
+                    customerCode: activeOrder.customerCode,
+                    bomCode: activeOrder.bomCode,
+                    qty,
+                    date: ANCHOR,
+                    time: index === 0 ? "09:40" : "11:05",
+                    operator: OPERATORS[index % OPERATORS.length],
+                    state: "registered",
+                    version: 1,
+                    printVersion: 0,
+                    no: `CK${ANCHOR.slice(2).replaceAll("-", "")}${index === 0 ? "92" : "93"}`,
+                });
+            });
+        }
         return numbered;
     }
 
