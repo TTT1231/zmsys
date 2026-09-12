@@ -96,6 +96,31 @@ describe('IdempotencyService.digest（method/路径参数/query/body 覆盖面�
             eq(base, service.digest({ method: 'POST', pathParams: { id: 'A' }, query: { page: 1 }, body: { x: 2 } })),
         ).toBe(false);
     });
+
+    it('Date 不退化为空对象：不同日期摘要不同（回归：旧实现 Date→{} 导致改日期仍被判为重放）', () => {
+        const a = service.digest({ method: 'POST', body: { deliverDate: new Date('2026-09-10') } });
+        const b = service.digest({ method: 'POST', body: { deliverDate: new Date('2026-09-11') } });
+        expect(eq(a, b)).toBe(false);
+    });
+
+    it('含 BigInt 不抛错且同值稳定（回归：JSON.stringify 对 BigInt 直接抛 TypeError）', () => {
+        const a = service.digest({ method: 'POST', body: { bomId: 9007199254740993n } });
+        const b = service.digest({ method: 'POST', body: { bomId: 9007199254740993n } });
+        expect(a).toHaveLength(32);
+        expect(eq(a, b)).toBe(true);
+    });
+
+    it('类型标签防碰撞：Date 与等值 ISO 字符串、BigInt 与数字、数字与数字字符串摘要互不相同', () => {
+        const asDate = service.digest({ method: 'POST', body: { v: new Date('2026-09-12T00:00:00.000Z') } });
+        const asString = service.digest({ method: 'POST', body: { v: '2026-09-12T00:00:00.000Z' } });
+        expect(eq(asDate, asString)).toBe(false);
+        const withBigint = service.digest({ method: 'POST', body: { v: 123n } });
+        const withNumber = service.digest({ method: 'POST', body: { v: 123 } });
+        const withNumericString = service.digest({ method: 'POST', body: { v: '123' } });
+        expect(eq(withBigint, withNumber)).toBe(false);
+        expect(eq(withBigint, withNumericString)).toBe(false);
+        expect(eq(withNumber, withNumericString)).toBe(false);
+    });
 });
 
 describe('IdempotencyService.beginOrReplay（事务内占位/重放/冲突）', () => {

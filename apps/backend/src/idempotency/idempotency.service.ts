@@ -32,19 +32,44 @@ export interface BeginResult {
     placeholderId: bigint | null;
 }
 
-/** 递归规范化：对象键排序、数组顺序保留（db-scheme.md：同 key 同 body 但路径不同必须判为不同请求） */
+/**
+ * 递归规范化（db-scheme.md：同 key 同 body 但路径不同必须判为不同请求）。
+ * 每个值先打类型标签再交给 JSON.stringify：Date/BigInt/undefined 等非 JSON
+ * 原生类型不会退化为 {}（旧实现两个不同日期摘要相同）也不会让 stringify 抛
+ * TypeError；整棵树都被 $ 标签包裹，body 里的普通对象无法伪造与其他类型的碰撞。
+ */
 const canonicalize = (value: unknown): unknown => {
-    if (Array.isArray(value)) {
-        return value.map(canonicalize);
+    if (value === null) {
+        return { $null: 1 };
     }
-    if (value !== null && typeof value === 'object') {
-        return Object.fromEntries(
-            Object.entries(value as Record<string, unknown>)
-                .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-                .map(([key, item]) => [key, canonicalize(item)]),
-        );
+    switch (typeof value) {
+        case 'undefined':
+            return { $undefined: 1 };
+        case 'string':
+            return { $string: value };
+        case 'number':
+            // String(number) 往返精确；NaN/Infinity 不像 JSON.stringify 那样退化成 null
+            return { $number: String(value) };
+        case 'bigint':
+            return { $bigint: value.toString() };
+        case 'boolean':
+            return { $boolean: value };
+        case 'object':
+            if (value instanceof Date) {
+                return { $date: value.toISOString() };
+            }
+            if (Array.isArray(value)) {
+                return { $array: value.map(canonicalize) };
+            }
+            return {
+                $object: Object.entries(value as Record<string, unknown>)
+                    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+                    .map(([key, item]) => [key, canonicalize(item)]),
+            };
+        default:
+            // function/symbol 不可能来自 JSON DTO，出现即程序性缺陷：快速失败优于静默丢字段
+            throw new Error(`请求摘要遇到不可序列化的值类型：${typeof value}`);
     }
-    return value;
 };
 
 /** 字节比较（Prisma Bytes 列读取为 Uint8Array，统一在此比较而非依赖 Buffer 方法） */
