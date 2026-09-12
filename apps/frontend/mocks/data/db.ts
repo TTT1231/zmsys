@@ -674,6 +674,22 @@ function staticOrders(): SeededOrder[] {
         // 两笔 7 个月前的已完成历史订单：让成都锐成 / 天津远达在合作状态派生中落为「待跟进」
         mk(2, 215, 232, 8, "ZMKW0003", 400, 400, 0),
         mk(1, 226, 243, 9, "ZMXK2010", 500, 500, 0),
+        // 取消终态两种形态（db-scheme §6.1）：完全未发取消 / 部分发货后取消（保留已发数量）
+        {
+            ...mk(80, 3, 12, 6, "ZMXK2003", 700, 0, 0),
+            lifecycleStatus: "cancelled" as const,
+            cancelledBy: "郭均",
+            cancelledAt: `${addDays(ANCHOR, -2)}T15:30:00+08:00`,
+            cancelReason: "客户临时缩减需求，整单取消",
+        },
+        {
+            ...mk(79, 5, 14, 7, "ZMKW0001", 900, 360, 0),
+            version: 3,
+            lifecycleStatus: "cancelled" as const,
+            cancelledBy: "郭均",
+            cancelledAt: `${addDays(ANCHOR, -1)}T10:12:00+08:00`,
+            cancelReason: "已发 360 件后客户取消剩余欠量",
+        },
     ];
 }
 
@@ -992,7 +1008,9 @@ class MockDb {
     private buildInboundLedger(): InboundRow[] {
         const outByBom = new Map<string, number>();
         const firstOutByBom = new Map<string, OutboundRow>();
+        // 库存口径同 v_bom_stock：作废出库不占库存，反推有效入库时排除
         this.outboundLedger.forEach(row => {
+            if (row.state === "voided") return;
             outByBom.set(row.bomCode, (outByBom.get(row.bomCode) || 0) + row.qty);
             const prev = firstOutByBom.get(row.bomCode);
             if (!prev || row.date < prev.date) firstOutByBom.set(row.bomCode, row);
@@ -1047,11 +1065,30 @@ class MockDb {
 
         raw.sort((a, b) => (a.date === b.date ? a.bomCode.localeCompare(b.bomCode) : a.date.localeCompare(b.date)));
         const counter = new Map<string, number>();
-        return raw.map(row => {
+        const numbered = raw.map(row => {
             const seq = (counter.get(row.date) || 0) + 1;
             counter.set(row.date, seq);
             return { ...row, no: `RK${row.date.slice(2).replaceAll("-", "")}${String(seq).padStart(2, "0")}` };
         });
+        // 演示当天作废：入库只能作废当天录入的记录，故锚定今天；qty 不参与库存种子设定
+        const inboundDemoBom = numbered[0]?.bomCode ?? this.boms[0]?.code;
+        if (inboundDemoBom) {
+            numbered.push({
+                no: `RK${ANCHOR.slice(2).replaceAll("-", "")}90`,
+                bomCode: inboundDemoBom,
+                qty: 150,
+                date: ANCHOR,
+                time: "14:20",
+                inspector: INSPECTORS[0],
+                remark: "",
+                status: "voided",
+                version: 2,
+                createdAt: `${ANCHOR}T14:20:00+08:00`,
+                updatedBy: INSPECTORS[0],
+                updatedAt: `${ANCHOR}T15:05:00+08:00`,
+            });
+        }
+        return numbered;
     }
 
     /* op_log 口径（db-scheme §2.4）：只记三种操作——登记发货 / 新建客户 / 新建销售订单 */

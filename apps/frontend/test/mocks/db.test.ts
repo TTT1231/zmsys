@@ -70,11 +70,12 @@ describe("mock db inventory rules", () => {
         expect(db.stockOf(row.bomCode)).toBe(row.stock);
 
         for (const bom of db.boms) {
+            // 库存口径同 v_bom_stock：只计有效入库与有效出库，作废行不参与
             const inbound = db.inboundLedger
-                .filter(item => item.bomCode === bom.code)
+                .filter(item => item.bomCode === bom.code && item.status === "active")
                 .reduce((sum, item) => sum + item.qty, 0);
             const outbound = db.outboundLedger
-                .filter(item => item.bomCode === bom.code)
+                .filter(item => item.bomCode === bom.code && item.state !== "voided")
                 .reduce((sum, item) => sum + item.qty, 0);
             expect(inbound - outbound).toBe(db.stockOf(bom.code));
         }
