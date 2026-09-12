@@ -6,6 +6,7 @@ import { Icon } from "@/lib/icons";
 import { downloadCsv } from "@/lib/format";
 import { useApp } from "@/context/AppContext";
 import { PageHeading } from "@/components/ui/PageHeading";
+import { Pagination } from "@/components/ui/Pagination";
 import { Badge, Button, TableLink } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { CustomerCell } from "@/components/ui/cells";
@@ -310,7 +311,7 @@ export function CustomersPage() {
     const [statusFilter, setStatusFilter] = useState("全部状态");
     const [keyword, setKeyword] = useState("");
     const [page, setPage] = useState(1);
-    const [pageSize] = useState(10);
+    const [pageSize, setPageSize] = useState(10);
     const [formTarget, setFormTarget] = useState<Customer | "new" | null>(null);
     const [detail, setDetail] = useState<Customer | null>(null);
 
@@ -551,7 +552,19 @@ export function CustomersPage() {
                     )}
                 </div>
 
-                <div className="border-t border-line px-5 py-3.5 text-12.5 text-muted">共 {rows.length} 家客户</div>
+                <div className="border-t border-line">
+                    <Pagination
+                        page={page}
+                        pageSize={pageSize}
+                        total={rows.length}
+                        unit="家客户"
+                        onPageChange={setPage}
+                        onPageSizeChange={size => {
+                            setPageSize(size);
+                            setPage(1);
+                        }}
+                    />
+                </div>
             </section>
 
             {formTarget !== null && (formTarget === "new" ? canCreate : canEdit) && (
