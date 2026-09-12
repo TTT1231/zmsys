@@ -2,7 +2,6 @@
 import { http } from "msw";
 import type {
     CancelOrderInput,
-    CreateBomInput,
     CreateCustomerInput,
     CreateInboundInput,
     CreateOrderInput,
@@ -17,7 +16,6 @@ import type {
     VoidOutboundInput,
 } from "@/api";
 import { db } from "../data/db";
-import { BOM_CATEGORIES } from "@/data/categories";
 import { authenticate, authorized, fail, idempotent, ok } from "./shared";
 
 const statusOf = (message: string) =>
@@ -130,37 +128,6 @@ export const customerHandlers = [
             return ok(db.updateCustomer(String(params.code), body, auth.actor));
         } catch (error) {
             const message = error instanceof Error ? error.message : "客户更新失败";
-            return fail(message, statusOf(message));
-        }
-    }),
-];
-
-export const bomHandlers = [
-    http.get("/api/bom-categories", ({ request }) => {
-        const auth = authenticate(request);
-        if (!auth) return fail("登录已过期，请重新登录", 401);
-        if (!authorized(auth, "bom:view")) return fail("无权查看 BOM 品类", 403);
-        return ok(structuredClone(BOM_CATEGORIES));
-    }),
-
-    http.get("/api/boms", ({ request }) => {
-        const auth = authenticate(request);
-        if (!auth) return fail("登录已过期，请重新登录", 401);
-        if (!authorized(auth, "bom:view")) return fail("无权查看 BOM", 403);
-        return ok(db.boms.map(bom => ({ ...bom, specs: { ...bom.specs } })));
-    }),
-
-    http.post("/api/boms", async ({ request }) => {
-        const auth = authenticate(request);
-        if (!auth) return fail("登录已过期，请重新登录", 401);
-        if (!authorized(auth, "bom:create")) return fail("无权新建 BOM", 403);
-        const body = (await request.json().catch(() => null)) as CreateBomInput | null;
-        if (!body?.name?.trim()) return fail("请选择品类");
-        if (!body?.modelCode?.trim()) return fail("请输入型号");
-        try {
-            return ok(idempotent(request, auth.user.account, "boms:create", body, () => db.createBom(body)));
-        } catch (error) {
-            const message = error instanceof Error ? error.message : "BOM 创建失败";
             return fail(message, statusOf(message));
         }
     }),
