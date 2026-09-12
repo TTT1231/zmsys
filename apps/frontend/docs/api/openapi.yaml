@@ -906,7 +906,7 @@ components:
 
         Order:
             type: object
-            required: [version, orderNo, customer, customerCode, bomCode, qty, outbound, orderDate, deliverStart, deliverEnd, remark, lifecycleStatus]
+            required: [version, orderNo, customer, customerCode, bomCode, qty, outbound, orderDate, deliverDate, remark, lifecycleStatus]
             properties:
                 version: { type: integer, minimum: 1 }
                 orderNo: { type: string }
@@ -916,8 +916,7 @@ components:
                 qty: { type: integer, minimum: 1 }
                 outbound: { type: integer, minimum: 0, description: 有效出库净额 }
                 orderDate: { type: string, format: date }
-                deliverStart: { type: string, format: date }
-                deliverEnd: { type: string, format: date }
+                deliverDate: { type: string, format: date, description: 交货日期（单个日历日，排序/逾期口径） }
                 remark: { type: string }
                 lifecycleStatus: { type: string, enum: [active, cancelled] }
                 cancelledAt: { type: string, format: date-time }
@@ -927,13 +926,12 @@ components:
         CreateOrderInput:
             type: object
             additionalProperties: false
-            required: [customerCode, bomCode, qty, deliverStart, deliverEnd, orderDate, remark]
+            required: [customerCode, bomCode, qty, deliverDate, orderDate, remark]
             properties:
                 customerCode: { type: string }
                 bomCode: { type: string }
                 qty: { type: integer, minimum: 1 }
-                deliverStart: { type: string, format: date }
-                deliverEnd: { type: string, format: date, description: 必须不早于 deliverStart }
+                deliverDate: { type: string, format: date }
                 orderDate: { type: string, format: date }
                 remark: { type: string, maxLength: 2000 }
 
@@ -945,8 +943,7 @@ components:
             properties:
                 expectedVersion: { type: integer, minimum: 1 }
                 qty: { type: integer, minimum: 1 }
-                deliverStart: { type: string, format: date }
-                deliverEnd: { type: string, format: date }
+                deliverDate: { type: string, format: date }
                 remark: { type: string, maxLength: 2000 }
 
         CancelOrderInput:

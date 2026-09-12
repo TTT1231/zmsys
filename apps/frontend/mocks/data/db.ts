@@ -658,8 +658,7 @@ function staticOrders(): SeededOrder[] {
             qty,
             outbound,
             orderDate,
-            deliverStart: addDays(orderDate, Math.max(1, deliverInDays - 5)),
-            deliverEnd: addDays(orderDate, deliverInDays),
+            deliverDate: addDays(orderDate, deliverInDays),
             remark: "",
             lifecycleStatus: "active",
             seedStock,
@@ -701,8 +700,7 @@ function buildOrders(boms: Bom[]): SeededOrder[] {
             qty,
             outbound: status === "已完成" ? qty : 0,
             orderDate,
-            deliverStart: addDays(orderDate, 7 + (seq % 4)),
-            deliverEnd: addDays(orderDate, 12 + (seq % 8)),
+            deliverDate: addDays(orderDate, 12 + (seq % 8)),
             remark: "",
             lifecycleStatus: "active",
             seedStock: status === "可发货" ? done : 0,
@@ -895,7 +893,7 @@ class MockDb {
         const raw: Array<Omit<OutboundRow, "no">> = [];
         const shipped = this.orders.filter(order => order.outbound > 0);
         const recent = [...shipped]
-            .sort((a, b) => a.deliverEnd.localeCompare(b.deliverEnd))
+            .sort((a, b) => a.deliverDate.localeCompare(b.deliverDate))
             .slice(-12)
             .map(order => order.orderNo);
         const recentSet = new Set([
@@ -916,7 +914,7 @@ class MockDb {
                 if (recentSet.has(order.orderNo)) {
                     date = partIndex === 0 && todayFirst.has(order.orderNo) ? ANCHOR : addDays(ANCHOR, -randInt(1, 6));
                 } else {
-                    date = clampDate(addDays(order.deliverEnd, -randInt(0, 3)), addDays(ANCHOR, -55), ANCHOR);
+                    date = clampDate(addDays(order.deliverDate, -randInt(0, 3)), addDays(ANCHOR, -55), ANCHOR);
                 }
                 raw.push({
                     orderNo: order.orderNo,
@@ -1140,8 +1138,7 @@ class MockDb {
             customerCode: string;
             bomCode: string;
             qty: number;
-            deliverStart: string;
-            deliverEnd: string;
+            deliverDate: string;
             orderDate: string;
             remark: string;
         },
@@ -1152,9 +1149,7 @@ class MockDb {
         if (!this.bomByCode(input.bomCode)) throw new Error("成品不存在");
         if (!Number.isSafeInteger(input.qty) || input.qty <= 0) throw new Error("请输入有效的订单数量");
         assertIsoDate(input.orderDate, "订单日期");
-        assertIsoDate(input.deliverStart, "交货起始日期");
-        assertIsoDate(input.deliverEnd, "交货截止日期");
-        if (input.deliverEnd < input.deliverStart) throw new Error("交货截止日期不能早于起始日期");
+        assertIsoDate(input.deliverDate, "交货日期");
         const yyMMdd = input.orderDate.slice(2).replaceAll("-", "");
         // 按日递增取号：单号日期段来自 orderDate，序号取「同日已有订单」最大值 + 1
         const sameDay = this.orders.filter(order => order.orderNo.startsWith(`ZM${yyMMdd}`));
@@ -1169,8 +1164,7 @@ class MockDb {
             qty: input.qty,
             outbound: 0,
             orderDate: input.orderDate,
-            deliverStart: input.deliverStart,
-            deliverEnd: input.deliverEnd,
+            deliverDate: input.deliverDate,
             remark: input.remark,
             lifecycleStatus: "active",
         };
@@ -1201,8 +1195,7 @@ class MockDb {
             orderNo: string;
             expectedVersion: number;
             qty?: number;
-            deliverStart?: string;
-            deliverEnd?: string;
+            deliverDate?: string;
             remark?: string;
         },
         actor: Actor,
@@ -1217,15 +1210,11 @@ class MockDb {
         if (input.qty !== undefined && input.qty < order.outbound) {
             throw new Error(`新数量不能低于累计已发 ${order.outbound} 件`);
         }
-        const nextStart = input.deliverStart ?? order.deliverStart;
-        const nextEnd = input.deliverEnd ?? order.deliverEnd;
-        assertIsoDate(nextStart, "交货起始日期");
-        assertIsoDate(nextEnd, "交货截止日期");
-        if (nextEnd < nextStart) throw new Error("交货截止日期不能早于起始日期");
+        const nextDeliverDate = input.deliverDate ?? order.deliverDate;
+        assertIsoDate(nextDeliverDate, "交货日期");
         const before = { ...order };
         if (input.qty !== undefined) order.qty = input.qty;
-        order.deliverStart = nextStart;
-        order.deliverEnd = nextEnd;
+        order.deliverDate = nextDeliverDate;
         if (input.remark !== undefined) order.remark = input.remark;
         order.version += 1;
         this.salesOrderChangeLog.unshift({

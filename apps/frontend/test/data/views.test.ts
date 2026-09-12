@@ -37,8 +37,7 @@ const order = (over: Partial<Order> = {}): Order => ({
     qty: 10,
     outbound: 0,
     orderDate: "2026-03-10",
-    deliverStart: "2026-03-15",
-    deliverEnd: "2026-03-20",
+    deliverDate: "2026-03-20",
     remark: "",
     lifecycleStatus: "active",
     ...over,
@@ -106,8 +105,8 @@ describe("readyToShip", () => {
         const fixture = snap({
             stock: { ZMXK001: 15 },
             orders: [
-                order({ orderNo: "ZM-B", qty: 10, deliverEnd: "2026-03-19" }),
-                order({ orderNo: "ZM-A", qty: 10, deliverEnd: "2026-03-18" }),
+                order({ orderNo: "ZM-B", qty: 10, deliverDate: "2026-03-19" }),
+                order({ orderNo: "ZM-A", qty: 10, deliverDate: "2026-03-18" }),
             ],
         });
         const rows = readyToShip(fixture);
@@ -128,8 +127,8 @@ describe("readyToShip", () => {
             snap({
                 stock: { ZMXK001: 99 },
                 orders: [
-                    order({ orderNo: "ZM-2", deliverEnd: "2026-03-18" }),
-                    order({ orderNo: "ZM-1", deliverEnd: "2026-03-18" }),
+                    order({ orderNo: "ZM-2", deliverDate: "2026-03-18" }),
+                    order({ orderNo: "ZM-1", deliverDate: "2026-03-18" }),
                 ],
             }),
         );
@@ -142,7 +141,7 @@ describe("readyToShip", () => {
                 stock: { ZMXK001: 5 },
                 orders: [
                     order({ orderNo: "ZM-DONE", outbound: 10 }),
-                    order({ orderNo: "ZM-LATE", deliverEnd: "2026-03-14" }),
+                    order({ orderNo: "ZM-LATE", deliverDate: "2026-03-14" }),
                     order(),
                 ],
             }),
@@ -167,8 +166,8 @@ describe("stockGapList", () => {
             snap({
                 stock: { ZMXK001: 5 },
                 orders: [
-                    order({ orderNo: "ZM-1", qty: 10, deliverEnd: "2026-03-22" }),
-                    order({ orderNo: "ZM-2", qty: 10, deliverEnd: "2026-03-18" }),
+                    order({ orderNo: "ZM-1", qty: 10, deliverDate: "2026-03-22" }),
+                    order({ orderNo: "ZM-2", qty: 10, deliverDate: "2026-03-18" }),
                     // 已完成订单不占需求
                     order({ orderNo: "ZM-DONE", qty: 99, outbound: 99 }),
                 ],
@@ -196,8 +195,8 @@ describe("stockGapList", () => {
             snap({
                 stock: {},
                 orders: [
-                    order({ orderNo: "ZM-LATE", bomCode: "ZMXK001", deliverEnd: "2026-03-25" }),
-                    order({ orderNo: "ZM-EARLY", bomCode: "ZMKQ001", deliverEnd: "2026-03-16" }),
+                    order({ orderNo: "ZM-LATE", bomCode: "ZMXK001", deliverDate: "2026-03-25" }),
+                    order({ orderNo: "ZM-EARLY", bomCode: "ZMKQ001", deliverDate: "2026-03-16" }),
                 ],
             }),
         );

@@ -66,7 +66,7 @@ export function OrderTaskCard({
     const bom = bomByCode(snap, order.bomCode);
     const remaining = remainingOf(order);
     const maxShip = maxShipOf(snap, order.orderNo);
-    const daysLate = Math.max(0, Math.floor((Date.parse(todayIso()) - Date.parse(order.deliverEnd)) / 86400000));
+    const daysLate = Math.max(0, Math.floor((Date.parse(todayIso()) - Date.parse(order.deliverDate)) / 86400000));
     return (
         <RecordCard
             title={order.customer}
@@ -114,7 +114,7 @@ export function OrderTaskCard({
                 )}
             </div>
             <p className="mt-1 text-12 text-muted">
-                交期 {order.deliverStart} ~ {order.deliverEnd} · 已发 {num(order.outbound)} / {num(order.qty)} 件
+                交货日期 {order.deliverDate} · 已发 {num(order.outbound)} / {num(order.qty)} 件
             </p>
         </RecordCard>
     );

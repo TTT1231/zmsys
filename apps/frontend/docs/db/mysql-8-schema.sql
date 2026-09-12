@@ -422,8 +422,7 @@ CREATE TABLE sales_order_table (
     qty INT UNSIGNED NOT NULL,
     lifecycle_status ENUM('ACTIVE', 'CANCELLED') NOT NULL DEFAULT 'ACTIVE',
     order_date DATE NOT NULL,
-    deliver_start_date DATE NOT NULL,
-    deliver_end_date DATE NOT NULL,
+    deliver_date DATE NOT NULL,
     remark TEXT NOT NULL,
     customer_name_snapshot VARCHAR(160) NOT NULL,
     bom_name_snapshot VARCHAR(64) NOT NULL,
@@ -441,7 +440,7 @@ CREATE TABLE sales_order_table (
     PRIMARY KEY (id),
     UNIQUE KEY uk_sales_order_no (order_no),
     UNIQUE KEY uk_sales_order_request (request_key),
-    KEY idx_sales_order_bom_queue (bom_id, lifecycle_status, deliver_end_date, order_no),
+    KEY idx_sales_order_bom_queue (bom_id, lifecycle_status, deliver_date, order_no),
     KEY idx_sales_order_customer_date (customer_id, order_date),
     CONSTRAINT fk_sales_order_customer FOREIGN KEY (customer_id) REFERENCES custom_table (id)
         ON DELETE RESTRICT ON UPDATE RESTRICT,
@@ -454,7 +453,6 @@ CREATE TABLE sales_order_table (
     CONSTRAINT fk_sales_order_updater FOREIGN KEY (updated_by) REFERENCES sys_user (id)
         ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT ck_sales_order_qty CHECK (qty > 0),
-    CONSTRAINT ck_sales_order_delivery CHECK (deliver_end_date >= deliver_start_date),
     CONSTRAINT ck_sales_order_bom_snapshot CHECK (JSON_TYPE(bom_spec_snapshot) = 'OBJECT'),
     CONSTRAINT ck_sales_order_cancel CHECK (
         (lifecycle_status = 'ACTIVE' AND cancelled_at IS NULL AND cancelled_by IS NULL AND cancel_reason IS NULL)

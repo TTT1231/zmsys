@@ -128,14 +128,7 @@ export const useCancelOrder = () =>
 /* 页面沿用旧签名 {orderNo, ...变更}，此处拆参适配契约 PUT /orders/:orderNo */
 export const useUpdateOrder = () =>
     useWbMutation(
-        (input: {
-            orderNo: string;
-            expectedVersion: number;
-            qty?: number;
-            deliverStart?: string;
-            deliverEnd?: string;
-            remark?: string;
-        }) => {
+        (input: { orderNo: string; expectedVersion: number; qty?: number; deliverDate?: string; remark?: string }) => {
             const { orderNo, ...body } = input;
             return updateOrderReq(orderNo, body);
         },

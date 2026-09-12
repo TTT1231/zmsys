@@ -47,7 +47,7 @@ export function readyToShip(snap: Snapshot): ReadyToShipRow[] {
     const today = todayIso();
     return snap.orders
         .filter(order => remainingOf(order) > 0)
-        .sort((a, b) => a.deliverEnd.localeCompare(b.deliverEnd) || a.orderNo.localeCompare(b.orderNo))
+        .sort((a, b) => a.deliverDate.localeCompare(b.deliverDate) || a.orderNo.localeCompare(b.orderNo))
         .map(order => {
             const available = left.get(order.bomCode) ?? 0;
             const remaining = remainingOf(order);
@@ -59,13 +59,12 @@ export function readyToShip(snap: Snapshot): ReadyToShipRow[] {
                 customerCode: order.customerCode,
                 bomCode: order.bomCode,
                 bomLabel: bomByCode(snap, order.bomCode)?.spec ?? "",
-                deliverStart: order.deliverStart,
-                deliverEnd: order.deliverEnd,
+                deliverDate: order.deliverDate,
                 remaining,
                 stock: stockOf(snap, order.bomCode),
                 maxShip,
                 status: orderStatusOf(snap, order),
-                overdue: order.deliverEnd < today,
+                overdue: order.deliverDate < today,
             };
         });
 }
@@ -88,7 +87,7 @@ export function stockGapList(snap: Snapshot): StockGapRow[] {
         const stockQty = stockOf(snap, bomCode);
         const demandQty = orders.reduce((sum, order) => sum + remainingOf(order), 0);
         if (demandQty <= stockQty) return;
-        const sorted = [...orders].sort((a, b) => a.deliverEnd.localeCompare(b.deliverEnd));
+        const sorted = [...orders].sort((a, b) => a.deliverDate.localeCompare(b.deliverDate));
         const earliest = sorted[0];
         list.push({
             bomCode,
@@ -96,10 +95,10 @@ export function stockGapList(snap: Snapshot): StockGapRow[] {
             demandQty,
             stockQty,
             orderCount: orders.length,
-            earliestDate: earliest.deliverEnd,
+            earliestDate: earliest.deliverDate,
             earliestOrderNo: earliest.orderNo,
             earliestCustomer: earliest.customer,
-            earliestOverdue: earliest.deliverEnd < today,
+            earliestOverdue: earliest.deliverDate < today,
         });
     });
     return list.sort((a, b) => a.earliestDate.localeCompare(b.earliestDate));

@@ -90,8 +90,7 @@ describe("mock db business write rules", () => {
                 customerCode: "CUS-1024",
                 bomCode: db.boms[0]!.code,
                 qty: 5,
-                deliverStart: "2026-03-20",
-                deliverEnd: "2026-03-25",
+                deliverDate: "2026-03-25",
                 orderDate: "2026-03-10",
                 remark: "",
             },
@@ -132,11 +131,11 @@ describe("mock db business write rules", () => {
                 {
                     orderNo: shipped.orderNo,
                     expectedVersion: shipped.version,
-                    deliverEnd: "2020-01-01",
+                    deliverDate: "2026/03/20",
                 },
                 actor,
             ),
-        ).toThrow("交货截止日期不能早于起始日期");
+        ).toThrow("交货日期格式不正确");
         expect(() => db.updateOrder({ orderNo: "ZM-NOPE", expectedVersion: 1, qty: 1 }, actor)).toThrow("订单不存在");
     });
 
@@ -199,8 +198,7 @@ describe("mock db business write rules", () => {
                 customerCode: customer.code,
                 bomCode: db.boms[0]!.code,
                 qty: 5,
-                deliverStart: "2026-03-20",
-                deliverEnd: "2026-03-25",
+                deliverDate: "2026-03-25",
                 orderDate: ANCHOR,
                 remark: "",
             },

@@ -20,8 +20,7 @@ export interface Order {
     qty: number;
     outbound: number;
     orderDate: string;
-    deliverStart: string; // 交货起始日期
-    deliverEnd: string; // 交货截止日期（排序/逾期口径）
+    deliverDate: string; // 交货日期（单个日历日，排序/逾期口径）
     remark: string;
     lifecycleStatus: OrderLifecycleStatus;
     cancelledAt?: string;
@@ -227,8 +226,7 @@ export interface CreateOrderInput {
     customerCode: string;
     bomCode: string;
     qty: number;
-    deliverStart: string;
-    deliverEnd: string;
+    deliverDate: string;
     orderDate: string;
     remark: string;
 }
@@ -236,8 +234,7 @@ export interface CreateOrderInput {
 export interface UpdateOrderInput {
     expectedVersion: number;
     qty?: number;
-    deliverStart?: string;
-    deliverEnd?: string;
+    deliverDate?: string;
     remark?: string;
 }
 
@@ -364,8 +361,7 @@ export interface ReadyToShipRow {
     customerCode: string;
     bomCode: string;
     bomLabel: string;
-    deliverStart: string;
-    deliverEnd: string;
+    deliverDate: string;
     remaining: number;
     stock: number;
     maxShip: number;

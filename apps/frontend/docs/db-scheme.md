@@ -160,7 +160,7 @@
 ### 6.1 `sales_order_table`
 
 - 外键关联客户和 BOM；API 新建只接收 `customerCode` / `bomCode`，名称和规格由后端查询。
-- `qty > 0`，`deliver_end_date >= deliver_start_date`。
+- `qty > 0`；交货日期 `deliver_date` 为单个日历日。
 - `lifecycle_status` 为 `ACTIVE` 或 `CANCELLED`；完成、部分发货、待备货、可发货继续由累计已发和库存派生。
 - 修改数量时新数量必须大于等于该订单有效出库净额。
 - 取消必须填写原因。完全未发时取消全部数量；部分发货后取消时保留已发数量并关闭全部剩余欠量，状态展示为“部分发货后取消”。
@@ -175,7 +175,7 @@
 同一 BOM 的库存由全部活动、未完成订单共享：
 
 1. 当前库存 = 该 BOM 有效入库 `Σqty_delta` − 有效出库 `Σqty_delta`。
-2. 活动订单按交货截止日期升序、同日按订单号升序。
+2. 活动订单按交货日期升序、同日按订单号升序。
 3. 从库存池依次分配，每单最多分配其 `qty − 有效出库净额`。
 4. 目标订单分配量即本次最多可发量；超出返回 409，客户端刷新后重试。
 
@@ -258,7 +258,7 @@
 必须存在的关键索引已写入建表脚本，包括：
 
 - 客户：`owner_id`、名称；
-- 订单：`(bom_id, lifecycle_status, deliver_end_date, order_no)`、`(customer_id, order_date)`；
+- 订单：`(bom_id, lifecycle_status, deliver_date, order_no)`、`(customer_id, order_date)`；
 - 入库：`(bom_id, status, business_date, id)`；库存调整：`(bom_id, business_date, id)`；
 - 出库单：`(order_id, state, business_date, id)`；出库数量事件：`(shipment_id, business_date, id)`；
 - 入库修改、负责人历史、订单变更、打印和授权日志：业务主键 + 时间；

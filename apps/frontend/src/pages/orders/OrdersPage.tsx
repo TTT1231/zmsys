@@ -38,8 +38,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
     const [customerCode, setCustomerCode] = useState("");
     const [qty, setQty] = useState("");
     const [orderDate, setOrderDate] = useState(todayIso);
-    const [deliverStart, setDeliverStart] = useState("");
-    const [deliverEnd, setDeliverEnd] = useState("");
+    const [deliverDate, setDeliverDate] = useState("");
     const [category, setCategory] = useState("");
     const [bomSelections, setBomSelections] = useState<Record<string, string>>({});
     const [remark, setRemark] = useState("");
@@ -93,8 +92,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
         setCustomerCode("");
         setQty("");
         setOrderDate(todayIso());
-        setDeliverStart("");
-        setDeliverEnd("");
+        setDeliverDate("");
         setCategory("");
         setBomSelections({});
         setRemark("");
@@ -107,9 +105,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
         if (!orderDate) nextErrors.orderDate = "请选择下单日期";
         if (!customerCode) nextErrors.customerCode = "请选择客户";
         if (!qty || Number(qty) <= 0) nextErrors.qty = "请填写订单数量";
-        if (!deliverStart) nextErrors.deliverStart = "请选择交货起始日期";
-        if (!deliverEnd) nextErrors.deliverEnd = "请选择交货终止日期";
-        if (deliverStart && deliverEnd && deliverEnd < deliverStart) nextErrors.deliverEnd = "终止不能早于起始";
+        if (!deliverDate) nextErrors.deliverDate = "请选择交货日期";
         if (!category) nextErrors.category = "请选择 BOM 品类";
         else if (!selectedBom) nextErrors.bom = "请完成规格选择";
         setErrors(nextErrors);
@@ -124,8 +120,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
                 customerCode,
                 bomCode: selectedBom!.code,
                 qty: Number(qty),
-                deliverStart,
-                deliverEnd,
+                deliverDate,
                 orderDate,
                 remark,
             },
@@ -195,22 +190,13 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
                             value={orderDate}
                             onChange={event => setOrderDate(event.target.value)}
                         />
-                        <div className="grid grid-cols-2 gap-3">
-                            <DateField
-                                label="交货起始"
-                                required
-                                error={errors.deliverStart}
-                                value={deliverStart}
-                                onChange={event => setDeliverStart(event.target.value)}
-                            />
-                            <DateField
-                                label="交货终止"
-                                required
-                                error={errors.deliverEnd}
-                                value={deliverEnd}
-                                onChange={event => setDeliverEnd(event.target.value)}
-                            />
-                        </div>
+                        <DateField
+                            label="交货日期"
+                            required
+                            error={errors.deliverDate}
+                            value={deliverDate}
+                            onChange={event => setDeliverDate(event.target.value)}
+                        />
                     </div>
                 </fieldset>
 
@@ -317,8 +303,7 @@ function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void 
     const updateOrder = useUpdateOrder();
     const toast = useToast();
     const [qty, setQty] = useState(String(order.qty));
-    const [deliverStart, setDeliverStart] = useState(order.deliverStart);
-    const [deliverEnd, setDeliverEnd] = useState(order.deliverEnd);
+    const [deliverDate, setDeliverDate] = useState(order.deliverDate);
     const [remark, setRemark] = useState(order.remark);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -327,9 +312,7 @@ function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void 
         const nextErrors: Record<string, string> = {};
         if (!qty || Number(qty) <= 0) nextErrors.qty = "请填写订单数量";
         if (Number(qty) < order.outbound) nextErrors.qty = `新数量不能低于累计已发 ${order.outbound} 件`;
-        if (!deliverStart) nextErrors.deliverStart = "请选择交货起始日期";
-        if (!deliverEnd) nextErrors.deliverEnd = "请选择交货截止日期";
-        if (deliverStart && deliverEnd && deliverEnd < deliverStart) nextErrors.deliverEnd = "截止不能早于起始";
+        if (!deliverDate) nextErrors.deliverDate = "请选择交货日期";
         setErrors(nextErrors);
         if (Object.keys(nextErrors).length)
             requestAnimationFrame(() =>
@@ -341,8 +324,7 @@ function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void 
                 orderNo: order.orderNo,
                 expectedVersion: order.version,
                 qty: Number(qty),
-                deliverStart,
-                deliverEnd,
+                deliverDate,
                 remark,
             },
             {
@@ -393,18 +375,11 @@ function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void 
                         onChange={event => setQty(event.target.value.replace(/\D/g, ""))}
                     />
                     <DateField
-                        label="交货起始日期"
+                        label="交货日期"
                         required
-                        error={errors.deliverStart}
-                        value={deliverStart}
-                        onChange={event => setDeliverStart(event.target.value)}
-                    />
-                    <DateField
-                        label="交货截止日期"
-                        required
-                        error={errors.deliverEnd}
-                        value={deliverEnd}
-                        onChange={event => setDeliverEnd(event.target.value)}
+                        error={errors.deliverDate}
+                        value={deliverDate}
+                        onChange={event => setDeliverDate(event.target.value)}
                     />
                     <div className="sm:col-span-2">
                         <TextArea label="订单备注" value={remark} onChange={event => setRemark(event.target.value)} />
@@ -501,16 +476,10 @@ export function OrderDetailModal({
                             </span>,
                         ],
                         [
-                            "交货起始日期",
-                            <span key="ds" className="tnum text-td">
-                                {order.deliverStart}
-                            </span>,
-                        ],
-                        [
-                            "交货截止日期",
-                            <span key="de" className="tnum text-td">
-                                {order.deliverEnd}
-                                {remaining > 0 && order.deliverEnd < todayIso() ? "（已逾期）" : ""}
+                            "交货日期",
+                            <span key="dd" className="tnum text-td">
+                                {order.deliverDate}
+                                {remaining > 0 && order.deliverDate < todayIso() ? "（已逾期）" : ""}
                             </span>,
                         ],
                         [
@@ -592,8 +561,8 @@ export function OrdersPage() {
             if (taskFilter === "ready" && maxShipOf(snap, order.orderNo) <= 0) return false;
             if (statusFilter !== "全部状态" && orderStatusOf(snap, order).label !== statusFilter) return false;
             if (categoryFilter !== "全部品类" && bomCategory.get(order.bomCode) !== categoryFilter) return false;
-            if (dateStart && order.deliverEnd < dateStart) return false;
-            if (dateEnd && order.deliverEnd > dateEnd) return false;
+            if (dateStart && order.deliverDate < dateStart) return false;
+            if (dateEnd && order.deliverDate > dateEnd) return false;
             if (kw) {
                 const bom = bomByCode(snap, order.bomCode);
                 const text =
@@ -602,9 +571,9 @@ export function OrdersPage() {
             }
             return true;
         });
-        // 仓库角色按交期优先排序，便于安排发货
+        // 仓库角色按交货日期优先排序，便于安排发货
         return role === "warehouse"
-            ? [...rows].sort((a, b) => a.deliverEnd.localeCompare(b.deliverEnd) || a.orderNo.localeCompare(b.orderNo))
+            ? [...rows].sort((a, b) => a.deliverDate.localeCompare(b.deliverDate) || a.orderNo.localeCompare(b.orderNo))
             : rows;
     })();
 
@@ -769,8 +738,7 @@ export function OrdersPage() {
                                         "客户编码",
                                         "BOM 编码",
                                         "订单数量",
-                                        "交货起始日期",
-                                        "交货截止日期",
+                                        "交货日期",
                                         "累计出库",
                                         "状态",
                                     ],
@@ -780,8 +748,7 @@ export function OrdersPage() {
                                         order.customerCode,
                                         order.bomCode,
                                         String(order.qty),
-                                        order.deliverStart,
-                                        order.deliverEnd,
+                                        order.deliverDate,
                                         String(order.outbound),
                                         orderStatusOf(snap, order).label,
                                     ]),
@@ -827,7 +794,7 @@ export function OrdersPage() {
                                         订单数量
                                     </th>
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "14%" }}>
-                                        交货期
+                                        交货日期
                                     </th>
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "14%" }}>
                                         交付情况
@@ -894,10 +861,9 @@ export function OrdersPage() {
                                                 <QtyCell value={order.qty} />
                                             </td>
                                             <td className="px-3 py-4">
-                                                <div className="text-11.5 tnum text-muted">{order.deliverStart} 起</div>
                                                 <DateCell
-                                                    date={order.deliverEnd}
-                                                    overdue={order.deliverEnd < todayIso() && !done}
+                                                    date={order.deliverDate}
+                                                    overdue={order.deliverDate < todayIso() && !done}
                                                 />
                                             </td>
                                             <td className="px-3 py-4">
