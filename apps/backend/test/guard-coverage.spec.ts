@@ -10,8 +10,9 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { AUTH_ONLY_KEY, IS_PUBLIC_KEY, PERMISSIONS_KEY } from '../src/constants';
 
-// Nest 路由装饰器（@Get/@Post/...）写入的 method 元数据键（Nest 稳定内部约定）
-const METHOD_METADATA = '__method__';
+// Nest 路由装饰器（@Get/@Post/...）把 method 元数据写在 handler 函数自身上（Nest 稳定内部约定，
+// @nestjs/common constants：'method'；SetMetadata 类装饰器同样写函数而非 prototype 属性）
+const METHOD_METADATA = 'method';
 
 const SRC_ROOT = join(__dirname, '..', 'src');
 
@@ -32,6 +33,7 @@ describe('权限元数据三选一（默认拒绝的架构兜底）', () => {
         expect(files.length, '自动发现 controller（发现数应随业务模块增长）').toBeGreaterThanOrEqual(2);
 
         const violations: string[] = [];
+        let checkedHandlers = 0;
         for (const file of files) {
             const moduleExports = (await import(pathToFileURL(file).href)) as Record<string, unknown>;
             for (const [exportName, exported] of Object.entries(moduleExports)) {
@@ -43,14 +45,19 @@ describe('权限元数据三选一（默认拒绝的架构兜底）', () => {
                     if (methodName === 'constructor') {
                         continue;
                     }
-                    // 仅检查路由方法（被 @Get/@Post 等装饰），非路由辅助方法不强制
-                    if (Reflect.getMetadata(METHOD_METADATA, prototype, methodName) === undefined) {
+                    const handler = prototype[methodName];
+                    if (typeof handler !== 'function') {
                         continue;
                     }
+                    // 仅检查路由方法（被 @Get/@Post 等装饰），非路由辅助方法不强制
+                    if (Reflect.getMetadata(METHOD_METADATA, handler) === undefined) {
+                        continue;
+                    }
+                    checkedHandlers += 1;
                     const declared = [
-                        Reflect.getMetadata(IS_PUBLIC_KEY, prototype, methodName),
-                        Reflect.getMetadata(AUTH_ONLY_KEY, prototype, methodName),
-                        Reflect.getMetadata(PERMISSIONS_KEY, prototype, methodName),
+                        Reflect.getMetadata(IS_PUBLIC_KEY, handler),
+                        Reflect.getMetadata(AUTH_ONLY_KEY, handler),
+                        Reflect.getMetadata(PERMISSIONS_KEY, handler),
                     ].filter(value => value !== undefined);
                     if (declared.length !== 1) {
                         violations.push(
@@ -61,5 +68,7 @@ describe('权限元数据三选一（默认拒绝的架构兜底）', () => {
             }
         }
         expect(violations.join('\n')).toBe('');
+        // 防空转兜底：元数据键或挂载位置漂移会让上方循环静默跳过全部 handler，0 检出也绿
+        expect(checkedHandlers, '至少检出既有 11 条路由（auth 5 / roles 4 / health 2）').toBeGreaterThanOrEqual(11);
     });
 });
