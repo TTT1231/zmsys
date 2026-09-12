@@ -12,7 +12,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { QtyCell } from "@/components/ui/cells";
 import { DateField, TextArea, TextField } from "@/components/ui/Field";
-import { useCreateInbound, useVoidInbound, useWbRefresh, useWbSnapshot } from "@/data/queries";
+import { useCreateInbound, useUpdateInbound, useVoidInbound, useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { EMPTY_SNAPSHOT, bomByCode } from "@/data/views";
@@ -197,6 +197,127 @@ function VoucherModal({ row, snap, onClose }: { row: InboundRow | null; snap: Sn
     );
 }
 
+function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => void }) {
+    const { data } = useWbSnapshot();
+    const snap = data ?? EMPTY_SNAPSHOT;
+    const updateInbound = useUpdateInbound();
+    const toast = useToast();
+    const [bomCode, setBomCode] = useState(row.bomCode);
+    const [qty, setQty] = useState(String(row.qty));
+    const [date, setDate] = useState(row.date);
+    const [remark, setRemark] = useState(row.remark ?? "");
+    const [reason, setReason] = useState("");
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
+    const submit = () => {
+        if (updateInbound.isPending) return;
+        const nextErrors: Record<string, string> = {};
+        if (!bomCode) nextErrors.bomCode = "请选择成品";
+        if (!qty || Number(qty) <= 0) nextErrors.qty = "请填写入库数量";
+        if (!date) nextErrors.date = "请选择入库日期";
+        if (reason.trim().length < 2) nextErrors.reason = "请填写修正原因（至少 2 个字）";
+        setErrors(nextErrors);
+        if (Object.keys(nextErrors).length) return;
+        updateInbound.mutate(
+            {
+                no: row.no,
+                expectedVersion: row.version,
+                bomCode,
+                qty: Number(qty),
+                date,
+                remark,
+                reason: reason.trim(),
+            },
+            {
+                onError: error => toast(error.message, true),
+                onSuccess: updated => {
+                    toast(`入库单 ${updated.no} 已修正，版本 ${updated.version}`);
+                    onClose();
+                },
+            },
+        );
+    };
+
+    return (
+        <Modal
+            open
+            onClose={onClose}
+            title="修正入库记录"
+            subtitle={`${row.no} · 当天录入，版本 ${row.version}`}
+            label="修正入库记录"
+            width={600}
+            footer={
+                <>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
+                    >
+                        取消
+                    </button>
+                    <button
+                        type="button"
+                        disabled={updateInbound.isPending}
+                        onClick={submit}
+                        className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
+                    >
+                        {updateInbound.isPending ? "正在保存…" : "确认修正"}
+                    </button>
+                </>
+            }
+        >
+            <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                    <SearchSelect
+                        label="成品（选错型号时在此更正）"
+                        required
+                        error={errors.bomCode}
+                        value={bomCode}
+                        onChange={setBomCode}
+                        options={snap.boms.map(bom => ({
+                            value: bom.code,
+                            label: `${bom.code} · ${bom.spec}`,
+                        }))}
+                    />
+                </div>
+                <TextField
+                    label="入库数量（件）"
+                    required
+                    inputMode="numeric"
+                    placeholder="如 1600"
+                    error={errors.qty}
+                    value={qty}
+                    onChange={event => setQty(event.target.value.replace(/\D/g, ""))}
+                />
+                <DateField
+                    label="入库日期"
+                    required
+                    error={errors.date}
+                    value={date}
+                    onChange={event => setDate(event.target.value)}
+                />
+                <TextArea
+                    label="备注"
+                    placeholder="选填"
+                    value={remark}
+                    onChange={event => setRemark(event.target.value)}
+                />
+                <TextArea
+                    label="修正原因"
+                    required
+                    placeholder="例如：实际入库数量少记了 200 件"
+                    error={errors.reason}
+                    value={reason}
+                    onChange={event => setReason(event.target.value)}
+                />
+                <p className="text-12 text-muted sm:col-span-2">
+                    仅限当天录入的记录修正；每次修正版本 +1 并保留前后快照，可继续修正或作废。
+                </p>
+            </div>
+        </Modal>
+    );
+}
+
 function VoidInboundModal({
     row,
     pending,
@@ -278,6 +399,7 @@ export function InboundPage() {
     const [newOpen, setNewOpen] = useState(false);
     const [voucher, setVoucher] = useState<InboundRow | null>(null);
     const [voidTarget, setVoidTarget] = useState<InboundRow | null>(null);
+    const [editTarget, setEditTarget] = useState<InboundRow | null>(null);
 
     const rows = snap.inboundLedger;
     const boms = snap.boms;
@@ -408,13 +530,22 @@ export function InboundPage() {
                                             查看凭证
                                         </Button>
                                         {voidable(row) && (
-                                            <Button
-                                                variant="secondary"
-                                                disabled={voidRequest.isPending}
-                                                onClick={() => setVoidTarget(row)}
-                                            >
-                                                作废
-                                            </Button>
+                                            <>
+                                                <Button
+                                                    variant="secondary"
+                                                    disabled={voidRequest.isPending}
+                                                    onClick={() => setEditTarget(row)}
+                                                >
+                                                    修正
+                                                </Button>
+                                                <Button
+                                                    variant="secondary"
+                                                    disabled={voidRequest.isPending}
+                                                    onClick={() => setVoidTarget(row)}
+                                                >
+                                                    作废
+                                                </Button>
+                                            </>
                                         )}
                                     </div>
                                 }
@@ -471,16 +602,26 @@ export function InboundPage() {
                                                     查看凭证
                                                 </button>
                                                 {voidable(row) && (
-                                                    <button
-                                                        type="button"
-                                                        disabled={voidRequest.isPending}
-                                                        onClick={() => setVoidTarget(row)}
-                                                        className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                                                    >
-                                                        {voidRequest.isPending && voidRequest.variables?.no === row.no
-                                                            ? "处理中…"
-                                                            : "作废"}
-                                                    </button>
+                                                    <>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setEditTarget(row)}
+                                                            className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline"
+                                                        >
+                                                            修正
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            disabled={voidRequest.isPending}
+                                                            onClick={() => setVoidTarget(row)}
+                                                            className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                                                        >
+                                                            {voidRequest.isPending &&
+                                                            voidRequest.variables?.no === row.no
+                                                                ? "处理中…"
+                                                                : "作废"}
+                                                        </button>
+                                                    </>
                                                 )}
                                             </div>
                                         </td>
@@ -504,6 +645,7 @@ export function InboundPage() {
 
             {canRegister && <InboundModal open={newOpen} onClose={() => setNewOpen(false)} />}
             <VoucherModal row={voucher} snap={snap} onClose={() => setVoucher(null)} />
+            {editTarget && <EditInboundModal row={editTarget} onClose={() => setEditTarget(null)} />}
             {voidTarget && (
                 <VoidInboundModal
                     row={voidTarget}
