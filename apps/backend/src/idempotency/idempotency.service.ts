@@ -110,6 +110,17 @@ export class IdempotencyService {
     }
 
     /**
+     * 业务行 request_key（VARCHAR(128) 全局唯一，CHECK 8–128 ASCII）的派生值：
+     * 幂等三元组以 \n 连接后的 SHA-256 十六进制（定长 64）。不能直接存原始
+     * Idempotency-Key——api_idempotency 的唯一域含 actor_id，两个用户各自首次
+     * 使用同一原始 key 时会在业务表的全局唯一键上相撞；哈希派生与幂等占位保持
+     * 同一唯一域，且恒在长度约束内。三元组各字段均不含 \n（可见 ASCII），无拼接歧义。
+     */
+    requestKey(actorId: bigint, operationKey: string, idempotencyKey: string): string {
+        return createHash('sha256').update(`${actorId}\n${operationKey}\n${idempotencyKey}`).digest('hex');
+    }
+
+    /**
      * 事务内开始或重放：
      * - 无记录：写入 PROCESSING 占位，返回 replay=null，调用方继续业务写入；
      * - 已 SUCCEEDED 且摘要一致：返回重放体，调用方不得执行业务；

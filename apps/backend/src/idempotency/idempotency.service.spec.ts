@@ -123,6 +123,29 @@ describe('IdempotencyService.digest（method/路径参数/query/body 覆盖面�
     });
 });
 
+describe('IdempotencyService.requestKey（业务行幂等键派生）', () => {
+    const service = createService().service;
+
+    it('同三元组稳定，输出为 64 位十六进制（落在 CHECK 8–128 ASCII 内）', () => {
+        const a = service.requestKey(1n, 'order:create', 'abc12345');
+        const b = service.requestKey(1n, 'order:create', 'abc12345');
+        expect(a).toBe(b);
+        expect(a).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it('不同 actor 用同一原始 key 派生不同 request_key（业务唯一键是全局的）', () => {
+        const userA = service.requestKey(1n, 'order:create', 'same-key-0001');
+        const userB = service.requestKey(2n, 'order:create', 'same-key-0001');
+        expect(userA).not.toBe(userB);
+    });
+
+    it('operationKey 或 idempotencyKey 任一不同派生值即不同', () => {
+        const base = service.requestKey(1n, 'order:create', 'abc12345');
+        expect(service.requestKey(1n, 'order:cancel', 'abc12345')).not.toBe(base);
+        expect(service.requestKey(1n, 'order:create', 'abc12346')).not.toBe(base);
+    });
+});
+
 describe('IdempotencyService.beginOrReplay（事务内占位/重放/冲突）', () => {
     it('无记录：写 PROCESSING 占位并返回 placeholderId', async () => {
         const { service, tx, snowflake } = createService();
