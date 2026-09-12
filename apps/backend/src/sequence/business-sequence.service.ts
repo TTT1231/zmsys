@@ -19,8 +19,8 @@ interface SequenceFormat {
 
 const FORMATS: Record<SequenceType, SequenceFormat> = {
     order: { prefix: 'ZM', datePattern: 'yyMMdd', minWidth: 3 },
-    inbound: { prefix: 'RK-', datePattern: 'yyyyMMdd', minWidth: 4 },
-    outbound: { prefix: 'CK-', datePattern: 'yyyyMMdd', minWidth: 4 },
+    inbound: { prefix: 'RK', datePattern: 'yyMMdd', minWidth: 2 },
+    outbound: { prefix: 'CK', datePattern: 'yyMMdd', minWidth: 2 },
     adjust: { prefix: 'TZ-', datePattern: 'yyyyMMdd', minWidth: 4 },
     customer: { prefix: 'CUS-', datePattern: null, minWidth: 4 },
 };
