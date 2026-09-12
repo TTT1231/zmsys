@@ -1,0 +1,415 @@
+/**
+ * 销售订单集成测试：真实 HTTP 管线 + 真实测试库（*_test 种子数据）。
+ * 直插 BOM 与出库流水构造库存口径（BOM/出库模块未实现，按表契约造数），
+ * 验证 v_order_outbound_qty 视图聚合、快照冻结与合作状态联动。
+ * 运行前置：pnpm test:db:reset。
+ */
+import './db-guard';
+import { Test } from '@nestjs/testing';
+import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import { AppModule } from '../src/app.module';
+import { configureApp } from '../src/main';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { SnowflakeGenerator } from '../src/common/snowflake';
+import { specHash } from '../src/common/bom-spec';
+
+const RUN = Date.now().toString(36);
+const accountOf = (name: string): string => `qa_${name}_${RUN}`;
+const authHeaders = (token: string) => ({ authorization: `Bearer ${token}` });
+const today = (): string => new Date().toISOString().slice(0, 10);
+
+/** 固定测试 BOM（重跑复用，不撞唯一键） */
+const BOM_CODE = 'ZME2E0001';
+const BOM_MODEL = 'E2E-KW';
+const BOM_SPEC = { 底座: '二脚底座（无挡脚）', 按钮高度: '7.6mm（常用装跌倒）' };
+
+const orderInput = (customerCode: string) => ({
+    customerCode,
+    bomCode: BOM_CODE,
+    qty: 100,
+    deliverDate: '2026-09-30',
+    orderDate: today(),
+    remark: `e2e 订单 ${RUN}`,
+});
+
+describe('销售订单 (e2e)', () => {
+    let app: NestFastifyApplication;
+    let prisma: PrismaService;
+    let snowflake: SnowflakeGenerator;
+    let superToken: string;
+    let salesToken: string;
+    let customerCode: string;
+    let orderNo: string;
+
+    const login = async (account: string): Promise<string> => {
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/auth/login',
+            payload: { account, password: '123456' },
+        });
+        return res.json().data.accessToken;
+    };
+
+    const createUser = async (account: string, role: string): Promise<void> => {
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/users',
+            headers: { ...authHeaders(superToken), 'idempotency-key': `e2e-${RUN}-${account}` },
+            payload: { name: `联调${account.split('_')[1] ?? '用户'}`, account, role },
+        });
+        expect(res.statusCode).toBe(200);
+    };
+
+    const createOrder = async (token: string, payload: ReturnType<typeof orderInput>, idemKey: string) =>
+        app.inject({
+            method: 'POST',
+            url: '/api/orders',
+            headers: { ...authHeaders(token), 'idempotency-key': idemKey },
+            payload,
+        });
+
+    /** 直插正向出库流水（REGISTERED 未作废）构造净额与取消拦截前提 */
+    const seedRegisteredShipment = async (orderId: bigint, shipmentNo: string, qty: number): Promise<bigint> => {
+        const superUser = await prisma.sysUser.findUnique({ where: { account: 'guojun' } });
+        const now = new Date();
+        const shipmentId = snowflake.next();
+        await prisma.outboundShipment.create({
+            data: {
+                id: shipmentId,
+                shipmentNo,
+                orderId,
+                originalQty: qty,
+                businessDate: now,
+                state: 'REGISTERED',
+                requestKey: `e2e-ship-${shipmentNo}`,
+                registeredBy: superUser!.id,
+                registeredAt: now,
+            },
+        });
+        const eventId = snowflake.next();
+        await prisma.outboundLedger.create({
+            data: {
+                id: eventId,
+                eventNo: `${shipmentNo}-E1`,
+                shipmentId,
+                entryType: 'NORMAL',
+                qtyDelta: qty,
+                businessDate: now,
+                operatorId: superUser!.id,
+                requestKey: `e2e-ledger-${shipmentNo}-E1`,
+                createdAt: now,
+            },
+        });
+        return eventId;
+    };
+
+    /** 真实作废语义（db-scheme.md §7.3）：追加等额负向冲销 + 单头置 VOIDED */
+    const voidShipment = async (shipmentNo: string, eventId: bigint, qty: number): Promise<void> => {
+        const superUser = await prisma.sysUser.findUnique({ where: { account: 'guojun' } });
+        const now = new Date();
+        await prisma.outboundLedger.create({
+            data: {
+                id: snowflake.next(),
+                eventNo: `${shipmentNo}-E2`,
+                shipmentId: (await prisma.outboundShipment.findUnique({ where: { shipmentNo } }))!.id,
+                entryType: 'CORRECTION',
+                correctionOfId: eventId,
+                qtyDelta: -qty,
+                businessDate: now,
+                operatorId: superUser!.id,
+                correctionReason: 'e2e 构造：作废冲销',
+                requestKey: `e2e-ledger-${shipmentNo}-E2`,
+                createdAt: now,
+            },
+        });
+        await prisma.outboundShipment.update({
+            where: { shipmentNo },
+            data: {
+                state: 'VOIDED',
+                voidMode: 'PRE_PRINT',
+                voidedBy: superUser!.id,
+                voidReason: 'e2e 构造作废',
+                voidedAt: now,
+            },
+        });
+    };
+
+    beforeAll(async () => {
+        const moduleFixture = await Test.createTestingModule({ imports: [AppModule] }).compile();
+        app = moduleFixture.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+        configureApp(app);
+        await app.init();
+        prisma = app.get(PrismaService);
+        snowflake = app.get(SnowflakeGenerator);
+        superToken = await login('guojun');
+
+        const salesAccount = accountOf('sales01');
+        await createUser(salesAccount, 'sales');
+        salesToken = await login(salesAccount);
+
+        // 固定测试 BOM：存在则复用（重跑不撞唯一键）
+        const existing = await prisma.bomTable.findUnique({ where: { bomCode: BOM_CODE } });
+        if (!existing) {
+            const category = await prisma.bomCategory.findUnique({ where: { categoryKey: 'new-micro-switch' } });
+            const superUser = await prisma.sysUser.findUnique({ where: { account: 'guojun' } });
+            const now = new Date();
+            await prisma.bomTable.create({
+                data: {
+                    id: snowflake.next(),
+                    bomCode: BOM_CODE,
+                    categoryId: category!.id,
+                    modelCode: BOM_MODEL,
+                    spec: BOM_SPEC,
+                    specHash: specHash(BOM_SPEC),
+                    requestKey: `e2e-bom-${BOM_CODE}`,
+                    createdBy: superUser!.id,
+                    updatedBy: superUser!.id,
+                    createdAt: now,
+                },
+            });
+        }
+
+        // 测试客户（订单与客户合作状态联动的前置）
+        const customerRes = await app.inject({
+            method: 'POST',
+            url: '/api/customers',
+            headers: { ...authHeaders(superToken), 'idempotency-key': `e2e-ord-${RUN}-cust` },
+            payload: {
+                name: `订单联调客户_${RUN}`,
+                contact: '李经理',
+                phone: '13800002222',
+                province: '广东省',
+                city: '东莞市',
+                district: '',
+                town: '',
+                address: `松山湖 ${RUN.slice(-3)} 号`,
+                ownerAccount: salesAccount,
+                payTerms: '',
+            },
+        });
+        expect(customerRes.statusCode).toBe(200);
+        customerCode = customerRes.json().data.code;
+    });
+
+    afterAll(async () => {
+        await app.close();
+    });
+
+    it('staff 有 orders:view 可查看列表，但无 orders:create 创建返回 403', async () => {
+        await createUser(accountOf('staff01'), 'staff');
+        const staffToken = await login(accountOf('staff01'));
+        const list = await app.inject({ method: 'GET', url: '/api/orders', headers: authHeaders(staffToken) });
+        expect(list.statusCode).toBe(200);
+        const denied = await createOrder(staffToken, orderInput(customerCode), `e2e-ord-${RUN}-staff`);
+        expect(denied.statusCode).toBe(403);
+        expect(denied.json()).toEqual({ code: 403, data: null, message: '无权新建订单' });
+    });
+
+    it('创建成功：ZM+yyMMdd 序号、服务端冻结客户与 BOM 快照、写 op_log；客户合作状态联动为合作中', async () => {
+        const res = await createOrder(superToken, orderInput(customerCode), `e2e-ord-${RUN}-create`);
+        expect(res.statusCode).toBe(200);
+        const created = res.json().data;
+        expect(created.orderNo).toMatch(/^ZM\d{6}\d{3,}$/);
+        expect(created).toMatchObject({
+            customerCode,
+            bomCode: BOM_CODE,
+            qty: 100,
+            outbound: 0,
+            lifecycleStatus: 'active',
+            version: 1,
+            orderDate: today(),
+        });
+        orderNo = created.orderNo;
+
+        // 下单客户在客户列表中变为合作中（近 6 个日历月活动订单派生）
+        const customers = await app.inject({ method: 'GET', url: '/api/customers', headers: authHeaders(salesToken) });
+        const me = customers.json().data.find((item: { code: string }) => item.code === customerCode);
+        expect(me.cooperation).toBe('合作中');
+
+        const stored = await prisma.salesOrderTable.findUnique({ where: { orderNo } });
+        expect(stored).toMatchObject({
+            customerNameSnapshot: `订单联调客户_${RUN}`,
+            bomNameSnapshot: '新微动',
+            bomModelSnapshot: BOM_MODEL,
+        });
+        const opLog = await prisma.opLog.findFirst({ where: { action: 'create_order', targetCode: orderNo } });
+        expect(opLog).not.toBeNull();
+        const changeLog = await prisma.salesOrderChangeLog.findFirst({ where: { order: { orderNo } } });
+        expect(changeLog?.eventType).toBe('CREATE');
+    });
+
+    it('快照不随客户改名漂移：客户改名后订单列表仍显示下单时名称', async () => {
+        const customer = await prisma.customTable.findUnique({ where: { customerCode } });
+        await prisma.customTable.update({
+            where: { id: customer!.id },
+            data: { name: `改名后的客户_${RUN}`, rowVersion: { increment: 1 } },
+        });
+        const list = await app.inject({ method: 'GET', url: '/api/orders', headers: authHeaders(superToken) });
+        const mine = list.json().data.find((item: { orderNo: string }) => item.orderNo === orderNo);
+        expect(mine.customer).toBe(`订单联调客户_${RUN}`);
+    });
+
+    it('缺幂等键 400；客户或 BOM 不存在 404；重放返回首次响应；同键不同体 409', async () => {
+        const noKey = await app.inject({
+            method: 'POST',
+            url: '/api/orders',
+            headers: authHeaders(superToken),
+            payload: orderInput(customerCode),
+        });
+        expect(noKey.statusCode).toBe(400);
+
+        const badCustomer = await createOrder(superToken, orderInput('CUS-999999'), `e2e-ord-${RUN}-c404`);
+        expect(badCustomer.statusCode).toBe(404);
+        expect(badCustomer.json().message).toBe('客户不存在');
+
+        const badBom = await createOrder(
+            superToken,
+            { ...orderInput(customerCode), bomCode: 'ZMXXXX999' },
+            `e2e-ord-${RUN}-b404`,
+        );
+        expect(badBom.statusCode).toBe(404);
+        expect(badBom.json().message).toBe('BOM 不存在');
+
+        const key = `e2e-ord-${RUN}-idem`;
+        const first = await createOrder(superToken, { ...orderInput(customerCode), qty: 7 }, key);
+        expect(first.statusCode).toBe(200);
+        const replay = await createOrder(superToken, { ...orderInput(customerCode), qty: 7 }, key);
+        expect(replay.statusCode).toBe(200);
+        expect(replay.json().data).toEqual(first.json().data);
+        const conflict = await createOrder(superToken, { ...orderInput(customerCode), qty: 8 }, key);
+        expect(conflict.statusCode).toBe(409);
+    });
+
+    it('编辑：无可变字段 400；未知订单 404；版本过期 409；合法修改版本 +1', async () => {
+        const noField = await app.inject({
+            method: 'PUT',
+            url: `/api/orders/${orderNo}`,
+            headers: authHeaders(superToken),
+            payload: { expectedVersion: 1 },
+        });
+        expect(noField.statusCode).toBe(400);
+
+        const missing = await app.inject({
+            method: 'PUT',
+            url: '/api/orders/ZM999999999',
+            headers: authHeaders(superToken),
+            payload: { expectedVersion: 1, qty: 10 },
+        });
+        expect(missing.statusCode).toBe(404);
+
+        const stale = await app.inject({
+            method: 'PUT',
+            url: `/api/orders/${orderNo}`,
+            headers: authHeaders(superToken),
+            payload: { expectedVersion: 5, qty: 10 },
+        });
+        expect(stale.statusCode).toBe(409);
+
+        const updated = await app.inject({
+            method: 'PUT',
+            url: `/api/orders/${orderNo}`,
+            headers: authHeaders(superToken),
+            payload: { expectedVersion: 1, qty: 150, deliverDate: '2026-10-15' },
+        });
+        expect(updated.statusCode).toBe(200);
+        expect(updated.json().data).toMatchObject({ version: 2, qty: 150, deliverDate: '2026-10-15' });
+        const logs = await prisma.salesOrderChangeLog.findMany({ where: { order: { orderNo } } });
+        expect(logs.some(log => log.eventType === 'UPDATE')).toBe(true);
+    });
+
+    it('有效出库净额拦截：正向出库未作废时不可取消、新数量不得低于净额；作废冲销后净额归零', async () => {
+        const order = await prisma.salesOrderTable.findUnique({ where: { orderNo } });
+        const shipmentNo = `CKE2E${RUN}`;
+        const eventId = await seedRegisteredShipment(order!.id, shipmentNo, 30);
+
+        // 列表口径经 v_order_outbound_qty 视图聚合：outbound = 30
+        const list = await app.inject({ method: 'GET', url: '/api/orders', headers: authHeaders(superToken) });
+        const mine = list.json().data.find((item: { orderNo: string }) => item.orderNo === orderNo);
+        expect(mine.outbound).toBe(30);
+
+        // 存在已登记未打印出库 → 取消 409
+        const blockedCancel = await app.inject({
+            method: 'POST',
+            url: `/api/orders/${orderNo}/cancel`,
+            headers: { ...authHeaders(superToken), 'idempotency-key': `e2e-ord-${RUN}-cancel-blocked` },
+            payload: { expectedVersion: 2, reason: '存在未打印出库' },
+        });
+        expect(blockedCancel.statusCode).toBe(409);
+        expect(blockedCancel.json().message).toContain('先作废');
+
+        // 新数量低于净额 → 409
+        const lowQty = await app.inject({
+            method: 'PUT',
+            url: `/api/orders/${orderNo}`,
+            headers: authHeaders(superToken),
+            payload: { expectedVersion: 2, qty: 20 },
+        });
+        expect(lowQty.statusCode).toBe(409);
+
+        // 真实作废：追加 -30 冲销 + 单头 VOIDED → 视图净额归零
+        await voidShipment(shipmentNo, eventId, 30);
+        const afterVoid = await app.inject({ method: 'GET', url: '/api/orders', headers: authHeaders(superToken) });
+        const voided = afterVoid.json().data.find((item: { orderNo: string }) => item.orderNo === orderNo);
+        expect(voided.outbound).toBe(0);
+    });
+
+    it('取消成功：终态字段、CANCEL 日志与原因；重放幂等；已取消再取消 409；取消后不可编辑', async () => {
+        const key = `e2e-ord-${RUN}-cancel`;
+        const cancelled = await app.inject({
+            method: 'POST',
+            url: `/api/orders/${orderNo}/cancel`,
+            headers: { ...authHeaders(superToken), 'idempotency-key': key },
+            payload: { expectedVersion: 2, reason: '客户计划变更' },
+        });
+        expect(cancelled.statusCode).toBe(200);
+        expect(cancelled.json().data).toMatchObject({
+            lifecycleStatus: 'cancelled',
+            version: 3,
+            cancelReason: '客户计划变更',
+            cancelledBy: '郭均',
+        });
+        expect(cancelled.json().data.cancelledAt).toBeDefined();
+
+        const replay = await app.inject({
+            method: 'POST',
+            url: `/api/orders/${orderNo}/cancel`,
+            headers: { ...authHeaders(superToken), 'idempotency-key': key },
+            payload: { expectedVersion: 2, reason: '客户计划变更' },
+        });
+        expect(replay.statusCode).toBe(200);
+        expect(replay.json().data).toEqual(cancelled.json().data);
+
+        const again = await app.inject({
+            method: 'POST',
+            url: `/api/orders/${orderNo}/cancel`,
+            headers: { ...authHeaders(superToken), 'idempotency-key': `e2e-ord-${RUN}-cancel-2` },
+            payload: { expectedVersion: 3, reason: '再次取消' },
+        });
+        expect(again.statusCode).toBe(409);
+
+        const edit = await app.inject({
+            method: 'PUT',
+            url: `/api/orders/${orderNo}`,
+            headers: authHeaders(superToken),
+            payload: { expectedVersion: 3, qty: 200 },
+        });
+        expect(edit.statusCode).toBe(409);
+
+        const logs = await prisma.salesOrderChangeLog.findMany({ where: { order: { orderNo } } });
+        const cancelLog = logs.find(log => log.eventType === 'CANCEL');
+        expect(cancelLog).toMatchObject({ reason: '客户计划变更', beforeVersion: 2n, afterVersion: 3n });
+    });
+
+    it('取消订单仍返回列表用于历史审计；客户合作状态由剩余活动订单决定', async () => {
+        const list = await app.inject({ method: 'GET', url: '/api/orders', headers: authHeaders(superToken) });
+        const cancelled = list.json().data.find((item: { orderNo: string }) => item.orderNo === orderNo);
+        expect(cancelled.lifecycleStatus).toBe('cancelled');
+        expect(cancelled.cancelReason).toBe('客户计划变更');
+
+        // 该客户仍有一笔活动订单（幂等测试 qty=7 单）→ 合作中；
+        // “取消订单不参与派生”的口径由单测覆盖（lifecycleStatus=ACTIVE 过滤）
+        const customers = await app.inject({ method: 'GET', url: '/api/customers', headers: authHeaders(salesToken) });
+        const me = customers.json().data.find((item: { code: string }) => item.code === customerCode);
+        expect(me.cooperation).toBe('合作中');
+    });
+});

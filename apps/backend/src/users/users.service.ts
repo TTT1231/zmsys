@@ -14,7 +14,6 @@ import type { SysUser } from '../generated/prisma/client';
 import type { CreateUserDto } from './dto/create-user.dto';
 import type { UpdateUserDto } from './dto/update-user.dto';
 import type { SetUserStatusDto } from './dto/set-user-status.dto';
-import type { CustomerOwnerOption } from './types';
 
 /** 契约初始密码：新增用户统一 123456，数据库只保存强哈希（db-scheme.md §0.6） */
 const INITIAL_PASSWORD = '123456';
@@ -46,15 +45,6 @@ export class UsersService {
     async listUsers(): Promise<WbUser[]> {
         const users = await this.prisma.sysUser.findMany({ orderBy: { account: 'asc' } });
         return users.map(user => toWbUser(user));
-    }
-
-    /** 启用中的销售即合法负责人候选（db-scheme.md §4.1）；只回展示字段 */
-    async listSalesOwnerOptions(): Promise<CustomerOwnerOption[]> {
-        return this.prisma.sysUser.findMany({
-            where: { roleCode: 'sales', status: true },
-            orderBy: { account: 'asc' },
-            select: { name: true, account: true },
-        });
     }
 
     /**
