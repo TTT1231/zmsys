@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 export const DropdownMenu = DropdownMenuPrimitive.Root;
 export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
 export const DropdownMenuGroup = DropdownMenuPrimitive.Group;
+export const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 
 export function DropdownMenuContent({
     className,
@@ -39,6 +40,30 @@ export function DropdownMenuItem({ className, ...props }: React.ComponentProps<t
             )}
             {...props}
         />
+    );
+}
+
+export function DropdownMenuRadioItem({
+    className,
+    children,
+    ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.RadioItem>) {
+    return (
+        <DropdownMenuPrimitive.RadioItem
+            className={cn(
+                "relative flex min-h-10 max-lg:min-h-11 cursor-pointer select-none items-center rounded-btn py-2 pr-2.5 pl-8 text-13 text-ink outline-none transition",
+                "data-[highlighted]:bg-soft data-[highlighted]:text-ink",
+                "data-[state=checked]:bg-primary-soft/70 data-[state=checked]:font-medium data-[state=checked]:text-primary-strong",
+                "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+                className,
+            )}
+            {...props}
+        >
+            <DropdownMenuPrimitive.ItemIndicator className="absolute left-2.5 flex items-center text-primary">
+                <span className="size-1.5 rounded-full bg-current" />
+            </DropdownMenuPrimitive.ItemIndicator>
+            {children}
+        </DropdownMenuPrimitive.RadioItem>
     );
 }
 

@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { QtyCell } from "@/components/ui/cells";
-import { SelectField, TextArea, TextField } from "@/components/ui/Field";
+import { TextArea, TextField } from "@/components/ui/Field";
+import { SelectMenuField } from "@/components/ui/SelectMenuField";
 import { useCreateInbound, useUpdateInbound, useVoidInbound, useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
@@ -84,33 +85,28 @@ function InboundBomPicker({
     const effectiveBom = selectedBom ?? currentBom;
     return (
         <div className="col-span-full flex flex-col gap-3">
-            <SelectField
+            <SelectMenuField
                 label="品类"
                 required
                 error={error}
                 value={category}
-                onChange={event => pickCategory(event.target.value)}
-            >
-                <option value="">请选择品类</option>
-                {categories.map(item => (
-                    <option key={item}>{item}</option>
-                ))}
-            </SelectField>
+                placeholder="请选择品类"
+                options={categories.map(item => ({ value: item, label: item }))}
+                onValueChange={pickCategory}
+            />
             {resolution.steps.map(step => (
-                <SelectField
+                <SelectMenuField
                     key={step.field.id}
                     label={step.field.label}
                     required
                     value={bomSelections[step.field.id] ?? ""}
-                    onChange={event => pickBomDimension(step.field.id, event.target.value)}
-                >
-                    <option value="">请选择{step.field.label}</option>
-                    {step.options.map(option => (
-                        <option key={option} value={option}>
-                            {bomSelectorOptionLabel(option)}
-                        </option>
-                    ))}
-                </SelectField>
+                    placeholder={`请选择${step.field.label}`}
+                    options={step.options.map(option => ({
+                        value: option,
+                        label: bomSelectorOptionLabel(option),
+                    }))}
+                    onValueChange={value => pickBomDimension(step.field.id, value)}
+                />
             ))}
             {category && selectorSchema.fixedSpecs.length > 0 && (
                 <div className="rounded-btn border border-line bg-panel px-3 py-2.5">
@@ -249,16 +245,17 @@ export function InboundModal({
                     value={qty}
                     onChange={event => setQty(event.target.value.replace(/\D/g, ""))}
                 />
-                <div className="rounded-btn border border-line bg-panel px-3.5 py-2.5">
-                    <p className="text-11.5 text-muted">入库日期（固定为今天）</p>
-                    <p className="tnum text-13.5 font-medium text-ink">{todayIso()}</p>
+                <div className="[&_input]:cursor-default [&_input]:bg-soft">
+                    <TextField label="入库日期（固定为今天）" value={todayIso()} readOnly tabIndex={-1} />
                 </div>
-                <TextArea
-                    label="备注"
-                    placeholder="选填"
-                    value={remark}
-                    onChange={event => setRemark(event.target.value)}
-                />
+                <div className="sm:col-span-2">
+                    <TextArea
+                        label="备注"
+                        placeholder="选填"
+                        value={remark}
+                        onChange={event => setRemark(event.target.value)}
+                    />
+                </div>
                 {selectedBom && (
                     <div className="rounded-xl border border-line bg-panel px-3.5 py-3 text-12.5 sm:col-span-2">
                         <div className="font-semibold text-ink">{selectedBom.code}</div>

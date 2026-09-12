@@ -10,6 +10,7 @@ import { Button, TableLink } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { SelectField, TextField } from "@/components/ui/Field";
+import { SelectMenuField } from "@/components/ui/SelectMenuField";
 import { useCreateBom, useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
@@ -378,12 +379,13 @@ function QuickFindModal({
             }
         >
             <div className="flex flex-col gap-3">
-                <SelectField label="品类" value={category} onChange={event => pickCategory(event.target.value)}>
-                    <option value="">请选择品类</option>
-                    {categories.map(item => (
-                        <option key={item}>{item}</option>
-                    ))}
-                </SelectField>
+                <SelectMenuField
+                    label="品类"
+                    value={category}
+                    placeholder="请选择品类"
+                    options={categories.map(item => ({ value: item, label: item }))}
+                    onValueChange={pickCategory}
+                />
 
                 {!category && <p className="py-6 text-center text-12.5 text-subtle">请先选择品类，再按规格缩小范围</p>}
 
@@ -392,21 +394,19 @@ function QuickFindModal({
                         {fieldOptions.length > 0 && (
                             <div className="grid gap-3 sm:grid-cols-2">
                                 {fieldOptions.map(({ field, options }) => (
-                                    <SelectField
+                                    <SelectMenuField
                                         key={field.id}
                                         label={field.label}
                                         value={selections[field.id] ?? ""}
-                                        onChange={event =>
-                                            setSelections(current => ({ ...current, [field.id]: event.target.value }))
+                                        placeholder={`全部${field.label}`}
+                                        options={options.map(option => ({
+                                            value: option,
+                                            label: bomSelectorOptionLabel(option),
+                                        }))}
+                                        onValueChange={value =>
+                                            setSelections(current => ({ ...current, [field.id]: value }))
                                         }
-                                    >
-                                        <option value="">全部{field.label}</option>
-                                        {options.map(option => (
-                                            <option key={option} value={option}>
-                                                {bomSelectorOptionLabel(option)}
-                                            </option>
-                                        ))}
-                                    </SelectField>
+                                    />
                                 ))}
                             </div>
                         )}
