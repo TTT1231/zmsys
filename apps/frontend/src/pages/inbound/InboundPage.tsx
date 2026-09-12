@@ -1,7 +1,7 @@
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard } from "@/components/ui/MobileList";
 import { SearchSelect } from "@/components/ui/SearchSelect";
-import { useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
@@ -12,7 +12,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { QtyCell } from "@/components/ui/cells";
 import { DateField, TextArea, TextField } from "@/components/ui/Field";
-import { useCreateInbound, useWbRefresh, useWbSnapshot } from "@/data/queries";
+import { useCreateInbound, useVoidInbound, useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { EMPTY_SNAPSHOT, bomByCode } from "@/data/views";
@@ -197,6 +197,70 @@ function VoucherModal({ row, snap, onClose }: { row: InboundRow | null; snap: Sn
     );
 }
 
+function VoidInboundModal({
+    row,
+    pending,
+    onClose,
+    onConfirm,
+}: {
+    row: InboundRow;
+    pending: boolean;
+    onClose: () => void;
+    onConfirm: (reason: string) => void;
+}) {
+    const [reason, setReason] = useState("");
+    const [error, setError] = useState("");
+    const formId = `void-inbound-${row.no}`;
+    const submit = (event: FormEvent) => {
+        event.preventDefault();
+        const value = reason.trim();
+        if (value.length < 2) {
+            setError("请填写作废原因（至少 2 个字）");
+            return;
+        }
+        setError("");
+        onConfirm(value);
+    };
+    const close = () => {
+        if (!pending) onClose();
+    };
+
+    return (
+        <Modal
+            open
+            onClose={close}
+            title="作废入库记录"
+            subtitle={`${row.no} · 当天录入`}
+            label="作废入库记录"
+            width={440}
+            footer={
+                <>
+                    <Button variant="secondary" type="button" disabled={pending} onClick={close}>
+                        取消
+                    </Button>
+                    <Button type="submit" form={formId} disabled={pending}>
+                        {pending ? "正在作废…" : "确认作废"}
+                    </Button>
+                </>
+            }
+        >
+            <form id={formId} onSubmit={submit} aria-busy={pending}>
+                <TextArea
+                    label="作废原因"
+                    required
+                    value={reason}
+                    error={error}
+                    placeholder="例如：登记了错误数量 / 入库了错误型号"
+                    onChange={event => setReason(event.target.value)}
+                />
+                <p className="mt-2 text-12 text-muted">
+                    仅限当天录入的记录作废；作废后库存立即扣回，原记录永久保留，可重新登记正确的入库。
+                </p>
+            </form>
+        </Modal>
+    );
+}
+
 export function InboundPage() {
     const { can } = useApp();
     const { data, isLoading, isFetching } = useWbSnapshot();
@@ -204,6 +268,8 @@ export function InboundPage() {
     // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
     const overlay = useDelayedFlag(isFetching && !isLoading);
     const snap = data ?? EMPTY_SNAPSHOT;
+    const voidRequest = useVoidInbound();
+    const toast = useToast();
     const [searchParams, setSearchParams] = useSearchParams();
     const [keyword, setKeyword] = useState("");
     const [category, setCategory] = useState("全部品类");
@@ -211,6 +277,7 @@ export function InboundPage() {
     const [pageSize] = useState(10);
     const [newOpen, setNewOpen] = useState(false);
     const [voucher, setVoucher] = useState<InboundRow | null>(null);
+    const [voidTarget, setVoidTarget] = useState<InboundRow | null>(null);
 
     const rows = snap.inboundLedger;
     const boms = snap.boms;
@@ -232,6 +299,9 @@ export function InboundPage() {
     );
     const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize);
     const canRegister = can("inbound:register");
+    const canVoidToday = can("inbound:edit");
+    // 当天（北京时间）录入且未作废的记录才允许当天作废；跨日只能走库存调整
+    const voidable = (row: InboundRow) => canVoidToday && row.status === "active" && row.date === todayIso();
 
     useEffect(() => {
         if (searchParams.get("new") === "inbound") {
@@ -307,13 +377,14 @@ export function InboundPage() {
                             onClick={() =>
                                 downloadCsv(
                                     "成品入库",
-                                    ["入库单号", "BOM 编码", "入库数量", "入库日期", "检验登记人"],
+                                    ["入库单号", "BOM 编码", "入库数量", "入库日期", "检验登记人", "状态"],
                                     pageRows.map(row => [
                                         row.no,
                                         row.bomCode,
                                         String(row.qty),
                                         row.date,
                                         row.inspector,
+                                        row.status === "active" ? "有效" : "已作废",
                                     ]),
                                 )
                             }
@@ -332,9 +403,20 @@ export function InboundPage() {
                                 subtitle={`${row.date} · ${row.no}`}
                                 badge={<strong className="text-success">+{num(row.qty)} 件</strong>}
                                 actions={
-                                    <Button variant="secondary" onClick={() => setVoucher(row)}>
-                                        查看凭证
-                                    </Button>
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button variant="secondary" onClick={() => setVoucher(row)}>
+                                            查看凭证
+                                        </Button>
+                                        {voidable(row) && (
+                                            <Button
+                                                variant="secondary"
+                                                disabled={voidRequest.isPending}
+                                                onClick={() => setVoidTarget(row)}
+                                            >
+                                                作废
+                                            </Button>
+                                        )}
+                                    </div>
                                 }
                             >
                                 <p>{bomByCode(snap, row.bomCode)?.spec}</p>
@@ -380,13 +462,27 @@ export function InboundPage() {
                                         <td className="px-3 py-3 tnum text-13 text-td">{row.date}</td>
                                         <td className="px-3 py-3 text-13 text-td">{row.inspector}</td>
                                         <td className="px-5 py-3 text-right">
-                                            <button
-                                                type="button"
-                                                onClick={() => setVoucher(row)}
-                                                className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline"
-                                            >
-                                                查看凭证
-                                            </button>
+                                            <div className="flex items-center justify-end gap-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setVoucher(row)}
+                                                    className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline"
+                                                >
+                                                    查看凭证
+                                                </button>
+                                                {voidable(row) && (
+                                                    <button
+                                                        type="button"
+                                                        disabled={voidRequest.isPending}
+                                                        onClick={() => setVoidTarget(row)}
+                                                        className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                                                    >
+                                                        {voidRequest.isPending && voidRequest.variables?.no === row.no
+                                                            ? "处理中…"
+                                                            : "作废"}
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -408,6 +504,25 @@ export function InboundPage() {
 
             {canRegister && <InboundModal open={newOpen} onClose={() => setNewOpen(false)} />}
             <VoucherModal row={voucher} snap={snap} onClose={() => setVoucher(null)} />
+            {voidTarget && (
+                <VoidInboundModal
+                    row={voidTarget}
+                    pending={voidRequest.isPending}
+                    onClose={() => setVoidTarget(null)}
+                    onConfirm={reason =>
+                        voidRequest.mutate(
+                            { no: voidTarget.no, expectedVersion: voidTarget.version, reason },
+                            {
+                                onError: error => toast(error.message, true),
+                                onSuccess: updated => {
+                                    setVoidTarget(null);
+                                    toast(`入库记录 ${updated.no} 已作废，库存已扣回`);
+                                },
+                            },
+                        )
+                    }
+                />
+            )}
         </div>
     );
 }

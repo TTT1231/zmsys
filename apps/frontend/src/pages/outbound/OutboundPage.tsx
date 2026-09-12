@@ -11,7 +11,14 @@ import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { CustomerCell, QtyCell } from "@/components/ui/cells";
 import { DateField, TextArea, TextField } from "@/components/ui/Field";
-import { useCreateOutbound, usePrintOutbound, useWbRefresh, useWbSnapshot } from "@/data/queries";
+import {
+    useCreateOutbound,
+    useEmergencyVoidOutbound,
+    usePrintOutbound,
+    useVoidOutbound,
+    useWbRefresh,
+    useWbSnapshot,
+} from "@/data/queries";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { EMPTY_SNAPSHOT, bomByCode, maxShipOf, remainingOf } from "@/data/views";
@@ -129,6 +136,160 @@ function ReprintModal({
                     onChange={event => setReason(event.target.value)}
                 />
                 <p className="mt-2 text-12 text-muted">原打印版本永久保留，本次成功后旧版本显示为已取代。</p>
+            </form>
+        </Modal>
+    );
+}
+
+function VoidOutboundModal({
+    row,
+    pending,
+    onClose,
+    onConfirm,
+}: {
+    row: OutboundRow;
+    pending: boolean;
+    onClose: () => void;
+    onConfirm: (reason: string) => void;
+}) {
+    const [reason, setReason] = useState("");
+    const [error, setError] = useState("");
+    const formId = `void-outbound-${row.no}`;
+    const submit = (event: FormEvent) => {
+        event.preventDefault();
+        const value = reason.trim();
+        if (value.length < 2) {
+            setError("请填写作废原因（至少 2 个字）");
+            return;
+        }
+        setError("");
+        onConfirm(value);
+    };
+    const close = () => {
+        if (!pending) onClose();
+    };
+
+    return (
+        <Modal
+            open
+            onClose={close}
+            title="作废出库单"
+            subtitle={`${row.no} · 未打印`}
+            label="作废出库单"
+            width={440}
+            footer={
+                <>
+                    <Button variant="secondary" type="button" disabled={pending} onClick={close}>
+                        取消
+                    </Button>
+                    <Button type="submit" form={formId} disabled={pending}>
+                        {pending ? "正在作废…" : "确认作废"}
+                    </Button>
+                </>
+            }
+        >
+            <form id={formId} onSubmit={submit} aria-busy={pending}>
+                <TextArea
+                    label="作废原因"
+                    required
+                    value={reason}
+                    error={error}
+                    placeholder="例如：登记了错误数量 / 选错了产品型号"
+                    onChange={event => setReason(event.target.value)}
+                />
+                <p className="mt-2 text-12 text-muted">
+                    作废后库存与订单已发量立即回退，原单永久保留；请重新登记正确的出库单。
+                </p>
+            </form>
+        </Modal>
+    );
+}
+
+function EmergencyVoidModal({
+    row,
+    pending,
+    onClose,
+    onConfirm,
+}: {
+    row: OutboundRow;
+    pending: boolean;
+    onClose: () => void;
+    onConfirm: (reason: string) => void;
+}) {
+    const [reason, setReason] = useState("");
+    const [goodsStayed, setGoodsStayed] = useState(false);
+    const [paperVoided, setPaperVoided] = useState(false);
+    const [error, setError] = useState("");
+    const formId = `emergency-void-${row.no}`;
+    const submit = (event: FormEvent) => {
+        event.preventDefault();
+        const value = reason.trim();
+        if (value.length < 2) {
+            setError("请填写紧急撤销原因（至少 2 个字）");
+            return;
+        }
+        if (!goodsStayed || !paperVoided) {
+            setError("必须同时确认货物尚未离开且纸质单据已作废");
+            return;
+        }
+        setError("");
+        onConfirm(value);
+    };
+    const close = () => {
+        if (!pending) onClose();
+    };
+
+    return (
+        <Modal
+            open
+            onClose={close}
+            title="紧急撤销已打印出库单"
+            subtitle={`${row.no} · 第 ${row.printVersion} 版`}
+            label="紧急撤销出库单"
+            width={440}
+            footer={
+                <>
+                    <Button variant="secondary" type="button" disabled={pending} onClick={close}>
+                        取消
+                    </Button>
+                    <Button type="submit" form={formId} disabled={pending}>
+                        {pending ? "正在撤销…" : "确认紧急撤销"}
+                    </Button>
+                </>
+            }
+        >
+            <form id={formId} onSubmit={submit} aria-busy={pending} className="flex flex-col gap-3">
+                <TextArea
+                    label="紧急撤销原因"
+                    required
+                    value={reason}
+                    error={error}
+                    placeholder="例如：打印后发现发错型号，货物仍在仓库"
+                    onChange={event => setReason(event.target.value)}
+                />
+                <div className="flex flex-col gap-2 rounded-btn border border-line px-3 py-2.5">
+                    <label className="flex items-start gap-2 text-13 text-ink">
+                        <input
+                            type="checkbox"
+                            checked={goodsStayed}
+                            onChange={event => setGoodsStayed(event.target.checked)}
+                            className="mt-0.5"
+                        />
+                        已线下确认：货物尚未离开仓库
+                    </label>
+                    <label className="flex items-start gap-2 text-13 text-ink">
+                        <input
+                            type="checkbox"
+                            checked={paperVoided}
+                            onChange={event => setPaperVoided(event.target.checked)}
+                            className="mt-0.5"
+                        />
+                        已线下确认：全部纸质单据均已作废
+                    </label>
+                </div>
+                <p className="text-12 text-muted">
+                    紧急撤销仅限超级管理员，用于打印后、发货前的纠错；撤销后库存与订单已发量立即回退。
+                </p>
             </form>
         </Modal>
     );
@@ -390,6 +551,7 @@ function OutboundDetailModal({ row, snap, onClose }: { row: OutboundRow | null; 
                     ["打印版本", row.printVersion ? `第 ${row.printVersion} 版` : "尚未打印"],
                     ["操作人", row.operator],
                     ["备注", row.remark || "—"],
+                    ...(row.state === "voided" ? [["作废原因", row.voidReason || "—"]] : []),
                 ].map(([label, value]) => (
                     <div key={label} className="flex items-center justify-between gap-4 border-b border-line/70 pb-1.5">
                         <span className="text-muted">{label}</span>
@@ -406,6 +568,8 @@ export function OutboundPage() {
     const { data, isLoading, isFetching } = useWbSnapshot();
     const { refresh } = useWbRefresh();
     const printRequest = usePrintOutbound();
+    const voidRequest = useVoidOutbound();
+    const emergencyVoidRequest = useEmergencyVoidOutbound();
     const toast = useToast();
     // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
     const overlay = useDelayedFlag(isFetching && !isLoading);
@@ -418,6 +582,8 @@ export function OutboundPage() {
     const [newOpen, setNewOpen] = useState(false);
     const [detail, setDetail] = useState<OutboundRow | null>(null);
     const [reprintTarget, setReprintTarget] = useState<OutboundRow | null>(null);
+    const [voidTarget, setVoidTarget] = useState<OutboundRow | null>(null);
+    const [emergencyTarget, setEmergencyTarget] = useState<OutboundRow | null>(null);
 
     const rows = snap.outboundLedger;
     const boms = snap.boms;
@@ -440,6 +606,8 @@ export function OutboundPage() {
     const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize);
     const canRegister = can("outbound:ship");
     const canPrint = can("outbound:print");
+    const canVoid = can("outbound:void");
+    const canEmergencyVoid = can("outbound:emergency-void");
 
     const requestPrint = (row: OutboundRow, reason = "") => {
         if (printRequest.isPending || row.state === "voided") return;
@@ -541,7 +709,7 @@ export function OutboundPage() {
                             onClick={() =>
                                 downloadCsv(
                                     "成品出库",
-                                    ["出库单号", "订单", "客户", "BOM 编码", "发货数量", "出库日期", "操作人"],
+                                    ["出库单号", "订单", "客户", "BOM 编码", "发货数量", "出库日期", "操作人", "状态"],
                                     pageRows.map(row => [
                                         row.no,
                                         row.orderNo,
@@ -550,6 +718,7 @@ export function OutboundPage() {
                                         String(row.qty),
                                         row.date,
                                         row.operator,
+                                        outboundStateLabel(row),
                                     ]),
                                 )
                             }
@@ -581,6 +750,16 @@ export function OutboundPage() {
                                                 }
                                             >
                                                 {row.state === "printed" ? "重打" : "打印"}
+                                            </Button>
+                                        )}
+                                        {canVoid && row.state === "registered" && (
+                                            <Button variant="secondary" onClick={() => setVoidTarget(row)}>
+                                                作废
+                                            </Button>
+                                        )}
+                                        {canEmergencyVoid && row.state === "printed" && (
+                                            <Button variant="secondary" onClick={() => setEmergencyTarget(row)}>
+                                                紧急撤销
                                             </Button>
                                         )}
                                     </div>
@@ -664,6 +843,31 @@ export function OutboundPage() {
                                                               : "打印"}
                                                     </button>
                                                 )}
+                                                {canVoid && row.state === "registered" && (
+                                                    <button
+                                                        type="button"
+                                                        disabled={voidRequest.isPending}
+                                                        onClick={() => setVoidTarget(row)}
+                                                        className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                                                    >
+                                                        {voidRequest.isPending && voidRequest.variables?.no === row.no
+                                                            ? "处理中…"
+                                                            : "作废"}
+                                                    </button>
+                                                )}
+                                                {canEmergencyVoid && row.state === "printed" && (
+                                                    <button
+                                                        type="button"
+                                                        disabled={emergencyVoidRequest.isPending}
+                                                        onClick={() => setEmergencyTarget(row)}
+                                                        className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                                                    >
+                                                        {emergencyVoidRequest.isPending &&
+                                                        emergencyVoidRequest.variables?.no === row.no
+                                                            ? "处理中…"
+                                                            : "紧急撤销"}
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -692,6 +896,44 @@ export function OutboundPage() {
                     pending={printRequest.isPending}
                     onClose={() => setReprintTarget(null)}
                     onConfirm={reason => requestPrint(reprintTarget, reason)}
+                />
+            )}
+            {voidTarget && (
+                <VoidOutboundModal
+                    row={voidTarget}
+                    pending={voidRequest.isPending}
+                    onClose={() => setVoidTarget(null)}
+                    onConfirm={reason =>
+                        voidRequest.mutate(
+                            { no: voidTarget.no, expectedVersion: voidTarget.version, reason },
+                            {
+                                onError: error => toast(error.message, true),
+                                onSuccess: updated => {
+                                    setVoidTarget(null);
+                                    toast(`出库单 ${updated.no} 已作废，库存与订单已发量已回退`);
+                                },
+                            },
+                        )
+                    }
+                />
+            )}
+            {emergencyTarget && (
+                <EmergencyVoidModal
+                    row={emergencyTarget}
+                    pending={emergencyVoidRequest.isPending}
+                    onClose={() => setEmergencyTarget(null)}
+                    onConfirm={reason =>
+                        emergencyVoidRequest.mutate(
+                            { no: emergencyTarget.no, expectedVersion: emergencyTarget.version, reason },
+                            {
+                                onError: error => toast(error.message, true),
+                                onSuccess: updated => {
+                                    setEmergencyTarget(null);
+                                    toast(`出库单 ${updated.no} 已紧急撤销，库存与订单已发量已回退`);
+                                },
+                            },
+                        )
+                    }
                 />
             )}
         </div>

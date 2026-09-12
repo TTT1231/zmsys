@@ -934,11 +934,35 @@ class MockDb {
 
         raw.sort((a, b) => (a.date === b.date ? a.orderNo.localeCompare(b.orderNo) : a.date.localeCompare(b.date)));
         const counter = new Map<string, number>();
-        return raw.map(row => {
+        const numbered = raw.map(row => {
             const seq = (counter.get(row.date) || 0) + 1;
             counter.set(row.date, seq);
             return { ...row, no: `CK${row.date.slice(2).replaceAll("-", "")}${String(seq).padStart(2, "0")}` };
         });
+        // 演示作废形态：一张打印前作废（历史日）、一张紧急撤销（当天），不参与库存/订单已发的种子设定
+        const demoSource = numbered[0];
+        if (demoSource) {
+            numbered.push(
+                {
+                    ...demoSource,
+                    no: `CK${demoSource.date.slice(2).replaceAll("-", "")}90`,
+                    state: "voided",
+                    version: 2,
+                    printVersion: 0,
+                    voidReason: "登记时选错了产品型号，作废后重新登记",
+                },
+                {
+                    ...demoSource,
+                    no: `CK${ANCHOR.slice(2).replaceAll("-", "")}91`,
+                    date: ANCHOR,
+                    state: "voided",
+                    version: 3,
+                    printVersion: 1,
+                    voidReason: "打印后发现数量错误，货物未走且纸质单已废，紧急撤销",
+                },
+            );
+        }
+        return numbered;
     }
 
     private buildInboundLedger(): InboundRow[] {
@@ -1617,6 +1641,7 @@ class MockDb {
     }
 
     voidOutbound(no: string, expectedVersion: number, reason: string, actor: Actor): OutboundRow {
+        if (actor.role !== "warehouse" && actor.role !== "super") throw new Error("仅仓管或超级管理员可作废出库单");
         const row = this.outboundLedger.find(item => item.no === no);
         if (!row) throw new Error("出库单不存在");
         if (row.version !== expectedVersion) throw new Error("出库单已被其他人处理，请刷新后重试");
@@ -1718,6 +1743,7 @@ class MockDb {
         paperInvalidated: boolean,
         actor: Actor,
     ): OutboundRow {
+        if (actor.role !== "super") throw new Error("仅超级管理员可紧急撤销已打印出库单");
         const row = this.outboundLedger.find(item => item.no === no);
         if (!row) throw new Error("出库单不存在");
         if (row.version !== expectedVersion) throw new Error("出库单已被其他人处理，请刷新后重试");
