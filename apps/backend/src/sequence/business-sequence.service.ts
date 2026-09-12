@@ -25,6 +25,13 @@ const FORMATS: Record<SequenceType, SequenceFormat> = {
     customer: { prefix: 'CUS-', datePattern: null, minWidth: 4 },
 };
 
+/** BOM 编码取号所需的品类元数据（db-scheme.md §1.3：ZM + 品类前缀 + 至少 seqWidth 位序号） */
+export interface BomSequenceCategory {
+    categoryKey: string;
+    codePrefix: string;
+    seqWidth: number;
+}
+
 /** 业务日期（yyyy-MM-dd）→ 日期段字符串 */
 const datePartOf = (pattern: 'yyMMdd' | 'yyyyMMdd', businessDate: string): string => {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(businessDate);
@@ -56,6 +63,27 @@ export class BusinessSequenceService {
         const sequenceKey = `${type}:${datePart ?? 'global'}`;
         const seq = await this.nextRaw(tx, sequenceKey);
         return `${format.prefix}${datePart ?? ''}${seq.toString().padStart(format.minWidth, '0')}`;
+    }
+
+    /**
+     * BOM 编码取号（db-scheme.md §5.2 + §1.3）：`ZM` + 品类前缀 + 至少 seqWidth 位序号，
+     * 每品类独立计数。品类序列首次使用时从该品类已有 bom_code 的最大序号续接
+     * （JOIN 品类过滤后解析序号，避免 ZMKW/ZMKW16 相近前缀互读；空品类从 1 起）。
+     * 必须在调用方的事务内执行（品类行锁之后），与业务写入同事务提交或回滚。
+     */
+    async nextBomCode(tx: Tx, category: BomSequenceCategory): Promise<string> {
+        const sequenceKey = `bom:${category.categoryKey}`;
+        // 品类内序号起点：'ZM'+codePrefix 之后的部分；非数字前缀 CAST 为 0 不影响 MAX
+        const digitsStart = 2 + category.codePrefix.length + 1; // SUBSTRING 为 1 基
+        await tx.$executeRaw`
+            INSERT IGNORE INTO biz_sequence (sequence_key, next_value)
+            SELECT ${sequenceKey}, COALESCE(MAX(CAST(SUBSTRING(bt.bom_code, ${digitsStart}) AS UNSIGNED)), 0) + 1
+            FROM bom_table bt
+            JOIN bom_category bc ON bt.category_id = bc.id
+            WHERE bc.category_key = ${category.categoryKey}
+        `;
+        const seq = await this.nextRaw(tx, sequenceKey);
+        return `ZM${category.codePrefix}${seq.toString().padStart(category.seqWidth, '0')}`;
     }
 
     /**
