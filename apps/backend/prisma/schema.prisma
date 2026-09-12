@@ -9,8 +9,9 @@
 // DDL 中的 DEFAULT 仅作手工 SQL 兜底保留。
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["views"]
 }
 
 datasource db {
@@ -45,6 +46,66 @@ enum ApiIdempotencyState {
   SUCCEEDED
 }
 
+/// sales_order_table.lifecycle_status：活动订单与已取消订单
+enum SalesOrderLifecycleStatus {
+  ACTIVE
+  CANCELLED
+}
+
+/// sales_order_change_log.event_type
+enum SalesOrderChangeEventType {
+  CREATE
+  UPDATE
+  CANCEL
+}
+
+/// inbound_ledger.status：有效台账与当天作废
+enum InboundStatus {
+  ACTIVE
+  VOIDED
+}
+
+/// inbound_change_log.event_type
+enum InboundChangeEventType {
+  UPDATE
+  VOID
+}
+
+/// outbound_shipment.state / outbound_state_log.before|after_state 共用
+enum OutboundShipmentState {
+  REGISTERED
+  PRINTED
+  VOIDED
+}
+
+/// outbound_shipment.void_mode：打印前作废 vs 紧急撤销（已打印）
+enum OutboundVoidMode {
+  PRE_PRINT
+  EMERGENCY
+}
+
+/// outbound_ledger.entry_type：正常发货 vs 冲销
+enum OutboundEntryType {
+  NORMAL
+  CORRECTION
+}
+
+/// outbound_state_log.event_type
+enum OutboundStateEventType {
+  REGISTER
+  PRINT
+  REPRINT
+  VOID_PRE_PRINT
+  VOID_EMERGENCY
+}
+
+/// op_log.action：业务里程碑动作，一个 (action, target_id) 只记一次（uk 兜底）
+enum OpLogAction {
+  ship
+  create_customer
+  create_order
+}
+
 /// 固定角色目录；grant_version 是整组授权的乐观锁版本
 model SysRole {
   code         String     @id @db.VarChar(20)
@@ -73,10 +134,32 @@ model SysUser {
   lastLoginAt        DateTime?          @map("last_login_at") @db.DateTime(3)
   createdAt          DateTime           @map("created_at") @db.DateTime(3)
   updatedAt          DateTime           @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
-  role               SysRole            @relation(fields: [roleCode], references: [code])
-  changeLogs         SysUserChangeLog[] @relation("SysUserChangeLogUser")
-  operatedLogs       SysUserChangeLog[] @relation("SysUserChangeLogOperator")
+  role               SysRole               @relation(fields: [roleCode], references: [code])
+  changeLogs         SysUserChangeLog[]    @relation("SysUserChangeLogUser")
+  operatedLogs       SysUserChangeLog[]    @relation("SysUserChangeLogOperator")
   idempotencyRecords ApiIdempotency[]
+  bomCreated         BomTable[]            @relation("BomCreator")
+  bomUpdated         BomTable[]            @relation("BomUpdater")
+  ownedCustomers     CustomTable[]         @relation("CustomerOwner")
+  customerCreated    CustomTable[]         @relation("CustomerCreator")
+  customerUpdated    CustomTable[]         @relation("CustomerUpdater")
+  ownerHistoryFrom      CustomerOwnerHistory[] @relation("OwnerHistoryFrom")
+  ownerHistoryTo        CustomerOwnerHistory[] @relation("OwnerHistoryTo")
+  ownerHistoryOperator  CustomerOwnerHistory[] @relation("OwnerHistoryOperator")
+  cancelledOrders       SalesOrderTable[]      @relation("SalesOrderCanceller")
+  createdOrders         SalesOrderTable[]      @relation("SalesOrderCreator")
+  updatedOrders         SalesOrderTable[]      @relation("SalesOrderUpdater")
+  orderChangeLogs       SalesOrderChangeLog[]
+  operatedInbound       InboundLedger[]        @relation("InboundOperator")
+  updatedInbound        InboundLedger[]        @relation("InboundUpdater")
+  inboundChangeLogs     InboundChangeLog[]     @relation("InboundChangeOperator")
+  operatedAdjustments   StockAdjustment[]      @relation("StockAdjustmentOperator")
+  registeredShipments   OutboundShipment[]     @relation("OutboundRegistrar")
+  voidedShipments       OutboundShipment[]     @relation("OutboundVoider")
+  outboundLedgerEntries OutboundLedger[]       @relation("OutboundLedgerOperator")
+  printedOutboundLogs   OutboundPrintLog[]     @relation("OutboundPrinter")
+  outboundStateLogs     OutboundStateLog[]     @relation("OutboundStateOperator")
+  opLogs                OpLog[]                @relation("OpLogOperator")
 
   @@index([roleCode, status])
   @@map("sys_user")
@@ -181,4 +264,362 @@ model BizSequence {
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
 
   @@map("biz_sequence")
+}
+
+/// BOM 品类目录：spec_schema 定义规格字段；1–9999 为内置参考数据保留 id（种子 1001–1005）
+model BomCategory {
+  id          BigInt   @id
+  categoryKey String   @unique(map: "uk_bom_category_key") @map("category_key") @db.VarChar(40)
+  name        String   @unique(map: "uk_bom_category_name") @db.VarChar(64)
+  codePrefix  String   @unique(map: "uk_bom_category_prefix") @map("code_prefix") @db.VarChar(16)
+  seqWidth    Int      @default(3) @map("seq_width") @db.UnsignedTinyInt
+  specSchema  Json     @map("spec_schema")
+  status      Boolean  @default(true)
+  rowVersion  BigInt   @default(1) @map("row_version") @db.UnsignedBigInt
+  createdAt   DateTime @map("created_at") @db.DateTime(3)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  boms        BomTable[]
+
+  @@map("bom_category")
+}
+
+/// BOM 物料：(category_id, model_code, spec_hash) 业务去重；spec_hash 为 NFKC 规范化规格的 SHA-256
+model BomTable {
+  id          BigInt   @id
+  bomCode     String   @unique(map: "uk_bom_code") @map("bom_code") @db.VarChar(32)
+  categoryId  BigInt   @map("category_id")
+  modelCode   String   @map("model_code") @db.VarChar(64)
+  spec        Json
+  specHash    Bytes    @map("spec_hash") @db.Binary(32)
+  unit        String   @default("个") @db.VarChar(16)
+  status      Boolean  @default(true)
+  rowVersion  BigInt   @default(1) @map("row_version") @db.UnsignedBigInt
+  requestKey  String   @unique(map: "uk_bom_request") @map("request_key") @db.VarChar(128)
+  createdBy   BigInt   @map("created_by")
+  updatedBy   BigInt   @map("updated_by")
+  createdAt   DateTime @map("created_at") @db.DateTime(3)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  category    BomCategory @relation(fields: [categoryId], references: [id])
+  creator     SysUser     @relation("BomCreator", fields: [createdBy], references: [id])
+  updater     SysUser     @relation("BomUpdater", fields: [updatedBy], references: [id])
+  orders      SalesOrderTable[]
+  inboundEntries InboundLedger[]
+  adjustments StockAdjustment[]
+
+  @@unique([categoryId, modelCode, specHash], map: "uk_bom_identity")
+  @@index([categoryId, status], map: "idx_bom_category_status")
+  @@index([modelCode], map: "idx_bom_model")
+  @@map("bom_table")
+}
+
+/// 客户档案：customer_code 形如 CUS-0001；owner_id 为负责销售
+model CustomTable {
+  id             BigInt   @id
+  customerCode   String   @unique(map: "uk_customer_code") @map("customer_code") @db.VarChar(24)
+  name           String   @db.VarChar(160)
+  contactPerson  String   @map("contact_person") @db.VarChar(64)
+  contactPhone   String   @map("contact_phone") @db.VarChar(32)
+  province       String   @db.VarChar(64)
+  city           String   @db.VarChar(64)
+  district       String?  @db.VarChar(64)
+  town           String?  @db.VarChar(96)
+  address        String   @db.VarChar(300)
+  ownerId        BigInt   @map("owner_id")
+  payTerms       String   @default("") @map("pay_terms") @db.VarChar(160)
+  rowVersion     BigInt   @default(1) @map("row_version") @db.UnsignedBigInt
+  requestKey     String   @unique(map: "uk_customer_request") @map("request_key") @db.VarChar(128)
+  createdBy      BigInt   @map("created_by")
+  updatedBy      BigInt   @map("updated_by")
+  createdAt      DateTime @map("created_at") @db.DateTime(3)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  owner          SysUser                @relation("CustomerOwner", fields: [ownerId], references: [id])
+  creator        SysUser                @relation("CustomerCreator", fields: [createdBy], references: [id])
+  updater        SysUser                @relation("CustomerUpdater", fields: [updatedBy], references: [id])
+  orders         SalesOrderTable[]
+  ownerHistory   CustomerOwnerHistory[]
+
+  @@index([ownerId], map: "idx_customer_owner")
+  @@index([name], map: "idx_customer_name")
+  @@map("custom_table")
+}
+
+/// 客户负责人移交历史：batch_id 标识一次批量移交
+model CustomerOwnerHistory {
+  id          BigInt   @id
+  batchId     BigInt   @map("batch_id")
+  customerId  BigInt   @map("customer_id")
+  fromOwnerId BigInt   @map("from_owner_id")
+  toOwnerId   BigInt   @map("to_owner_id")
+  operatorId  BigInt   @map("operator_id")
+  reason      String   @db.VarChar(500)
+  createdAt   DateTime @map("created_at") @db.DateTime(3)
+  customer    CustomTable @relation(fields: [customerId], references: [id])
+  fromOwner   SysUser     @relation("OwnerHistoryFrom", fields: [fromOwnerId], references: [id])
+  toOwner     SysUser     @relation("OwnerHistoryTo", fields: [toOwnerId], references: [id])
+  operator    SysUser     @relation("OwnerHistoryOperator", fields: [operatorId], references: [id])
+
+  @@unique([batchId, customerId], map: "uk_customer_owner_history_batch_customer")
+  @@index([customerId, createdAt(sort: Desc)], map: "idx_customer_owner_history_customer_time")
+  @@index([fromOwnerId, createdAt(sort: Desc)], map: "idx_customer_owner_history_from_time")
+  @@map("customer_owner_history")
+}
+
+/// 销售订单：下单即冻结客户/BOM 快照；取消为生命周期终态，不物理删除
+model SalesOrderTable {
+  id                  BigInt                     @id
+  orderNo             String                     @unique(map: "uk_sales_order_no") @map("order_no") @db.VarChar(24)
+  customerId          BigInt                     @map("customer_id")
+  bomId               BigInt                     @map("bom_id")
+  qty                 Int                        @db.UnsignedInt
+  lifecycleStatus     SalesOrderLifecycleStatus  @default(ACTIVE) @map("lifecycle_status")
+  orderDate           DateTime                   @map("order_date") @db.Date
+  deliverStartDate    DateTime                   @map("deliver_start_date") @db.Date
+  deliverEndDate      DateTime                   @map("deliver_end_date") @db.Date
+  remark              String                     @db.Text
+  customerNameSnapshot String                    @map("customer_name_snapshot") @db.VarChar(160)
+  bomNameSnapshot     String                     @map("bom_name_snapshot") @db.VarChar(64)
+  bomModelSnapshot    String                     @map("bom_model_snapshot") @db.VarChar(64)
+  bomSpecSnapshot     Json                       @map("bom_spec_snapshot")
+  cancelledAt         DateTime?                  @map("cancelled_at") @db.DateTime(3)
+  cancelledBy         BigInt?                    @map("cancelled_by")
+  cancelReason        String?                    @map("cancel_reason") @db.VarChar(500)
+  rowVersion          BigInt                     @default(1) @map("row_version") @db.UnsignedBigInt
+  requestKey          String                     @unique(map: "uk_sales_order_request") @map("request_key") @db.VarChar(128)
+  createdBy           BigInt                     @map("created_by")
+  updatedBy           BigInt                     @map("updated_by")
+  createdAt           DateTime                   @map("created_at") @db.DateTime(3)
+  updatedAt           DateTime                   @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  customer            CustomTable                @relation(fields: [customerId], references: [id])
+  bom                 BomTable                   @relation(fields: [bomId], references: [id])
+  canceller           SysUser?                   @relation("SalesOrderCanceller", fields: [cancelledBy], references: [id])
+  creator             SysUser                    @relation("SalesOrderCreator", fields: [createdBy], references: [id])
+  updater             SysUser                    @relation("SalesOrderUpdater", fields: [updatedBy], references: [id])
+  shipments           OutboundShipment[]
+  changeLogs          SalesOrderChangeLog[]
+
+  @@index([bomId, lifecycleStatus, deliverEndDate, orderNo], map: "idx_sales_order_bom_queue")
+  @@index([customerId, orderDate], map: "idx_sales_order_customer_date")
+  @@map("sales_order_table")
+}
+
+/// 订单变更日志：CREATE/CANCEL 必带 request_key（幂等键回写业务行）
+model SalesOrderChangeLog {
+  id             BigInt                    @id
+  orderId        BigInt                    @map("order_id")
+  operatorId     BigInt                    @map("operator_id")
+  eventType      SalesOrderChangeEventType @map("event_type")
+  beforeVersion  BigInt?                   @map("before_version") @db.UnsignedBigInt
+  afterVersion   BigInt                    @map("after_version") @db.UnsignedBigInt
+  reason         String                    @default("") @db.VarChar(500)
+  requestKey     String?                   @unique(map: "uk_sales_order_change_request") @map("request_key") @db.VarChar(128)
+  beforeJson     Json?                     @map("before_json")
+  afterJson      Json                      @map("after_json")
+  createdAt      DateTime                  @map("created_at") @db.DateTime(3)
+  order          SalesOrderTable @relation(fields: [orderId], references: [id])
+  operator       SysUser         @relation(fields: [operatorId], references: [id])
+
+  @@index([orderId, createdAt(sort: Desc)], map: "idx_sales_order_change_order_time")
+  @@index([operatorId, createdAt(sort: Desc)], map: "idx_sales_order_change_operator_time")
+  @@map("sales_order_change_log")
+}
+
+/// 成品入库台账：当天窗口内可修正/作废（写变更日志），跨日只能走库存调整
+model InboundLedger {
+  id            BigInt         @id
+  entryNo       String         @unique(map: "uk_inbound_entry_no") @map("entry_no") @db.VarChar(28)
+  bomId         BigInt         @map("bom_id")
+  qty           Int            @db.UnsignedInt
+  businessDate  DateTime       @map("business_date") @db.Date
+  operatorId    BigInt         @map("operator_id")
+  remark        String         @default("") @db.VarChar(500)
+  status        InboundStatus  @default(ACTIVE)
+  rowVersion    BigInt         @default(1) @map("row_version") @db.UnsignedBigInt
+  requestKey    String         @unique(map: "uk_inbound_request") @map("request_key") @db.VarChar(128)
+  updatedBy     BigInt         @map("updated_by")
+  createdAt     DateTime       @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime       @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  bom               BomTable            @relation(fields: [bomId], references: [id])
+  operator          SysUser             @relation("InboundOperator", fields: [operatorId], references: [id])
+  updater           SysUser             @relation("InboundUpdater", fields: [updatedBy], references: [id])
+  changeLogs        InboundChangeLog[]
+  relatedAdjustments StockAdjustment[]
+
+  @@index([bomId, status, businessDate, id], map: "idx_inbound_bom_status_date")
+  @@map("inbound_ledger")
+}
+
+/// 入库修正/作废日志：每次变更版本 +1，before/after 全量快照
+model InboundChangeLog {
+  id            BigInt                @id
+  inboundId     BigInt                @map("inbound_id")
+  operatorId    BigInt                @map("operator_id")
+  eventType     InboundChangeEventType @map("event_type")
+  beforeVersion BigInt                @map("before_version") @db.UnsignedBigInt
+  afterVersion  BigInt                @map("after_version") @db.UnsignedBigInt
+  reason        String                @db.VarChar(500)
+  requestKey    String?               @unique(map: "uk_inbound_change_request") @map("request_key") @db.VarChar(128)
+  beforeJson    Json                  @map("before_json")
+  afterJson     Json                  @map("after_json")
+  createdAt     DateTime              @map("created_at") @db.DateTime(3)
+  inbound       InboundLedger @relation(fields: [inboundId], references: [id])
+  operator      SysUser       @relation("InboundChangeOperator", fields: [operatorId], references: [id])
+
+  @@index([inboundId, createdAt(sort: Desc)], map: "idx_inbound_change_entry_time")
+  @@index([operatorId, createdAt(sort: Desc)], map: "idx_inbound_change_operator_time")
+  @@map("inbound_change_log")
+}
+
+/// 跨日库存调整：qty_delta 正负皆可非零；reversal_of_id 唯一键保证一次冲销
+model StockAdjustment {
+  id                BigInt     @id
+  adjustmentNo      String     @unique(map: "uk_stock_adjustment_no") @map("adjustment_no") @db.VarChar(28)
+  bomId             BigInt     @map("bom_id")
+  qtyDelta          Int        @map("qty_delta")
+  businessDate      DateTime   @map("business_date") @db.Date
+  relatedInboundId  BigInt?    @map("related_inbound_id")
+  reversalOfId      BigInt?    @unique(map: "uk_stock_adjustment_reversal_once") @map("reversal_of_id")
+  operatorId        BigInt     @map("operator_id")
+  reason            String     @db.VarChar(500)
+  requestKey        String     @unique(map: "uk_stock_adjustment_request") @map("request_key") @db.VarChar(128)
+  createdAt         DateTime   @map("created_at") @db.DateTime(3)
+  bom               BomTable        @relation(fields: [bomId], references: [id])
+  relatedInbound    InboundLedger?  @relation(fields: [relatedInboundId], references: [id])
+  reversalOf        StockAdjustment? @relation("StockAdjustmentReversal", fields: [reversalOfId], references: [id])
+  reversedBy        StockAdjustment[] @relation("StockAdjustmentReversal")
+  operator          SysUser         @relation("StockAdjustmentOperator", fields: [operatorId], references: [id])
+
+  @@index([bomId, businessDate, id], map: "idx_stock_adjustment_bom_date")
+  @@index([relatedInboundId, createdAt(sort: Desc)], map: "idx_stock_adjustment_inbound")
+  @@map("stock_adjustment")
+}
+
+/// 出库单：REGISTERED→PRINTED 单向；作废分打印前/紧急撤销两态，紧急撤销要求货未走+纸已废
+model OutboundShipment {
+  id                 BigInt               @id
+  shipmentNo         String               @unique(map: "uk_outbound_shipment_no") @map("shipment_no") @db.VarChar(28)
+  orderId            BigInt               @map("order_id")
+  originalQty        Int                  @map("original_qty") @db.UnsignedInt
+  businessDate       DateTime             @map("business_date") @db.Date
+  state              OutboundShipmentState @default(REGISTERED)
+  voidMode           OutboundVoidMode?    @map("void_mode")
+  voidedBy           BigInt?              @map("voided_by")
+  voidReason         String?              @map("void_reason") @db.VarChar(500)
+  goodsNotDeparted   Boolean?             @map("goods_not_departed")
+  paperInvalidated   Boolean?             @map("paper_invalidated")
+  voidedAt           DateTime?            @map("voided_at") @db.DateTime(3)
+  rowVersion         BigInt               @default(1) @map("row_version") @db.UnsignedBigInt
+  requestKey         String               @unique(map: "uk_outbound_shipment_request") @map("request_key") @db.VarChar(128)
+  registeredBy       BigInt               @map("registered_by")
+  registeredAt       DateTime             @map("registered_at") @db.DateTime(3)
+  updatedAt          DateTime             @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  order              SalesOrderTable   @relation(fields: [orderId], references: [id])
+  registrar          SysUser           @relation("OutboundRegistrar", fields: [registeredBy], references: [id])
+  voider             SysUser?          @relation("OutboundVoider", fields: [voidedBy], references: [id])
+  ledgers            OutboundLedger[]
+  printLogs          OutboundPrintLog[]
+  stateLogs          OutboundStateLog[]
+
+  @@index([orderId, state, businessDate, id], map: "idx_outbound_shipment_order_state_date")
+  @@index([state, registeredAt], map: "idx_outbound_shipment_state_time")
+  @@map("outbound_shipment")
+}
+
+/// 出库台账：NORMAL 正数发货 / CORRECTION 负数冲销，correction_of_id 唯一保证一次冲销
+model OutboundLedger {
+  id                BigInt            @id
+  eventNo           String            @unique(map: "uk_outbound_event_no") @map("event_no") @db.VarChar(36)
+  shipmentId        BigInt            @map("shipment_id")
+  entryType         OutboundEntryType @map("entry_type")
+  correctionOfId    BigInt?           @unique(map: "uk_outbound_correction_once") @map("correction_of_id")
+  qtyDelta          Int               @map("qty_delta")
+  businessDate      DateTime          @map("business_date") @db.Date
+  operatorId        BigInt            @map("operator_id")
+  remark            String            @default("") @db.VarChar(500)
+  correctionReason  String?           @map("correction_reason") @db.VarChar(500)
+  requestKey        String            @unique(map: "uk_outbound_request") @map("request_key") @db.VarChar(128)
+  createdAt         DateTime          @map("created_at") @db.DateTime(3)
+  shipment          OutboundShipment   @relation(fields: [shipmentId], references: [id])
+  operator          SysUser            @relation("OutboundLedgerOperator", fields: [operatorId], references: [id])
+  correctionOf      OutboundLedger?    @relation("OutboundCorrection", fields: [correctionOfId], references: [id])
+  correctedBy       OutboundLedger[]   @relation("OutboundCorrection")
+
+  @@index([shipmentId, businessDate, id], map: "idx_outbound_shipment_date")
+  @@map("outbound_ledger")
+}
+
+/// 打印记录：document_hash 锁定单据快照，(shipment_id, print_seq) 支持重打编号
+model OutboundPrintLog {
+  id                BigInt   @id
+  shipmentId        BigInt   @map("shipment_id")
+  printSeq          Int      @map("print_seq") @db.UnsignedInt
+  printedBy         BigInt   @map("printed_by")
+  reason            String   @default("") @db.VarChar(500)
+  documentSnapshot  Json     @map("document_snapshot")
+  documentHash      Bytes    @map("document_hash") @db.Binary(32)
+  requestKey        String   @unique(map: "uk_outbound_print_request") @map("request_key") @db.VarChar(128)
+  printedAt         DateTime @map("printed_at") @db.DateTime(3)
+  shipment          OutboundShipment @relation(fields: [shipmentId], references: [id])
+  printer           SysUser          @relation("OutboundPrinter", fields: [printedBy], references: [id])
+
+  @@unique([shipmentId, printSeq], map: "uk_outbound_print_seq")
+  @@index([printedBy, printedAt(sort: Desc)], map: "idx_outbound_print_operator_time")
+  @@map("outbound_print_log")
+}
+
+/// 出库状态机日志：REGISTER 起版，PRINT/REPRINT/VOID 各自 +1 版本
+model OutboundStateLog {
+  id             BigInt                 @id
+  shipmentId     BigInt                 @map("shipment_id")
+  operatorId     BigInt                 @map("operator_id")
+  eventType      OutboundStateEventType @map("event_type")
+  beforeState    OutboundShipmentState? @map("before_state")
+  afterState     OutboundShipmentState  @map("after_state")
+  beforeVersion  BigInt?                @map("before_version") @db.UnsignedBigInt
+  afterVersion   BigInt                 @map("after_version") @db.UnsignedBigInt
+  reason         String                 @default("") @db.VarChar(500)
+  requestKey     String                 @unique(map: "uk_outbound_state_request") @map("request_key") @db.VarChar(128)
+  detailJson     Json                   @map("detail_json")
+  createdAt      DateTime               @map("created_at") @db.DateTime(3)
+  shipment       OutboundShipment @relation(fields: [shipmentId], references: [id])
+  operator       SysUser          @relation("OutboundStateOperator", fields: [operatorId], references: [id])
+
+  @@index([shipmentId, createdAt(sort: Desc)], map: "idx_outbound_state_shipment_time")
+  @@index([operatorId, createdAt(sort: Desc)], map: "idx_outbound_state_operator_time")
+  @@map("outbound_state_log")
+}
+
+/// 业务里程碑日志：一个目标每个动作只记一次（uk(action, target_id) 兜底）
+model OpLog {
+  id                   BigInt      @id
+  operatorId           BigInt      @map("operator_id")
+  operatorNameSnapshot String      @map("operator_name_snapshot") @db.VarChar(64)
+  operatorRoleSnapshot String      @map("operator_role_snapshot") @db.VarChar(32)
+  action               OpLogAction
+  targetType           String      @map("target_type") @db.VarChar(32)
+  targetId             BigInt      @map("target_id")
+  targetCode           String      @map("target_code") @db.VarChar(64)
+  detailJson           Json        @map("detail_json")
+  createdAt            DateTime    @map("created_at") @db.DateTime(3)
+  operator             SysUser     @relation("OpLogOperator", fields: [operatorId], references: [id])
+
+  @@unique([action, targetId], map: "uk_op_log_action_target")
+  @@index([createdAt(sort: Desc)], map: "idx_op_log_time")
+  @@index([operatorId, createdAt(sort: Desc)], map: "idx_op_log_operator_time")
+  @@map("op_log")
+}
+
+/// 每个订单累计已发数量（§6.2 分配算法的对照视图，SQL SECURITY INVOKER）
+view VOrderOutboundQty {
+  orderId     BigInt @map("order_id")
+  outboundQty BigInt @map("outbound_qty")
+
+  @@map("v_order_outbound_qty")
+}
+
+/// BOM 实时库存 = 有效入库 + 库存调整 − 出库台账（§6 视图，SQL SECURITY INVOKER）
+view VBomStock {
+  bomId    BigInt @map("bom_id")
+  stockQty BigInt @map("stock_qty")
+
+  @@map("v_bom_stock")
 }
