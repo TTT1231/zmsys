@@ -579,7 +579,7 @@ export function OutboundPage() {
     const [category, setCategory] = useState("全部品类");
     const [statusFilter, setStatusFilter] = useState("全部状态");
     const [page, setPage] = useState(1);
-    const [pageSize] = useState(10);
+    const [pageSize, setPageSize] = useState(10);
     const [newOpen, setNewOpen] = useState(false);
     const [detail, setDetail] = useState<OutboundRow | null>(null);
     const [reprintTarget, setReprintTarget] = useState<OutboundRow | null>(null);
@@ -932,6 +932,10 @@ export function OutboundPage() {
                         total={filtered.length}
                         unit="条出库记录"
                         onPageChange={setPage}
+                        onPageSizeChange={size => {
+                            setPageSize(size);
+                            setPage(1);
+                        }}
                     />
                 </div>
             </section>

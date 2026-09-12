@@ -491,7 +491,7 @@ export function BomPage() {
     const [keyword, setKeyword] = useState("");
     const [category, setCategory] = useState("全部品类");
     const [page, setPage] = useState(1);
-    const [pageSize] = useState(10);
+    const [pageSize, setPageSize] = useState(10);
     const [newOpen, setNewOpen] = useState(false);
     const [quickOpen, setQuickOpen] = useState(false);
     const [detail, setDetail] = useState<Bom | null>(null);
@@ -709,6 +709,10 @@ export function BomPage() {
                         total={filtered.length}
                         unit="条 BOM"
                         onPageChange={setPage}
+                        onPageSizeChange={size => {
+                            setPageSize(size);
+                            setPage(1);
+                        }}
                     />
                 </div>
             </section>
