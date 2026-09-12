@@ -1359,6 +1359,28 @@ class MockDb {
         return owner;
     }
 
+    /* 新建/编辑共用的字段校验，长度上限对齐 openapi Create/UpdateCustomerInput */
+    private assertCustomerInput(input: {
+        name: string;
+        contact: string;
+        province: string;
+        city: string;
+        district: string;
+        town: string;
+        address: string;
+        payTerms: string;
+    }) {
+        if (input.name.trim().length < 4 || input.name.trim().length > 80) throw new Error("客户名称须为 4-80 个字符");
+        if (!input.contact.trim() || input.contact.trim().length > 32) throw new Error("联系人须为 1-32 个字符");
+        if (!input.province.trim() || !input.city.trim() || !input.address.trim())
+            throw new Error("请完善所在地区与地址");
+        if (input.province.length > 64 || input.city.length > 64) throw new Error("省份/城市最多 64 个字符");
+        if (input.district.length > 64) throw new Error("县区最多 64 个字符");
+        if (input.town.length > 96) throw new Error("乡镇最多 96 个字符");
+        if (input.address.length > 300) throw new Error("详细地址最多 300 个字符");
+        if ((input.payTerms ?? "").length > 160) throw new Error("付款条件最多 160 个字符");
+    }
+
     createCustomer(
         input: {
             name: string;
@@ -1374,11 +1396,8 @@ class MockDb {
         },
         actor: Actor,
     ): Customer {
-        if (input.name.trim().length < 4 || input.name.trim().length > 80) throw new Error("客户名称须为 4-80 个字符");
-        if (!input.contact.trim() || input.contact.trim().length > 32) throw new Error("联系人须为 1-32 个字符");
+        this.assertCustomerInput(input);
         if (!/^1\d{10}$/.test(input.phone)) throw new Error("请输入 11 位手机号");
-        if (!input.province.trim() || !input.city.trim() || !input.address.trim())
-            throw new Error("请完善所在地区与地址");
         const owner = this.ownerOf(input.ownerAccount);
         const maxSeq = this.customers.reduce((max, customer) => Math.max(max, Number(customer.code.slice(-4)) || 0), 0);
         const customer: Customer = {
@@ -1431,11 +1450,8 @@ class MockDb {
         const customer = this.customers.find(item => item.code === code);
         if (!customer) throw new Error("客户不存在");
         if (customer.version !== input.expectedVersion) throw new Error("客户已被其他人修改，请刷新后重试");
-        if (input.name.trim().length < 4 || input.name.trim().length > 80) throw new Error("客户名称须为 4-80 个字符");
-        if (!input.contact.trim() || input.contact.trim().length > 32) throw new Error("联系人须为 1-32 个字符");
+        this.assertCustomerInput(input);
         if (input.phone && !/^1\d{10}$/.test(input.phone)) throw new Error("请输入 11 位手机号");
-        if (!input.province.trim() || !input.city.trim() || !input.address.trim())
-            throw new Error("请完善所在地区与地址");
         const owner = this.ownerOf(input.ownerAccount);
         const previousOwner = customer.ownerAccount;
         customer.name = input.name;

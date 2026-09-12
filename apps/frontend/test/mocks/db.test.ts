@@ -193,6 +193,22 @@ describe("mock db business write rules", () => {
             ),
         ).toThrow("在职销售");
 
+        // 字段长度上限对齐契约：payTerms ≤160、address ≤300
+        expect(() =>
+            db.updateCustomer(
+                customer.code,
+                { ...payload, expectedVersion: updated.version, payTerms: "月".repeat(161) },
+                actor,
+            ),
+        ).toThrow("付款条件最多 160 个字符");
+        expect(() =>
+            db.updateCustomer(
+                customer.code,
+                { ...payload, expectedVersion: updated.version, address: "路".repeat(301) },
+                actor,
+            ),
+        ).toThrow("详细地址最多 300 个字符");
+
         // 有近期订单后派生为合作中
         const recentOrder = db.createOrder(
             {
