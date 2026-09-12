@@ -548,7 +548,7 @@ function OutboundDetailModal({ row, snap, onClose }: { row: OutboundRow | null; 
                     ["发货数量", `${num(row.qty)} 件`],
                     ["出库日期", row.date],
                     ["状态", outboundStateLabel(row)],
-                    ["打印情况", row.printVersion ? `第 ${row.printVersion} 次打印` : "还未打印"],
+                    ["打印情况", row.printVersion ? `第 ${row.printVersion} 次打印` : "未打印"],
                     ["操作人", row.operator],
                     ["备注", row.remark || "—"],
                     ...(row.state === "voided" ? [["作废原因", row.voidReason || "—"]] : []),
