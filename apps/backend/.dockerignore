@@ -1,0 +1,11 @@
+# 不参与镜像构建的内容
+node_modules
+dist
+# 本地 .env 含数据库密码与 JWT_SECRET，绝不能进镜像层；生产配置由 compose 环境变量注入
+.env
+.git
+.husky
+test
+coverage
+*.log
+tsconfig.build.tsbuildinfo
