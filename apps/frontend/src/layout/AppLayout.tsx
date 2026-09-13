@@ -31,10 +31,13 @@ export function AppLayout() {
         menu => menu.to && menu.key !== "workbench" && location.pathname.startsWith(menu.to),
     );
     const accessDenied = Boolean(activeMenu && !grant.menus.includes(activeMenu.key));
-    const title = accessDenied ? "没有访问权限" : resolveTitle(location.pathname, role);
+    // 授权未就绪（loading/guest）时不按空 grant 判无权限、不动标题：
+    // title effect 在 early return 之前，加载期 grant 恒空会闪"没有访问权限"
+    const title =
+        status === "authenticated" ? (accessDenied ? "没有访问权限" : resolveTitle(location.pathname, role)) : "";
 
     useEffect(() => {
-        document.title = `${title} · 智造管理系统`;
+        if (title) document.title = `${title} · 智造管理系统`;
     }, [title]);
 
     // 认证守卫：未登录进登录页；本地 token 校验中显示全屏加载画面（避免未授权请求）
