@@ -4,7 +4,7 @@ import { ListState, RecordCard } from "@/components/ui/MobileList";
 import { Badge, Button, TableLink } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeading } from "@/components/ui/PageHeading";
-import { SelectField, TextField } from "@/components/ui/Field";
+import { SelectField, TextArea, TextField } from "@/components/ui/Field";
 import { useToast } from "@/components/ui/Toast";
 import { Icon } from "@/lib/icons";
 import { useApp } from "@/context/AppContext";
@@ -18,7 +18,7 @@ import {
     useWbSnapshot,
 } from "@/data/queries";
 import { EMPTY_SNAPSHOT } from "@/data/views";
-import type { WbUser } from "@/api";
+import type { Customer, CustomerOwnerOption, WbUser } from "@/api";
 import {
     ACTION_CATALOG,
     DEFAULT_GRANTS,
@@ -43,6 +43,9 @@ const roleNameOf = (id: RoleId) => ROLES.find(role => role.id === id)?.name ?? i
 const clone = (value: RoleGrant): RoleGrant => JSON.parse(JSON.stringify(value));
 const topMenuCount = (grant: RoleGrant) =>
     MENU_CATALOG.filter(menu => !menu.onlyFor && grant.menus.includes(menu.key)).length;
+/** 离岗移交预判：销售名下仍有客户时，改角色 / 停用须指定接任销售（后端同规则兜底校验） */
+const ownedCustomerCount = (customers: Customer[], account: string) =>
+    customers.filter(customer => customer.ownerAccount === account).length;
 
 export function PermissionsPage() {
     const { can } = useApp();
@@ -94,7 +97,14 @@ export function PermissionsPage() {
                 ))}
             </div>
 
-            {tab === "accounts" && <AccountsTab users={users} isLoading={isLoading} />}
+            {tab === "accounts" && (
+                <AccountsTab
+                    users={users}
+                    customers={snap.customers}
+                    ownerOptions={snap.customerOwnerOptions}
+                    isLoading={isLoading}
+                />
+            )}
             {tab === "roles" && <RolesTab users={users} />}
             {tab === "matrix" && <MatrixTab />}
 
@@ -105,7 +115,17 @@ export function PermissionsPage() {
 
 /* ================= Tab 1 · 账号管理 ================= */
 
-function AccountsTab({ users, isLoading }: { users: WbUser[]; isLoading: boolean }) {
+function AccountsTab({
+    users,
+    customers,
+    ownerOptions,
+    isLoading,
+}: {
+    users: WbUser[];
+    customers: Customer[];
+    ownerOptions: CustomerOwnerOption[];
+    isLoading: boolean;
+}) {
     const [editing, setEditing] = useState<WbUser | "new" | null>(null);
     const toast = useToast();
     const resetPwd = (user: WbUser) => toast(`已重置【${user.name}】的密码并通知本人（演示）`);
@@ -140,7 +160,11 @@ function AccountsTab({ users, isLoading }: { users: WbUser[]; isLoading: boolean
                                             <Button variant="secondary" onClick={() => resetPwd(user)}>
                                                 重置密码
                                             </Button>
-                                            <UserActiveToggle user={user} />
+                                            <UserActiveToggle
+                                                user={user}
+                                                customers={customers}
+                                                ownerOptions={ownerOptions}
+                                            />
                                         </>
                                     )
                                 }
@@ -181,7 +205,12 @@ function AccountsTab({ users, isLoading }: { users: WbUser[]; isLoading: boolean
                                     </td>
                                     <td className="px-3 py-3 tnum text-13 text-muted">{user.account}</td>
                                     <td className="px-3 py-3">
-                                        <UserActiveToggle user={user} asSwitch />
+                                        <UserActiveToggle
+                                            user={user}
+                                            customers={customers}
+                                            ownerOptions={ownerOptions}
+                                            asSwitch
+                                        />
                                     </td>
                                     <td className="px-3 py-3 tnum text-13 text-muted">{user.last}</td>
                                     <td className="px-5 py-3 text-right whitespace-nowrap">
@@ -202,51 +231,182 @@ function AccountsTab({ users, isLoading }: { users: WbUser[]; isLoading: boolean
                 </div>
             </section>
             {editing !== null && (
-                <UserDialog user={editing === "new" ? null : editing} users={users} onClose={() => setEditing(null)} />
+                <UserDialog
+                    user={editing === "new" ? null : editing}
+                    users={users}
+                    customers={customers}
+                    ownerOptions={ownerOptions}
+                    onClose={() => setEditing(null)}
+                />
             )}
         </>
     );
 }
 
-/* 启用 / 停用：桌面表格内是开关，移动卡片内是按钮 */
-function UserActiveToggle({ user, asSwitch }: { user: WbUser; asSwitch?: boolean }) {
+/* 启用 / 停用：桌面表格内是开关，移动卡片内是按钮。
+ * 停用在岗销售且名下仍有客户时先弹移交确认，避免被后端 400 拒绝。 */
+function UserActiveToggle({
+    user,
+    customers,
+    ownerOptions,
+    asSwitch,
+}: {
+    user: WbUser;
+    customers: Customer[];
+    ownerOptions: CustomerOwnerOption[];
+    asSwitch?: boolean;
+}) {
     const setActive = useSetUserActive();
+    const toast = useToast();
+    const [transferring, setTransferring] = useState(false);
     if (user.role === "super") {
         return <Badge tone="success">启用</Badge>;
     }
-    const toggle = () =>
-        setActive.mutate({ account: user.account, expectedVersion: user.version, active: !user.active });
-    if (asSwitch) {
-        return (
-            <button
-                type="button"
-                role="switch"
-                aria-checked={user.active}
-                aria-label={`${user.active ? "停用" : "启用"} ${user.name}`}
-                onClick={toggle}
-                className={`relative h-5 w-9 rounded-full transition ${user.active ? "bg-success" : "bg-line-strong"}`}
-            >
-                <span
-                    className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow-xs transition ${user.active ? "translate-x-4" : ""}`}
-                />
-            </button>
+    const ownedCount = ownedCustomerCount(customers, user.account);
+    const candidates = ownerOptions.filter(option => option.account !== user.account);
+    const toggle = () => {
+        if (user.active && user.role === "sales" && ownedCount > 0) {
+            setTransferring(true);
+            return;
+        }
+        setActive.mutate(
+            { account: user.account, expectedVersion: user.version, active: !user.active },
+            { onError: error => toast(error.message, true) },
         );
-    }
-    return (
+    };
+    const control = asSwitch ? (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={user.active}
+            aria-label={`${user.active ? "停用" : "启用"} ${user.name}`}
+            onClick={toggle}
+            className={`relative h-5 w-9 rounded-full transition ${user.active ? "bg-success" : "bg-line-strong"}`}
+        >
+            <span
+                className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow-xs transition ${user.active ? "translate-x-4" : ""}`}
+            />
+        </button>
+    ) : (
         <Button variant="secondary" onClick={toggle}>
             {user.active ? "停用" : "启用"}
         </Button>
     );
+    return (
+        <>
+            {control}
+            {transferring && (
+                <DeactivateTransferModal
+                    user={user}
+                    ownedCount={ownedCount}
+                    candidates={candidates}
+                    onClose={() => setTransferring(false)}
+                />
+            )}
+        </>
+    );
 }
 
-function UserDialog({ user, users, onClose }: { user: WbUser | null; users: WbUser[]; onClose: () => void }) {
+/* 停用销售前移交客户：接任者 + 原因（后端要求原因 2-500 字符） */
+function DeactivateTransferModal({
+    user,
+    ownedCount,
+    candidates,
+    onClose,
+}: {
+    user: WbUser;
+    ownedCount: number;
+    candidates: CustomerOwnerOption[];
+    onClose: () => void;
+}) {
+    const setActive = useSetUserActive();
+    const toast = useToast();
+    const [replacement, setReplacement] = useState("");
+    const [reason, setReason] = useState("");
+    const [errors, setErrors] = useState<{ replacement?: string; reason?: string }>({});
+
+    const confirm = () => {
+        const next: typeof errors = {};
+        if (!replacement) next.replacement = "请选择接任销售";
+        if (!validTransferReason(reason)) next.reason = TRANSFER_REASON_ERROR;
+        setErrors(next);
+        if (Object.keys(next).length) return;
+        setActive.mutate(
+            {
+                account: user.account,
+                expectedVersion: user.version,
+                active: false,
+                replacementOwnerAccount: replacement,
+                transferReason: reason.trim(),
+            },
+            { onSuccess: onClose, onError: error => toast(error.message, true) },
+        );
+    };
+
+    return (
+        <Modal
+            open
+            onClose={onClose}
+            label="系统设置"
+            title="停用销售并移交客户"
+            width={440}
+            footer={
+                <>
+                    <Button variant="secondary" onClick={onClose}>
+                        取消
+                    </Button>
+                    <Button onClick={confirm} disabled={setActive.isPending}>
+                        确认停用并移交
+                    </Button>
+                </>
+            }
+        >
+            <div className="flex flex-col gap-3">
+                <p className="text-13 leading-relaxed text-td">
+                    即将停用【{user.name}（{user.account}）】，名下 {ownedCount} 个客户将移交给接任销售继续跟进。
+                </p>
+                <TransferFields
+                    candidates={candidates}
+                    replacement={replacement}
+                    reason={reason}
+                    errors={errors}
+                    onReplacement={setReplacement}
+                    onReason={setReason}
+                />
+            </div>
+        </Modal>
+    );
+}
+
+function UserDialog({
+    user,
+    users,
+    customers,
+    ownerOptions,
+    onClose,
+}: {
+    user: WbUser | null;
+    users: WbUser[];
+    customers: Customer[];
+    ownerOptions: CustomerOwnerOption[];
+    onClose: () => void;
+}) {
     const createUser = useCreateUser();
     const updateUser = useUpdateUser();
+    const toast = useToast();
     const pending = createUser.isPending || updateUser.isPending;
     const [name, setName] = useState(user?.name ?? "");
     const [account, setAccount] = useState(user?.account ?? "");
     const [role, setRole] = useState<RoleId>(user?.role ?? "staff");
-    const [errors, setErrors] = useState<{ name?: string; account?: string }>({});
+    const [replacement, setReplacement] = useState("");
+    const [reason, setReason] = useState("");
+    const [errors, setErrors] = useState<{ name?: string; account?: string; replacement?: string; reason?: string }>(
+        {},
+    );
+    // 在岗销售被改为其他角色 = 离岗：名下仍有客户则必须移交（后端同规则兜底校验）
+    const ownedCount = user ? ownedCustomerCount(customers, user.account) : 0;
+    const needTransfer = !!user && user.role === "sales" && role !== "sales" && ownedCount > 0;
+    const candidates = ownerOptions.filter(option => !user || option.account !== user.account);
 
     const submit = () => {
         const next: typeof errors = {};
@@ -255,18 +415,29 @@ function UserDialog({ user, users, onClose }: { user: WbUser | null; users: WbUs
         if (!accountOk) next.account = "账号需为字母 / 数字 / 下划线";
         else if (users.some(item => item.account === account.trim() && item.account !== user?.account))
             next.account = "账号已存在";
+        if (needTransfer) {
+            if (!replacement) next.replacement = "请选择接任销售";
+            if (!validTransferReason(reason)) next.reason = TRANSFER_REASON_ERROR;
+        }
         setErrors(next);
         if (Object.keys(next).length) return;
         const onSuccess = () => onClose();
+        const onError = (error: Error) => toast(error.message, true);
         if (user) {
-            // account 创建后不可改，仅更新姓名与角色
+            // account 创建后不可改，仅更新姓名与角色；离岗移交随角色变更一并提交
             updateUser.mutate(
-                { account: user.account, expectedVersion: user.version, name: name.trim(), role },
-                { onSuccess },
+                {
+                    account: user.account,
+                    expectedVersion: user.version,
+                    name: name.trim(),
+                    role,
+                    ...(needTransfer ? { replacementOwnerAccount: replacement, transferReason: reason.trim() } : {}),
+                },
+                { onSuccess, onError },
             );
         } else {
             if (role === "super") return;
-            createUser.mutate({ name: name.trim(), account: account.trim(), role }, { onSuccess });
+            createUser.mutate({ name: name.trim(), account: account.trim(), role }, { onSuccess, onError });
         }
     };
 
@@ -321,9 +492,80 @@ function UserDialog({ user, users, onClose }: { user: WbUser | null; users: WbUs
                         </option>
                     ))}
                 </SelectField>
+                {needTransfer && (
+                    <TransferFields
+                        candidates={candidates}
+                        replacement={replacement}
+                        reason={reason}
+                        errors={errors}
+                        onReplacement={setReplacement}
+                        onReason={setReason}
+                    />
+                )}
                 {!user && <p className="text-12 text-subtle">初始密码统一为 123456，用户可登录后按需修改。</p>}
             </div>
         </Modal>
+    );
+}
+
+/* ---------- 离岗移交（编辑改角色 / 停用共用） ---------- */
+
+const TRANSFER_REASON_ERROR = "移交原因需 2-500 字符";
+const validTransferReason = (reason: string) => {
+    const length = reason.trim().length;
+    return length >= 2 && length <= 500;
+};
+
+/* 接任销售候选为启用中的其他销售（来自 /customer-owner-options，后端校验同规则） */
+function TransferFields({
+    candidates,
+    replacement,
+    reason,
+    errors,
+    onReplacement,
+    onReason,
+}: {
+    candidates: CustomerOwnerOption[];
+    replacement: string;
+    reason: string;
+    errors: { replacement?: string; reason?: string };
+    onReplacement: (value: string) => void;
+    onReason: (value: string) => void;
+}) {
+    return (
+        <div className="flex flex-col gap-3 rounded-xl border border-warning/60 bg-warning/5 p-3.5">
+            <p className="text-12.5 leading-relaxed text-td">
+                <Icon name="alert" size={13} className="mr-1 -mt-px inline text-warning" />
+                该销售名下仍有客户，离岗前须指定接任销售并填写移交原因。
+            </p>
+            {candidates.length ? (
+                <SelectField
+                    label="接任销售"
+                    required
+                    value={replacement}
+                    error={errors.replacement}
+                    onChange={event => onReplacement(event.target.value)}
+                >
+                    <option value="">请选择</option>
+                    {candidates.map(option => (
+                        <option key={option.account} value={option.account}>
+                            {option.name}（{option.account}）
+                        </option>
+                    ))}
+                </SelectField>
+            ) : (
+                <p className="text-12.5 text-danger">暂无其他在职销售可接任，请先启用其他销售账号。</p>
+            )}
+            <TextArea
+                label="移交原因"
+                required
+                value={reason}
+                error={errors.reason}
+                placeholder="例：岗位调整，名下客户由接任销售继续跟进"
+                maxLength={500}
+                onChange={event => onReason(event.target.value)}
+            />
+        </div>
     );
 }
 
@@ -331,6 +573,7 @@ function UserDialog({ user, users, onClose }: { user: WbUser | null; users: WbUs
 
 function RolesTab({ users }: { users: WbUser[] }) {
     const { refreshProfile } = useApp();
+    const toast = useToast();
     const { data: grantsData, isLoading: grantsLoading } = useGrants();
     const saveGrants = useSaveGrants();
     const grants = grantsData ?? DEFAULT_GRANTS;
@@ -418,6 +661,8 @@ function RolesTab({ users }: { users: WbUser[] }) {
                     // 若改的是当前登录用户的角色，刷新自身权限（菜单/按钮立即生效）
                     void refreshProfile();
                 },
+                // 乐观锁冲突（他人已保存）等失败：保留草稿并提示，用户可刷新后重勾
+                onError: error => toast(error.message, true),
             },
         );
     };
