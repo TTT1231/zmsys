@@ -28,7 +28,8 @@ const findControllers = (dir: string): string[] => {
 };
 
 describe('权限元数据三选一（默认拒绝的架构兜底）', () => {
-    it('每个路由 handler 恰好声明 @Public/@AuthenticatedOnly/@Permissions 之一', async () => {
+    // 逐文件动态 import 会拉起全部模块依赖链，冷启动远超默认 5s，显式放宽
+    it('每个路由 handler 恰好声明 @Public/@AuthenticatedOnly/@Permissions 之一', { timeout: 30_000 }, async () => {
         const files = findControllers(SRC_ROOT);
         expect(files.length, '自动发现 controller（发现数应随业务模块增长）').toBeGreaterThanOrEqual(2);
 
