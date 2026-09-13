@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, useNavigate } from "react-router";
+import { NavLink } from "react-router";
 import { Icon } from "@/lib/icons";
 import { useApp } from "@/context/AppContext";
 import { buildNavSections, type NavItem } from "@/data/permissions";
@@ -200,7 +200,6 @@ export function MobileBottomNav({ onOpenDrawer }: { onOpenDrawer: () => void }) 
 
 /* 顶栏：全局刷新 / 全屏 / 用户菜单（真实登录用户） */
 export function Topbar({ title, onOpenDrawer }: { title: string; onOpenDrawer: () => void }) {
-    const navigate = useNavigate();
     const { refresh, refreshing } = useWbRefresh();
     const { supported, isFullscreen, toggle } = useFullscreen();
 
@@ -222,14 +221,6 @@ export function Topbar({ title, onOpenDrawer }: { title: string; onOpenDrawer: (
             </div>
 
             <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
-                <button
-                    type="button"
-                    aria-label="全局搜索"
-                    onClick={() => navigate("/search")}
-                    className="flex h-11 w-11 max-lg:min-h-[44px] max-lg:min-w-[44px] items-center justify-center rounded-btn text-muted lg:hidden"
-                >
-                    <Icon name="search" size={20} />
-                </button>
                 <TooltipProvider delayDuration={250}>
                     <Tooltip>
                         <TooltipTrigger asChild>
