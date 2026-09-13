@@ -63,14 +63,14 @@ describe("ProfileDialog", () => {
         expect(screen.getByLabelText("姓名")).toHaveValue("李销售");
     });
 
-    it("blocks empty name without calling the API", () => {
+    it("blocks empty name without calling the API", async () => {
         renderDialog();
         const input = screen.getByLabelText("姓名");
         fireEvent.change(input, { target: { value: "   " } });
         fireEvent.click(screen.getByRole("button", { name: "保存" }));
         expect(updateProfile).not.toHaveBeenCalled();
         expect(refreshProfileSpy).not.toHaveBeenCalled();
-        expect(screen.getByRole("status")).toHaveTextContent("姓名不能为空");
+        expect(await screen.findByText("姓名不能为空")).toBeInTheDocument();
     });
 
     it("saves name change through updateProfile then refreshProfile", async () => {
@@ -79,7 +79,7 @@ describe("ProfileDialog", () => {
         fireEvent.click(screen.getByRole("button", { name: "保存" }));
         await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({ name: "李新名" }));
         await waitFor(() => expect(refreshProfileSpy).toHaveBeenCalledTimes(1));
-        expect(screen.getByRole("status")).toHaveTextContent("已保存");
+        expect(await screen.findByText("已保存")).toBeInTheDocument();
     });
 
     it("shows error toast when save fails", async () => {
@@ -88,7 +88,7 @@ describe("ProfileDialog", () => {
         renderDialog();
         fireEvent.change(screen.getByLabelText("姓名"), { target: { value: "超长姓名超长姓名超长姓名超长" } });
         fireEvent.click(screen.getByRole("button", { name: "保存" }));
-        await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("姓名最多 20 个字符"));
+        expect(await screen.findByText("姓名最多 20 个字符")).toBeInTheDocument();
         expect(refreshProfileSpy).not.toHaveBeenCalled();
     });
 
@@ -103,6 +103,6 @@ describe("ProfileDialog", () => {
             expect(changePassword).toHaveBeenCalledWith({ oldPassword: "123456", newPassword: "new-password" }),
         );
         await waitFor(() => expect(logoutSpy).toHaveBeenCalledTimes(1));
-        expect(screen.getByRole("status")).toHaveTextContent("密码已修改，请重新登录");
+        expect(await screen.findByText("密码已修改，请重新登录")).toBeInTheDocument();
     });
 });

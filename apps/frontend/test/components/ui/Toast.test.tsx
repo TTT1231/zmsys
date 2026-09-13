@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
+/* 反馈分层：Message 顶部居中、Notification 右上角，分别验证语义与关闭行为 */
 import "@testing-library/jest-dom/vitest";
 
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import { toast } from "sonner";
 
-import { ToastProvider, useToast } from "@/components/ui/Toast";
+import { ToastProvider, useNotification, useToast } from "@/components/ui/Toast";
 
 function ToastTrigger({ message, error }: { message: string; error?: boolean }) {
     const push = useToast();
@@ -15,91 +17,95 @@ function ToastTrigger({ message, error }: { message: string; error?: boolean }) 
     );
 }
 
-function NotificationTrigger() {
-    const push = useToast();
+function NotificationTrigger({ duration = 5000 }: { duration?: number }) {
+    const notify = useNotification();
     return (
-        <button
-            type="button"
-            onClick={() => push({ title: "登录成功", message: "欢迎回来，李晓梅", tone: "success", duration: 4000 })}
-        >
+        <button type="button" onClick={() => notify({ title: "登录成功", message: "欢迎回来，系统管理员", duration })}>
             触发欢迎通知
         </button>
     );
 }
 
-beforeEach(() => {
-    vi.useFakeTimers();
-});
-
 afterEach(() => {
-    vi.useRealTimers();
+    toast.dismiss();
     cleanup();
 });
 
 describe("ToastProvider", () => {
-    it("pushes a toast via context and auto dismisses with an exit animation", () => {
+    it("shows a compact top-center success message without a close button", async () => {
         render(
             <ToastProvider>
-                <ToastTrigger message="保存成功" />
+                <ToastTrigger message="已退出登录" />
             </ToastProvider>,
         );
         fireEvent.click(screen.getByRole("button", { name: "触发" }));
-        expect(screen.getByRole("status")).toHaveTextContent("保存成功");
-        act(() => {
-            vi.advanceTimersByTime(3599);
-        });
-        expect(screen.getByRole("status")).toBeInTheDocument();
-        act(() => {
-            vi.advanceTimersByTime(1);
-        });
-        expect(screen.getByRole("status")).toHaveAttribute("data-state", "closing");
-        act(() => {
-            vi.advanceTimersByTime(160);
-        });
-        expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+        const message = await screen.findByText("已退出登录");
+        expect(message.closest("[data-sonner-toast]")).toHaveAttribute("data-type", "success");
+        expect(message.closest("[data-sonner-toaster]")).toHaveAttribute("data-x-position", "center");
+        expect(message.closest("[data-sonner-toaster]")).toHaveAttribute("data-y-position", "top");
+        expect(screen.queryByRole("button", { name: "关闭通知" })).not.toBeInTheDocument();
     });
 
-    it("guesses error tone from message keywords", () => {
-        render(
+    it("infers error tone and also honors an explicit error flag", async () => {
+        const { rerender } = render(
             <ToastProvider>
                 <ToastTrigger message="请输入有效的发货数量" />
             </ToastProvider>,
         );
         fireEvent.click(screen.getByRole("button", { name: "触发" }));
-        const status = screen.getByRole("status");
-        expect(status).toHaveAttribute("data-tone", "error");
-        expect(status).toHaveAttribute("aria-live", "assertive");
-    });
+        const inferred = await screen.findByText("请输入有效的发货数量");
+        expect(inferred.closest("[data-sonner-toast]")).toHaveAttribute("data-type", "error");
 
-    it("honors an explicit error flag", () => {
-        render(
+        rerender(
             <ToastProvider>
-                <ToastTrigger message="plain" error={true} />
+                <ToastTrigger message="plain" error />
             </ToastProvider>,
         );
         fireEvent.click(screen.getByRole("button", { name: "触发" }));
-        const status = screen.getByRole("status");
-        expect(status).toHaveAttribute("data-tone", "error");
-        expect(status).toHaveTextContent("plain");
+        const explicit = await screen.findByText("plain");
+        expect(explicit.closest("[data-sonner-toast]")).toHaveAttribute("data-type", "error");
+        await waitFor(() => expect(screen.queryByText("请输入有效的发货数量")).not.toBeInTheDocument());
     });
 
-    it("renders a titled notification and supports manual dismissal", () => {
+    it("renders the welcome notification at the top-right with a dismiss control", async () => {
         render(
             <ToastProvider>
                 <NotificationTrigger />
             </ToastProvider>,
         );
         fireEvent.click(screen.getByRole("button", { name: "触发欢迎通知" }));
-
-        const notification = screen.getByRole("status");
-        expect(notification).toHaveTextContent("登录成功");
-        expect(notification).toHaveTextContent("欢迎回来，李晓梅");
-
+        const title = await screen.findByText("登录成功");
+        expect(screen.getByText("欢迎回来，系统管理员")).toBeInTheDocument();
+        expect(title.closest("[data-sonner-toaster]")).toHaveAttribute("data-x-position", "right");
+        expect(title.closest("[data-sonner-toaster]")).toHaveAttribute("data-y-position", "top");
         fireEvent.click(screen.getByRole("button", { name: "关闭通知" }));
-        expect(notification).toHaveAttribute("data-state", "closing");
-        act(() => {
-            vi.advanceTimersByTime(160);
-        });
-        expect(screen.queryByRole("status")).not.toBeInTheDocument();
+        await waitFor(() => expect(screen.queryByText("登录成功")).not.toBeInTheDocument());
+    });
+
+    it("auto-dismisses a short-lived notification", async () => {
+        render(
+            <ToastProvider>
+                <NotificationTrigger duration={120} />
+            </ToastProvider>,
+        );
+        fireEvent.click(screen.getByRole("button", { name: "触发欢迎通知" }));
+        expect(await screen.findByText("登录成功")).toBeInTheDocument();
+        await waitFor(() => expect(screen.queryByText("登录成功")).not.toBeInTheDocument());
+    });
+
+    it("keeps a notification visible when a separate global message appears", async () => {
+        render(
+            <ToastProvider>
+                <NotificationTrigger />
+                <ToastTrigger message="已退出登录" />
+            </ToastProvider>,
+        );
+        fireEvent.click(screen.getByRole("button", { name: "触发欢迎通知" }));
+        expect(await screen.findByText("欢迎回来，系统管理员")).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole("button", { name: "触发" }));
+        expect(await screen.findByText("已退出登录")).toBeInTheDocument();
+        expect(screen.getByText("欢迎回来，系统管理员")).toBeInTheDocument();
     });
 });

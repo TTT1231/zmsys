@@ -1,21 +1,32 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import { Navigate, useNavigate } from "react-router";
 import { Icon } from "@/lib/icons";
 import { useApp } from "@/context/AppContext";
 import { isApiError } from "@/http";
-import { useToast } from "@/components/ui/Toast";
+import { useNotification, useToast } from "@/components/ui/Toast";
 import loginArt from "./login-art.svg";
+
+function loginErrorMessage(error: unknown) {
+    if (!isApiError(error)) return "登录服务暂时不可用，请稍后重试";
+    if (error.code === -1) return "无法连接登录服务，请检查网络后重试";
+    if (error.code === 408) return "登录请求超时，请稍后重试";
+    if (error.code === 429) return "尝试次数过多，请稍后再试";
+    if (error.code >= 500) return "登录服务暂时不可用，请稍后重试";
+    return error.message || "登录失败，请重试";
+}
 
 /* 登录页：账号密码 → POST /auth/login → 建立会话后进入自己角色的工作台 */
 export function LoginPage() {
     const { status, login } = useApp();
     const navigate = useNavigate();
     const toast = useToast();
+    const notify = useNotification();
     const [account, setAccount] = useState("");
     const [password, setPassword] = useState("");
-    const [error, setError] = useState("");
     const [busy, setBusy] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const accountInputRef = useRef<HTMLInputElement>(null);
+    const passwordInputRef = useRef<HTMLInputElement>(null);
     /* 字段校验首次提交后才开启，开启后随输入实时更新，避免刚进页面就标红 */
     const [validated, setValidated] = useState(false);
     const accountError = validated && !account.trim() ? "请输入账号" : "";
@@ -26,22 +37,19 @@ export function LoginPage() {
     const onSubmit = async (event: FormEvent) => {
         event.preventDefault();
         if (busy) return;
-        setError("");
         setValidated(true);
-        if (!account.trim() || !password) return;
+        if (!account.trim() || !password) {
+            if (!account.trim()) accountInputRef.current?.focus();
+            else passwordInputRef.current?.focus();
+            return;
+        }
         setBusy(true);
         try {
             const user = await login(account.trim(), password);
-            toast({
-                title: "登录成功",
-                message: user?.name ? `欢迎回来，${user.name}` : "欢迎回来",
-                tone: "success",
-                duration: 4000,
-            });
+            notify({ title: "登录成功", message: user?.name ? `欢迎回来，${user.name}` : "欢迎回来" });
             navigate("/workbench", { replace: true });
         } catch (err) {
-            const message = isApiError(err) ? err.message : "登录失败，请稍后重试";
-            setError(message);
+            toast(loginErrorMessage(err), true);
         } finally {
             setBusy(false);
         }
@@ -110,9 +118,11 @@ export function LoginPage() {
                             <p className="mt-1 text-13 text-muted">登录您的账号以继续</p>
                         </div>
 
-                        <form onSubmit={onSubmit} className="flex flex-col gap-4.5" noValidate>
-                            <label className="block">
-                                <span className="mb-1.5 block text-13 font-medium text-ink">账号</span>
+                        <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
+                            <div className="block">
+                                <label htmlFor="login-account" className="mb-1.5 block text-13 font-medium text-ink">
+                                    账号
+                                </label>
                                 <div className="group relative">
                                     <Icon
                                         name="user"
@@ -120,33 +130,33 @@ export function LoginPage() {
                                         className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-subtle transition-colors group-focus-within:text-primary"
                                     />
                                     <input
+                                        ref={accountInputRef}
+                                        id="login-account"
                                         className={`h-12 w-full rounded-input bg-soft pr-3 pl-10 text-14 text-ink transition-all placeholder:text-subtle/70 focus:bg-white focus:ring-4 focus:outline-none ${
                                             accountError
                                                 ? "border-danger focus:border-danger focus:ring-danger/10"
                                                 : "border-line focus:border-primary focus:ring-primary/10"
                                         }`}
                                         autoComplete="username"
+                                        disabled={busy}
                                         aria-invalid={accountError ? true : undefined}
                                         aria-describedby={accountError ? "login-account-error" : undefined}
                                         placeholder="请输入账号"
                                         value={account}
-                                        onChange={event => {
-                                            setAccount(event.target.value);
-                                            setError("");
-                                        }}
+                                        onChange={event => setAccount(event.target.value)}
                                     />
                                 </div>
-                                {/* 每个字段预留一行提示位，提示出现/消失时布局不挤动 */}
-                                <p
-                                    id="login-account-error"
-                                    className="mt-1.5 flex min-h-5 items-start text-12.5 leading-5 text-danger"
-                                >
-                                    {accountError}
-                                </p>
-                            </label>
+                                {accountError && (
+                                    <p id="login-account-error" className="mt-1.5 text-12.5 leading-5 text-danger">
+                                        {accountError}
+                                    </p>
+                                )}
+                            </div>
 
-                            <label className="block">
-                                <span className="mb-1.5 block text-13 font-medium text-ink">密码</span>
+                            <div className="block">
+                                <label htmlFor="login-password" className="mb-1.5 block text-13 font-medium text-ink">
+                                    密码
+                                </label>
                                 <div className="group relative">
                                     <Icon
                                         name="lock"
@@ -154,6 +164,8 @@ export function LoginPage() {
                                         className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-subtle transition-colors group-focus-within:text-primary"
                                     />
                                     <input
+                                        ref={passwordInputRef}
+                                        id="login-password"
                                         className={`h-12 w-full rounded-input bg-soft pr-11 pl-10 text-14 text-ink transition-all placeholder:text-subtle/70 focus:bg-white focus:ring-4 focus:outline-none ${
                                             passwordError
                                                 ? "border-danger focus:border-danger focus:ring-danger/10"
@@ -161,58 +173,37 @@ export function LoginPage() {
                                         }`}
                                         type={showPassword ? "text" : "password"}
                                         autoComplete="current-password"
+                                        disabled={busy}
                                         aria-invalid={passwordError ? true : undefined}
                                         aria-describedby={passwordError ? "login-password-error" : undefined}
                                         placeholder="请输入密码"
                                         value={password}
-                                        onChange={event => {
-                                            setPassword(event.target.value);
-                                            setError("");
-                                        }}
+                                        onChange={event => setPassword(event.target.value)}
                                     />
                                     <button
                                         type="button"
+                                        disabled={busy}
                                         onClick={() => setShowPassword(value => !value)}
                                         aria-label={showPassword ? "隐藏密码" : "显示密码"}
                                         aria-pressed={showPassword}
-                                        className="absolute top-1/2 right-2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-subtle transition-colors hover:bg-line/40 hover:text-ink"
+                                        className="absolute top-1/2 right-2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-subtle transition-colors hover:bg-line/40 hover:text-ink disabled:cursor-wait disabled:opacity-50"
                                     >
                                         <Icon name={showPassword ? "eye-off" : "eye"} size={17} />
                                     </button>
                                 </div>
-                                <p
-                                    id="login-password-error"
-                                    className="mt-1.5 flex min-h-5 items-start text-12.5 leading-5 text-danger"
-                                >
-                                    {passwordError}
-                                </p>
-                            </label>
+                                {passwordError && (
+                                    <p id="login-password-error" className="mt-1.5 text-12.5 leading-5 text-danger">
+                                        {passwordError}
+                                    </p>
+                                )}
+                            </div>
 
                             <div>
-                                {/* 始终保留两行反馈空间，校验和请求状态切换时不挤动表单。 */}
-                                <p
-                                    id="login-error"
-                                    role="alert"
-                                    aria-atomic="true"
-                                    className={`flex h-10 items-start gap-2 overflow-y-auto text-12.5 leading-5 text-danger transition-opacity duration-150 motion-reduce:transition-none ${error ? "opacity-100" : "opacity-0"}`}
-                                >
-                                    {error && (
-                                        <>
-                                            <Icon
-                                                name="alert"
-                                                size={15}
-                                                className="mt-0.5 shrink-0"
-                                                aria-hidden="true"
-                                            />
-                                            <span className="min-w-0 wrap-anywhere">{error}</span>
-                                        </>
-                                    )}
-                                </p>
-
                                 <button
                                     type="submit"
                                     disabled={busy}
-                                    className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-btn bg-gradient-to-r from-indigo-600 to-indigo-500 text-15 font-semibold text-white shadow-glow transition-all hover:from-indigo-700 hover:to-indigo-600 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-70"
+                                    aria-busy={busy}
+                                    className="flex h-12 w-full items-center justify-center gap-2 rounded-btn bg-gradient-to-r from-indigo-600 to-indigo-500 text-15 font-semibold text-white shadow-glow transition-all hover:from-indigo-700 hover:to-indigo-600 active:scale-[0.98] disabled:cursor-wait disabled:from-indigo-500 disabled:to-indigo-400 disabled:shadow-none"
                                 >
                                     {busy && (
                                         <span
@@ -220,7 +211,7 @@ export function LoginPage() {
                                             aria-hidden="true"
                                         />
                                     )}
-                                    {busy ? "登录中…" : "登录"}
+                                    {busy ? "正在登录…" : "登录"}
                                 </button>
                             </div>
                         </form>

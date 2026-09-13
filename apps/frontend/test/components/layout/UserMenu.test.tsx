@@ -91,6 +91,7 @@ describe("UserMenu", () => {
         fireEvent.click(screen.getByRole("button", { name: "退出登录" }));
         await waitFor(() => expect(logoutSpy).toHaveBeenCalledTimes(1));
         await waitFor(() => expect(navigateSpy).toHaveBeenCalledWith("/login", { replace: true }));
+        expect(await screen.findByText("已退出登录")).toBeInTheDocument();
     });
 
     it("cancel keeps session", async () => {

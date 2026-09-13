@@ -1,5 +1,138 @@
 @import "tailwindcss";
 
+/* Sonner 只负责全局消息行为；外观使用项目语义色，短消息按内容收缩。 */
+[data-sonner-toaster] [data-sonner-toast].app-message-toast {
+    left: 50%;
+    right: auto;
+    translate: -50% 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: max-content;
+    max-width: min(
+        420px,
+        calc(100vw - 48px - env(safe-area-inset-left) - env(safe-area-inset-right))
+    );
+    min-height: 44px;
+    padding: 10px 15px;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-btn);
+    background: var(--color-surface);
+    box-shadow: 0 8px 28px rgba(16, 24, 40, 0.12);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.app-message-toast [data-icon] {
+    display: flex;
+    flex: none;
+    color: var(--color-success);
+}
+
+.app-message-toast[data-type="error"] [data-icon] {
+    color: var(--color-danger);
+}
+
+.app-message-toast [data-content] {
+    min-width: 0;
+}
+
+/* Notification 与 Message 分层：右上角用于带标题/说明的提醒，手机端沿用卡片宽度。 */
+[data-sonner-toaster] [data-sonner-toast].app-notification-toast {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    width: 100%;
+    min-height: 76px;
+    padding: 16px 48px 16px 16px;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-modal);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+}
+
+.app-notification-toast [data-icon] {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--color-success-soft);
+    color: var(--color-success);
+}
+
+.app-notification-toast[data-type="error"] [data-icon] {
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+}
+
+.app-notification-toast [data-content] {
+    flex: 1;
+    min-width: 0;
+    padding-top: 2px;
+}
+
+.app-notification-toast [data-title] {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.app-notification-toast [data-description] {
+    margin-top: 2px;
+    color: var(--color-muted);
+    font-size: 13px;
+}
+
+.app-notification-toast [data-close-button] {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--color-muted);
+}
+
+.app-notification-toast [data-close-button]:hover {
+    background: var(--color-soft);
+    color: var(--color-ink);
+}
+
+.app-notification-toast [data-close-button]:focus-visible {
+    outline: 3px solid var(--color-primary-border);
+    outline-offset: 1px;
+}
+
+@media (max-width: 600px) {
+    [data-sonner-toaster] [data-sonner-toast].app-notification-toast {
+        left: 50%;
+        right: auto;
+        translate: -50% 0;
+        width: calc(100% - 32px);
+        max-width: min(420px, calc(100vw - 48px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+        padding: 14px 44px 14px 14px;
+    }
+
+    .app-notification-toast [data-close-button] {
+        top: 4px;
+        right: 4px;
+        width: 44px;
+        height: 44px;
+    }
+}
+
 /* 智造管理系统 · 设计令牌（源自原型 manufacturing-saas-theme.css 最终生效层） */
 @theme {
     --font-sans:

@@ -1,143 +1,90 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
+import { Toaster, toast } from "sonner";
 import { Icon } from "@/lib/icons";
 
-type ToastTone = "success" | "error";
+type Tone = "success" | "error";
+type MessagePush = (message: string, error?: boolean) => void;
 
-interface ToastOptions {
-    title?: string;
+interface NotificationOptions {
+    title: string;
     message: string;
-    tone?: ToastTone;
+    tone?: Tone;
     duration?: number;
 }
 
-interface ToastItem {
-    id: number;
-    title?: string;
-    message: string;
-    tone: ToastTone;
-    closing: boolean;
-}
+type NotificationPush = (options: NotificationOptions) => void;
 
-interface ToastPush {
-    (message: string, error?: boolean): void;
-    (options: ToastOptions): void;
-}
+const MessageContext = createContext<MessagePush>(() => {});
+const NotificationContext = createContext<NotificationPush>(() => {});
+let activeMessageId: string | number | undefined;
 
-const DEFAULT_DURATION = 3600;
-const EXIT_DURATION = 160;
-
-const ToastContext = createContext<ToastPush>(() => {});
-
+/** 操作结果：顶部居中的单条轻提示。 */
 export function useToast() {
-    return useContext(ToastContext);
+    return useContext(MessageContext);
 }
+
+/** 标题 + 说明：右上角的通知提醒。 */
+export function useNotification() {
+    return useContext(NotificationContext);
+}
+
+const pushMessage: MessagePush = (message, error) => {
+    const tone: Tone = (error ?? /请|未找到|超过|必须|失败|不能/.test(message)) ? "error" : "success";
+    const show = tone === "error" ? toast.error : toast.success;
+    if (activeMessageId !== undefined) toast.dismiss(activeMessageId);
+    activeMessageId = show(message, {
+        toasterId: "message",
+        duration: message.length > 28 ? 5000 : tone === "error" ? 4000 : 3000,
+        closeButton: false,
+        onAutoClose: item => {
+            if (activeMessageId === item.id) activeMessageId = undefined;
+        },
+        onDismiss: item => {
+            if (activeMessageId === item.id) activeMessageId = undefined;
+        },
+    });
+};
+
+const pushNotification: NotificationPush = ({ title, message, tone = "success", duration = 5000 }) => {
+    const show = tone === "error" ? toast.error : toast.success;
+    show(title, { toasterId: "notification", description: message, duration, closeButton: true });
+};
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-    const [items, setItems] = useState<ToastItem[]>([]);
-    const seq = useRef(0);
-    const autoDismissTimers = useRef(new Map<number, number>());
-    const exitTimers = useRef(new Map<number, number>());
-    const closingIds = useRef(new Set<number>());
-
-    const dismiss = useCallback((id: number) => {
-        if (closingIds.current.has(id)) return;
-        closingIds.current.add(id);
-
-        const autoDismissTimer = autoDismissTimers.current.get(id);
-        if (autoDismissTimer !== undefined) {
-            window.clearTimeout(autoDismissTimer);
-            autoDismissTimers.current.delete(id);
-        }
-
-        setItems(prev => prev.map(item => (item.id === id ? { ...item, closing: true } : item)));
-        const exitTimer = window.setTimeout(() => {
-            setItems(prev => prev.filter(item => item.id !== id));
-            exitTimers.current.delete(id);
-            closingIds.current.delete(id);
-        }, EXIT_DURATION);
-        exitTimers.current.set(id, exitTimer);
-    }, []);
-
-    const push = useCallback<ToastPush>(
-        (input: string | ToastOptions, error?: boolean) => {
-            const options = typeof input === "string" ? { message: input } : input;
-            const inferredError = error ?? /请|未找到|超过|必须|失败|不能/.test(options.message);
-            const id = ++seq.current;
-            const duration = options.duration ?? DEFAULT_DURATION;
-
-            setItems(prev => [
-                ...prev,
-                {
-                    id,
-                    title: options.title,
-                    message: options.message,
-                    tone: options.tone ?? (inferredError ? "error" : "success"),
-                    closing: false,
-                },
-            ]);
-
-            const timer = window.setTimeout(() => dismiss(id), duration);
-            autoDismissTimers.current.set(id, timer);
-        },
-        [dismiss],
-    );
-
-    useEffect(
-        () => () => {
-            autoDismissTimers.current.forEach(timer => window.clearTimeout(timer));
-            exitTimers.current.forEach(timer => window.clearTimeout(timer));
-        },
-        [],
-    );
-
     return (
-        <ToastContext.Provider value={push}>
-            {children}
-            <div className="pointer-events-none fixed inset-x-3 top-[max(12px,env(safe-area-inset-top))] z-220 flex flex-col items-stretch gap-2 md:inset-x-auto md:top-6 md:right-6 md:w-96">
-                {items.map(item => (
-                    <div
-                        key={item.id}
-                        role="status"
-                        aria-live={item.tone === "error" ? "assertive" : "polite"}
-                        aria-atomic="true"
-                        data-state={item.closing ? "closing" : "open"}
-                        data-tone={item.tone}
-                        className={`pointer-events-auto grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 rounded-card border border-line bg-surface p-3 text-left shadow-modal will-change-transform md:p-4 ${
-                            item.closing ? "animate-notification-exit" : "animate-notification-enter"
-                        }`}
-                    >
-                        <span
-                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-                                item.tone === "error" ? "bg-danger-soft text-danger" : "bg-success-soft text-success"
-                            }`}
-                        >
-                            <Icon name={item.tone === "error" ? "alert" : "check"} size={18} />
-                        </span>
-
-                        <div className="min-w-0 self-center">
-                            {item.title && <div className="text-14 font-semibold text-ink">{item.title}</div>}
-                            <div
-                                className={
-                                    item.title
-                                        ? "mt-0.5 text-13 leading-5 text-muted"
-                                        : "text-13 font-medium leading-5 text-td"
-                                }
-                            >
-                                {item.message}
-                            </div>
-                        </div>
-
-                        <button
-                            type="button"
-                            aria-label="关闭通知"
-                            onClick={() => dismiss(item.id)}
-                            className="-mr-2 -mt-2 flex h-11 w-11 items-center justify-center rounded-btn text-muted transition-colors hover:bg-soft hover:text-ink md:-mr-1 md:-mt-1 md:h-8 md:w-8"
-                        >
-                            <Icon name="close" size={16} />
-                        </button>
-                    </div>
-                ))}
-            </div>
-        </ToastContext.Provider>
+        <MessageContext.Provider value={pushMessage}>
+            <NotificationContext.Provider value={pushNotification}>
+                {children}
+                <Toaster
+                    id="message"
+                    position="top-center"
+                    offset="max(16px, env(safe-area-inset-top))"
+                    mobileOffset={{ top: "max(96px, calc(env(safe-area-inset-top) + 80px))", left: 0, right: 0 }}
+                    visibleToasts={1}
+                    containerAriaLabel="全局提示"
+                    closeButton={false}
+                    toastOptions={{ unstyled: true, classNames: { toast: "app-message-toast" } }}
+                    icons={{ success: <Icon name="check" size={17} />, error: <Icon name="alert" size={17} /> }}
+                />
+                <Toaster
+                    id="notification"
+                    position="top-right"
+                    offset={{ top: "max(24px, env(safe-area-inset-top))", right: 24 }}
+                    mobileOffset={{ top: "max(96px, calc(env(safe-area-inset-top) + 80px))", left: 0, right: 0 }}
+                    visibleToasts={3}
+                    containerAriaLabel="通知提醒"
+                    toastOptions={{
+                        unstyled: true,
+                        closeButtonAriaLabel: "关闭通知",
+                        classNames: { toast: "app-notification-toast" },
+                    }}
+                    icons={{
+                        success: <Icon name="check" size={18} />,
+                        error: <Icon name="alert" size={18} />,
+                        close: <Icon name="close" size={16} />,
+                    }}
+                />
+            </NotificationContext.Provider>
+        </MessageContext.Provider>
     );
 }
