@@ -1,67 +1,74 @@
 import { useEffect, useRef, useState } from "react";
-import { Outlet, useLocation } from "react-router";
-import { isRoutePending } from "@/lib/route-pending";
+import { Outlet } from "react-router";
+import { isRoutePending, subscribeRoutePending } from "@/lib/route-pending";
 
 type Phase = "idle" | "active" | "finishing";
 
-/** 同步导航最小展示时长:路径瞬时切换时进度条不至于一闪而过 */
-const MIN_ACTIVE_MS = 300;
-/** 收尾淡出时长,与内条 transition-duration 对齐 */
-const FINISH_MS = 220;
+/* 加载期宽度爬升:超长 CSS 过渡逼近 88%,复刻 nprogress trickle 的前快后慢,无需 JS 计时 */
+const CREEP_TRANSITION = "transition-[width] duration-[10000ms] ease-[cubic-bezier(0.1,0.35,0.25,1)]";
+/* 归零冲刺:信号结束即快速滑向 100%(对齐 vben 的 speed: 300 量级) */
+const SETTLE_TRANSITION = "transition-[width] duration-200 ease-out";
+/* 满格淡出:width 定格,opacity 退场 */
+const FADE_TRANSITION = "transition-opacity duration-300 ease-out";
+/** 满格停留时长,之后开始淡出 */
+const HOLD_MS = 300;
+/** 淡出时长,完成后 width 静默归零 */
+const FADE_MS = 300;
 
-/* 顶部路由进度条(仿 vben/nprogress 交互):挂载(硬刷新/进入)与 pathname 变化时启动;
-   结束条件 = route-pending 归零(懒加载 chunk / 认证校验完成),再补足最小展示。
-   必须挂在路由树内(经 ProgressLayout),useLocation 是唯一可靠的导航信号 */
+/* 顶部路由进度条(借鉴 vben/nprogress 的事件对模型):route-pending 出现路由级加载
+   (懒加载 chunk / 认证校验)即显示,归零即满格淡出,全程由订阅事件驱动;
+   宽度推进交给 CSS 过渡,无轮询、无最小展示时长——缓存命中的瞬时切换不出现进度条,
+   页面数据加载由页面内占位表达,不进这条链路 */
 export function RouteProgressBar() {
-    const { pathname } = useLocation();
     const [phase, setPhase] = useState<Phase>("idle");
     const [width, setWidth] = useState(0);
     const phaseRef = useRef<Phase>("idle");
-    const startedAt = useRef(0);
-    const finishTimer = useRef<number | undefined>(undefined);
-
-    const applyPhase = (next: Phase) => {
-        phaseRef.current = next;
-        setPhase(next);
-    };
-
-    const start = () => {
-        window.clearTimeout(finishTimer.current);
-        startedAt.current = Date.now();
-        if (phaseRef.current === "idle") setWidth(8);
-        else if (phaseRef.current === "finishing") setWidth(25);
-        applyPhase("active");
-    };
+    const hideTimer = useRef<number | undefined>(undefined);
+    const resetTimer = useRef<number | undefined>(undefined);
 
     useEffect(() => {
-        start();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pathname]);
-
-    /* active 期:渐近推进;满足结束条件后满格淡出 */
-    useEffect(() => {
-        if (phase !== "active") return;
-        const iv = window.setInterval(() => {
-            if (!isRoutePending() && Date.now() - startedAt.current >= MIN_ACTIVE_MS) {
-                window.clearInterval(iv);
-                setWidth(100);
-                applyPhase("finishing");
-                finishTimer.current = window.setTimeout(() => {
-                    setWidth(0);
-                    applyPhase("idle");
-                }, FINISH_MS);
-                return;
-            }
-            setWidth(prev => prev + (88 - prev) * 0.22);
-        }, 140);
-        return () => window.clearInterval(iv);
-    }, [phase]);
+        const show = () => {
+            window.clearTimeout(hideTimer.current);
+            window.clearTimeout(resetTimer.current);
+            // 淡出中途新加载开始时不倒退,从当前值继续爬
+            setWidth(prev => Math.max(88, prev));
+            phaseRef.current = "active";
+            setPhase("active");
+        };
+        const settle = () => {
+            setWidth(100);
+            phaseRef.current = "finishing";
+            setPhase("finishing");
+            hideTimer.current = window.setTimeout(() => {
+                phaseRef.current = "idle";
+                setPhase("idle");
+                // 淡出完成后归零,下一轮从 0 重新爬升(此刻 opacity 已为 0,不可见)
+                resetTimer.current = window.setTimeout(() => setWidth(0), FADE_MS);
+            }, HOLD_MS);
+        };
+        const sync = () => {
+            if (isRoutePending()) show();
+            else if (phaseRef.current !== "idle") settle();
+        };
+        const unsubscribe = subscribeRoutePending(sync);
+        // 挂载时信号可能已置位(不会再收到通知),同步读一次
+        sync();
+        return () => {
+            unsubscribe();
+            window.clearTimeout(hideTimer.current);
+            window.clearTimeout(resetTimer.current);
+        };
+    }, []);
 
     return (
         <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 top-0 z-60 h-0.5">
             <div
-                className={`h-full bg-primary transition-[width,opacity] duration-200 ease-out ${
-                    phase === "active" ? "opacity-100" : "opacity-0"
+                className={`h-full bg-primary ${
+                    phase === "active"
+                        ? `opacity-100 ${CREEP_TRANSITION}`
+                        : phase === "finishing"
+                          ? `opacity-100 ${SETTLE_TRANSITION}`
+                          : `opacity-0 ${FADE_TRANSITION}`
                 }`}
                 style={{ width: `${width}%` }}
             />

@@ -42,7 +42,7 @@ export function AppLayout() {
 
     // 认证守卫：未登录进登录页；本地 token 校验中显示全屏加载画面（避免未授权请求）
     if (status === "guest") return <Navigate to="/login" replace />;
-    if (status === "loading") return <PageLoading className="min-h-dvh bg-canvas" />;
+    if (status === "loading") return <PageLoading routeLevel className="min-h-dvh bg-canvas" />;
 
     return (
         <div className="flex min-h-dvh">
@@ -62,7 +62,7 @@ export function AppLayout() {
                         <ErrorPage kind="forbidden" />
                     ) : (
                         <AppContentErrorBoundary>
-                            <Suspense fallback={<PageLoading />}>
+                            <Suspense fallback={<PageLoading routeLevel />}>
                                 {/* key 只用 pathname(不含 search):改筛选参数不重播进入动画 */}
                                 <div
                                     key={location.pathname}

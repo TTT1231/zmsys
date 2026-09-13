@@ -28,7 +28,7 @@ export const router = createBrowserRouter([
             {
                 path: "/login",
                 element: (
-                    <Suspense fallback={<PageLoading className="min-h-dvh bg-canvas" />}>
+                    <Suspense fallback={<PageLoading routeLevel className="min-h-dvh bg-canvas" />}>
                         <LoginPage />
                     </Suspense>
                 ),

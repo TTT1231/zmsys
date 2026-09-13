@@ -1,27 +1,53 @@
-/* 路由加载信号 store:置位/复位通知与退订 */
+/* 路由加载信号 store:引用计数的进出配对、边界通知与退订 */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { isRoutePending, setRoutePending, subscribeRoutePending } from "@/lib/route-pending";
+import {
+    enterRoutePending,
+    exitRoutePending,
+    isRoutePending,
+    resetRoutePending,
+    subscribeRoutePending,
+} from "@/lib/route-pending";
 
 afterEach(() => {
-    setRoutePending(false);
+    resetRoutePending();
 });
 
 describe("route-pending store", () => {
-    it("notifies subscribers only on change", () => {
+    it("keeps pending while nested enter/exit pairs overlap", () => {
+        enterRoutePending();
+        enterRoutePending();
+        expect(isRoutePending()).toBe(true);
+
+        exitRoutePending();
+        expect(isRoutePending()).toBe(true); // 并存加载源退出一方不得清零信号
+        exitRoutePending();
+        expect(isRoutePending()).toBe(false);
+    });
+
+    it("clamps extra exits at zero", () => {
+        exitRoutePending();
+        expect(isRoutePending()).toBe(false);
+
+        enterRoutePending();
+        expect(isRoutePending()).toBe(true);
+    });
+
+    it("notifies subscribers only when crossing the boundary", () => {
         const listener = vi.fn();
         const unsubscribe = subscribeRoutePending(listener);
 
-        setRoutePending(true);
-        expect(listener).toHaveBeenCalledTimes(1);
-        expect(isRoutePending()).toBe(true);
-
-        setRoutePending(true); // 同值不重复通知
+        enterRoutePending();
         expect(listener).toHaveBeenCalledTimes(1);
 
-        setRoutePending(false);
+        enterRoutePending(); // 仍 pending,不重复通知
+        expect(listener).toHaveBeenCalledTimes(1);
+
+        exitRoutePending(); // 仍 pending
+        expect(listener).toHaveBeenCalledTimes(1);
+
+        exitRoutePending(); // 归零
         expect(listener).toHaveBeenCalledTimes(2);
-        expect(isRoutePending()).toBe(false);
 
         unsubscribe();
     });
@@ -30,7 +56,7 @@ describe("route-pending store", () => {
         const listener = vi.fn();
         const unsubscribe = subscribeRoutePending(listener);
         unsubscribe();
-        setRoutePending(true);
+        enterRoutePending();
         expect(listener).not.toHaveBeenCalled();
     });
 });

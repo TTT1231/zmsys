@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { setRoutePending } from "@/lib/route-pending";
+import { enterRoutePending, exitRoutePending } from "@/lib/route-pending";
 import { Loader } from "./Loader";
 
 interface PageLoadingProps {
@@ -7,15 +7,20 @@ interface PageLoadingProps {
     label?: string;
     /** 追加类名:全屏场景传 "min-h-dvh bg-canvas" */
     className?: string;
+    /** 路由级加载标记(懒加载 chunk 挂起 / 认证校验):上报顶部路由进度条;
+        页面内数据占位不传——进度条只属于路由切换,数据加载由占位自身表达(vben 语义) */
+    routeLevel?: boolean;
 }
 
-/* 替换式页面占位:首载 / 认证校验 / 路由 chunk 加载(Suspense fallback)。
-   挂载/卸载向 route-pending 上报,作为顶部路由进度条的"仍在加载"信号 */
-export function PageLoading({ label = "加载中…", className = "" }: PageLoadingProps) {
+/* 替换式页面占位:首载 / 认证校验 / 路由 chunk 加载(Suspense fallback)/ 页面首屏数据。
+   routeLevel 的挂载/卸载向 route-pending 计数上报,作为顶部路由进度条的"仍在加载"信号;
+   多实例并存时逐一退出,先卸载的不会误清仍挂载实例的信号 */
+export function PageLoading({ label = "加载中…", className = "", routeLevel = false }: PageLoadingProps) {
     useEffect(() => {
-        setRoutePending(true);
-        return () => setRoutePending(false);
-    }, []);
+        if (!routeLevel) return;
+        enterRoutePending();
+        return () => exitRoutePending();
+    }, [routeLevel]);
 
     return (
         <div
