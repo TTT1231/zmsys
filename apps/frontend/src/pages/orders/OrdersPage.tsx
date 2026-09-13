@@ -1,6 +1,7 @@
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { ListState, OrderTaskCard } from "@/components/ui/MobileList";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { OutboundModal } from "@/pages/outbound/OutboundPage";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -810,17 +811,8 @@ export function OrdersPage() {
                             <tbody>
                                 {pageRows.length === 0 && (
                                     <tr>
-                                        <td colSpan={8} className="px-5 py-14 text-center">
-                                            <Icon name="search" size={28} className="mx-auto mb-2 text-subtle" />
-                                            <p className="text-13 font-medium text-ink">没有找到匹配的订单</p>
-                                            <p className="mt-0.5 text-12 text-muted">调整筛选或搜索关键词后重试</p>
-                                            <button
-                                                type="button"
-                                                onClick={reset}
-                                                className="mt-3 rounded-input border border-line-strong px-3.5 py-2 text-12.5 font-medium text-primary-strong hover:border-primary-border"
-                                            >
-                                                清除筛选
-                                            </button>
+                                        <td colSpan={8} className="px-5 py-10 text-center">
+                                            <EmptyState description="没有找到匹配的订单" />
                                         </td>
                                     </tr>
                                 )}

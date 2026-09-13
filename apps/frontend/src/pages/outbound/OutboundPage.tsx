@@ -1,5 +1,6 @@
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard } from "@/components/ui/MobileList";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
@@ -820,8 +821,8 @@ export function OutboundPage() {
                             <tbody>
                                 {pageRows.length === 0 && (
                                     <tr>
-                                        <td colSpan={8} className="px-5 py-14 text-center text-13 text-subtle">
-                                            没有找到匹配的出库记录
+                                        <td colSpan={8} className="px-5 py-10 text-center">
+                                            <EmptyState description="没有找到匹配的出库记录" />
                                         </td>
                                     </tr>
                                 )}

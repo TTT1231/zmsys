@@ -4,6 +4,7 @@ import { bomByCode, maxShipOf, orderStatusOf, remainingOf } from "@/data/views";
 import { num } from "@/lib/format";
 import { todayIso } from "@/lib/date";
 import { Badge, Button, StatusBadge } from "./Badge";
+import { EmptyState } from "./EmptyState";
 import { Loader } from "./Loader";
 
 export function ListState({ loading, empty, children }: { loading?: boolean; empty: boolean; children: ReactNode }) {
@@ -15,9 +16,9 @@ export function ListState({ loading, empty, children }: { loading?: boolean; emp
         );
     if (empty)
         return (
-            <p role="status" className="p-8 text-center text-muted">
-                没有匹配的记录，请调整搜索或筛选。
-            </p>
+            <div role="status" className="p-8">
+                <EmptyState description="没有匹配的记录，请调整搜索或筛选。" />
+            </div>
         );
     return <>{children}</>;
 }

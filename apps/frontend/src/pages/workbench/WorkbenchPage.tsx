@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Modal } from "@/components/ui/Modal";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/lib/icons";
 import { num } from "@/lib/format";
 import { addDays } from "@/lib/date";
@@ -408,7 +409,9 @@ function OwnerWorkbench() {
                                 ))}
                                 {!ranking.length && (
                                     <tr>
-                                        <td colSpan={6}>所选期间暂无客户订单</td>
+                                        <td colSpan={6}>
+                                            <EmptyState description="所选期间暂无客户订单" imageSize={120} />
+                                        </td>
                                     </tr>
                                 )}
                             </tbody>
@@ -447,7 +450,9 @@ function OwnerWorkbench() {
                                 ))}
                                 {!detail.orders.length && (
                                     <tr>
-                                        <td colSpan={5}>所选期间暂无订单</td>
+                                        <td colSpan={5}>
+                                            <EmptyState description="所选期间暂无订单" imageSize={120} />
+                                        </td>
                                     </tr>
                                 )}
                             </tbody>
@@ -489,7 +494,9 @@ function OwnerWorkbench() {
                                         ))}
                                     {!risks.some(order => order.kind === detail.risk) && (
                                         <tr>
-                                            <td colSpan={5}>当前没有此类交付风险</td>
+                                            <td colSpan={5}>
+                                                <EmptyState description="当前没有此类交付风险" imageSize={120} />
+                                            </td>
                                         </tr>
                                     )}
                                 </tbody>
