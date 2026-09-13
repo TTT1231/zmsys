@@ -151,6 +151,14 @@ describe('基础设施并发专项 (e2e)', () => {
         it('同 key 同 body 顺序重试：重放原响应，号码只消耗一个', async () => {
             const token = await login();
             const headers = { authorization: `Bearer ${token}`, 'idempotency-key': 'replay-key-0001' };
+            // 共享测试库被多套件串行消耗同一序列，断言改为相对增量（不依赖绝对值）
+            const readNext = async (): Promise<number> => {
+                const rows = await prisma.$queryRaw<Array<{ next_value: bigint }>>`
+                    SELECT next_value FROM biz_sequence WHERE sequence_key = 'customer:global'
+                `;
+                return Number(rows[0].next_value);
+            };
+            const before = await readNext();
             const first = await app.inject({
                 method: 'POST',
                 url: '/api/test/idempotent/orders',
@@ -167,15 +175,19 @@ describe('基础设施并发专项 (e2e)', () => {
             expect(second.statusCode).toBe(200);
             expect(second.json().data).toEqual(first.json().data);
             // 重放不重新执行业务：全局客户序列只前进一次
-            const rows = await prisma.$queryRaw<Array<{ next_value: bigint }>>`
-                SELECT next_value FROM biz_sequence WHERE sequence_key = 'customer:global'
-            `;
-            expect(Number(rows[0].next_value)).toBe(2); // 首次取 1，重放不取号
+            expect(await readNext()).toBe(before + 1);
         });
 
         it('同 key 并发请求：恰一次提交业务效果，另一方拿到重放', async () => {
             const token = await login();
             const headers = { authorization: `Bearer ${token}`, 'idempotency-key': 'race-key-00002' };
+            const readNext = async (): Promise<number> => {
+                const rows = await prisma.$queryRaw<Array<{ next_value: bigint }>>`
+                    SELECT next_value FROM biz_sequence WHERE sequence_key = 'customer:global'
+                `;
+                return Number(rows[0].next_value);
+            };
+            const before = await readNext();
             const [a, b] = await Promise.all([
                 app.inject({ method: 'POST', url: '/api/test/idempotent/orders', headers, payload: { payload: 'x' } }),
                 app.inject({ method: 'POST', url: '/api/test/idempotent/orders', headers, payload: { payload: 'x' } }),
@@ -183,10 +195,7 @@ describe('基础设施并发专项 (e2e)', () => {
             expect(a.statusCode).toBe(200);
             expect(b.statusCode).toBe(200);
             expect(a.json().data).toEqual(b.json().data);
-            const rows = await prisma.$queryRaw<Array<{ next_value: bigint }>>`
-                SELECT next_value FROM biz_sequence WHERE sequence_key = 'customer:global'
-            `;
-            expect(Number(rows[0].next_value)).toBe(3); // 只新增一次（上一用例已到 2）
+            expect(await readNext()).toBe(before + 1); // 只新增一次
         });
 
         it('同 key 不同请求体：409', async () => {

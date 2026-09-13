@@ -15,13 +15,15 @@ interface SequenceFormat {
     datePattern: 'yyMMdd' | 'yyyyMMdd' | null;
     /** 序号显示宽度下限 */
     minWidth: number;
+    /** 日期段与序号之间的连接符（库存调整单 TZ-yyyyMMdd-0001，其余为空） */
+    dateJoiner?: string;
 }
 
 const FORMATS: Record<SequenceType, SequenceFormat> = {
     order: { prefix: 'ZM', datePattern: 'yyMMdd', minWidth: 3 },
     inbound: { prefix: 'RK', datePattern: 'yyMMdd', minWidth: 2 },
     outbound: { prefix: 'CK', datePattern: 'yyMMdd', minWidth: 2 },
-    adjust: { prefix: 'TZ-', datePattern: 'yyyyMMdd', minWidth: 4 },
+    adjust: { prefix: 'TZ-', datePattern: 'yyyyMMdd', minWidth: 4, dateJoiner: '-' },
     customer: { prefix: 'CUS-', datePattern: null, minWidth: 4 },
 };
 
@@ -62,7 +64,9 @@ export class BusinessSequenceService {
         const datePart = format.datePattern ? datePartOf(format.datePattern, businessDate) : null;
         const sequenceKey = `${type}:${datePart ?? 'global'}`;
         const seq = await this.nextRaw(tx, sequenceKey);
-        return `${format.prefix}${datePart ?? ''}${seq.toString().padStart(format.minWidth, '0')}`;
+        return `${format.prefix}${datePart ?? ''}${datePart ? (format.dateJoiner ?? '') : ''}${seq
+            .toString()
+            .padStart(format.minWidth, '0')}`;
     }
 
     /**

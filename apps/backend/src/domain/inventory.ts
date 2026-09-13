@@ -17,7 +17,8 @@ export async function getStockQty(tx: Tx, bomId: bigint): Promise<number> {
 
 interface ActiveOrderRow {
     id: bigint;
-    qty: number;
+    /** INT UNSIGNED 经原生查询可能映射为 BigInt（driver 决定），统一显式转换 */
+    qty: number | bigint;
     outbound_qty: bigint | number;
 }
 
@@ -43,11 +44,11 @@ export async function computeShippableQty(
         FROM sales_order_table AS o
         LEFT JOIN v_order_outbound_qty AS v ON v.order_id = o.id
         WHERE o.bom_id = ${params.bomId} AND o.lifecycle_status = 'ACTIVE'
-        ORDER BY o.deliver_end_date ASC, o.order_no ASC
+        ORDER BY o.deliver_date ASC, o.order_no ASC
     `;
     let pool = await getStockQty(tx, params.bomId);
     for (const order of orders) {
-        const remaining = Math.max(order.qty - Number(order.outbound_qty), 0);
+        const remaining = Math.max(Number(order.qty) - Number(order.outbound_qty), 0);
         if (order.id === params.targetOrderId) {
             const allowance = Math.min(pool, remaining);
             if (params.requestedQty > allowance) {

@@ -1,14 +1,7 @@
 /** 契约 BomSpecField（openapi boms tag）：品类规格字段元数据，目录由后端权威下发 */
-export interface BomSpecField {
-    key: string;
-    label: string;
-    type: 'select' | 'text';
-    options?: string[];
-    required?: boolean;
-    placeholder?: string;
-    initial?: string;
-    defaultValue?: string;
-}
+import type { BomSpecField } from '../common/bom-display';
+
+export type { BomSpecField };
 
 /** 契约 BomCategory：key 为稳定标识，seqWidth 缺省 3 */
 export interface BomCategory {

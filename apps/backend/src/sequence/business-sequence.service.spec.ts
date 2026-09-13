@@ -27,12 +27,12 @@ describe('BusinessSequenceService.nextCode（契约编码格式化）', () => {
         await expect(service.nextCode(tx, 'order', '2026-09-11')).resolves.toBe('ZM2609111000');
     });
 
-    it('入库/出库：RK/CK + yyMMdd + 至少 2 位序号；调整：TZ- + yyyyMMdd + 至少 4 位', async () => {
+    it('入库/出库：RK/CK + yyMMdd + 至少 2 位序号；调整：TZ- + yyyyMMdd + 至少 4 位（与 mock 同构带连字符）', async () => {
         const { service, queryRaw, tx } = createService();
         queryRaw.mockResolvedValue([{ next_value: 7n }]);
         await expect(service.nextCode(tx, 'inbound', '2026-09-11')).resolves.toBe('RK26091107');
         await expect(service.nextCode(tx, 'outbound', '2026-09-11')).resolves.toBe('CK26091107');
-        await expect(service.nextCode(tx, 'adjust', '2026-09-11')).resolves.toBe('TZ-202609110007');
+        await expect(service.nextCode(tx, 'adjust', '2026-09-11')).resolves.toBe('TZ-20260911-0007');
     });
 
     it('客户：全局计数（忽略业务日期），CUS- + 至少 4 位', async () => {
