@@ -34,6 +34,9 @@ const PATHS: Record<string, string[]> = {
     "chevron-left": ["M14.5 6 9 12l5.5 6"],
     "chevron-right": ["M9.5 6 15 12l-5.5 6"],
     "chevron-down": ["M6 9.5l6 5.5 6-5.5"],
+    "chevron-up": ["M6 14.5l6-5.5 6 5.5"],
+    /* 表头排序指示：未激活时上下双箭头，激活后换 chevron-up / chevron-down */
+    sort: ["M8.5 9.5 12 6l3.5 3.5", "M8.5 14.5 12 18l3.5-3.5"],
     copy: ["M9 9h11v11H9z", "M5 15H4V4h11v1"],
     download: ["M12 4v10.5", "M7.5 11 12 15.5 16.5 11", "M5 19.5h14"],
     refresh: ["M20 12a8 8 0 1 1-2.5-5.8", "M20 3.5V8h-4.5"],

@@ -1,5 +1,5 @@
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
-import { ListState, RecordCard } from "@/components/ui/MobileList";
+import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BomSpecs } from "@/components/bom/BomSpecs";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -491,6 +491,11 @@ export function BomPage() {
 
     const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
     const canCreate = can("bom:create");
+    // 翻页后行序变化，滚动区回到顶部
+    const tableScrollRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
+    }, [page]);
 
     useEffect(() => {
         if (searchParams.get("new") === "bom") {
@@ -617,19 +622,24 @@ export function BomPage() {
                                     layout="list"
                                     showIdentity={false}
                                 />
-                                <p className="mt-2 text-13 text-muted">库存 {num(data?.stock[bom.code] ?? 0)} 件</p>
+                                <div className="mt-2">
+                                    <CardField label="当前库存" value={`${num(data?.stock[bom.code] ?? 0)} 件`} />
+                                </div>
                             </RecordCard>
                         ))}
                     </ListState>
                 </div>
-                <div className="hidden overflow-x-auto lg:block">
+                <div
+                    ref={tableScrollRef}
+                    className="hidden overflow-auto lg:block lg:max-h-[calc(100dvh-23rem)] lg:min-h-[18.75rem]"
+                >
                     {isLoading ? (
                         <PageLoading className="py-16" />
                     ) : (
-                        <table className="w-full min-w-230 table-fixed border-collapse">
+                        <table className="data-table w-full min-w-230 table-fixed border-collapse">
                             <thead>
-                                <tr className="bg-soft text-left text-12 text-muted">
-                                    <th className="px-5 py-2.5 font-semibold" style={{ width: "6%" }}>
+                                <tr className="text-left text-12 text-muted">
+                                    <th className="px-5 py-2.5 text-right font-semibold" style={{ width: "6%" }}>
                                         序号
                                     </th>
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "16%" }}>
@@ -661,9 +671,9 @@ export function BomPage() {
                                 {pageRows.map((bom, index) => (
                                     <tr
                                         key={bom.code}
-                                        className="border-t border-line/70 align-top transition hover:bg-row-hover"
+                                        className="border-t border-line align-top transition hover:bg-row-hover"
                                     >
-                                        <td className="px-5 py-3 tnum text-13 text-muted">
+                                        <td className="px-5 py-3 tnum text-right text-13 text-muted">
                                             {(page - 1) * pageSize + index + 1}
                                         </td>
                                         <td className="px-3 py-3">

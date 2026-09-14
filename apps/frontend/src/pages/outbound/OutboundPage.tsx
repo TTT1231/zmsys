@@ -1,8 +1,8 @@
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
-import { ListState, RecordCard } from "@/components/ui/MobileList";
+import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { RecordFields, RecordProduct, RecordSummary } from "@/components/business/RecordDetails";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
@@ -12,6 +12,9 @@ import { Badge, Button } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { CustomerCell, QtyCell } from "@/components/ui/cells";
+import { SortTh } from "@/components/ui/SortTh";
+import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
+import { nextSortState, type SortState } from "@/lib/tableSort";
 import { DateField, TextArea, TextField } from "@/components/ui/Field";
 import {
     useCreateOutbound,
@@ -27,6 +30,13 @@ import { EMPTY_SNAPSHOT, bomByCode, maxShipOf, remainingOf } from "@/data/views"
 import { todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/Toast";
 import type { OutboundPrintDocument, OutboundRow, Snapshot } from "@/api";
+
+/* 可排序列：出库日期 / 发货数量；桌面表头与移动端排序下拉共用 */
+type LedgerSortKey = "date" | "qty";
+const LEDGER_SORT_COLUMNS: Array<{ key: LedgerSortKey; label: string }> = [
+    { key: "date", label: "出库日期" },
+    { key: "qty", label: "发货数量" },
+];
 
 const escapeHtml = (value: string) =>
     value.replace(
@@ -594,6 +604,8 @@ export function OutboundPage() {
     const [statusFilter, setStatusFilter] = useState("全部状态");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
+    // 列排序默认升序：默认按出库日期（同日以单号稳定排序）
+    const [sort, setSort] = useState<SortState<LedgerSortKey>>({ key: "date", dir: "asc" });
     const [newOpen, setNewOpen] = useState(false);
     const [detail, setDetail] = useState<OutboundRow | null>(null);
     const [reprintTarget, setReprintTarget] = useState<OutboundRow | null>(null);
@@ -614,16 +626,24 @@ export function OutboundPage() {
         });
     }, [rows, keyword, category, statusFilter, bomCategory]);
 
-    const sorted = useMemo(
-        () =>
-            [...filtered].sort((a, b) => (a.date === b.date ? b.no.localeCompare(a.no) : b.date.localeCompare(a.date))),
-        [filtered],
-    );
+    const sorted = useMemo(() => {
+        const factor = sort.dir === "asc" ? 1 : -1;
+        return [...filtered].sort((a, b) => {
+            const byKey = sort.key === "qty" ? a.qty - b.qty : a.date.localeCompare(b.date);
+            return byKey * factor || a.no.localeCompare(b.no);
+        });
+    }, [filtered, sort]);
     const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize);
     const canRegister = can("outbound:ship");
     const canPrint = can("outbound:print");
     const canVoid = can("outbound:void");
     const canEmergencyVoid = can("outbound:emergency-void");
+    const applySort = (key: LedgerSortKey) => setSort(current => nextSortState(current, key));
+    // 排序或翻页后行序变化，滚动区回到顶部，避免误以为排错行
+    const tableScrollRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
+    }, [page, sort]);
 
     const requestPrint = (row: OutboundRow, reason = "") => {
         if (printRequest.isPending || row.state === "voided") return;
@@ -723,6 +743,7 @@ export function OutboundPage() {
                             <option key={item}>{item}</option>
                         ))}
                     </select>
+                    <MobileSortSelect columns={LEDGER_SORT_COLUMNS} value={sort} onChange={setSort} />
                     <button
                         type="button"
                         onClick={clearFilters}
@@ -777,7 +798,7 @@ export function OutboundPage() {
                             <RecordCard
                                 key={row.no}
                                 title={row.customer}
-                                subtitle={`${row.orderNo} · ${row.date}`}
+                                subtitle={row.orderNo}
                                 badge={
                                     row.state === "voided" ? (
                                         <Badge tone="danger">已作废</Badge>
@@ -814,31 +835,50 @@ export function OutboundPage() {
                                     </div>
                                 }
                             >
-                                <p>{row.bomCode}</p>
-                                <p className="mt-2 text-13 text-muted">
+                                <p className="tnum">{row.bomCode}</p>
+                                <p className="mt-0.5 tnum text-13 text-muted">
                                     {row.state === "voided" ? (
                                         <span className="line-through decoration-danger/50">{row.no}</span>
                                     ) : (
                                         row.no
-                                    )}{" "}
-                                    · {row.operator}
+                                    )}
                                 </p>
+                                <div className="mt-2 flex flex-col gap-1.5">
+                                    <CardField label="出库日期" value={row.date} />
+                                    <CardField label="操作人" value={row.operator} />
+                                </div>
                             </RecordCard>
                         ))}
                     </ListState>
                 </div>
-                <div className="hidden overflow-x-auto lg:block">
+                <div
+                    ref={tableScrollRef}
+                    className="hidden overflow-auto lg:block lg:max-h-[calc(100dvh-23rem)] lg:min-h-[18.75rem]"
+                >
                     {isLoading ? (
                         <PageLoading className="py-16" />
                     ) : (
-                        <table className="w-full min-w-225 border-collapse">
+                        <table className="data-table w-full min-w-225 border-collapse">
                             <thead>
-                                <tr className="bg-soft text-left text-12 text-muted">
+                                <tr className="text-left text-12 text-muted">
                                     <th className="px-5 py-2.5 font-semibold">出库单号</th>
                                     <th className="px-3 py-2.5 font-semibold">订单 / 客户</th>
                                     <th className="px-3 py-2.5 font-semibold">BOM 编码</th>
-                                    <th className="px-3 py-2.5 text-right font-semibold">发货数量</th>
-                                    <th className="px-3 py-2.5 font-semibold">出库日期</th>
+                                    <SortTh
+                                        label="发货数量（件）"
+                                        align="right"
+                                        active={sort.key === "qty"}
+                                        dir={sort.dir}
+                                        onSort={() => applySort("qty")}
+                                        className="px-3"
+                                    />
+                                    <SortTh
+                                        label="出库日期"
+                                        active={sort.key === "date"}
+                                        dir={sort.dir}
+                                        onSort={() => applySort("date")}
+                                        className="px-3"
+                                    />
                                     <th className="px-3 py-2.5 text-13 font-semibold">操作人</th>
                                     <th className="px-3 py-2.5 font-semibold">状态</th>
                                     <th className="px-5 py-2.5 text-right font-semibold">操作</th>
@@ -857,8 +897,8 @@ export function OutboundPage() {
                                         key={row.no}
                                         className={
                                             row.state === "voided"
-                                                ? "border-t border-line/70 bg-danger-soft/60"
-                                                : "border-t border-line/70 transition hover:bg-row-hover"
+                                                ? "border-t border-line bg-danger-soft/60"
+                                                : "border-t border-line transition hover:bg-row-hover"
                                         }
                                     >
                                         <td
@@ -878,7 +918,7 @@ export function OutboundPage() {
                                             {row.bomCode}
                                         </td>
                                         <td className="px-3 py-3 text-right">
-                                            <QtyCell value={row.qty} unit="件" />
+                                            <QtyCell value={row.qty} />
                                         </td>
                                         <td className="px-3 py-3 tnum text-13 text-td">{row.date}</td>
                                         <td className="px-3 py-3 text-13 text-td">{row.operator}</td>

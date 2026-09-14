@@ -1,16 +1,19 @@
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
-import { ListState, RecordCard } from "@/components/ui/MobileList";
+import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
-import { downloadCsv } from "@/lib/format";
+import { downloadCsv, num } from "@/lib/format";
 import { useApp } from "@/context/AppContext";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Pagination } from "@/components/ui/Pagination";
 import { Badge, Button, TableLink } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { CustomerCell } from "@/components/ui/cells";
+import { SortTh } from "@/components/ui/SortTh";
+import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
+import { nextSortState, type SortState } from "@/lib/tableSort";
 import { SelectField, TextField } from "@/components/ui/Field";
 import { RegionCascader, regionText, type RegionValue } from "@/components/ui/RegionCascader";
 import { useCreateCustomer, useUpdateCustomer, useWbRefresh, useWbSnapshot } from "@/data/queries";
@@ -25,6 +28,14 @@ const AVATAR_TONES = [
     "bg-success-soft text-success",
     "bg-purple-100 text-purple-700",
     "bg-accent-soft text-accent",
+];
+
+/* 可排序列：最近下单（日期）/ 累计订单 / 待交数量；桌面表头与移动端排序下拉共用 */
+type CustomerSortKey = "lastOrderDate" | "orderCount" | "pendingQty";
+const CUSTOMER_SORT_COLUMNS: Array<{ key: CustomerSortKey; label: string }> = [
+    { key: "lastOrderDate", label: "最近下单" },
+    { key: "orderCount", label: "累计订单" },
+    { key: "pendingQty", label: "待交数量" },
 ];
 
 /* 新建 / 编辑客户共用表单弹窗（编辑时传 customer 初值；电话留空表示不修改） */
@@ -313,6 +324,8 @@ export function CustomersPage() {
     const [keyword, setKeyword] = useState("");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
+    // 列排序默认升序：默认按最近下单
+    const [sort, setSort] = useState<SortState<CustomerSortKey>>({ key: "lastOrderDate", dir: "asc" });
     const [formTarget, setFormTarget] = useState<Customer | "new" | null>(null);
     const [detail, setDetail] = useState<Customer | null>(null);
 
@@ -345,7 +358,30 @@ export function CustomersPage() {
             });
     }, [customers, orders, statusFilter, keyword]);
 
-    const pageRows = rows.slice((page - 1) * pageSize, page * pageSize);
+    // 列排序：从未下单（—）的客户固定排在最后，同值以客户编码稳定排序
+    const sortedRows = useMemo(() => {
+        const factor = sort.dir === "asc" ? 1 : -1;
+        const byCode = (a: (typeof rows)[number], b: (typeof rows)[number]) =>
+            a.customer.code.localeCompare(b.customer.code);
+        return [...rows].sort((a, b) => {
+            if (sort.key === "orderCount") return (a.orderCount - b.orderCount) * factor || byCode(a, b);
+            if (sort.key === "pendingQty") return (a.pendingQty - b.pendingQty) * factor || byCode(a, b);
+            if (a.lastOrderDate === "—" || b.lastOrderDate === "—") {
+                if (a.lastOrderDate === b.lastOrderDate) return byCode(a, b);
+                return a.lastOrderDate === "—" ? 1 : -1;
+            }
+            return a.lastOrderDate.localeCompare(b.lastOrderDate) * factor || byCode(a, b);
+        });
+    }, [rows, sort]);
+
+    const pageRows = sortedRows.slice((page - 1) * pageSize, page * pageSize);
+
+    const applySort = (key: CustomerSortKey) => setSort(current => nextSortState(current, key));
+    // 排序或翻页后行序变化，滚动区回到顶部，避免误以为排错行
+    const tableScrollRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
+    }, [page, sort]);
 
     useEffect(() => {
         if (searchParams.get("new") === "customer") {
@@ -406,6 +442,7 @@ export function CustomersPage() {
                             <option key={option}>{option}</option>
                         ))}
                     </select>
+                    <MobileSortSelect columns={CUSTOMER_SORT_COLUMNS} value={sort} onChange={setSort} />
                     <button
                         type="button"
                         onClick={clearFilters}
@@ -476,26 +513,51 @@ export function CustomersPage() {
                                 <p>
                                     {customer.contact} · {customer.phone}
                                 </p>
-                                <p className="mt-2">
-                                    {orderCount} 笔订单 · 待交 <strong>{pendingQty.toLocaleString("zh-CN")}</strong> 件
-                                </p>
+                                <div className="mt-2 flex flex-col gap-1.5">
+                                    <CardField label="累计订单" value={`${orderCount} 单`} />
+                                    <CardField label="待交" value={`${num(pendingQty)} 件`} strong />
+                                </div>
                             </RecordCard>
                         ))}
                     </ListState>
                 </div>
-                <div className="hidden overflow-x-auto lg:block">
+                <div
+                    ref={tableScrollRef}
+                    className="hidden overflow-auto lg:block lg:max-h-[calc(100dvh-23rem)] lg:min-h-[18.75rem]"
+                >
                     {isLoading ? (
                         <PageLoading className="py-16" />
                     ) : (
-                        <table className="w-full min-w-240 border-collapse">
+                        <table className="data-table w-full min-w-240 border-collapse">
                             <thead>
-                                <tr className="bg-soft text-left text-12 text-muted">
+                                <tr className="text-left text-12 text-muted">
                                     <th className="px-5 py-2.5 font-semibold">客户信息</th>
                                     <th className="px-3 py-2.5 font-semibold">联系人</th>
                                     <th className="px-3 py-2.5 font-semibold">电话</th>
                                     <th className="px-3 py-2.5 font-semibold">所在地</th>
-                                    <th className="px-3 py-2.5 font-semibold">累计 / 待交</th>
-                                    <th className="px-3 py-2.5 font-semibold">最近下单</th>
+                                    <SortTh
+                                        label="累计订单"
+                                        align="right"
+                                        active={sort.key === "orderCount"}
+                                        dir={sort.dir}
+                                        onSort={() => applySort("orderCount")}
+                                        className="px-3"
+                                    />
+                                    <SortTh
+                                        label="待交数量"
+                                        align="right"
+                                        active={sort.key === "pendingQty"}
+                                        dir={sort.dir}
+                                        onSort={() => applySort("pendingQty")}
+                                        className="px-3"
+                                    />
+                                    <SortTh
+                                        label="最近下单"
+                                        active={sort.key === "lastOrderDate"}
+                                        dir={sort.dir}
+                                        onSort={() => applySort("lastOrderDate")}
+                                        className="px-3"
+                                    />
                                     <th className="px-3 py-2.5 font-semibold">合作状态</th>
                                     <th className="px-5 py-2.5 text-right font-semibold">操作</th>
                                 </tr>
@@ -503,7 +565,7 @@ export function CustomersPage() {
                             <tbody>
                                 {pageRows.length === 0 && (
                                     <tr>
-                                        <td colSpan={8} className="px-5 py-10 text-center">
+                                        <td colSpan={9} className="px-5 py-10 text-center">
                                             <EmptyState description="没有找到匹配的客户" />
                                         </td>
                                     </tr>
@@ -511,7 +573,7 @@ export function CustomersPage() {
                                 {pageRows.map((row, index) => (
                                     <tr
                                         key={row.customer.code}
-                                        className="border-t border-line/70 transition hover:bg-row-hover"
+                                        className="border-t border-line transition hover:bg-row-hover"
                                     >
                                         <td className="px-5 py-3">
                                             <div className="flex items-center gap-2.5">
@@ -537,14 +599,13 @@ export function CustomersPage() {
                                                 {regionText(row.customer)}
                                             </span>
                                         </td>
-                                        <td className="px-3 py-3 text-13 text-td tnum">
-                                            {row.orderCount} 单
-                                            {row.pendingQty > 0 ? (
-                                                <span className="text-muted">
-                                                    {" "}
-                                                    · 待交 {row.pendingQty.toLocaleString("zh-CN")}
-                                                </span>
-                                            ) : null}
+                                        <td className="px-3 py-3 tnum text-right text-13 text-td">{row.orderCount}</td>
+                                        <td className="px-3 py-3 tnum text-right text-13">
+                                            <span
+                                                className={row.pendingQty > 0 ? "font-medium text-ink" : "text-subtle"}
+                                            >
+                                                {num(row.pendingQty)}
+                                            </span>
                                         </td>
                                         <td className="px-3 py-3 tnum text-13 text-td">{row.lastOrderDate}</td>
                                         <td className="px-3 py-3">

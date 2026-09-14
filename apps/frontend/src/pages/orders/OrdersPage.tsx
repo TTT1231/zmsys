@@ -5,7 +5,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { BomCell } from "@/components/bom/BomCell";
 import { RecordFields, RecordProduct, RecordSummary } from "@/components/business/RecordDetails";
 import { OutboundModal } from "@/pages/outbound/OutboundPage";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
@@ -15,6 +15,9 @@ import { Badge, Button, ProgressTrack, StatusBadge, TableLink } from "@/componen
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { CustomerCell, DateCell, QtyCell } from "@/components/ui/cells";
+import { SortTh } from "@/components/ui/SortTh";
+import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
+import { nextSortState, type SortState } from "@/lib/tableSort";
 import { Field, SelectField, TextArea, TextField, DateField } from "@/components/ui/Field";
 import { useCreateOrder, useUpdateOrder, useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { EMPTY_SNAPSHOT, bomByCode, maxShipOf, orderStatusOf, remainingOf } from "@/data/views";
@@ -29,6 +32,15 @@ import { bomSelectorOptionLabel, buildBomSelectorSchema, resolveBomSelection } f
 const STATUS_OPTIONS = ["全部状态", "待备货", "可发货", "部分发货", "已完成", "已取消", "部分发货后取消"];
 const EMPTY_BOMS: Snapshot["boms"] = [];
 const EMPTY_CUSTOMERS: Snapshot["customers"] = [];
+
+/* 可排序列：订单号 / 数量 / 交期 / 交付情况（按累计已发对比）；桌面表头与移动端排序下拉共用 */
+type OrderSortKey = "orderNo" | "qty" | "deliverDate" | "outbound";
+const ORDER_SORT_COLUMNS: Array<{ key: OrderSortKey; label: string }> = [
+    { key: "orderNo", label: "销售订单号" },
+    { key: "qty", label: "订单数量" },
+    { key: "deliverDate", label: "交货日期" },
+    { key: "outbound", label: "交付情况" },
+];
 
 /* 交期筛选激活时在按钮上回显的简写日期（MM/DD） */
 const shortDate = (isoDate: string) => `${isoDate.slice(5, 7)}/${isoDate.slice(8, 10)}`;
@@ -518,6 +530,11 @@ export function OrdersPage() {
     const [dateEnd, setDateEnd] = useState("");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
+    // 列排序默认升序：默认按订单号；仓管视角默认交货日期（按交期备货）
+    const [sort, setSort] = useState<SortState<OrderSortKey>>({
+        key: role === "warehouse" ? "deliverDate" : "orderNo",
+        dir: "asc",
+    });
     const [newOpen, setNewOpen] = useState(false);
     const [ship, setShip] = useState<string | null>(null);
     const [taskFilter, setTaskFilter] = useState(searchParams.get("task") ?? (role === "warehouse" ? "ready" : "all"));
@@ -551,13 +568,25 @@ export function OrdersPage() {
             }
             return true;
         });
-        // 仓库角色按交货日期优先排序，便于安排发货
-        return role === "warehouse"
-            ? [...rows].sort((a, b) => a.deliverDate.localeCompare(b.deliverDate) || a.orderNo.localeCompare(b.orderNo))
-            : rows;
+        return rows;
     })();
 
-    const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
+    const sorted = (() => {
+        const factor = sort.dir === "asc" ? 1 : -1;
+        return [...filtered].sort((a, b) => {
+            const byKey =
+                sort.key === "qty"
+                    ? a.qty - b.qty
+                    : sort.key === "outbound"
+                      ? a.outbound - b.outbound
+                      : sort.key === "deliverDate"
+                        ? a.deliverDate.localeCompare(b.deliverDate)
+                        : a.orderNo.localeCompare(b.orderNo);
+            return byKey * factor || a.orderNo.localeCompare(b.orderNo);
+        });
+    })();
+
+    const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize);
     const dateFilterActive = !!dateStart || !!dateEnd;
     const filtersActive =
         dateFilterActive || !!keyword.trim() || statusFilter !== "全部状态" || categoryFilter !== "全部品类";
@@ -585,6 +614,13 @@ export function OrdersPage() {
             setSearchParams({}, { replace: true });
         }
     }, [searchParams, setSearchParams]);
+
+    const applySort = (key: OrderSortKey) => setSort(current => nextSortState(current, key));
+    // 排序或翻页后行序变化，滚动区回到顶部，避免误以为排错行
+    const tableScrollRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
+    }, [page, sort]);
 
     // 清空条件只作用于筛选行（搜索/状态/品类/交期）；快捷 tab 由用户自行切换
     const clearFilters = () => {
@@ -682,6 +718,7 @@ export function OrdersPage() {
                             <option key={item}>{item}</option>
                         ))}
                     </select>
+                    <MobileSortSelect columns={ORDER_SORT_COLUMNS} value={sort} onChange={setSort} />
                     <details className="relative">
                         <summary
                             className={`flex h-10 list-none items-center gap-1.5 rounded-btn px-3 text-13 transition ${
@@ -834,31 +871,55 @@ export function OrdersPage() {
                         ))}
                     </ListState>
                 </div>
-                <div className="hidden overflow-x-auto lg:block">
+                <div
+                    ref={tableScrollRef}
+                    className="hidden overflow-auto lg:block lg:max-h-[calc(100dvh-26rem)] lg:min-h-[18.75rem]"
+                >
                     {isLoading ? (
                         <PageLoading className="py-16" />
                     ) : (
-                        <table className="w-full min-w-245 border-collapse">
+                        <table className="data-table w-full min-w-245 border-collapse">
                             <thead>
-                                <tr className="bg-soft text-left text-12 text-muted">
-                                    <th className="px-5 py-2.5 font-semibold" style={{ width: "14%" }}>
-                                        销售订单号
-                                    </th>
+                                <tr className="text-12 text-muted">
+                                    <SortTh
+                                        label="销售订单号"
+                                        active={sort.key === "orderNo"}
+                                        dir={sort.dir}
+                                        onSort={() => applySort("orderNo")}
+                                        className="px-5"
+                                        width="14%"
+                                    />
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "16%" }}>
                                         客户
                                     </th>
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "22%" }}>
                                         成品 / BOM
                                     </th>
-                                    <th className="px-3 py-2.5 text-right font-semibold" style={{ width: "8%" }}>
-                                        订单数量
-                                    </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "12%" }}>
-                                        交货日期
-                                    </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "12%" }}>
-                                        交付情况
-                                    </th>
+                                    <SortTh
+                                        label="订单数量"
+                                        align="right"
+                                        active={sort.key === "qty"}
+                                        dir={sort.dir}
+                                        onSort={() => applySort("qty")}
+                                        className="px-3"
+                                        width="8%"
+                                    />
+                                    <SortTh
+                                        label="交货日期"
+                                        active={sort.key === "deliverDate"}
+                                        dir={sort.dir}
+                                        onSort={() => applySort("deliverDate")}
+                                        className="px-3"
+                                        width="12%"
+                                    />
+                                    <SortTh
+                                        label="交付情况"
+                                        active={sort.key === "outbound"}
+                                        dir={sort.dir}
+                                        onSort={() => applySort("outbound")}
+                                        className="px-3"
+                                        width="12%"
+                                    />
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "8%" }}>
                                         状态
                                     </th>
@@ -887,7 +948,7 @@ export function OrdersPage() {
                                     return (
                                         <tr
                                             key={order.orderNo}
-                                            className="border-t border-line/70 transition hover:bg-row-hover"
+                                            className="border-t border-line transition hover:bg-row-hover"
                                         >
                                             <td className="px-5 py-4">
                                                 <button

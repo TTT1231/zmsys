@@ -324,6 +324,16 @@
     }
 }
 
+/* 列表表格（.data-table）：吸附表头——滚动容器内 th 固定在顶部；
+   border-collapse 的边框不随吸附移动，改用不透明内阴影画表头底线（比行线深一档） */
+.data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--color-soft);
+    box-shadow: inset 0 -1px 0 var(--color-line-strong);
+}
+
 .record-card {
     padding: 18px;
     border: 1px solid var(--color-line);

@@ -52,6 +52,18 @@ export function RecordCard({
     );
 }
 
+/* 卡片键值行：标签左灰、值右对齐（数字/日期 tabular-nums），只用于短值指标；长文本仍走文字流 */
+export function CardField({ label, value, strong }: { label: string; value: ReactNode; strong?: boolean }) {
+    return (
+        <div className="flex items-baseline justify-between gap-3">
+            <span className="text-13 text-muted">{label}</span>
+            <span className={`tnum text-right text-13 ${strong ? "font-semibold text-ink" : "font-medium text-td"}`}>
+                {value}
+            </span>
+        </div>
+    );
+}
+
 export function OrderTaskCard({
     order,
     snap,
@@ -105,26 +117,27 @@ export function OrderTaskCard({
                 bomCode={order.bomCode}
                 category={snap.bomCategories.find(category => category.name === bom?.name)}
             />
-            <div className="mt-3 flex flex-wrap justify-between gap-2 border-t border-line pt-3">
-                {cancelled ? (
-                    <span className="text-muted">已停止交付</span>
-                ) : (
-                    <span>
-                        待交 <strong className="tnum text-ink">{num(remaining)}</strong> 件
-                    </span>
-                )}
-                {!cancelled &&
-                    (remaining > 0 ? (
-                        <span className={maxShip > 0 ? "text-success" : "text-warning"}>
-                            {maxShip > 0 ? `本次可发 ${num(maxShip)} 件` : "等待备货"}
-                        </span>
+            <div className="mt-3 flex flex-col gap-1.5 border-t border-line pt-3">
+                <CardField label="交货日期" value={order.deliverDate} />
+                <CardField label="已发 / 订单" value={`${num(order.outbound)} / ${num(order.qty)} 件`} />
+                <div className="flex flex-wrap justify-between gap-2">
+                    {cancelled ? (
+                        <span className="text-muted">已停止交付</span>
                     ) : (
-                        <span className="text-success">已全部交付</span>
-                    ))}
+                        <span>
+                            待交 <strong className="tnum text-ink">{num(remaining)}</strong> 件
+                        </span>
+                    )}
+                    {!cancelled &&
+                        (remaining > 0 ? (
+                            <span className={maxShip > 0 ? "text-success" : "text-warning"}>
+                                {maxShip > 0 ? `本次可发 ${num(maxShip)} 件` : "等待备货"}
+                            </span>
+                        ) : (
+                            <span className="text-success">已全部交付</span>
+                        ))}
+                </div>
             </div>
-            <p className="mt-1 text-12 text-muted">
-                交货日期 {order.deliverDate} · 已发 {num(order.outbound)} / {num(order.qty)} 件
-            </p>
         </RecordCard>
     );
 }
