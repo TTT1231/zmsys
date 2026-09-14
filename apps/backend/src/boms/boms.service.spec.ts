@@ -92,7 +92,7 @@ const mkBom = (overrides: Partial<BomTable> = {}): BomTable =>
  */
 const createStore = (store: Store) => {
     const tx = {
-        $queryRaw: vi.fn(async (..._parts: unknown[]) => []),
+        $queryRaw: vi.fn(async (..._parts: unknown[]): Promise<unknown[]> => []),
         bomCategory: {
             findUnique: vi.fn(
                 async ({ where }: { where: { name: string } }) =>
@@ -143,6 +143,7 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>, nextB
     const tx = createStore(store);
     const prisma = {
         $transaction: tx.$transaction,
+        $queryRaw: tx.$queryRaw,
         bomCategory: tx.bomCategory,
         bomTable: tx.bomTable,
     } as unknown as PrismaService;
@@ -242,6 +243,22 @@ describe('BomsService', () => {
             });
             // 品类常量（杆子高度=defaultValue 4.8）不进摘要
             expect(boms[0]!.spec).toBe('2-2 · 脚位 二脚');
+        });
+    });
+
+    describe('listStocks', () => {
+        it('映射 v_bom_stock 行为 bomCode → 余量，BigInt 数量转为 number', async () => {
+            const { service, tx } = mkService(store);
+            tx.$queryRaw.mockResolvedValue([
+                { bom_code: 'ZMXK2010', stock_qty: 200n },
+                { bom_code: 'ZMKW0001', stock_qty: 0 },
+            ]);
+            await expect(service.listStocks()).resolves.toEqual({ ZMXK2010: 200, ZMKW0001: 0 });
+        });
+
+        it('无流水的 BOM 不在视图返回中，余量映射为空对象', async () => {
+            const { service } = mkService(store);
+            await expect(service.listStocks()).resolves.toEqual({});
         });
     });
 

@@ -54,6 +54,20 @@ export class BomsService {
     }
 
     /**
+     * BOM 库存余量聚合（契约 bom:view）：v_bom_stock 视图直查，供列表页
+     * 库存列使用，免前端拉全量台账推导；仅返回存在流水的 BOM，无流水者
+     * 由前端按 0 展示。
+     */
+    async listStocks(): Promise<Record<string, number>> {
+        const rows = await this.prisma.$queryRaw<Array<{ bom_code: string; stock_qty: bigint | number }>>`
+            SELECT b.bom_code, v.stock_qty
+            FROM v_bom_stock AS v
+            JOIN bom_table AS b ON b.id = v.bom_id
+        `;
+        return Object.fromEntries(rows.map(row => [row.bom_code, Number(row.stock_qty)]));
+    }
+
+    /**
      * 新建唯一 BOM（契约 bom:create，幂等）：锁品类行（db-scheme.md §2 锁序表——
      * BOM 新建锁品类与其序列表，串行化同品类建档）；规格校验按品类目录，
      * 规范化后 (category, model, spec_hash) 命中即 409 并返回已有 bomCode。

@@ -320,4 +320,31 @@ describe('BOM/成品档案 (e2e)', () => {
         expect(denied.statusCode).toBe(403);
         expect(denied.json().message).toBe('无权新建 BOM');
     });
+
+    it('库存余量聚合：入库后按 bomCode 返回净量，无流水的 BOM 不出现；bom:view 可读', async () => {
+        const created = await createBom(
+            { name: '旋转开关', modelCode: `${RUN}-stock`, specs: { 脚位: '二脚', 档位: '一档' } },
+            `e2e-bom-${RUN}-stock`,
+        );
+        expect(created.statusCode).toBe(200);
+        const code = created.json().data.code as string;
+
+        // 未入库：视图无行，不进余量映射
+        const before = await app.inject({ method: 'GET', url: '/api/bom-stocks', headers: authHeaders(superToken) });
+        expect(before.statusCode).toBe(200);
+        expect(Object.keys(before.json().data as Record<string, number>)).not.toContain(code);
+
+        const inbound = await app.inject({
+            method: 'POST',
+            url: '/api/inbound',
+            headers: { ...authHeaders(superToken), 'idempotency-key': `e2e-bom-${RUN}-stock-in` },
+            payload: { bomCode: code, qty: 120, date: '2026-09-14', remark: '库存余量聚合 e2e' },
+        });
+        expect(inbound.statusCode).toBe(200);
+
+        const staffToken = await createUser(accountOf('staff03'), 'staff');
+        const after = await app.inject({ method: 'GET', url: '/api/bom-stocks', headers: authHeaders(staffToken) });
+        expect(after.statusCode).toBe(200);
+        expect(after.json().data[code]).toBe(120);
+    });
 });
