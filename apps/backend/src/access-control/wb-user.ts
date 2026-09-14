@@ -21,5 +21,7 @@ export function toWbUser(user: SysUser, lastLoginAt: Date | null = user.lastLogi
         role: user.roleCode as WbUser['role'],
         active: user.status,
         last: formatBeijingStamp(lastLoginAt),
+        createdAt: user.createdAt.toISOString(),
+        updatedAt: user.updatedAt.toISOString(),
     };
 }

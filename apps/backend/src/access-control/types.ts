@@ -15,4 +15,8 @@ export interface WbUser {
     role: RoleCode;
     active: boolean;
     last: string;
+    /** 创建时间（ISO 8601） */
+    createdAt: string;
+    /** 最近一次资料/状态/密码变更时间（ISO 8601）；登录刷新 last_login_at 不算变更 */
+    updatedAt?: string;
 }

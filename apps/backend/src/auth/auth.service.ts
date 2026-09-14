@@ -13,7 +13,6 @@ import type { AuthUser } from '../common/types/auth-user';
 import type { JwtPayload } from './types';
 import type { LoginDto } from './dto/login.dto';
 import type { ChangePasswordDto } from './dto/change-password.dto';
-import type { UpdateProfileDto } from './dto/update-profile.dto';
 
 /** 账号不存在时也执行一次同代价比较，避免响应时间泄露账号是否存在 */
 const DUMMY_HASH = bcrypt.hashSync('timing-attack-dummy-password', 10);
@@ -41,7 +40,9 @@ export class AuthService {
         const now = new Date();
         await this.prisma.sysUser.update({
             where: { id: user.id },
-            data: { lastLoginAt: now },
+            // 登录只更新 last_login_at；显式回写 updated_at，避免 @updatedAt 把
+            // “上一次修改时间”刷成最近登录时间（个人中心展示语义：仅资料/状态/密码变更）
+            data: { lastLoginAt: now, updatedAt: user.updatedAt },
         });
 
         const payload: Pick<JwtPayload, 'sub' | 'ver'> = {
@@ -66,41 +67,10 @@ export class AuthService {
         return { user: toWbUser(current), grant };
     }
 
-    /** 个人姓名只做单字段原子更新；递增 row_version 并同事务写变更日志 */
-    async updateProfile(user: AuthUser, dto: UpdateProfileDto): Promise<WbUser> {
-        const userId = BigInt(user.id);
-        return this.txRunner.run(async (tx: Tx) => {
-            const now = new Date();
-            await tx.$queryRaw`SELECT id FROM sys_user WHERE id = ${userId} FOR UPDATE`;
-            const current = await tx.sysUser.findUnique({ where: { id: userId } });
-            if (!current) {
-                throw new BadRequestException('账号不存在或已停用');
-            }
-            const updated = await tx.sysUser.update({
-                where: { id: userId },
-                data: { name: dto.name, rowVersion: { increment: 1 } },
-            });
-            await tx.sysUserChangeLog.create({
-                data: {
-                    id: this.snowflake.next(),
-                    userId,
-                    operatorId: userId,
-                    eventType: 'PROFILE_UPDATE',
-                    createdAt: now,
-                    beforeVersion: current.rowVersion,
-                    afterVersion: updated.rowVersion,
-                    reason: '修改姓名',
-                    beforeJson: userSnapshot(current),
-                    afterJson: userSnapshot(updated),
-                },
-            });
-            return toWbUser(updated);
-        });
-    }
-
     /**
      * 自助修改密码：锁用户行，旧密码校验通过后更新强哈希，
      * 递增 token_version 使全部旧 JWT 立即失效，row_version 同步 +1 并写日志。
+     * （姓名等资料为管理员域，走 users 模块的 PUT /users/{account}，无自助改名）
      */
     async changePassword(user: AuthUser, dto: ChangePasswordDto): Promise<null> {
         const userId = BigInt(user.id);

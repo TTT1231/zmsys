@@ -17,7 +17,6 @@ function createController() {
     const service = {
         login: vi.fn().mockResolvedValue({ accessToken: 't', user: {} }),
         getProfile: vi.fn().mockResolvedValue({ user: {}, grant: {} }),
-        updateProfile: vi.fn().mockResolvedValue({}),
         changePassword: vi.fn().mockResolvedValue(null),
     } as unknown as AuthService;
     return { controller: new AuthController(service), service };
@@ -34,14 +33,6 @@ describe('AuthController', () => {
     it('logout 是幂等公开端点，直接返回 null', () => {
         const { controller } = createController();
         expect(controller.logout()).toBeNull();
-    });
-
-    it('updateProfile 携带当前会话用户', async () => {
-        const { controller, service } = createController();
-        await controller.updateProfile(actor, { name: '新名字' });
-        expect(service.updateProfile).toHaveBeenCalledWith(actor, {
-            name: '新名字',
-        });
     });
 
     it('changePassword 返回 null 信封数据', async () => {

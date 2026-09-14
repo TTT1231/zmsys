@@ -6,7 +6,6 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { LoginThrottleGuard } from '../common/guards/login-throttle.guard';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
-import { UpdateProfileDto } from './dto/update-profile.dto';
 import type { AuthUser } from '../common/types/auth-user';
 import type { RoleGrant, WbUser } from '../access-control/types';
 
@@ -34,12 +33,6 @@ export class AuthController {
     @Get('profile')
     async getProfile(@CurrentUser() user: AuthUser): Promise<{ user: WbUser; grant: RoleGrant }> {
         return this.authService.getProfile(user);
-    }
-
-    @AuthenticatedOnly()
-    @Put('profile')
-    async updateProfile(@CurrentUser() user: AuthUser, @Body() dto: UpdateProfileDto): Promise<WbUser> {
-        return this.authService.updateProfile(user, dto);
     }
 
     @AuthenticatedOnly()

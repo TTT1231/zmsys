@@ -35,6 +35,8 @@ const activeUser = {
     passwordHash: bcrypt.hashSync('123456', 4),
     passwordChangedAt: null,
     lastLoginAt: null,
+    createdAt: new Date('2026-01-01T08:00:00Z'),
+    updatedAt: new Date('2026-02-01T08:00:00Z'),
 };
 
 describe('AuthService.login', () => {
