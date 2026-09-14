@@ -69,7 +69,7 @@ function CustomerFormModal({
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    // 在职销售作为客户负责人候选
+    // 在职销售与超级管理员作为客户负责人候选
     const salesOptions = snap.customerOwnerOptions.map(item => ({
         value: item.account,
         label: `${item.name}（${item.account}）`,
@@ -78,12 +78,11 @@ function CustomerFormModal({
     const submit = () => {
         const nextErrors: Record<string, string> = {};
         if (name.trim().length < 4) nextErrors.name = "请填写公司名称（至少 4 个字）";
-        if (!contact.trim()) nextErrors.contact = "请填写联系人";
+        if (!contact.trim()) nextErrors.contact = "请填写客户联系人";
         // 新建必填手机号；编辑留空 = 不修改，填了才校验格式
         if (!customer || phone) {
             if (!/^1\d{10}$/.test(phone)) nextErrors.phone = "请填写 11 位手机号";
         }
-        if (!region.province || !region.city) nextErrors.region = "请选择所在地区";
         if (!ownerAccount) nextErrors.owner = "请选择客户负责人";
         setErrors(nextErrors);
         if (Object.keys(nextErrors).length)
@@ -150,7 +149,7 @@ function CustomerFormModal({
                 />
                 {customer && <TextField label="客户编码" disabled value={customer.code} />}
                 <TextField
-                    label="联系人"
+                    label="客户联系人"
                     required
                     placeholder="姓名"
                     error={errors.contact}
@@ -158,7 +157,7 @@ function CustomerFormModal({
                     onChange={event => setContact(event.target.value)}
                 />
                 <TextField
-                    label="联系电话"
+                    label="客户联系电话"
                     required={!customer}
                     placeholder={customer ? "留空保持不变，输入新号替换" : "11 位手机号"}
                     error={errors.phone}
@@ -172,7 +171,7 @@ function CustomerFormModal({
                     value={ownerAccount}
                     onChange={event => setOwnerAccount(event.target.value)}
                 >
-                    <option value="">请选择销售</option>
+                    <option value="">请选择负责人</option>
                     {salesOptions.map(item => (
                         <option key={item.value} value={item.value}>
                             {item.label}
@@ -185,10 +184,10 @@ function CustomerFormModal({
                     value={payTerms}
                     onChange={event => setPayTerms(event.target.value)}
                 />
-                <RegionCascader value={region} onChange={setRegion} error={errors.region} />
+                <RegionCascader value={region} onChange={setRegion} />
                 <TextField
                     label="详细地址"
-                    placeholder="如 示例街道 88 号"
+                    placeholder="如 示例街道 88 号（可空）"
                     value={address}
                     onChange={event => setAddress(event.target.value)}
                 />
@@ -274,8 +273,8 @@ export function CustomerDetailModal({
                 </div>
                 <div className="flex flex-col gap-2 text-13">
                     {[
-                        ["联系人", customer.contact],
-                        ["联系电话", customer.phone],
+                        ["客户联系人", customer.contact],
+                        ["客户联系电话", customer.phone],
                         ["所在地区", regionText(customer)],
                         ["详细地址", customer.address || "—"],
                         ["付款方式", customer.payTerms || "—"],
@@ -466,8 +465,8 @@ export function CustomersPage() {
                                         [
                                             "客户编码",
                                             "客户名称",
-                                            "联系人",
-                                            "电话",
+                                            "客户联系人",
+                                            "客户电话",
                                             "地区",
                                             "累计订单",
                                             "待交件数",
@@ -532,7 +531,7 @@ export function CustomersPage() {
                             <thead>
                                 <tr className="text-left text-12 text-muted">
                                     <th className="px-5 py-2.5 font-semibold">客户信息</th>
-                                    <th className="px-3 py-2.5 font-semibold">联系人</th>
+                                    <th className="px-3 py-2.5 font-semibold">客户联系人</th>
                                     <th className="px-3 py-2.5 font-semibold">电话</th>
                                     <th className="px-3 py-2.5 font-semibold">所在地</th>
                                     <SortTh

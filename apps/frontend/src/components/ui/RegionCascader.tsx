@@ -88,19 +88,17 @@ export function RegionCascader({
         <>
             <SelectField
                 label="省 / 直辖市"
-                required
                 error={error}
                 value={value.province}
                 onChange={event => pick({ province: event.target.value }, ["city", "district", "town"])}
             >
-                <option value="">请选择省份</option>
+                <option value="">请选择省份（可空）</option>
                 {provinces.map(item => (
                     <option key={item.code}>{item.name}</option>
                 ))}
             </SelectField>
             <SelectField
                 label="市"
-                required
                 disabled={!province}
                 value={value.city}
                 onChange={event => pick({ city: event.target.value }, ["district", "town"])}

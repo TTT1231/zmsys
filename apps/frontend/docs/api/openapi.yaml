@@ -252,7 +252,7 @@ paths:
             tags: [customers]
             operationId: listCustomerOwnerOptions
             summary: 客户负责人候选
-            description: 权限 `customers:view`。仅返回启用中销售的 name/account，不暴露用户管理信息。
+            description: 权限 `customers:view`。仅返回启用中销售与超级管理员的 name/account，不暴露用户管理信息。
             responses:
                 "200":
                     description: 成功
@@ -985,14 +985,14 @@ components:
             required: [name, contact, phone, province, city, district, town, address, ownerAccount, payTerms]
             properties:
                 name: { type: string, minLength: 4, maxLength: 80 }
-                contact: { type: string, minLength: 1, maxLength: 32 }
+                contact: { type: string, minLength: 1, maxLength: 32, description: 客户方联系人姓名 }
                 phone: { type: string, pattern: "^1[0-9]{10}$" }
-                province: { type: string, minLength: 1, maxLength: 64 }
-                city: { type: string, minLength: 1, maxLength: 64 }
+                province: { type: string, maxLength: 64, description: 可空，未填写传空串 }
+                city: { type: string, maxLength: 64, description: 可空，未填写传空串 }
                 district: { type: string, maxLength: 64 }
                 town: { type: string, maxLength: 96 }
-                address: { type: string, minLength: 1, maxLength: 300 }
-                ownerAccount: { type: string }
+                address: { type: string, maxLength: 300, description: 可空，未填写传空串 }
+                ownerAccount: { type: string, description: 启用中的销售或超级管理员账号 }
                 payTerms: { type: string, maxLength: 160 }
 
         UpdateCustomerInput:
@@ -1002,14 +1002,14 @@ components:
             properties:
                 expectedVersion: { type: integer, minimum: 1 }
                 name: { type: string, minLength: 4, maxLength: 80 }
-                contact: { type: string, minLength: 1, maxLength: 32 }
+                contact: { type: string, minLength: 1, maxLength: 32, description: 客户方联系人姓名 }
                 phone: { type: string, pattern: "^(|1[0-9]{10})$", description: 空字符串表示不修改 }
-                province: { type: string, minLength: 1, maxLength: 64 }
-                city: { type: string, minLength: 1, maxLength: 64 }
+                province: { type: string, maxLength: 64, description: 可空，未填写传空串 }
+                city: { type: string, maxLength: 64, description: 可空，未填写传空串 }
                 district: { type: string, maxLength: 64 }
                 town: { type: string, maxLength: 96 }
-                address: { type: string, minLength: 1, maxLength: 300 }
-                ownerAccount: { type: string }
+                address: { type: string, maxLength: 300, description: 可空，未填写传空串 }
+                ownerAccount: { type: string, description: 启用中的销售或超级管理员账号 }
                 payTerms: { type: string, maxLength: 160 }
 
         CustomerOwnerOption:

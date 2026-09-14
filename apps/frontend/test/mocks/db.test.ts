@@ -184,14 +184,23 @@ describe("mock db business write rules", () => {
         expect(updated.phone).toBe("138****5678");
         expect(updated.payTerms).toBe("月结 60 天");
 
-        // 负责人须为在职销售
+        // 负责人须为在职销售或超级管理员（管理员不行）
         expect(() =>
             db.updateCustomer(
                 customer.code,
-                { ...payload, expectedVersion: updated.version, ownerAccount: "sys_admin" },
+                { ...payload, expectedVersion: updated.version, ownerAccount: "li_xiaomei" },
                 actor,
             ),
         ).toThrow("在职销售");
+
+        // 超级管理员可作为负责人；省市地址可空建档
+        const bySuper = db.createCustomer(
+            { ...payload, province: "", city: "", district: "", town: "", address: "", ownerAccount: "sys_admin" },
+            actor,
+        );
+        expect(bySuper.owner).toBe("系统管理员");
+        expect(bySuper.province).toBe("");
+        expect(bySuper.address).toBe("");
 
         // 字段长度上限对齐契约：payTerms ≤160、address ≤300
         expect(() =>

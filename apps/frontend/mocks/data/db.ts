@@ -1354,10 +1354,11 @@ class MockDb {
         return { ...order };
     }
 
-    /** 校验并解析所属销售账号（须为在职 sales 用户） */
+    /** 校验并解析负责人账号（须为在职 sales 或 super 用户） */
     private ownerOf(ownerAccount: string): DbUser {
         const owner = this.users.find(item => item.account === ownerAccount.trim() && item.active);
-        if (!owner || owner.role !== "sales") throw new Error("客户负责人须为在职销售账号");
+        if (!owner || !["sales", "super"].includes(owner.role))
+            throw new Error("客户负责人须为在职销售或超级管理员账号");
         return owner;
     }
 
@@ -1373,9 +1374,7 @@ class MockDb {
         payTerms: string;
     }) {
         if (input.name.trim().length < 4 || input.name.trim().length > 80) throw new Error("客户名称须为 4-80 个字符");
-        if (!input.contact.trim() || input.contact.trim().length > 32) throw new Error("联系人须为 1-32 个字符");
-        if (!input.province.trim() || !input.city.trim() || !input.address.trim())
-            throw new Error("请完善所在地区与地址");
+        if (!input.contact.trim() || input.contact.trim().length > 32) throw new Error("客户联系人须为 1-32 个字符");
         if (input.province.length > 64 || input.city.length > 64) throw new Error("省份/城市最多 64 个字符");
         if (input.district.length > 64) throw new Error("县区最多 64 个字符");
         if (input.town.length > 96) throw new Error("乡镇最多 96 个字符");
@@ -1886,7 +1885,7 @@ class MockDb {
             stock: Object.fromEntries(this.stock),
             users: this.listUsers(),
             customerOwnerOptions: this.listUsers()
-                .filter(user => user.role === "sales" && user.active)
+                .filter(user => ["sales", "super"].includes(user.role) && user.active)
                 .map(({ name, account }) => ({ name, account })),
         };
     }

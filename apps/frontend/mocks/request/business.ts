@@ -94,11 +94,8 @@ export const customerHandlers = [
         if (!authorized(auth, "customers:create")) return fail("无权新建客户", 403);
         const body = (await request.json().catch(() => null)) as CreateCustomerInput | null;
         if (!body?.name || body.name.trim().length < 4) return fail("请填写公司名称（至少 4 个字）");
-        if (!body?.contact?.trim()) return fail("请输入联系人");
+        if (!body?.contact?.trim()) return fail("请输入客户联系人");
         if (!/^1\d{10}$/.test(body?.phone ?? "")) return fail("请输入 11 位手机号");
-        if (!body?.province?.trim() || !body?.city?.trim() || !body?.address?.trim()) {
-            return fail("请完善所在地区与地址");
-        }
         if (!body?.ownerAccount?.trim()) return fail("请选择客户负责人");
         try {
             return ok(
@@ -119,10 +116,8 @@ export const customerHandlers = [
         const body = (await request.json().catch(() => null)) as UpdateCustomerInput | null;
         if (!body?.name || body.name.trim().length < 4) return fail("请填写公司名称（至少 4 个字）");
         if (!Number.isSafeInteger(body.expectedVersion)) return fail("缺少客户版本");
-        if (!body?.contact?.trim()) return fail("请输入联系人");
+        if (!body?.contact?.trim()) return fail("请输入客户联系人");
         if (body?.phone && !/^1\d{10}$/.test(body.phone)) return fail("请输入 11 位手机号");
-        if (!body?.province?.trim() || !body?.city?.trim() || !body?.address?.trim())
-            return fail("请完善所在地区与地址");
         if (!body?.ownerAccount?.trim()) return fail("请选择客户负责人");
         try {
             return ok(db.updateCustomer(String(params.code), body, auth.actor));
