@@ -4,6 +4,7 @@ import { ROLE_META, useApp, type Role } from "@/context/AppContext";
 import { MENU_CATALOG, menuLabelFor } from "@/data/permissions";
 import { MobileBottomNav, Sidebar, Topbar } from "@/components/layout/Shell";
 import { PageLoading } from "@/components/ui/PageLoading";
+import { GlobalWatermark } from "@/components/ui/Watermark";
 import { AppContentErrorBoundary, ErrorPage } from "@/pages/error/ErrorPage";
 
 // 工作台标题随登录角色；其余页面标题取菜单字典（含仓管在订单页的「待发货订单」别名）
@@ -17,7 +18,7 @@ function resolveTitle(pathname: string, role: Role) {
 /* 登录后各页面的共享外壳：标题同步、认证/菜单守卫、侧边栏 + 内容区 + 移动端导航 */
 export function AppLayout() {
     const location = useLocation();
-    const { status, role, grant } = useApp();
+    const { status, role, grant, user } = useApp();
     // 抽屉只在打开它的那个路由上可见，路由一变自动收起（兜底重定向/浏览器回退等非点击导航）
     const [drawerPath, setDrawerPath] = useState<string | null>(null);
     const [collapsed, setCollapsed] = useState(false);
@@ -76,6 +77,7 @@ export function AppLayout() {
                 </main>
             </div>
             <MobileBottomNav onOpenDrawer={() => setDrawerPath(location.pathname)} />
+            {user && <GlobalWatermark text={`${user.name} · ${user.account}`} />}
         </div>
     );
 }
