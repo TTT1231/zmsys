@@ -1,6 +1,7 @@
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard } from "@/components/ui/MobileList";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { BomSpecs } from "@/components/bom/BomSpecs";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
@@ -27,16 +28,8 @@ import type { Bom } from "@/api";
 
 const EMPTY_BOMS: Bom[] = [];
 
-/* BOM 规格行：品类 + 型号 + 各品类规格键值对 */
-function specLines(bom: Bom) {
-    return [
-        ["品类", bom.name],
-        ["型号", bom.modelCode],
-        ...Object.entries(bom.specs).map(([key, value]) => [key, value || "—"] as [string, string]),
-    ];
-}
-
 export function BomDetailModal({ bom, onClose }: { bom: Bom | null; onClose: () => void }) {
+    const { data } = useWbSnapshot();
     if (!bom) return null;
     return (
         <Modal
@@ -44,7 +37,6 @@ export function BomDetailModal({ bom, onClose }: { bom: Bom | null; onClose: () 
             onClose={onClose}
             label="BOM 详情"
             title={bom.code}
-            subtitle={`${bom.name} · ${bom.modelCode}`}
             width={560}
             footer={
                 <button
@@ -56,17 +48,7 @@ export function BomDetailModal({ bom, onClose }: { bom: Bom | null; onClose: () 
                 </button>
             }
         >
-            <div className="flex flex-col gap-2">
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {specLines(bom).map(([label, value]) => (
-                        <div key={label} className="rounded-btn border border-line px-3 py-2">
-                            <div className="text-11 text-muted">{label}</div>
-                            <div className="truncate text-13 font-medium text-ink">{value}</div>
-                        </div>
-                    ))}
-                </div>
-                <div className="rounded-btn bg-primary-soft/70 px-3 py-2 text-12.5 text-primary-strong">{bom.spec}</div>
-            </div>
+            <BomSpecs bom={bom} category={data?.bomCategories.find(category => category.name === bom.name)} />
         </Modal>
     );
 }
@@ -517,6 +499,14 @@ export function BomPage() {
         }
     }, [searchParams, setSearchParams]);
 
+    // 清空条件只作用于筛选行（搜索/品类）；快捷入口与分页由用户自行操作
+    const clearFilters = () => {
+        setKeyword("");
+        setCategory("全部品类");
+        setPage(1);
+    };
+    const filtersActive = !!keyword.trim() || category !== "全部品类";
+
     return (
         <div className="flex flex-col gap-5">
             <PageHeading
@@ -541,73 +531,68 @@ export function BomPage() {
 
             <section className="relative overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
                 {overlay && <LoadingOverlay />}
-                <div className="list-toolbar flex flex-wrap items-center justify-between gap-2.5 border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
-                    <div className="flex flex-wrap items-center gap-2.5">
-                        <label className="flex h-10 min-w-55 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 sm:w-75">
-                            <Icon name="search" size={15} className="text-subtle" />
-                            <input
-                                value={keyword}
-                                onChange={event => {
-                                    setKeyword(event.target.value);
-                                    setPage(1);
-                                }}
-                                placeholder="搜索编码 / 品类 / 型号 / 规格"
-                                className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
-                            />
-                        </label>
-                        <select
-                            value={category}
+                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
+                    <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 lg:w-70">
+                        <Icon name="search" size={15} className="text-subtle" />
+                        <input
+                            value={keyword}
                             onChange={event => {
-                                setCategory(event.target.value);
+                                setKeyword(event.target.value);
                                 setPage(1);
                             }}
-                            className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
-                            aria-label="按品类筛选"
-                        >
-                            <option>全部品类</option>
-                            {categories.map(item => (
-                                <option key={item}>{item}</option>
-                            ))}
-                        </select>
+                            placeholder="搜索编码 / 品类 / 型号 / 规格"
+                            className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
+                        />
+                    </label>
+                    <select
+                        value={category}
+                        onChange={event => {
+                            setCategory(event.target.value);
+                            setPage(1);
+                        }}
+                        className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
+                        aria-label="按品类筛选"
+                    >
+                        <option>全部品类</option>
+                        {categories.map(item => (
+                            <option key={item}>{item}</option>
+                        ))}
+                    </select>
+                    <button
+                        type="button"
+                        onClick={clearFilters}
+                        disabled={!filtersActive}
+                        className="min-h-10 px-1 text-13 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
+                    >
+                        清空条件
+                    </button>
+                    <div className="ml-auto">
+                        <ToolbarMore>
+                            <Button variant="secondary" icon="refresh" onClick={refresh}>
+                                刷新
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                icon="download"
+                                onClick={() =>
+                                    downloadCsv(
+                                        "BOM",
+                                        ["序号", "BOM编码", "品类", "型号", "单位", "规格"],
+                                        pageRows.map((bom, index) => [
+                                            String((page - 1) * pageSize + index + 1),
+                                            bom.code,
+                                            bom.name,
+                                            bom.modelCode,
+                                            bom.unit,
+                                            bom.spec,
+                                        ]),
+                                    )
+                                }
+                            >
+                                导出
+                            </Button>
+                        </ToolbarMore>
                     </div>
-                    <ToolbarMore>
-                        <Button
-                            variant="secondary"
-                            icon="reset"
-                            data-low-priority="true"
-                            onClick={() => {
-                                setKeyword("");
-                                setCategory("全部品类");
-                                setPage(1);
-                            }}
-                        >
-                            重置
-                        </Button>
-                        <Button variant="secondary" icon="refresh" data-low-priority="true" onClick={refresh}>
-                            刷新
-                        </Button>
-                        <Button
-                            variant="secondary"
-                            icon="download"
-                            data-low-priority="true"
-                            onClick={() =>
-                                downloadCsv(
-                                    "BOM",
-                                    ["序号", "BOM编码", "品类", "型号", "单位", "规格"],
-                                    pageRows.map((bom, index) => [
-                                        String((page - 1) * pageSize + index + 1),
-                                        bom.code,
-                                        bom.name,
-                                        bom.modelCode,
-                                        bom.unit,
-                                        bom.spec,
-                                    ]),
-                                )
-                            }
-                        >
-                            导出
-                        </Button>
-                    </ToolbarMore>
                 </div>
 
                 <div className="mobile-records">
@@ -615,11 +600,23 @@ export function BomPage() {
                         {pageRows.map(bom => (
                             <RecordCard
                                 key={bom.code}
-                                title={`${bom.name} · ${bom.modelCode}`}
+                                title={
+                                    <span className="flex flex-wrap items-center gap-2">
+                                        {bom.name}
+                                        <span className="rounded-md bg-primary-soft px-2 py-0.5 tnum text-15 text-primary-strong">
+                                            {bom.modelCode}
+                                        </span>
+                                    </span>
+                                }
                                 subtitle={bom.code}
                                 actions={<Button onClick={() => setDetail(bom)}>查看规格</Button>}
                             >
-                                <p>{bom.spec}</p>
+                                <BomSpecs
+                                    bom={bom}
+                                    category={data?.bomCategories.find(category => category.name === bom.name)}
+                                    layout="list"
+                                    showIdentity={false}
+                                />
                                 <p className="mt-2 text-13 text-muted">库存 {num(data?.stock[bom.code] ?? 0)} 件</p>
                             </RecordCard>
                         ))}
@@ -629,7 +626,7 @@ export function BomPage() {
                     {isLoading ? (
                         <PageLoading className="py-16" />
                     ) : (
-                        <table className="w-full min-w-230 border-collapse">
+                        <table className="w-full min-w-230 table-fixed border-collapse">
                             <thead>
                                 <tr className="bg-soft text-left text-12 text-muted">
                                     <th className="px-5 py-2.5 font-semibold" style={{ width: "6%" }}>
@@ -664,7 +661,7 @@ export function BomPage() {
                                 {pageRows.map((bom, index) => (
                                     <tr
                                         key={bom.code}
-                                        className="border-t border-line/70 transition hover:bg-row-hover"
+                                        className="border-t border-line/70 align-top transition hover:bg-row-hover"
                                     >
                                         <td className="px-5 py-3 tnum text-13 text-muted">
                                             {(page - 1) * pageSize + index + 1}
@@ -686,12 +683,14 @@ export function BomPage() {
                                         </td>
                                         <td className="px-3 py-3 tnum text-13 text-td">1</td>
                                         <td className="px-3 py-3">
-                                            <span
-                                                className="block max-w-90 truncate text-12.5 text-td"
-                                                title={bom.spec}
-                                            >
-                                                {bom.spec}
-                                            </span>
+                                            <BomSpecs
+                                                bom={bom}
+                                                category={data?.bomCategories.find(
+                                                    category => category.name === bom.name,
+                                                )}
+                                                layout="list"
+                                                showIdentity={false}
+                                            />
                                         </td>
                                         <td className="px-5 py-3 text-right">
                                             <TableLink onClick={() => setDetail(bom)}>查看详情</TableLink>

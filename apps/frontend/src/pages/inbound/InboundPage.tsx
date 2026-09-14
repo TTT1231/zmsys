@@ -1,13 +1,14 @@
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard } from "@/components/ui/MobileList";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { RecordFields, RecordProduct, RecordSummary } from "@/components/business/RecordDetails";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
 import { useApp } from "@/context/AppContext";
 import { PageHeading } from "@/components/ui/PageHeading";
-import { Button } from "@/components/ui/Badge";
+import { Badge, Button } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { QtyCell } from "@/components/ui/cells";
@@ -271,7 +272,7 @@ export function InboundModal({
     );
 }
 
-function VoucherModal({ row, snap, onClose }: { row: InboundRow | null; snap: Snapshot; onClose: () => void }) {
+export function VoucherModal({ row, snap, onClose }: { row: InboundRow | null; snap: Snapshot; onClose: () => void }) {
     if (!row) return null;
     const bom = bomByCode(snap, row.bomCode);
     return (
@@ -280,8 +281,7 @@ function VoucherModal({ row, snap, onClose }: { row: InboundRow | null; snap: Sn
             onClose={onClose}
             label="入库凭证"
             title={row.no}
-            subtitle={row.bomCode}
-            width={480}
+            width={560}
             footer={
                 <button
                     type="button"
@@ -292,20 +292,26 @@ function VoucherModal({ row, snap, onClose }: { row: InboundRow | null; snap: Sn
                 </button>
             }
         >
-            <div className="flex flex-col gap-2 text-13">
-                <p className="rounded-btn bg-primary-soft/70 px-3 py-2 text-12.5 text-primary-strong">{bom?.spec}</p>
-                {[
-                    ["入库数量", `${num(row.qty)} 件`],
-                    ["入库日期", row.date],
-                    ["登记时间", row.time],
-                    ["检验登记人", row.inspector],
-                    ["备注", row.remark || "—"],
-                ].map(([label, value]) => (
-                    <div key={label} className="flex items-center justify-between gap-4 border-b border-line/70 pb-1.5">
-                        <span className="text-muted">{label}</span>
-                        <span className="tnum font-medium text-ink">{value}</span>
-                    </div>
-                ))}
+            <div className="flex flex-col gap-4">
+                <RecordSummary
+                    metrics={[{ label: "入库数量", value: row.qty }]}
+                    status={
+                        <Badge tone={row.status === "voided" ? "danger" : "progress"}>
+                            {row.status === "voided" ? "已作废" : "已入库"}
+                        </Badge>
+                    }
+                    note={row.status === "voided" ? "此记录已作废，以上数量不再计入库存。" : undefined}
+                />
+                <RecordProduct bom={bom} bomCode={row.bomCode} categories={snap.bomCategories} />
+                <RecordFields
+                    title="入库信息"
+                    items={[
+                        { label: "入库日期", value: row.date },
+                        { label: "检验登记人", value: row.inspector },
+                        { label: "登记时间", value: row.time },
+                        { label: "备注", value: row.remark || "—", fullWidth: true },
+                    ]}
+                />
             </div>
         </Modal>
     );
@@ -530,6 +536,14 @@ export function InboundPage() {
         }
     }, [searchParams, setSearchParams]);
 
+    // 清空条件只作用于筛选行（搜索/品类）；分页由用户自行操作
+    const clearFilters = () => {
+        setKeyword("");
+        setCategory("全部品类");
+        setPage(1);
+    };
+    const filtersActive = !!keyword.trim() || category !== "全部品类";
+
     return (
         <div className="flex flex-col gap-5">
             <PageHeading
@@ -546,8 +560,8 @@ export function InboundPage() {
 
             <section className="relative overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
                 {overlay && <LoadingOverlay />}
-                <div className="list-toolbar flex flex-wrap items-center gap-2.5 border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
-                    <label className="flex h-10 min-w-55 flex-1 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 sm:max-w-75">
+                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
+                    <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 lg:w-70">
                         <Icon name="search" size={15} className="text-subtle" />
                         <input
                             value={keyword}
@@ -573,45 +587,41 @@ export function InboundPage() {
                             <option key={item}>{item}</option>
                         ))}
                     </select>
-
-                    <ToolbarMore>
-                        <Button
-                            variant="secondary"
-                            icon="reset"
-                            data-low-priority="true"
-                            onClick={() => {
-                                setKeyword("");
-                                setCategory("全部品类");
-                                setPage(1);
-                            }}
-                        >
-                            重置
-                        </Button>
-                        <Button variant="secondary" icon="refresh" data-low-priority="true" onClick={refresh}>
-                            刷新
-                        </Button>
-                        <Button
-                            variant="secondary"
-                            icon="download"
-                            data-low-priority="true"
-                            onClick={() =>
-                                downloadCsv(
-                                    "成品入库",
-                                    ["入库单号", "BOM 编码", "入库数量", "入库日期", "检验登记人", "状态"],
-                                    pageRows.map(row => [
-                                        row.no,
-                                        row.bomCode,
-                                        String(row.qty),
-                                        row.date,
-                                        row.inspector,
-                                        row.status === "active" ? "有效" : "已作废",
-                                    ]),
-                                )
-                            }
-                        >
-                            导出
-                        </Button>
-                    </ToolbarMore>
+                    <button
+                        type="button"
+                        onClick={clearFilters}
+                        disabled={!filtersActive}
+                        className="min-h-10 px-1 text-13 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
+                    >
+                        清空条件
+                    </button>
+                    <div className="ml-auto">
+                        <ToolbarMore>
+                            <Button variant="secondary" icon="refresh" onClick={refresh}>
+                                刷新
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                icon="download"
+                                onClick={() =>
+                                    downloadCsv(
+                                        "成品入库",
+                                        ["入库单号", "BOM 编码", "入库数量", "入库日期", "检验登记人", "状态"],
+                                        pageRows.map(row => [
+                                            row.no,
+                                            row.bomCode,
+                                            String(row.qty),
+                                            row.date,
+                                            row.inspector,
+                                            row.status === "active" ? "有效" : "已作废",
+                                        ]),
+                                    )
+                                }
+                            >
+                                导出
+                            </Button>
+                        </ToolbarMore>
+                    </div>
                 </div>
 
                 <div className="mobile-records">

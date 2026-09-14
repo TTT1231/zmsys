@@ -354,11 +354,13 @@ export function CustomersPage() {
         }
     }, [searchParams, setSearchParams]);
 
-    const reset = () => {
+    // 清空条件只作用于筛选行（搜索/合作状态）；分页由用户自行操作
+    const clearFilters = () => {
         setStatusFilter("全部状态");
         setKeyword("");
         setPage(1);
     };
+    const filtersActive = !!keyword.trim() || statusFilter !== "全部状态";
 
     const canCreate = can("customers:create");
     const canEdit = can("customers:edit");
@@ -378,20 +380,8 @@ export function CustomersPage() {
 
             <section className="relative overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
                 {overlay && <LoadingOverlay />}
-                <div className="list-toolbar flex flex-wrap items-center gap-2.5 border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
-                    <select
-                        value={statusFilter}
-                        onChange={event => {
-                            setStatusFilter(event.target.value);
-                            setPage(1);
-                        }}
-                        className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
-                    >
-                        {["全部状态", "合作中", "待跟进"].map(option => (
-                            <option key={option}>{option}</option>
-                        ))}
-                    </select>
-                    <label className="flex h-10 min-w-55 flex-1 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 sm:max-w-75">
+                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
+                    <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 lg:w-70">
                         <Icon name="search" size={15} className="text-subtle" />
                         <input
                             value={keyword}
@@ -403,47 +393,66 @@ export function CustomersPage() {
                             className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
                         />
                     </label>
+                    <select
+                        value={statusFilter}
+                        onChange={event => {
+                            setStatusFilter(event.target.value);
+                            setPage(1);
+                        }}
+                        aria-label="按合作状态筛选"
+                        className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
+                    >
+                        {["全部状态", "合作中", "待跟进"].map(option => (
+                            <option key={option}>{option}</option>
+                        ))}
+                    </select>
+                    <button
+                        type="button"
+                        onClick={clearFilters}
+                        disabled={!filtersActive}
+                        className="min-h-10 px-1 text-13 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
+                    >
+                        清空条件
+                    </button>
 
-                    <ToolbarMore>
-                        <Button variant="secondary" icon="reset" data-low-priority="true" onClick={reset}>
-                            重置
-                        </Button>
-                        <Button variant="secondary" icon="refresh" data-low-priority="true" onClick={refresh}>
-                            刷新
-                        </Button>
-                        <Button
-                            variant="secondary"
-                            icon="download"
-                            data-low-priority="true"
-                            onClick={() =>
-                                downloadCsv(
-                                    "客户档案",
-                                    [
-                                        "客户编码",
-                                        "客户名称",
-                                        "联系人",
-                                        "电话",
-                                        "地区",
-                                        "累计订单",
-                                        "待交件数",
-                                        "合作状态",
-                                    ],
-                                    pageRows.map(row => [
-                                        row.customer.code,
-                                        row.customer.name,
-                                        row.customer.contact,
-                                        row.customer.phone,
-                                        regionText(row.customer),
-                                        String(row.orderCount),
-                                        String(row.pendingQty),
-                                        row.customer.cooperation,
-                                    ]),
-                                )
-                            }
-                        >
-                            导出
-                        </Button>
-                    </ToolbarMore>
+                    <div className="ml-auto">
+                        <ToolbarMore>
+                            <Button variant="secondary" icon="refresh" onClick={refresh}>
+                                刷新
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                icon="download"
+                                onClick={() =>
+                                    downloadCsv(
+                                        "客户档案",
+                                        [
+                                            "客户编码",
+                                            "客户名称",
+                                            "联系人",
+                                            "电话",
+                                            "地区",
+                                            "累计订单",
+                                            "待交件数",
+                                            "合作状态",
+                                        ],
+                                        pageRows.map(row => [
+                                            row.customer.code,
+                                            row.customer.name,
+                                            row.customer.contact,
+                                            row.customer.phone,
+                                            regionText(row.customer),
+                                            String(row.orderCount),
+                                            String(row.pendingQty),
+                                            row.customer.cooperation,
+                                        ]),
+                                    )
+                                }
+                            >
+                                导出
+                            </Button>
+                        </ToolbarMore>
+                    </div>
                 </div>
 
                 <div className="mobile-records">

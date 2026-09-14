@@ -2,6 +2,7 @@ import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { ListState, OrderTaskCard } from "@/components/ui/MobileList";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { RecordFields, RecordProduct, RecordSummary } from "@/components/business/RecordDetails";
 import { OutboundModal } from "@/pages/outbound/OutboundPage";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -9,14 +10,14 @@ import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
 import { useApp } from "@/context/AppContext";
 import { PageHeading } from "@/components/ui/PageHeading";
-import { Button, ProgressTrack, StatusBadge, TableLink } from "@/components/ui/Badge";
+import { Badge, Button, ProgressTrack, StatusBadge, TableLink } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { CustomerCell, DateCell, QtyCell } from "@/components/ui/cells";
 import { Field, SelectField, TextArea, TextField, DateField } from "@/components/ui/Field";
 import { useCreateOrder, useUpdateOrder, useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { EMPTY_SNAPSHOT, bomByCode, maxShipOf, orderStatusOf, remainingOf } from "@/data/views";
-import { todayIso } from "@/lib/date";
+import { addDays, addMonths, todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/Toast";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
@@ -27,6 +28,9 @@ import { bomSelectorOptionLabel, buildBomSelectorSchema, resolveBomSelection } f
 const STATUS_OPTIONS = ["全部状态", "待备货", "可发货", "部分发货", "已完成", "已取消", "部分发货后取消"];
 const EMPTY_BOMS: Snapshot["boms"] = [];
 const EMPTY_CUSTOMERS: Snapshot["customers"] = [];
+
+/* 交期筛选激活时在按钮上回显的简写日期（MM/DD） */
+const shortDate = (isoDate: string) => `${isoDate.slice(5, 7)}/${isoDate.slice(8, 10)}`;
 
 /* 新建销售订单弹窗（三步表单：客户与交付 → BOM 编码 → 备注） */
 function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -439,82 +443,56 @@ export function OrderDetailModal({
             }
         >
             <div className="flex flex-col gap-4">
-                <div className="grid grid-cols-3 gap-2.5">
-                    {[
-                        { label: "订单数量", value: order.qty, danger: false },
-                        { label: "累计出库", value: order.outbound, danger: false },
-                        { label: "剩余待交付", value: remaining, danger: remaining > 0 },
-                    ].map(metric => (
-                        <div key={metric.label} className="rounded-xl border border-line px-3 py-2.5 text-center">
-                            <div className="text-11.5 text-muted">{metric.label}</div>
-                            <div
-                                className={`tnum text-20 font-bold ${metric.value > 0 && metric.label === "剩余待交付" ? "text-danger" : "text-ink"}`}
-                            >
-                                {num(metric.value)}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-                <div className="flex flex-col gap-2 text-13">
-                    {[
-                        ["状态", <StatusBadge key="s" status={status.key} />],
-                        [
-                            "BOM 编码",
-                            <span key="b" className="tnum font-medium text-ink">
-                                {order.bomCode}
-                            </span>,
-                        ],
-                        [
-                            "规格",
-                            <span key="spec" className="text-td">
-                                {bom?.spec}
-                            </span>,
-                        ],
-                        [
-                            "下单日期",
-                            <span key="od" className="tnum text-td">
-                                {order.orderDate}
-                            </span>,
-                        ],
-                        [
-                            "交货日期",
-                            <span key="dd" className="tnum text-td">
-                                {order.deliverDate}
-                                {remaining > 0 && order.deliverDate < todayIso() ? "（已逾期）" : ""}
-                            </span>,
-                        ],
-                        [
-                            "订单备注",
-                            <span key="rk" className="text-td">
-                                {order.remark || "—"}
-                            </span>,
-                        ],
-                    ].map(([label, node]) => (
-                        <div
-                            key={label as string}
-                            className="flex items-center justify-between gap-4 border-b border-line/70 pb-1.5"
-                        >
-                            <span className="text-muted">{label as string}</span>
-                            {node}
-                        </div>
-                    ))}
-                </div>
-                <details className="rounded-xl border border-line px-3.5 py-2.5" open={shipments.length > 0}>
-                    <summary className="cursor-pointer text-12.5 font-semibold text-ink">
+                <RecordSummary
+                    metrics={[
+                        { label: "订单数量", value: order.qty },
+                        { label: "累计出库", value: order.outbound },
+                        { label: "剩余待交付", value: remaining },
+                    ]}
+                    status={<StatusBadge status={status.key} label={status.label} />}
+                    note={order.lifecycleStatus === "cancelled" ? "订单已取消，剩余数量不再安排交付。" : undefined}
+                />
+                <RecordProduct bom={bom} bomCode={order.bomCode} categories={snap.bomCategories} />
+                <RecordFields
+                    title="订单信息"
+                    items={[
+                        { label: "下单日期", value: order.orderDate },
+                        {
+                            label: "交货日期",
+                            value: (
+                                <>
+                                    {order.deliverDate}
+                                    {remaining > 0 && order.deliverDate < todayIso() && (
+                                        <span className="ml-1.5 text-warning">已逾期</span>
+                                    )}
+                                </>
+                            ),
+                        },
+                        { label: "订单备注", value: order.remark || "—", fullWidth: true },
+                        ...(order.lifecycleStatus === "cancelled"
+                            ? [{ label: "取消原因", value: order.cancelReason || "—", fullWidth: true }]
+                            : []),
+                    ]}
+                />
+                <details className="border-t border-line pt-2" open={shipments.length > 0}>
+                    <summary className="min-h-11 cursor-pointer py-3 text-14 font-medium text-ink">
                         发货记录（{shipments.length}）
                     </summary>
-                    <div className="mt-2 flex flex-col gap-1.5">
+                    <div className="mt-1 flex flex-col gap-2">
                         {shipments.length === 0 && <p className="text-12 text-subtle">暂无发货记录。</p>}
                         {shipments.map(row => (
                             <div
                                 key={row.no}
-                                className="flex items-center justify-between gap-3 rounded-input bg-soft px-3 py-1.5 text-12.5"
+                                className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 rounded-input bg-soft p-3 text-13"
                             >
-                                <span className="tnum font-medium text-ink">{row.no}</span>
-                                <span className="text-muted">
+                                <span className="tnum text-ink wrap-anywhere">{row.no}</span>
+                                <QtyCell value={row.qty} unit="件" />
+                                <span className="text-12 leading-5 text-muted wrap-anywhere">
                                     {row.date} · {row.operator}
                                 </span>
-                                <QtyCell value={row.qty} unit="件" />
+                                <Badge tone={row.state === "voided" ? "danger" : "progress"}>
+                                    {row.state === "voided" ? "已作废" : row.state === "printed" ? "已打印" : "已登记"}
+                                </Badge>
                             </div>
                         ))}
                     </div>
@@ -580,6 +558,25 @@ export function OrdersPage() {
 
     const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
     const dateFilterActive = !!dateStart || !!dateEnd;
+    const filtersActive =
+        dateFilterActive || !!keyword.trim() || statusFilter !== "全部状态" || categoryFilter !== "全部品类";
+    const dateLabel =
+        dateStart && dateEnd
+            ? `交期：${shortDate(dateStart)}–${shortDate(dateEnd)}`
+            : dateStart
+              ? `交期：${shortDate(dateStart)} 起`
+              : dateEnd
+                ? `交期：至 ${shortDate(dateEnd)}`
+                : "交期";
+    /* 交期快捷区间：手机上免滚原生日期选择器 */
+    const today = todayIso();
+    const monthStart = `${today.slice(0, 8)}01`;
+    const quickRanges = [
+        { label: "近 7 天", start: addDays(today, -6), end: today },
+        { label: "近 30 天", start: addDays(today, -29), end: today },
+        { label: "本月", start: monthStart, end: addDays(addMonths(monthStart, 1), -1) },
+        { label: "下月", start: addMonths(monthStart, 1), end: addDays(addMonths(monthStart, 2), -1) },
+    ];
 
     useEffect(() => {
         if (searchParams.get("new") === "order") {
@@ -588,11 +585,16 @@ export function OrdersPage() {
         }
     }, [searchParams, setSearchParams]);
 
-    const reset = () => {
-        setTaskFilter("all");
-        setStatusFilter("全部状态");
+    // 清空条件只作用于筛选行（搜索/状态/品类/交期）；快捷 tab 由用户自行切换
+    const clearFilters = () => {
         setKeyword("");
+        setStatusFilter("全部状态");
         setCategoryFilter("全部品类");
+        setDateStart("");
+        setDateEnd("");
+        setPage(1);
+    };
+    const clearDates = () => {
         setDateStart("");
         setDateEnd("");
         setPage(1);
@@ -638,8 +640,9 @@ export function OrdersPage() {
 
             <section className="relative overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
                 {overlay && <LoadingOverlay />}
-                <div className="list-toolbar flex flex-wrap items-center gap-2.5 border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
-                    <label className="flex h-10 min-w-55 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 sm:w-70">
+                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
+                    {/* 搜索最左：窄屏由 list-toolbar 规则独占整行，宽屏固定 280px */}
+                    <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 lg:w-70">
                         <Icon name="search" size={15} className="text-subtle" />
                         <input
                             value={keyword}
@@ -657,6 +660,7 @@ export function OrdersPage() {
                             setStatusFilter(event.target.value);
                             setPage(1);
                         }}
+                        aria-label="按状态筛选"
                         className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
                     >
                         {STATUS_OPTIONS.map(option => (
@@ -686,10 +690,50 @@ export function OrdersPage() {
                             }`}
                         >
                             <Icon name="calendar" size={15} />
-                            交期筛选
-                            {dateFilterActive && <span className="h-1.5 w-1.5 rounded-full bg-success" />}
+                            {dateLabel}
                         </summary>
-                        <div className="fixed inset-x-4 top-45 z-50 grid grid-cols-1 gap-2 lg:absolute lg:inset-x-auto lg:top-12 lg:right-0 lg:w-75 rounded-xl border border-line bg-white p-3 shadow-modal">
+                        {/* 移动端贴底弹层（同 Modal：scrim 关闭 + 顶圆角），宽屏锚定按钮右侧下拉；
+                            section 有 overflow-hidden，下拉面板在窄屏会被裁剪，故窄屏走 fixed 贴底 */}
+                        <div
+                            className="fixed inset-0 z-40 bg-scrim backdrop-blur-[2px] lg:hidden"
+                            onClick={event => event.currentTarget.closest("details")?.removeAttribute("open")}
+                        />
+                        <div className="absolute top-12 right-0 z-50 grid w-75 grid-cols-1 gap-2 rounded-xl border border-line bg-white p-3 shadow-modal max-lg:fixed max-lg:inset-x-0 max-lg:top-auto max-lg:bottom-0 max-lg:left-0 max-lg:w-auto max-lg:gap-3 max-lg:rounded-b-none max-lg:rounded-t-[22px] max-lg:border-x-0 max-lg:border-b-0 max-lg:p-4 max-lg:pb-[max(16px,env(safe-area-inset-bottom))]">
+                            <div className="flex items-center justify-between lg:hidden">
+                                <span className="text-14 font-semibold text-ink">按交货日期筛选</span>
+                                <button
+                                    type="button"
+                                    aria-label="关闭"
+                                    onClick={event => event.currentTarget.closest("details")?.removeAttribute("open")}
+                                    className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition hover:bg-soft hover:text-ink"
+                                >
+                                    <Icon name="close" size={16} />
+                                </button>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                                {quickRanges.map(item => {
+                                    const active = dateStart === item.start && dateEnd === item.end;
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={item.label}
+                                            aria-pressed={active}
+                                            onClick={() => {
+                                                setDateStart(item.start);
+                                                setDateEnd(item.end);
+                                                setPage(1);
+                                            }}
+                                            className={`min-h-8 rounded-full border px-3 text-12.5 font-medium transition ${
+                                                active
+                                                    ? "border-primary-border bg-primary-soft text-primary-strong"
+                                                    : "border-line-strong bg-white text-muted hover:text-primary-strong"
+                                            }`}
+                                        >
+                                            {item.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                             <Field label="开始">
                                 <input
                                     type="date"
@@ -698,7 +742,7 @@ export function OrdersPage() {
                                         setDateStart(event.target.value);
                                         setPage(1);
                                     }}
-                                    className="rounded-input border border-line-strong px-2.5 py-2 text-13"
+                                    className="w-full rounded-input border border-line-strong px-2.5 py-2 text-13"
                                 />
                             </Field>
                             <Field label="结束">
@@ -709,56 +753,70 @@ export function OrdersPage() {
                                         setDateEnd(event.target.value);
                                         setPage(1);
                                     }}
-                                    className="rounded-input border border-line-strong px-2.5 py-2 text-13"
+                                    className="w-full rounded-input border border-line-strong px-2.5 py-2 text-13"
                                 />
                             </Field>
-                            <Button onClick={event => event.currentTarget.closest("details")?.removeAttribute("open")}>
-                                完成筛选
-                            </Button>
+                            <div className="flex gap-2">
+                                {dateFilterActive && (
+                                    <Button variant="secondary" icon="reset" onClick={clearDates}>
+                                        清除
+                                    </Button>
+                                )}
+                                <Button
+                                    className="flex-1"
+                                    onClick={event => event.currentTarget.closest("details")?.removeAttribute("open")}
+                                >
+                                    完成筛选
+                                </Button>
+                            </div>
                         </div>
                     </details>
-
-                    <ToolbarMore>
-                        <Button variant="secondary" icon="reset" data-low-priority="true" onClick={reset}>
-                            重置
-                        </Button>
-                        <Button variant="secondary" icon="refresh" data-low-priority="true" onClick={refresh}>
-                            刷新
-                        </Button>
-                        <Button
-                            variant="secondary"
-                            icon="download"
-                            data-low-priority="true"
-                            className="ml-auto"
-                            onClick={() =>
-                                downloadCsv(
-                                    "销售订单",
-                                    [
-                                        "销售订单号",
-                                        "客户",
-                                        "客户编码",
-                                        "BOM 编码",
-                                        "订单数量",
-                                        "交货日期",
-                                        "累计出库",
-                                        "状态",
-                                    ],
-                                    pageRows.map(order => [
-                                        order.orderNo,
-                                        order.customer,
-                                        order.customerCode,
-                                        order.bomCode,
-                                        String(order.qty),
-                                        order.deliverDate,
-                                        String(order.outbound),
-                                        orderStatusOf(snap, order).label,
-                                    ]),
-                                )
-                            }
-                        >
-                            导出
-                        </Button>
-                    </ToolbarMore>
+                    <button
+                        type="button"
+                        onClick={clearFilters}
+                        disabled={!filtersActive}
+                        className="min-h-10 px-1 text-13 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
+                    >
+                        清空条件
+                    </button>
+                    <div className="ml-auto">
+                        <ToolbarMore>
+                            <Button variant="secondary" icon="refresh" onClick={refresh}>
+                                刷新
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                icon="download"
+                                onClick={() =>
+                                    downloadCsv(
+                                        "销售订单",
+                                        [
+                                            "销售订单号",
+                                            "客户",
+                                            "客户编码",
+                                            "BOM 编码",
+                                            "订单数量",
+                                            "交货日期",
+                                            "累计出库",
+                                            "状态",
+                                        ],
+                                        pageRows.map(order => [
+                                            order.orderNo,
+                                            order.customer,
+                                            order.customerCode,
+                                            order.bomCode,
+                                            String(order.qty),
+                                            order.deliverDate,
+                                            String(order.outbound),
+                                            orderStatusOf(snap, order).label,
+                                        ]),
+                                    )
+                                }
+                            >
+                                导出
+                            </Button>
+                        </ToolbarMore>
+                    </div>
                 </div>
 
                 <div className="mobile-records">
