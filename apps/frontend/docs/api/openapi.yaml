@@ -310,6 +310,20 @@ paths:
                 "403": { $ref: "#/components/responses/Forbidden" }
                 "409": { $ref: "#/components/responses/Conflict" }
 
+    /bom-stocks:
+        get:
+            tags: [boms]
+            operationId: listBomStocks
+            summary: BOM 当前库存余量聚合
+            description: 权限 `bom:view`。口径同 v_bom_stock：有效入库 + 库存调整 − 未作废出库；仅返回存在流水的 bomCode，无流水者由前端按 0 展示。
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/BomStockEnvelope" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+
     /inbound:
         get:
             tags: [inbound]
@@ -1294,6 +1308,15 @@ components:
                 - $ref: "#/components/schemas/Envelope"
                 - type: object
                   properties: { code: { const: 0 }, data: { type: array, items: { $ref: "#/components/schemas/BomCategory" } }, message: { const: ok } }
+        BomStockEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/BomStockMap" }, message: { const: ok } }
+        BomStockMap:
+            type: object
+            description: bomCode → 当前库存余量
+            additionalProperties: { type: integer }
         InboundEnvelope:
             allOf:
                 - $ref: "#/components/schemas/Envelope"

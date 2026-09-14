@@ -58,6 +58,9 @@ export interface Bom {
     unit: string;
 }
 
+/** BOM 当前库存余量聚合（GET /bom-stocks）：bomCode → 有效入库 + 库存调整 − 未作废出库 */
+export type BomStockMap = Record<string, number>;
+
 export interface Customer {
     version: number;
     code: string;
@@ -183,7 +186,7 @@ export interface Snapshot {
     inboundLedger: InboundRow[];
     outboundLedger: OutboundRow[];
     stockAdjustments: StockAdjustmentRow[];
-    stock: Record<string, number>;
+    stock: BomStockMap;
     users: WbUser[];
     customerOwnerOptions: CustomerOwnerOption[];
 }

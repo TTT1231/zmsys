@@ -301,3 +301,13 @@ export const ledgerHandlers = [
         }
     }),
 ];
+
+/* BOM 参考实现（真实后端 v_bom_stock 视图同口径）：db.stock 由各写操作增量维护 */
+export const bomHandlers = [
+    http.get("/api/bom-stocks", ({ request }) => {
+        const auth = authenticate(request);
+        if (!auth) return fail("登录已过期，请重新登录", 401);
+        if (!authorized(auth, "bom:view")) return fail("无权查看 BOM 库存", 403);
+        return ok(Object.fromEntries(db.stock));
+    }),
+];

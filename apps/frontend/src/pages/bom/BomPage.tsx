@@ -13,7 +13,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { SelectField, TextField } from "@/components/ui/Field";
 import { SelectMenuField } from "@/components/ui/SelectMenuField";
-import { useCreateBom, useWbRefresh, useWbSnapshot } from "@/data/queries";
+import { useBomCategories, useBomRefresh, useBomStocks, useBoms, useCreateBom } from "@/data/queries";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { useToast } from "@/components/ui/Toast";
@@ -29,7 +29,7 @@ import type { Bom } from "@/api";
 const EMPTY_BOMS: Bom[] = [];
 
 export function BomDetailModal({ bom, onClose }: { bom: Bom | null; onClose: () => void }) {
-    const { data } = useWbSnapshot();
+    const { data: bomCategories } = useBomCategories();
     if (!bom) return null;
     return (
         <Modal
@@ -48,7 +48,7 @@ export function BomDetailModal({ bom, onClose }: { bom: Bom | null; onClose: () 
                 </button>
             }
         >
-            <BomSpecs bom={bom} category={data?.bomCategories.find(category => category.name === bom.name)} />
+            <BomSpecs bom={bom} category={bomCategories?.find(category => category.name === bom.name)} />
         </Modal>
     );
 }
@@ -72,7 +72,8 @@ const blankSpecRow = (id: number): SpecRow => ({ id, key: "", value: "" });
 const RESERVED_SPEC_KEYS = new Set(["品类", "型号", "BOM编码", "BOM 编码"].map(key => key.toLocaleLowerCase()));
 
 function NewBomModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-    const { data } = useWbSnapshot();
+    const { data: boms } = useBoms();
+    const { data: bomCategories } = useBomCategories();
     const createBom = useCreateBom();
     const toast = useToast();
     const [name, setName] = useState("");
@@ -81,9 +82,8 @@ function NewBomModal({ open, onClose }: { open: boolean; onClose: () => void }) 
     const [errors, setErrors] = useState<Record<string, string>>({});
     const nextRowId = useRef(1);
 
-    const boms = data?.boms ?? EMPTY_BOMS;
-    const bomCategories = data?.bomCategories ?? [];
-    const category = bomCategories.find(item => item.name === name);
+    const bomList = boms ?? EMPTY_BOMS;
+    const category = bomCategories?.find(item => item.name === name);
     const fixedSpecs = useMemo(() => (category ? defaultsOf(category) : {}), [category]);
     const customSpecs = useMemo(
         () =>
@@ -96,7 +96,7 @@ function NewBomModal({ open, onClose }: { open: boolean; onClose: () => void }) 
     );
     const previewSpecs = useMemo(() => ({ ...fixedSpecs, ...customSpecs }), [fixedSpecs, customSpecs]);
 
-    const nextCode = useMemo(() => (category ? nextBomCode(category, boms) : "—"), [category, boms]);
+    const nextCode = useMemo(() => (category ? nextBomCode(category, bomList) : "—"), [category, bomList]);
 
     const pickCategory = (next: string) => {
         setName(next);
@@ -202,7 +202,7 @@ function NewBomModal({ open, onClose }: { open: boolean; onClose: () => void }) 
                         onChange={event => pickCategory(event.target.value)}
                     >
                         <option value="">请选择</option>
-                        {bomCategories.map(item => (
+                        {(bomCategories ?? []).map(item => (
                             <option key={item.name}>{item.name}</option>
                         ))}
                     </SelectField>
@@ -312,19 +312,23 @@ function QuickFindModal({
     onClose: () => void;
     onDetail: (bom: Bom) => void;
 }) {
-    const { data } = useWbSnapshot();
+    const { data: boms } = useBoms();
+    const { data: bomCategories } = useBomCategories();
     const [category, setCategory] = useState("");
     const [selections, setSelections] = useState<Record<string, string>>({});
-    const boms = data?.boms ?? EMPTY_BOMS;
-    const categories = useMemo(() => [...new Set(boms.map(bom => bom.name))], [boms]);
-    const categoryBoms = useMemo(() => (category ? boms.filter(bom => bom.name === category) : []), [boms, category]);
+    const bomList = boms ?? EMPTY_BOMS;
+    const categories = useMemo(() => [...new Set(bomList.map(bom => bom.name))], [bomList]);
+    const categoryBoms = useMemo(
+        () => (category ? bomList.filter(bom => bom.name === category) : []),
+        [bomList, category],
+    );
     const selectorSchema = useMemo(
         () =>
             buildBomSelectorSchema(
                 categoryBoms,
-                data?.bomCategories.find(item => item.name === category)?.fields.map(field => field.key),
+                bomCategories?.find(item => item.name === category)?.fields.map(field => field.key),
             ),
-        [categoryBoms, category, data],
+        [categoryBoms, category, bomCategories],
     );
     const specFields = useMemo(
         () => selectorSchema.fields.filter(field => field.kind === "spec"),
@@ -466,8 +470,12 @@ function QuickFindModal({
 
 export function BomPage() {
     const { can } = useApp();
-    const { data, isLoading, isFetching } = useWbSnapshot();
-    const { refresh } = useWbRefresh();
+    const bomsQuery = useBoms();
+    const categoriesQuery = useBomCategories();
+    const stocksQuery = useBomStocks();
+    const { refresh } = useBomRefresh();
+    const isLoading = bomsQuery.isLoading || categoriesQuery.isLoading || stocksQuery.isLoading;
+    const isFetching = bomsQuery.isFetching || categoriesQuery.isFetching || stocksQuery.isFetching;
     // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
     const overlay = useDelayedFlag(isFetching && !isLoading);
     const [searchParams, setSearchParams] = useSearchParams();
@@ -480,7 +488,7 @@ export function BomPage() {
     const [quickOpen, setQuickOpen] = useState(false);
     const [detail, setDetail] = useState<Bom | null>(null);
 
-    const boms = data?.boms ?? EMPTY_BOMS;
+    const boms = bomsQuery.data ?? EMPTY_BOMS;
     const categories = useMemo(() => [...new Set(boms.map(bom => bom.name))], [boms]);
 
     const filtered = useMemo(() => {
@@ -619,12 +627,15 @@ export function BomPage() {
                             >
                                 <BomSpecs
                                     bom={bom}
-                                    category={data?.bomCategories.find(category => category.name === bom.name)}
+                                    category={categoriesQuery.data?.find(category => category.name === bom.name)}
                                     layout="list"
                                     showIdentity={false}
                                 />
                                 <div className="mt-2">
-                                    <CardField label="当前库存" value={`${num(data?.stock[bom.code] ?? 0)} 件`} />
+                                    <CardField
+                                        label="当前库存"
+                                        value={stocksQuery.data ? `${num(stocksQuery.data[bom.code] ?? 0)} 件` : "—"}
+                                    />
                                 </div>
                             </RecordCard>
                         ))}
@@ -696,7 +707,7 @@ export function BomPage() {
                                         <td className="px-3 py-3">
                                             <BomSpecs
                                                 bom={bom}
-                                                category={data?.bomCategories.find(
+                                                category={categoriesQuery.data?.find(
                                                     category => category.name === bom.name,
                                                 )}
                                                 layout="list"

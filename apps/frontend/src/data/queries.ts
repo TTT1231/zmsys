@@ -14,6 +14,7 @@ import {
     emergencyVoidOutbound,
     fetchBomCategories,
     fetchBoms,
+    fetchBomStocks,
     fetchCustomerOwnerOptions,
     fetchCustomers,
     fetchGrantLog,
@@ -40,6 +41,40 @@ export const wbKeys = {
     grants: ["roles", "grants"] as const,
     grantLog: ["roles", "grants", "log"] as const,
 };
+
+/* BOM 慢变主数据独立缓存：列表页/选择器只拉所需接口，不再等聚合快照 */
+export const bomKeys = {
+    all: ["boms"] as const,
+    list: ["boms", "list"] as const,
+    categories: ["boms", "categories"] as const,
+    stocks: ["boms", "stocks"] as const,
+};
+
+/** BOM 与品类目录变化频率低，放宽 staleTime 到 5 分钟；写操作后仍精准失效 */
+const BOM_STALE_MS = 5 * 60_000;
+
+export function useBoms() {
+    return useQuery({ queryKey: bomKeys.list, queryFn: fetchBoms, staleTime: BOM_STALE_MS });
+}
+
+export function useBomCategories() {
+    return useQuery({
+        queryKey: bomKeys.categories,
+        queryFn: fetchBomCategories,
+        staleTime: BOM_STALE_MS,
+    });
+}
+
+/** 库存余量随台账写操作实时变化：staleTime 沿用全局 30s，台账 mutation 后主动失效 */
+export function useBomStocks() {
+    return useQuery({ queryKey: bomKeys.stocks, queryFn: fetchBomStocks });
+}
+
+/** 刷新 BOM 域三个查询；页面本地筛选/分页不受影响 */
+export function useBomRefresh() {
+    const queryClient = useQueryClient();
+    return { refresh: () => void queryClient.invalidateQueries({ queryKey: bomKeys.all }) };
+}
 
 /* 过渡实现：并发拉取当前完整计算窗口；库存按有效入库 + 库存调整 − 有效出库推导。
  * 真实后端启用分页前必须先提供工作台聚合端点，不能用分页局部数据计算全局库存。 */
@@ -115,7 +150,10 @@ function useWbMutation<TInput, TOutput>(mutationFn: (input: TInput) => Promise<T
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn,
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: wbKeys.all }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: wbKeys.all });
+            queryClient.invalidateQueries({ queryKey: bomKeys.stocks });
+        },
     });
 }
 
@@ -138,7 +176,17 @@ export const useUpdateOrder = () =>
 export const useCreateCustomer = () => useWbMutation(createCustomer);
 export const useUpdateCustomer = () =>
     useWbMutation((input: { code: string } & UpdateCustomerInput) => updateCustomerReq(input.code, input));
-export const useCreateBom = () => useWbMutation(createBom);
+/** 新建 BOM 只失效 BOM 列表与聚合快照；不动随台账变化的库存余量 */
+export const useCreateBom = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: createBom,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: bomKeys.list });
+            queryClient.invalidateQueries({ queryKey: wbKeys.all });
+        },
+    });
+};
 export const useCreateInbound = () => useWbMutation(createInbound);
 export const useUpdateInbound = () =>
     useWbMutation((input: { no: string } & Parameters<typeof updateInbound>[1]) => {
