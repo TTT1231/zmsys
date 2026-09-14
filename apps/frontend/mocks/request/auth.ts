@@ -21,18 +21,8 @@ export const authHandlers = [
         return ok({ user: auth.user, grant: db.getGrant(auth.user.role) });
     }),
 
-    // 个人中心：仅允许更新自己的姓名
-    http.put("/api/auth/profile", async ({ request }) => {
-        const auth = authenticate(request);
-        if (!auth) return fail("登录已过期，请重新登录", 401);
-        const body = (await request.json().catch(() => null)) as { name?: string } | null;
-        const name = body?.name?.trim();
-        if (!name) return fail("姓名不能为空");
-        if (name.length > 20) return fail("姓名最多 20 个字符");
-        return ok(db.updateUserName(auth.user.account, name));
-    }),
-
-    // 个人中心：修改自己的密码（不强制；成功后旧 token 失效，用户重新登录）
+    // 个人中心：修改自己的密码（不强制；成功后旧 token 失效，用户重新登录）。
+    // 姓名等资料为管理员域，由 PUT /users/{account} 维护，不再提供自助改名
     http.put("/api/auth/password", async ({ request }) => {
         const auth = authenticate(request);
         if (!auth) return fail("登录已过期，请重新登录", 401);

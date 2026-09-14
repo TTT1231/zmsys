@@ -1,47 +1,22 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ROLE_META, useApp } from "@/context/AppContext";
-import { changePassword, updateProfile } from "@/api";
+import { changePassword } from "@/api";
+import { formatDateTime } from "@/lib/date";
 import { isApiError } from "@/http";
 import { Button } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { TextField } from "@/components/ui/Field";
 import { useToast } from "@/components/ui/Toast";
 
-/* 个人信息弹窗:账号/角色/状态/最近登录只读(管理员域),姓名可编辑,可自助修改密码。
-   姓名保存走 PUT /auth/profile,成功后 refreshProfile 让顶栏与全站即时同步。
-   调用方条件挂载(打开即 mount),内部初始值即最新用户数据 */
+/* 个人信息弹窗:全部信息只读(账号/姓名/角色/状态均为管理员域),仅可自助修改密码。
+   姓名修改走用户权限页的管理员编辑,此处不再提供自助改名入口 */
 export function ProfileDialog({ onClose }: { onClose: () => void }) {
-    const { user, role, refreshProfile, logout } = useApp();
+    const { user, role, logout } = useApp();
     const toast = useToast();
-    const [name, setName] = useState(user?.name ?? "");
-    const [saving, setSaving] = useState(false);
     const [oldPassword, setOldPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [changingPwd, setChangingPwd] = useState(false);
-
-    const save = async () => {
-        const next = name.trim();
-        if (!next) {
-            toast("姓名不能为空", true);
-            return;
-        }
-        if (next === user?.name) {
-            onClose();
-            return;
-        }
-        setSaving(true);
-        try {
-            await updateProfile({ name: next });
-            await refreshProfile();
-            toast("已保存");
-            onClose();
-        } catch (error) {
-            toast(isApiError(error) ? error.message : "保存失败，请稍后重试", true);
-        } finally {
-            setSaving(false);
-        }
-    };
 
     const submitPassword = async () => {
         if (!oldPassword || !newPassword) {
@@ -68,11 +43,25 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
         }
     };
 
-    const roRows: Array<[string, string]> = [
+    /* 状态点：绿色=启用（与用户管理页 Badge 同一 status token）；停用为中性灰（登录态下几乎不可见，兜底展示） */
+    const activeNode = (
+        <span className={`inline-flex items-center gap-1.5 ${user?.active ? "text-success" : "text-muted"}`}>
+            <span
+                aria-hidden="true"
+                className={`h-1.5 w-1.5 rounded-full ${user?.active ? "bg-success" : "bg-muted"}`}
+            />
+            {user?.active ? "启用" : "已停用"}
+        </span>
+    );
+
+    const roRows: Array<[string, ReactNode]> = [
         ["账号", `@${user?.account ?? "-"}`],
+        ["姓名", user?.name ?? "-"],
         ["角色", ROLE_META[role].roleName],
-        ["状态", user?.active ? "启用" : "停用"],
+        ["状态", activeNode],
         ["最近登录", user?.last ?? "-"],
+        ["创建时间", user?.createdAt ? formatDateTime(user.createdAt) : "-"],
+        ["上一次修改时间", user?.updatedAt ? formatDateTime(user.updatedAt) : "—"],
     ];
 
     return (
@@ -80,23 +69,18 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
             open
             onClose={onClose}
             title="个人中心"
-            subtitle="查看账号信息，姓名可自行修改"
+            subtitle="查看账号信息，姓名如需修改请联系管理员"
             label="账号"
             width={420}
             footer={
-                <>
-                    <Button variant="secondary" onClick={onClose}>
-                        取消
-                    </Button>
-                    <Button onClick={() => void save()} disabled={saving}>
-                        {saving ? "正在保存…" : "保存"}
-                    </Button>
-                </>
+                <Button variant="secondary" onClick={onClose}>
+                    关闭
+                </Button>
             }
         >
             <div className="flex items-center gap-3 py-1">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 text-15 font-semibold text-white">
-                    {(name.trim() || user?.name || "?").slice(0, 1)}
+                    {(user?.name ?? "?").slice(0, 1)}
                 </span>
                 <div className="min-w-0">
                     <div className="truncate text-15 font-semibold text-ink">{user?.name ?? "未登录"}</div>
@@ -111,15 +95,6 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
                     </div>
                 ))}
             </dl>
-            <div className="mt-4">
-                <TextField
-                    label="姓名"
-                    value={name}
-                    onChange={event => setName(event.target.value)}
-                    maxLength={20}
-                    placeholder="请输入姓名"
-                />
-            </div>
             <div className="mt-4 border-t border-dashed border-line pt-4">
                 <p className="text-12.5 font-semibold text-ink">修改密码</p>
                 <div className="mt-2 flex flex-col gap-2.5">

@@ -152,6 +152,10 @@ export interface WbUser {
     role: RoleId;
     active: boolean;
     last: string;
+    /** 创建时间（ISO 8601 带时区） */
+    createdAt: string;
+    /** 最近一次资料/状态/密码变更时间；从未变更为空 */
+    updatedAt?: string;
 }
 
 /** 客户编辑页的最小负责人候选；接口只返回启用中的销售，不暴露登录时间等用户管理信息。 */

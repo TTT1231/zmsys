@@ -27,6 +27,7 @@ const user: WbUser = {
     role: "warehouse",
     active: true,
     last: "03-09 08:00",
+    createdAt: "2026-03-01T09:00:00+08:00",
 };
 const profile = { user, grant: DEFAULT_GRANTS.warehouse };
 const loginResult: LoginResult = { accessToken: "tok.1", user };

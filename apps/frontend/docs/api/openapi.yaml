@@ -95,30 +95,13 @@ paths:
             tags: [auth]
             operationId: getProfile
             summary: 当前用户与实时角色授权
+            description: 姓名、角色、状态等资料为管理员域，本人只读；修改姓名走用户管理接口 PUT /users/{account}。
             responses:
                 "200":
                     description: 成功
                     content:
                         application/json:
                             schema: { $ref: "#/components/schemas/ProfileEnvelope" }
-                "401": { $ref: "#/components/responses/Unauthorized" }
-        put:
-            tags: [auth]
-            operationId: updateProfile
-            summary: 修改自己的姓名
-            description: 只更新 name 单字段，不允许自行修改账号、角色或状态。
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema: { $ref: "#/components/schemas/UpdateProfileInput" }
-            responses:
-                "200":
-                    description: 成功
-                    content:
-                        application/json:
-                            schema: { $ref: "#/components/schemas/UserEnvelope" }
-                "400": { $ref: "#/components/responses/BadRequest" }
                 "401": { $ref: "#/components/responses/Unauthorized" }
 
     /orders:
@@ -841,7 +824,7 @@ components:
 
         WbUser:
             type: object
-            required: [version, name, account, role, active, last]
+            required: [version, name, account, role, active, last, createdAt]
             properties:
                 version: { type: integer, minimum: 1 }
                 name: { type: string, minLength: 1, maxLength: 20 }
@@ -849,6 +832,11 @@ components:
                 role: { $ref: "#/components/schemas/RoleId" }
                 active: { type: boolean }
                 last: { type: string, description: 最近登录展示值；从未登录为破折号 }
+                createdAt: { type: string, format: date-time, description: 创建时间 }
+                updatedAt:
+                    type: string
+                    format: date-time
+                    description: 最近一次资料/状态/密码变更时间；从未变更为 NULL
 
         LoginInput:
             type: object
@@ -865,13 +853,6 @@ components:
             properties:
                 oldPassword: { type: string, format: password, minLength: 1, maxLength: 128 }
                 newPassword: { type: string, format: password, minLength: 6, maxLength: 128 }
-
-        UpdateProfileInput:
-            type: object
-            additionalProperties: false
-            required: [name]
-            properties:
-                name: { type: string, minLength: 1, maxLength: 20 }
 
         LoginResult:
             type: object

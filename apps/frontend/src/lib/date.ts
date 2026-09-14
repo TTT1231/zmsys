@@ -28,3 +28,9 @@ export const nowTime = () => {
 
 /** 当前日期时间 MM-dd HH:mm（最近登录等展示用） */
 export const nowStamp = () => `${todayIso().slice(5)} ${nowTime()}`;
+
+/** 带时区的 ISO 日期时间转本地展示 yyyy-MM-dd HH:mm */
+export const formatDateTime = (iso: string) => {
+    const date = new Date(iso);
+    return `${toIso(date)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};

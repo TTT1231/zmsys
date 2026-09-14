@@ -16,6 +16,7 @@ const user: WbUser = {
     role: "sales",
     active: true,
     last: "09-08 17:42",
+    createdAt: "2026-08-01T09:00:00+08:00",
 };
 
 const { logoutSpy, refreshProfileSpy, navigateSpy } = vi.hoisted(() => ({

@@ -308,6 +308,27 @@ describe("mock db backend constraint contract", () => {
         ).toThrow("超级管理员密码不可重置");
     });
 
+    it("stamps createdAt on create and refreshes updatedAt on later changes", () => {
+        // 种子用户代表存量系统，携带创建与变更历史（个人中心展示）；刘敏为最新入职、从未变更
+        const seeded = db.listUsers().filter(item => !item.account.startsWith("test_"));
+        for (const item of seeded) expect(item.createdAt).toBeTruthy();
+        const sysAdmin = seeded.find(item => item.account === "sys_admin")!;
+        expect(sysAdmin.updatedAt).toBeTruthy();
+        expect(seeded.find(item => item.account === "liu_min")?.updatedAt).toBeUndefined();
+
+        const user = db.createUser({ name: "时间戳测试", account: "timestamp_check_01", role: "staff" });
+        expect(user.createdAt).toBeTruthy();
+        expect(user.updatedAt).toBeUndefined();
+
+        const updated = db.updateUser(
+            user.account,
+            { expectedVersion: user.version, name: "时间戳改名", role: "staff" },
+            superActor,
+        );
+        expect(updated.updatedAt).toBeTruthy();
+        expect(updated.createdAt).toBe(user.createdAt);
+    });
+
     it("validates the backend BOM schema and rejects canonical duplicates", () => {
         const created = db.createBom({
             name: "琴键开关",

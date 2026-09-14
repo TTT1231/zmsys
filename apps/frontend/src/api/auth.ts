@@ -1,4 +1,4 @@
-import type { ChangePasswordInput, LoginInput, LoginResult, ProfileResult, WbUser } from "./types";
+import type { ChangePasswordInput, LoginInput, LoginResult, ProfileResult } from "./types";
 import { clearToken, requestClient, setToken } from "@/http";
 
 export async function login(input: LoginInput): Promise<LoginResult> {
@@ -21,12 +21,7 @@ export function fetchProfile(): Promise<ProfileResult> {
     return requestClient.get<ProfileResult>("/auth/profile");
 }
 
-/** 个人中心:更新自己的姓名(账号/角色/状态为管理员域,不可自行修改) */
-export function updateProfile(input: { name: string }): Promise<WbUser> {
-    return requestClient.put<WbUser>("/auth/profile", input);
-}
-
-/** 个人中心:修改自己的密码(旧密码校验,新密码 ≥6 位;不强制) */
+/** 个人中心:修改自己的密码(旧密码校验,新密码 ≥6 位;不强制);姓名等资料由管理员在用户权限页维护 */
 export function changePassword(input: ChangePasswordInput): Promise<null> {
     return requestClient.put<null>("/auth/password", input);
 }

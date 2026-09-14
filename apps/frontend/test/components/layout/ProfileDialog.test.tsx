@@ -1,13 +1,12 @@
 // @vitest-environment jsdom
-/* ProfileDialog:只读信息渲染、姓名校验、保存链路(updateProfile → refreshProfile → toast) */
+/* ProfileDialog:账号信息(含创建/修改时间)只读渲染、无自助改名入口、改密链路(changePassword → logout) */
 import "@testing-library/jest-dom/vitest";
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { WbUser } from "@/api";
-import { changePassword, updateProfile } from "@/api";
-import { ApiError } from "@/http";
+import { changePassword } from "@/api";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ProfileDialog } from "@/components/layout/ProfileDialog";
 
@@ -18,6 +17,7 @@ const user: WbUser = {
     role: "sales",
     active: true,
     last: "09-07 09:12",
+    createdAt: "2026-06-01T09:45:00+08:00",
 };
 
 const { logoutSpy, refreshProfileSpy } = vi.hoisted(() => ({
@@ -27,7 +27,6 @@ const { logoutSpy, refreshProfileSpy } = vi.hoisted(() => ({
 
 vi.mock("@/api", () => ({
     changePassword: vi.fn(),
-    updateProfile: vi.fn(),
 }));
 
 vi.mock("@/context/AppContext", async importOriginal => {
@@ -41,7 +40,6 @@ vi.mock("@/context/AppContext", async importOriginal => {
 beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(changePassword).mockResolvedValue(null);
-    vi.mocked(updateProfile).mockResolvedValue({ ...user, name: "李新名" });
 });
 
 afterEach(cleanup);
@@ -54,42 +52,30 @@ const renderDialog = () =>
     );
 
 describe("ProfileDialog", () => {
-    it("renders read-only account info with current name prefilled", () => {
+    it("renders read-only account info including created/updated timestamps", () => {
         renderDialog();
         const dialog = screen.getByRole("dialog", { name: "个人中心" });
         expect(dialog).toHaveTextContent("@li_xiaomei");
+        expect(dialog).toHaveTextContent("李销售");
         expect(dialog).toHaveTextContent("启用");
         expect(dialog).toHaveTextContent("09-07 09:12");
-        expect(screen.getByLabelText("姓名")).toHaveValue("李销售");
+        expect(dialog).toHaveTextContent("2026-06-01 09:45");
+        // 从未变更过资料时,上一次修改时间显示占位符
+        expect(dialog).toHaveTextContent("—");
     });
 
-    it("blocks empty name without calling the API", async () => {
+    it("highlights the active status with a green dot and success text", () => {
         renderDialog();
-        const input = screen.getByLabelText("姓名");
-        fireEvent.change(input, { target: { value: "   " } });
-        fireEvent.click(screen.getByRole("button", { name: "保存" }));
-        expect(updateProfile).not.toHaveBeenCalled();
-        expect(refreshProfileSpy).not.toHaveBeenCalled();
-        expect(await screen.findByText("姓名不能为空")).toBeInTheDocument();
+        // 圆点为纯装饰(aria-hidden),状态由文字传达,颜色只作增强不作唯一信息
+        const dot = document.querySelector(".bg-success");
+        expect(dot).toHaveAttribute("aria-hidden", "true");
+        expect(screen.getByText("启用")).toHaveClass("text-success");
     });
 
-    it("saves name change through updateProfile then refreshProfile", async () => {
+    it("offers no self-service name editing or save action", () => {
         renderDialog();
-        fireEvent.change(screen.getByLabelText("姓名"), { target: { value: "李新名" } });
-        fireEvent.click(screen.getByRole("button", { name: "保存" }));
-        await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({ name: "李新名" }));
-        await waitFor(() => expect(refreshProfileSpy).toHaveBeenCalledTimes(1));
-        expect(await screen.findByText("已保存")).toBeInTheDocument();
-    });
-
-    it("shows error toast when save fails", async () => {
-        // 拦截器会把服务端失败归一成 ApiError,页面 catch 后透出其 message
-        vi.mocked(updateProfile).mockRejectedValueOnce(new ApiError("姓名最多 20 个字符", 400));
-        renderDialog();
-        fireEvent.change(screen.getByLabelText("姓名"), { target: { value: "超长姓名超长姓名超长姓名超长" } });
-        fireEvent.click(screen.getByRole("button", { name: "保存" }));
-        expect(await screen.findByText("姓名最多 20 个字符")).toBeInTheDocument();
-        expect(refreshProfileSpy).not.toHaveBeenCalled();
+        expect(screen.queryByLabelText("姓名")).toBeNull();
+        expect(screen.queryByRole("button", { name: "保存" })).toBeNull();
     });
 
     it("invalidates the session and returns to login state after changing password", async () => {

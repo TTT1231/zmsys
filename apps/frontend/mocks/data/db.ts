@@ -754,6 +754,8 @@ class MockDb {
             role: "super",
             active: true,
             last: `${addDays(ANCHOR, 0).slice(5)} 08:12`,
+            createdAt: `${addDays(ANCHOR, -365)}T08:30:00+08:00`,
+            updatedAt: `${addDays(ANCHOR, -100)}T10:20:00+08:00`,
             password: MOCK_PASSWORD,
             tokenVersion: 1,
         },
@@ -764,6 +766,8 @@ class MockDb {
             role: "admin",
             active: true,
             last: `${addDays(ANCHOR, 0).slice(5)} 09:40`,
+            createdAt: `${addDays(ANCHOR, -200)}T10:15:00+08:00`,
+            updatedAt: `${addDays(ANCHOR, -45)}T11:00:00+08:00`,
             password: MOCK_PASSWORD,
             tokenVersion: 1,
         },
@@ -774,6 +778,8 @@ class MockDb {
             role: "admin",
             active: true,
             last: `${addDays(ANCHOR, -1).slice(5)} 17:22`,
+            createdAt: `${addDays(ANCHOR, -180)}T09:00:00+08:00`,
+            updatedAt: `${addDays(ANCHOR, -60)}T15:30:00+08:00`,
             password: MOCK_PASSWORD,
             tokenVersion: 1,
         },
@@ -784,6 +790,8 @@ class MockDb {
             role: "warehouse",
             active: true,
             last: `${addDays(ANCHOR, 0).slice(5)} 08:55`,
+            createdAt: `${addDays(ANCHOR, -150)}T14:20:00+08:00`,
+            updatedAt: `${addDays(ANCHOR, -20)}T09:50:00+08:00`,
             password: MOCK_PASSWORD,
             tokenVersion: 1,
         },
@@ -794,6 +802,8 @@ class MockDb {
             role: "warehouse",
             active: true,
             last: `${addDays(ANCHOR, -2).slice(5)} 16:03`,
+            createdAt: `${addDays(ANCHOR, -120)}T11:05:00+08:00`,
+            updatedAt: `${addDays(ANCHOR, -15)}T14:10:00+08:00`,
             password: MOCK_PASSWORD,
             tokenVersion: 1,
         },
@@ -804,6 +814,8 @@ class MockDb {
             role: "warehouse",
             active: true,
             last: `${addDays(ANCHOR, -3).slice(5)} 11:20`,
+            createdAt: `${addDays(ANCHOR, -90)}T16:40:00+08:00`,
+            updatedAt: `${addDays(ANCHOR, -80)}T10:05:00+08:00`,
             password: MOCK_PASSWORD,
             tokenVersion: 1,
         },
@@ -814,6 +826,8 @@ class MockDb {
             role: "sales",
             active: true,
             last: `${addDays(ANCHOR, 0).slice(5)} 09:12`,
+            createdAt: `${addDays(ANCHOR, -60)}T09:45:00+08:00`,
+            updatedAt: `${addDays(ANCHOR, -10)}T16:25:00+08:00`,
             password: MOCK_PASSWORD,
             tokenVersion: 1,
         },
@@ -824,6 +838,7 @@ class MockDb {
             role: "staff",
             active: true,
             last: `${addDays(ANCHOR, -4).slice(5)} 15:44`,
+            createdAt: `${addDays(ANCHOR, -30)}T13:30:00+08:00`,
             password: MOCK_PASSWORD,
             tokenVersion: 1,
         },
@@ -1140,17 +1155,8 @@ class MockDb {
         return null;
     }
 
-    /** 个人中心：仅允许更新自己的姓名（账号/角色/状态为管理员域） */
-    updateUserName(account: string, name: string): WbUser {
-        const user = this.users.find(item => item.account === account);
-        if (!user || !user.active) throw new Error("账号不存在或已停用");
-        user.name = name;
-        user.version += 1;
-        const { password: _password, tokenVersion: _tokenVersion, ...rest } = user;
-        return rest;
-    }
-
-    /** 个人中心：修改自己的密码（旧密码校验 + 新密码 ≥6 位；不强制改密） */
+    /** 个人中心：修改自己的密码（旧密码校验 + 新密码 ≥6 位；不强制改密）。
+        姓名等资料为管理员域，由 updateUser 维护，不提供自助改名 */
     changePassword(account: string, oldPassword: string, newPassword: string): void {
         const user = this.users.find(item => item.account === account);
         if (!user || !user.active) throw new Error("账号不存在或已停用");
@@ -1159,6 +1165,7 @@ class MockDb {
         user.password = newPassword;
         user.tokenVersion += 1;
         user.version += 1;
+        user.updatedAt = new Date().toISOString();
     }
 
     // ---- 授权 ----
@@ -1901,6 +1908,7 @@ class MockDb {
             role: input.role,
             active: true,
             last: "—",
+            createdAt: new Date().toISOString(),
             password: MOCK_PASSWORD,
             tokenVersion: 1,
         };
@@ -1959,6 +1967,7 @@ class MockDb {
         if (user.role !== "super") user.role = input.role;
         if (roleChanged) user.tokenVersion += 1;
         user.version += 1;
+        user.updatedAt = new Date().toISOString();
         this.version += 1;
         const { password: _password, tokenVersion: _tokenVersion, ...rest } = user;
         return { ...rest };
@@ -1988,6 +1997,7 @@ class MockDb {
         if (user.active !== input.active) user.tokenVersion += 1;
         user.active = input.active;
         user.version += 1;
+        user.updatedAt = new Date().toISOString();
         this.version += 1;
         const { password: _password, tokenVersion: _tokenVersion, ...rest } = user;
         return { ...rest };
@@ -2008,6 +2018,7 @@ class MockDb {
         user.password = "123456";
         user.tokenVersion += 1;
         user.version += 1;
+        user.updatedAt = new Date().toISOString();
         this.version += 1;
         const { password: _password, tokenVersion: _tokenVersion, ...rest } = user;
         return { ...rest };
