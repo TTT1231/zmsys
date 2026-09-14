@@ -40,6 +40,10 @@ describe("categoryOf", () => {
         expect(newMicroSwitchGaugeOf("6.3支架：铜镀银")).toBe("6.3");
         expect(newMicroSwitchGaugeOf("4.8静片：复合铜镀镍")).toBe("4.8");
     });
+
+    it("archives the fixed cover as a constant for every new micro switch", () => {
+        expect(defaultsOf(categoryOf("新微动")!)).toEqual({ 盖子: "盖子" });
+    });
 });
 
 describe("nextBomCode", () => {

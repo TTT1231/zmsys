@@ -107,6 +107,8 @@ export const BOM_CATEGORIES: CategoryDef[] = [
                 options: ["二脚底座（无挡脚）", "三脚底座（有挡脚）"],
                 required: true,
             },
+            // 盖子是所有新微动开关都装的固定塑料件，无规格分支
+            { key: "盖子", label: "盖子", type: "text", defaultValue: "盖子" },
             {
                 key: "按钮高度",
                 label: "按钮高度",

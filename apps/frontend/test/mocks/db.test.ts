@@ -19,6 +19,7 @@ describe("mock db inventory rules", () => {
                     !Object.hasOwn(bom.specs, "4.8支架") &&
                     !Object.hasOwn(bom.specs, "6.3静片") &&
                     !Object.hasOwn(bom.specs, "4.8静片") &&
+                    bom.specs["盖子"] === "盖子" &&
                     newMicroSwitchGaugeOf(bom.specs["支架"]) === newMicroSwitchGaugeOf(bom.specs["静片"]),
             ),
         ).toBe(true);
