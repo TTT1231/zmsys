@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { Order, Snapshot } from "@/api";
+import { BomCell } from "@/components/bom/BomCell";
 import { bomByCode, maxShipOf, orderStatusOf, remainingOf } from "@/data/views";
 import { num } from "@/lib/format";
 import { todayIso } from "@/lib/date";
@@ -66,6 +67,8 @@ export function OrderTaskCard({
 }) {
     const bom = bomByCode(snap, order.bomCode);
     const remaining = remainingOf(order);
+    const cancelled = order.lifecycleStatus === "cancelled";
+    const status = orderStatusOf(snap, order);
     const maxShip = maxShipOf(snap, order.orderNo);
     const daysLate = Math.max(0, Math.floor((Date.parse(todayIso()) - Date.parse(order.deliverDate)) / 86400000));
     return (
@@ -76,7 +79,7 @@ export function OrderTaskCard({
                 remaining > 0 && daysLate > 0 ? (
                     <Badge tone="danger">逾期 {daysLate} 天</Badge>
                 ) : (
-                    <StatusBadge status={orderStatusOf(snap, order).key} />
+                    <StatusBadge status={status.key} label={status.label} />
                 )
             }
             actions={
@@ -97,22 +100,27 @@ export function OrderTaskCard({
                 </>
             }
         >
-            <p className="font-medium">
-                {bom?.name}
-                {bom?.modelCode ? ` · ${bom.modelCode}` : ""}
-            </p>
-            <p className="mt-1 text-12 text-muted break-words">{bom ? `${bom.code} · ${bom.spec}` : ""}</p>
+            <BomCell
+                bom={bom}
+                bomCode={order.bomCode}
+                category={snap.bomCategories.find(category => category.name === bom?.name)}
+            />
             <div className="mt-3 flex flex-wrap justify-between gap-2 border-t border-line pt-3">
-                <span>
-                    待交 <strong className="tnum text-ink">{num(remaining)}</strong> 件
-                </span>
-                {remaining > 0 ? (
-                    <span className={maxShip > 0 ? "text-success" : "text-warning"}>
-                        {maxShip > 0 ? `本次可发 ${num(maxShip)} 件` : "等待备货"}
-                    </span>
+                {cancelled ? (
+                    <span className="text-muted">已停止交付</span>
                 ) : (
-                    <span className="text-success">已全部交付</span>
+                    <span>
+                        待交 <strong className="tnum text-ink">{num(remaining)}</strong> 件
+                    </span>
                 )}
+                {!cancelled &&
+                    (remaining > 0 ? (
+                        <span className={maxShip > 0 ? "text-success" : "text-warning"}>
+                            {maxShip > 0 ? `本次可发 ${num(maxShip)} 件` : "等待备货"}
+                        </span>
+                    ) : (
+                        <span className="text-success">已全部交付</span>
+                    ))}
             </div>
             <p className="mt-1 text-12 text-muted">
                 交货日期 {order.deliverDate} · 已发 {num(order.outbound)} / {num(order.qty)} 件

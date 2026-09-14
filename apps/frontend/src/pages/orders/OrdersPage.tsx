@@ -2,6 +2,7 @@ import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { ListState, OrderTaskCard } from "@/components/ui/MobileList";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { BomCell } from "@/components/bom/BomCell";
 import { RecordFields, RecordProduct, RecordSummary } from "@/components/business/RecordDetails";
 import { OutboundModal } from "@/pages/outbound/OutboundPage";
 import { useEffect, useMemo, useState } from "react";
@@ -846,22 +847,25 @@ export function OrdersPage() {
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "16%" }}>
                                         客户
                                     </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "15%" }}>
-                                        BOM 编码
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "22%" }}>
+                                        成品 / BOM
                                     </th>
-                                    <th className="px-3 py-2.5 text-right font-semibold" style={{ width: "9%" }}>
+                                    <th className="px-3 py-2.5 text-right font-semibold" style={{ width: "8%" }}>
                                         订单数量
                                     </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "14%" }}>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "12%" }}>
                                         交货日期
                                     </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "14%" }}>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "12%" }}>
                                         交付情况
                                     </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "9%" }}>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "8%" }}>
                                         状态
                                     </th>
-                                    <th className="px-5 py-2.5 text-right font-semibold" style={{ width: "9%" }}>
+                                    <th
+                                        className="min-w-28 px-5 py-2.5 text-right font-semibold"
+                                        style={{ width: "8%" }}
+                                    >
                                         操作
                                     </th>
                                 </tr>
@@ -878,7 +882,8 @@ export function OrdersPage() {
                                     const bom = bomByCode(snap, order.bomCode);
                                     const status = orderStatusOf(snap, order);
                                     const remaining = remainingOf(order);
-                                    const done = remaining === 0;
+                                    const cancelled = order.lifecycleStatus === "cancelled";
+                                    const done = !cancelled && remaining === 0;
                                     return (
                                         <tr
                                             key={order.orderNo}
@@ -897,15 +902,13 @@ export function OrdersPage() {
                                                 <CustomerCell name={order.customer} sub={order.customerCode} />
                                             </td>
                                             <td className="px-3 py-4">
-                                                <span className="tnum block text-13 font-semibold text-td-strong">
-                                                    {order.bomCode}
-                                                </span>
-                                                <span
-                                                    className="mt-0.5 block max-w-65 truncate text-11.5 text-muted"
-                                                    title={bom?.spec}
-                                                >
-                                                    {bom ? `${bom.name} · ${bom.spec}` : "—"}
-                                                </span>
+                                                <BomCell
+                                                    bom={bom}
+                                                    bomCode={order.bomCode}
+                                                    category={snap.bomCategories.find(
+                                                        category => category.name === bom?.name,
+                                                    )}
+                                                />
                                             </td>
                                             <td className="px-3 py-4 text-right">
                                                 <QtyCell value={order.qty} />
@@ -913,12 +916,14 @@ export function OrdersPage() {
                                             <td className="px-3 py-4">
                                                 <DateCell
                                                     date={order.deliverDate}
-                                                    overdue={order.deliverDate < todayIso() && !done}
+                                                    overdue={order.deliverDate < todayIso() && remaining > 0}
                                                 />
                                             </td>
                                             <td className="px-3 py-4">
                                                 <div className="text-12.5 text-muted">
-                                                    {done ? (
+                                                    {cancelled ? (
+                                                        "已停止交付"
+                                                    ) : done ? (
                                                         "已全部交付"
                                                     ) : (
                                                         <>
@@ -929,17 +934,19 @@ export function OrdersPage() {
                                                 <div className="tnum mt-0.5 text-11.5 text-muted">
                                                     已发 {num(order.outbound)} / {num(order.qty)}
                                                 </div>
-                                                <div className="mt-1.5">
-                                                    <ProgressTrack
-                                                        value={order.qty === 0 ? 0 : order.outbound / order.qty}
-                                                        done={done}
-                                                    />
-                                                </div>
+                                                {!cancelled && (
+                                                    <div className="mt-1.5">
+                                                        <ProgressTrack
+                                                            value={order.qty === 0 ? 0 : order.outbound / order.qty}
+                                                            done={done}
+                                                        />
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="px-3 py-4">
-                                                <StatusBadge status={status.key} />
+                                                <StatusBadge status={status.key} label={status.label} />
                                             </td>
-                                            <td className="px-5 py-4 text-right">
+                                            <td className="min-w-28 px-5 py-4 text-right whitespace-nowrap">
                                                 <div className="flex flex-col items-end gap-1">
                                                     <TableLink onClick={() => setDetail(order)}>查看详情</TableLink>
                                                     {canShip && maxShipOf(snap, order.orderNo) > 0 && (
