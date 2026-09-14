@@ -19,5 +19,12 @@ export {
     printOutboundDocument,
     emergencyVoidOutbound,
 } from "./outbound";
-export { fetchUsers, fetchCustomerOwnerOptions, createUser, updateUser, setUserActive } from "./users";
+export {
+    fetchUsers,
+    fetchCustomerOwnerOptions,
+    createUser,
+    updateUser,
+    setUserActive,
+    resetUserPassword,
+} from "./users";
 export { fetchRoles, fetchGrants, saveRoleGrants, fetchGrantLog } from "./permissions";

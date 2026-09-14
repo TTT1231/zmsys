@@ -1507,7 +1507,7 @@ class MockDb {
         const identity = bomIdentityOf({ name, modelCode, specs });
         const duplicate = this.boms.find(bom => bomIdentityOf(bom) === identity);
         if (duplicate) throw new Error(`BOM 已存在：${duplicate.code}`);
-        const code = nextBomCode(name, this.boms);
+        const code = nextBomCode(category, this.boms);
         const bom: Bom = {
             code,
             name,
@@ -1987,6 +1987,26 @@ class MockDb {
         }
         if (user.active !== input.active) user.tokenVersion += 1;
         user.active = input.active;
+        user.version += 1;
+        this.version += 1;
+        const { password: _password, tokenVersion: _tokenVersion, ...rest } = user;
+        return { ...rest };
+    }
+
+    /** 重置为初始密码 123456：改密即递增 token_version，对方旧会话立即失效 */
+    resetUserPassword(
+        account: string,
+        input: {
+            expectedVersion: number;
+        },
+        _actor: Actor,
+    ): WbUser {
+        const user = this.users.find(item => item.account === account);
+        if (!user) throw new Error("用户不存在");
+        if (user.version !== input.expectedVersion) throw new Error("用户已被其他人修改，请刷新后重试");
+        if (user.role === "super") throw new Error("超级管理员密码不可重置");
+        user.password = "123456";
+        user.tokenVersion += 1;
         user.version += 1;
         this.version += 1;
         const { password: _password, tokenVersion: _tokenVersion, ...rest } = user;

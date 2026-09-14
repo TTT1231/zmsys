@@ -17,7 +17,7 @@ import { useCreateBom, useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { useToast } from "@/components/ui/Toast";
-import { BOM_CATEGORIES, categoryOf, defaultsOf, nextBomCode } from "@/data/categories";
+import { defaultsOf, nextBomCode } from "@/data/categories";
 import {
     bomFieldOptions,
     bomSelectorOptionLabel,
@@ -82,7 +82,8 @@ function NewBomModal({ open, onClose }: { open: boolean; onClose: () => void }) 
     const nextRowId = useRef(1);
 
     const boms = data?.boms ?? EMPTY_BOMS;
-    const category = categoryOf(name);
+    const bomCategories = data?.bomCategories ?? [];
+    const category = bomCategories.find(item => item.name === name);
     const fixedSpecs = useMemo(() => (category ? defaultsOf(category) : {}), [category]);
     const customSpecs = useMemo(
         () =>
@@ -95,7 +96,7 @@ function NewBomModal({ open, onClose }: { open: boolean; onClose: () => void }) 
     );
     const previewSpecs = useMemo(() => ({ ...fixedSpecs, ...customSpecs }), [fixedSpecs, customSpecs]);
 
-    const nextCode = useMemo(() => (category ? nextBomCode(name, boms) : "—"), [category, name, boms]);
+    const nextCode = useMemo(() => (category ? nextBomCode(category, boms) : "—"), [category, boms]);
 
     const pickCategory = (next: string) => {
         setName(next);
@@ -201,7 +202,7 @@ function NewBomModal({ open, onClose }: { open: boolean; onClose: () => void }) 
                         onChange={event => pickCategory(event.target.value)}
                     >
                         <option value="">请选择</option>
-                        {BOM_CATEGORIES.map(item => (
+                        {bomCategories.map(item => (
                             <option key={item.name}>{item.name}</option>
                         ))}
                     </SelectField>
@@ -321,9 +322,9 @@ function QuickFindModal({
         () =>
             buildBomSelectorSchema(
                 categoryBoms,
-                categoryOf(category)?.fields.map(field => field.key),
+                data?.bomCategories.find(item => item.name === category)?.fields.map(field => field.key),
             ),
-        [categoryBoms, category],
+        [categoryBoms, category, data],
     );
     const specFields = useMemo(
         () => selectorSchema.fields.filter(field => field.kind === "spec"),

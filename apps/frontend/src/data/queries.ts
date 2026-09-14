@@ -24,6 +24,7 @@ import {
     fetchStockAdjustments,
     fetchUsers,
     printOutboundDocument,
+    resetUserPassword as resetUserPasswordReq,
     saveRoleGrants,
     setUserActive as setUserActiveReq,
     updateCustomer as updateCustomerReq,
@@ -179,6 +180,12 @@ export const useSetUserActive = () =>
     useWbMutation((input: { account: string } & Parameters<typeof setUserActiveReq>[1]) => {
         const { account, ...body } = input;
         return setUserActiveReq(account, body);
+    });
+
+export const useResetUserPassword = () =>
+    useWbMutation((input: { account: string } & Parameters<typeof resetUserPasswordReq>[1]) => {
+        const { account, ...body } = input;
+        return resetUserPasswordReq(account, body);
     });
 
 /* ---- 用户与权限 ---- */

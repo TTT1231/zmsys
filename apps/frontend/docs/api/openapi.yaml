@@ -639,6 +639,30 @@ paths:
                 "404": { $ref: "#/components/responses/NotFound" }
                 "409": { $ref: "#/components/responses/Conflict" }
 
+    /users/{account}/reset-password:
+        post:
+            tags: [users]
+            operationId: resetUserPassword
+            summary: 重置用户密码为初始密码
+            description: 受保护权限 `permissions:manage`，仅 super。重置为初始密码 123456；递增 token_version 使该用户旧会话立即失效。super 不可重置。
+            parameters:
+                - $ref: "#/components/parameters/Account"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/ResetUserPasswordInput" }
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/UserEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
+
     /roles:
         get:
             tags: [roles]
@@ -1231,6 +1255,13 @@ components:
                 active: { type: boolean }
                 replacementOwnerAccount: { type: string, description: 停用销售且仍有客户时必填 }
                 transferReason: { type: string, minLength: 2, maxLength: 500 }
+
+        ResetUserPasswordInput:
+            type: object
+            additionalProperties: false
+            required: [expectedVersion]
+            properties:
+                expectedVersion: { type: integer, minimum: 1 }
 
         LoginEnvelope:
             allOf:

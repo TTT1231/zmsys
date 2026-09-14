@@ -1,6 +1,6 @@
 /* 用户与角色授权 handlers：sys_user / sys_grant 对应的 API */
 import { http } from "msw";
-import type { CreateUserInput, RoleDef, SetUserStatusInput, UpdateUserInput } from "@/api";
+import type { CreateUserInput, ResetUserPasswordInput, RoleDef, SetUserStatusInput, UpdateUserInput } from "@/api";
 import type { RoleGrant, RoleId, GrantMap } from "@/data/permissions";
 import { ROLES, ROLE_IDS } from "@/data/permissions";
 import { db } from "../data/db";
@@ -70,6 +70,20 @@ export const userHandlers = [
             return ok(db.setUserActive(String(params.account), body, auth.actor));
         } catch (error) {
             const message = error instanceof Error ? error.message : "状态更新失败";
+            return fail(message, statusOf(message));
+        }
+    }),
+
+    http.post("/api/users/:account/reset-password", async ({ request, params }) => {
+        const auth = authenticate(request);
+        if (!auth) return fail("登录已过期，请重新登录", 401);
+        if (!authorized(auth, "permissions:manage")) return fail("无权重置用户密码", 403);
+        const body = (await request.json().catch(() => null)) as ResetUserPasswordInput | null;
+        if (!body || !Number.isSafeInteger(body.expectedVersion)) return fail("缺少用户版本");
+        try {
+            return ok(db.resetUserPassword(String(params.account), body, auth.actor));
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "密码重置失败";
             return fail(message, statusOf(message));
         }
     }),

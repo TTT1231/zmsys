@@ -16,6 +16,8 @@ const rotary = categoryOf("旋转开关")!;
 
 /* 构造带品类名的编码列表（nextBomCode 按品类过滤后再取序号） */
 const of = (name: string, ...codes: string[]) => codes.map(code => ({ code, name }));
+/* 页面把接口下发的品类对象直接传入，这里用种子目录模拟 */
+const cat = (name: string) => categoryOf(name)!;
 
 describe("categoryOf", () => {
     it("finds category by name", () => {
@@ -42,42 +44,38 @@ describe("categoryOf", () => {
 
 describe("nextBomCode", () => {
     it("starts from 001 when category has no codes", () => {
-        expect(nextBomCode("旋转开关", [])).toBe("ZMXK2001");
-        expect(nextBomCode("老微动", [])).toBe("ZMKW16001");
-        expect(nextBomCode("新微动", [])).toBe("ZMKW0001");
-        expect(nextBomCode("琴键开关", [])).toBe("ZMKQ001");
+        expect(nextBomCode(cat("旋转开关"), [])).toBe("ZMXK2001");
+        expect(nextBomCode(cat("老微动"), [])).toBe("ZMKW16001");
+        expect(nextBomCode(cat("新微动"), [])).toBe("ZMKW0001");
+        expect(nextBomCode(cat("琴键开关"), [])).toBe("ZMKQ001");
     });
 
     it("increments max sequence within the same category only", () => {
-        expect(nextBomCode("旋转开关", of("旋转开关", "ZMXK2001", "ZMXK2003"))).toBe("ZMXK2004");
-        expect(nextBomCode("新微动", of("旋转开关", "ZMXK2002"))).toBe("ZMKW0001");
+        expect(nextBomCode(cat("旋转开关"), of("旋转开关", "ZMXK2001", "ZMXK2003"))).toBe("ZMXK2004");
+        expect(nextBomCode(cat("新微动"), of("旋转开关", "ZMXK2002"))).toBe("ZMKW0001");
     });
 
     it("ignores other categories even with similar prefixes", () => {
         // 老微动 ZMKW16xxx 不污染新微动 ZMKWxxxxxx，XK3 ZMXK3xxx 不污染旋转开关 ZMXK2xxx
-        expect(nextBomCode("新微动", [...of("新微动", "ZMKW0001"), ...of("老微动", "ZMKW16001", "ZMKW16012")])).toBe(
-            "ZMKW0002",
-        );
-        expect(nextBomCode("老微动", [...of("老微动", "ZMKW16001", "ZMKW16012"), ...of("新微动", "ZMKW3744")])).toBe(
-            "ZMKW16013",
-        );
-        expect(nextBomCode("旋转开关", [...of("旋转开关", "ZMXK2001", "ZMXK2033"), ...of("XK3", "ZMXK31280")])).toBe(
-            "ZMXK2034",
-        );
+        expect(
+            nextBomCode(cat("新微动"), [...of("新微动", "ZMKW0001"), ...of("老微动", "ZMKW16001", "ZMKW16012")]),
+        ).toBe("ZMKW0002");
+        expect(
+            nextBomCode(cat("老微动"), [...of("老微动", "ZMKW16001", "ZMKW16012"), ...of("新微动", "ZMKW3744")]),
+        ).toBe("ZMKW16013");
+        expect(
+            nextBomCode(cat("旋转开关"), [...of("旋转开关", "ZMXK2001", "ZMXK2033"), ...of("XK3", "ZMXK31280")]),
+        ).toBe("ZMXK2034");
     });
 
     it("counts sequences beyond 999 within the same category", () => {
         // 新微动全组合 3744 条（序号 4 位）、XK3 全组合 1280 条都会跨 999 边界，超 3 位序号也要参与自增
-        expect(nextBomCode("新微动", of("新微动", "ZMKW0999", "ZMKW1000", "ZMKW3744"))).toBe("ZMKW3745");
-        expect(nextBomCode("XK3", of("XK3", "ZMXK3001", "ZMXK31280"))).toBe("ZMXK31281");
+        expect(nextBomCode(cat("新微动"), of("新微动", "ZMKW0999", "ZMKW1000", "ZMKW3744"))).toBe("ZMKW3745");
+        expect(nextBomCode(cat("XK3"), of("XK3", "ZMXK3001", "ZMXK31280"))).toBe("ZMXK31281");
     });
 
     it("ignores non-numeric suffixes", () => {
-        expect(nextBomCode("旋转开关", of("旋转开关", "ZMXK2001", "ZMXK-XX"))).toBe("ZMXK2002");
-    });
-
-    it("throws on unknown category", () => {
-        expect(() => nextBomCode("未知品类", [])).toThrow("未知品类：未知品类");
+        expect(nextBomCode(cat("旋转开关"), of("旋转开关", "ZMXK2001", "ZMXK-XX"))).toBe("ZMXK2002");
     });
 });
 

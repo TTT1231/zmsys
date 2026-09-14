@@ -213,15 +213,14 @@ export const initialValuesOf = (category: CategoryDef) =>
             .map(field => [field.key, (field.initial ?? field.defaultValue)!]),
     );
 
-/* 生成下一个 BOM 编码：ZM + 品类码 + 序号（按品类过滤后在品类内自增，宽度取 seqWidth） */
-export function nextBomCode(name: string, existing: Array<{ code: string; name: string }>) {
-    const category = categoryOf(name);
-    if (!category) throw new Error(`未知品类：${name}`);
+/* 生成下一个 BOM 编码：ZM + 品类码 + 序号（按品类过滤后在品类内自增，宽度取 seqWidth）。
+ * 品类由调用方传入（页面用接口下发的 bomCategories），本文件不再回查种子常量。 */
+export function nextBomCode(category: CategoryDef, existing: Array<{ code: string; name: string }>) {
     const prefix = `ZM${category.codePrefix}`;
     // 先按品类过滤再解析 3 位以上序号：跨品类前缀相近（ZMKW/ZMKW16）与跨 999 边界（ZMKW1000+）都不会误读
     const pattern = new RegExp(`^${prefix}(\\d{3,})$`);
     const maxSeq = existing.reduce((max, item) => {
-        if (item.name !== name) return max;
+        if (item.name !== category.name) return max;
         const match = pattern.exec(item.code);
         return match ? Math.max(max, Number(match[1])) : max;
     }, 0);

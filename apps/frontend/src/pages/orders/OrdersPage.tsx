@@ -26,7 +26,6 @@ import { useToast } from "@/components/ui/Toast";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import type { Order, Snapshot } from "@/api";
-import { categoryOf } from "@/data/categories";
 import { bomSelectorOptionLabel, buildBomSelectorSchema, resolveBomSelection } from "@/data/bomSelection";
 
 const STATUS_OPTIONS = ["全部状态", "待备货", "可发货", "部分发货", "已完成", "已取消", "部分发货后取消"];
@@ -76,9 +75,9 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
         () =>
             buildBomSelectorSchema(
                 categoryBoms,
-                categoryOf(category)?.fields.map(field => field.key),
+                data?.bomCategories.find(item => item.name === category)?.fields.map(field => field.key),
             ),
-        [categoryBoms, category],
+        [categoryBoms, category, data],
     );
     const resolution = useMemo(
         () => resolveBomSelection(categoryBoms, selectorSchema.fields, bomSelections),

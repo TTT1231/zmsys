@@ -353,6 +353,10 @@ export interface SetUserStatusInput {
     transferReason?: string;
 }
 
+export interface ResetUserPasswordInput {
+    expectedVersion: number;
+}
+
 /* ---------- 前端派生视图行（服务端不出统计端点，前端基于快照计算） ---------- */
 
 export interface ReadyToShipRow {

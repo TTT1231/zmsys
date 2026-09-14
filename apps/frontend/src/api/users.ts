@@ -1,4 +1,11 @@
-import type { CreateUserInput, CustomerOwnerOption, SetUserStatusInput, UpdateUserInput, WbUser } from "./types";
+import type {
+    CreateUserInput,
+    CustomerOwnerOption,
+    ResetUserPasswordInput,
+    SetUserStatusInput,
+    UpdateUserInput,
+    WbUser,
+} from "./types";
 import { requestClient } from "@/http";
 import { idempotencyConfig } from "./idempotency";
 
@@ -21,4 +28,9 @@ export function updateUser(account: string, input: UpdateUserInput): Promise<WbU
 
 export function setUserActive(account: string, input: SetUserStatusInput): Promise<WbUser> {
     return requestClient.patch<WbUser>(`/users/${account}/status`, input);
+}
+
+/** 重置为初始密码 123456；服务端递增 token_version 使对方旧会话失效 */
+export function resetUserPassword(account: string, input: ResetUserPasswordInput): Promise<WbUser> {
+    return requestClient.post<WbUser>(`/users/${account}/reset-password`, input);
 }

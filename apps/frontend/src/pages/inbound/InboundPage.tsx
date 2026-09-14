@@ -23,7 +23,7 @@ import { PageLoading } from "@/components/ui/PageLoading";
 import { EMPTY_SNAPSHOT, bomByCode } from "@/data/views";
 import { todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/Toast";
-import { categoryOf } from "@/data/categories";
+
 import { bomSelectorOptionLabel, buildBomSelectorSchema, resolveBomSelection } from "@/data/bomSelection";
 import type { InboundRow, Snapshot } from "@/api";
 
@@ -40,11 +40,13 @@ const LEDGER_SORT_COLUMNS: Array<{ key: LedgerSortKey; label: string }> = [
  */
 function InboundBomPicker({
     boms,
+    categories,
     value,
     onChange,
     error,
 }: {
     boms: Snapshot["boms"];
+    categories: Snapshot["bomCategories"];
     value: string;
     onChange: (bomCode: string) => void;
     error?: string;
@@ -53,15 +55,15 @@ function InboundBomPicker({
     const [category, setCategory] = useState(currentBom?.name ?? "");
     const [bomSelections, setBomSelections] = useState<Record<string, string>>({});
 
-    const categories = useMemo(() => [...new Set(boms.map(bom => bom.name))], [boms]);
+    const categoryNames = useMemo(() => [...new Set(boms.map(bom => bom.name))], [boms]);
     const categoryBoms = useMemo(() => (category ? boms.filter(bom => bom.name === category) : []), [boms, category]);
     const selectorSchema = useMemo(
         () =>
             buildBomSelectorSchema(
                 categoryBoms,
-                categoryOf(category)?.fields.map(field => field.key),
+                categories.find(item => item.name === category)?.fields.map(field => field.key),
             ),
-        [categoryBoms, category],
+        [categoryBoms, category, categories],
     );
     const resolution = useMemo(
         () => resolveBomSelection(categoryBoms, selectorSchema.fields, bomSelections),
@@ -103,7 +105,7 @@ function InboundBomPicker({
                 error={error}
                 value={category}
                 placeholder="请选择品类"
-                options={categories.map(item => ({ value: item, label: item }))}
+                options={categoryNames.map(item => ({ value: item, label: item }))}
                 onValueChange={pickCategory}
             />
             {resolution.steps.map(step => (
@@ -247,7 +249,13 @@ export function InboundModal({
             }
         >
             <div className="grid gap-4 sm:grid-cols-2">
-                <InboundBomPicker boms={boms} value={bomCode} onChange={setBomCode} error={errors.bomCode} />
+                <InboundBomPicker
+                    boms={boms}
+                    categories={snap.bomCategories}
+                    value={bomCode}
+                    onChange={setBomCode}
+                    error={errors.bomCode}
+                />
                 <TextField
                     label="入库数量（件）"
                     required
@@ -396,7 +404,13 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
             }
         >
             <div className="grid gap-4 sm:grid-cols-2">
-                <InboundBomPicker boms={snap.boms} value={bomCode} onChange={setBomCode} error={errors.bomCode} />
+                <InboundBomPicker
+                    boms={snap.boms}
+                    categories={snap.bomCategories}
+                    value={bomCode}
+                    onChange={setBomCode}
+                    error={errors.bomCode}
+                />
                 <TextField
                     label="入库数量（件）"
                     required

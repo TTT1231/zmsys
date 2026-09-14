@@ -287,6 +287,27 @@ describe("mock db backend constraint contract", () => {
         expect(db.resolveToken(db.issueToken(user.account))?.account).toBe(user.account);
     });
 
+    it("resets a password to the initial 123456 and invalidates old sessions", () => {
+        const user = db.createUser({ name: "重置测试", account: "password_reset_01", role: "staff" });
+        db.changePassword(user.account, "123456", "custom-password-01");
+        const oldToken = db.issueToken(user.account);
+
+        const reset = db.resetUserPassword(user.account, { expectedVersion: user.version + 1 }, superActor);
+        expect(reset.version).toBe(user.version + 2);
+        expect(db.resolveToken(oldToken)).toBeNull();
+        expect(db.verifyLogin(user.account, "custom-password-01")).toBeNull();
+        expect(db.verifyLogin(user.account, "123456")?.account).toBe(user.account);
+
+        // 乐观锁冲突与超级管理员保护
+        expect(() => db.resetUserPassword(user.account, { expectedVersion: reset.version - 1 }, superActor)).toThrow(
+            "用户已被其他人修改，请刷新后重试",
+        );
+        const superUser = db.listUsers().find(item => item.account === "sys_admin")!;
+        expect(() =>
+            db.resetUserPassword(superUser.account, { expectedVersion: superUser.version }, superActor),
+        ).toThrow("超级管理员密码不可重置");
+    });
+
     it("validates the backend BOM schema and rejects canonical duplicates", () => {
         const created = db.createBom({
             name: "琴键开关",

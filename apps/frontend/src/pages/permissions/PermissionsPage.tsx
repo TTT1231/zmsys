@@ -12,6 +12,7 @@ import {
     useCreateUser,
     useGrantLog,
     useGrants,
+    useResetUserPassword,
     useSaveGrants,
     useSetUserActive,
     useUpdateUser,
@@ -128,7 +129,16 @@ function AccountsTab({
 }) {
     const [editing, setEditing] = useState<WbUser | "new" | null>(null);
     const toast = useToast();
-    const resetPwd = (user: WbUser) => toast(`已重置【${user.name}】的密码并通知本人（演示）`);
+    const resetPwdRequest = useResetUserPassword();
+    // 重置后对方旧会话立即失效，需用初始密码 123456 重新登录
+    const resetPwd = (user: WbUser) =>
+        resetPwdRequest.mutate(
+            { account: user.account, expectedVersion: user.version },
+            {
+                onError: error => toast(error.message, true),
+                onSuccess: () => toast(`已重置【${user.name}】的密码为初始密码 123456`),
+            },
+        );
 
     return (
         <>
