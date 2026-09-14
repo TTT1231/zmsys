@@ -281,7 +281,11 @@ function UserActiveToggle({
         }
         setActive.mutate(
             { account: user.account, expectedVersion: user.version, active: !user.active },
-            { onError: error => toast(error.message, true) },
+            {
+                onSuccess: () =>
+                    toast(user.active ? `已停用【${user.name}】，其登录会话已失效` : `已启用【${user.name}】`),
+                onError: error => toast(error.message, true),
+            },
         );
     };
     const control = asSwitch ? (
@@ -349,7 +353,13 @@ function DeactivateTransferModal({
                 replacementOwnerAccount: replacement,
                 transferReason: reason.trim(),
             },
-            { onSuccess: onClose, onError: error => toast(error.message, true) },
+            {
+                onSuccess: () => {
+                    toast(`已停用【${user.name}】，名下 ${ownedCount} 个客户已移交给接任销售`);
+                    onClose();
+                },
+                onError: error => toast(error.message, true),
+            },
         );
     };
 
@@ -431,7 +441,10 @@ function UserDialog({
         }
         setErrors(next);
         if (Object.keys(next).length) return;
-        const onSuccess = () => onClose();
+        const done = (message: string) => () => {
+            toast(message);
+            onClose();
+        };
         const onError = (error: Error) => toast(error.message, true);
         if (user) {
             // account 创建后不可改，仅更新姓名与角色；离岗移交随角色变更一并提交
@@ -443,11 +456,19 @@ function UserDialog({
                     role,
                     ...(needTransfer ? { replacementOwnerAccount: replacement, transferReason: reason.trim() } : {}),
                 },
-                { onSuccess, onError },
+                {
+                    onSuccess: done(
+                        `用户【${name.trim()}】已更新${needTransfer ? `，名下 ${ownedCount} 个客户已移交` : ""}`,
+                    ),
+                    onError,
+                },
             );
         } else {
             if (role === "super") return;
-            createUser.mutate({ name: name.trim(), account: account.trim(), role }, { onSuccess, onError });
+            createUser.mutate(
+                { name: name.trim(), account: account.trim(), role },
+                { onSuccess: done(`用户【${name.trim()}】已创建，初始密码为 123456`), onError },
+            );
         }
     };
 
@@ -668,6 +689,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
             {
                 onSuccess: () => {
                     setDraft(null);
+                    toast(`角色【${roleNameOf(activeRole)}】授权已保存`);
                     // 若改的是当前登录用户的角色，刷新自身权限（菜单/按钮立即生效）
                     void refreshProfile();
                 },
