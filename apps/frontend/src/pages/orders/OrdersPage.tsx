@@ -256,7 +256,15 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
 }
 
 /* 编辑销售订单弹窗（新数量不能低于累计已发；完全未发货的订单可由超级管理员删除） */
-function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void }) {
+function EditOrderModal({
+    order,
+    hasShipmentLedger,
+    onClose,
+}: {
+    order: Order;
+    hasShipmentLedger: boolean;
+    onClose: () => void;
+}) {
     const { can } = useApp();
     const updateOrder = useUpdateOrder();
     const deleteOrder = useDeleteOrder();
@@ -266,8 +274,9 @@ function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void 
     const [remark, setRemark] = useState(order.remark);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [confirmDelete, setConfirmDelete] = useState(false);
-    /* 无删除权限（仅超级管理员）或已有发货的订单不显示删除入口，前端先挡一层误操作 */
-    const canDelete = can("orders:delete") && order.outbound === 0;
+    /* 无删除权限（仅超级管理员）、已有发货或存在任何出库流水（含已作废，与后端口径
+     * 一致——曾发货又作废的订单不可删）时不显示删除入口，前端先挡一层误操作 */
+    const canDelete = can("orders:delete") && order.outbound === 0 && !hasShipmentLedger;
 
     const submit = () => {
         if (!order) return;
@@ -1051,7 +1060,14 @@ export function OrdersPage() {
             </section>
 
             {canCreate && newOpen && <NewOrderModal open onClose={() => setNewOpen(false)} />}
-            {editing && <EditOrderModal key={editing.orderNo} order={editing} onClose={() => setEditing(null)} />}
+            {editing && (
+                <EditOrderModal
+                    key={editing.orderNo}
+                    order={editing}
+                    hasShipmentLedger={snap.outboundLedger.some(row => row.orderNo === editing.orderNo)}
+                    onClose={() => setEditing(null)}
+                />
+            )}
             <OrderDetailModal
                 order={detail ? (orders.find(order => order.orderNo === detail.orderNo) ?? null) : null}
                 snap={snap}

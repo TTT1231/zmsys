@@ -6,7 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { afterEach, expect, it, vi } from "vitest";
 import { OrdersPage } from "@/pages/orders/OrdersPage";
-import { detailBom, detailOrder, detailSnapshot } from "../../fixtures/recordDetails";
+import { detailBom, detailOrder, detailOutbound, detailSnapshot } from "../../fixtures/recordDetails";
 
 const deleteMutate = vi.fn();
 const canMock = vi.fn<(code: string) => boolean>(() => true);
@@ -22,12 +22,16 @@ vi.mock("@/data/queries", () => ({
     useDeleteOrder: () => ({ mutate: deleteMutate, isPending: false }),
 }));
 
-/* 一件未发的新订单与已发 200/300 的旧订单同列，验证可见性按发货量区分 */
+/* 一件未发的新订单与已发 200/300 的旧订单同列，验证可见性按发货量区分；
+ * voidedOrder 曾发货又作废（累计已发回到 0 但台账留有已作废流水）——与后端口径一致不可删 */
 const freshOrder = { ...detailOrder, orderNo: "ZM260914001", outbound: 0 };
+const voidedOrder = { ...detailOrder, orderNo: "ZM260914002", outbound: 0 };
+const voidedShipment = { ...detailOutbound, no: "CK26091499", orderNo: voidedOrder.orderNo, state: "voided" };
 const snapshot = {
     ...detailSnapshot,
     boms: [detailBom],
-    orders: [detailOrder, freshOrder],
+    orders: [detailOrder, freshOrder, voidedOrder],
+    outboundLedger: [...detailSnapshot.outboundLedger, voidedShipment],
 };
 
 const openEdit = async (orderNo: string) => {
@@ -70,6 +74,11 @@ it("已有发货的订单即使超级管理员也不显示删除入口，只提�
     const dialog = await openEdit(detailOrder.orderNo);
     expect(within(dialog).queryByRole("button", { name: "删除订单" })).not.toBeInTheDocument();
     expect(within(dialog).getByText(/累计已发 200 件/)).toBeInTheDocument();
+});
+
+it("曾发货又作废的订单（累计已发回到 0 但台账留流水）与后端口径一致，不显示删除入口", async () => {
+    const dialog = await openEdit(voidedOrder.orderNo);
+    expect(within(dialog).queryByRole("button", { name: "删除订单" })).not.toBeInTheDocument();
 });
 
 it("无删除权限的角色不渲染删除入口，避免误操作", async () => {
