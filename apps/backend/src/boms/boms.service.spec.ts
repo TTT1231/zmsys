@@ -1,14 +1,15 @@
+// 覆盖物料目录模式的 BomsService：目录树下发、快照派生（modelCode/spec/明细）、
+// 物料集合校验（归属/停用/单选组）、判重 409 与幂等重放、取号与品类行锁
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BomsService } from './boms.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TransactionRunner } from '../prisma/transaction.runner';
 import { SnowflakeGenerator } from '../common/snowflake';
-import { specHash } from '../common/bom-spec';
+import { materialSetHash } from '../common/bom-spec';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import { BusinessSequenceService } from '../sequence/business-sequence.service';
 import type { BomCategory, BomTable } from '../generated/prisma/client';
-import type { BomSpecField } from './types';
 import type { CreateBomDto } from './dto/create-bom.dto';
 
 const actor = {
@@ -23,48 +24,211 @@ const actor = {
 
 const ID_KEY = 'idem-key-01';
 
-/** 真实目录的精简子集：rotary 有固定规格，new-micro-switch 有跨字段规则 */
-const rotaryFields: BomSpecField[] = [
-    { key: '脚位', label: '脚位', type: 'select', options: ['二脚', '三脚'], required: true },
-    { key: '杆子高度', label: '杆子高度', type: 'text', defaultValue: '4.8' },
-];
+interface ItemFixture {
+    id: bigint;
+    groupId: bigint;
+    name: string;
+    sortOrder: number;
+    status: boolean;
+}
 
-const microFields: BomSpecField[] = [
+interface GroupFixture {
+    id: bigint;
+    categoryId: bigint;
+    parentId: bigint | null;
+    kind: 'SECTION' | 'GROUP';
+    name: string;
+    groupKey: string | null;
+    multi: boolean | null;
+    sortOrder: number;
+    status: boolean;
+    items: ItemFixture[];
+}
+
+type CategoryFixture = BomCategory & { groups: GroupFixture[] };
+
+/** 旋转XK2（无分区）；0.3 为停用物料，用于目录过滤与建档拒绝用例 */
+const rotaryGroups = (): GroupFixture[] => [
     {
-        key: '底座',
-        label: '底座',
-        type: 'select',
-        options: ['二脚底座（无挡脚）', '三脚底座（有挡脚）'],
-        required: true,
+        id: 2001n,
+        categoryId: 1001n,
+        parentId: null,
+        kind: 'GROUP',
+        name: '型号',
+        groupKey: 'model',
+        multi: false,
+        sortOrder: 1,
+        status: true,
+        items: [
+            { id: 3001n, groupId: 2001n, name: '1-1', sortOrder: 1, status: true },
+            { id: 3002n, groupId: 2001n, name: '2-1', sortOrder: 2, status: true },
+        ],
     },
-    { key: '支架', label: '支架', type: 'select', options: ['6.3支架：铜镀银', '4.8支架：铜镀镍'], required: true },
-    { key: '静片', label: '静片', type: 'select', options: ['6.3静片：铜镀银', '4.8静片：铜镀镍'], required: true },
+    {
+        id: 2003n,
+        categoryId: 1001n,
+        parentId: null,
+        kind: 'GROUP',
+        name: '银丝厚度',
+        groupKey: 'silver-wire-thickness',
+        multi: false,
+        sortOrder: 3,
+        status: true,
+        items: [
+            { id: 3003n, groupId: 2003n, name: '0.2', sortOrder: 1, status: true },
+            { id: 3004n, groupId: 2003n, name: '0.3', sortOrder: 2, status: false },
+        ],
+    },
+    {
+        id: 2007n,
+        categoryId: 1001n,
+        parentId: null,
+        kind: 'GROUP',
+        name: '弹簧',
+        groupKey: 'spring',
+        multi: false,
+        sortOrder: 7,
+        status: true,
+        items: [{ id: 3008n, groupId: 2007n, name: '0.5', sortOrder: 1, status: true }],
+    },
 ];
 
-/** 夹具品类：specSchema 收窄为 { fields }（Prisma JsonValue 断言在构造内统一处理） */
-type CategoryFixture = Partial<Omit<BomCategory, 'specSchema'>> & { specSchema?: { fields: BomSpecField[] } };
+/** 新微动（分区树）；“停用分区”下的启用组用于分区停用整支不可选用例 */
+const microGroups = (): GroupFixture[] => [
+    {
+        id: 2101n,
+        categoryId: 1003n,
+        parentId: null,
+        kind: 'SECTION',
+        name: 'PA66塑料',
+        groupKey: null,
+        multi: null,
+        sortOrder: 1,
+        status: true,
+        items: [],
+    },
+    {
+        id: 2111n,
+        categoryId: 1003n,
+        parentId: 2101n,
+        kind: 'GROUP',
+        name: '底座',
+        groupKey: 'base',
+        multi: false,
+        sortOrder: 1,
+        status: true,
+        items: [{ id: 3101n, groupId: 2111n, name: '二脚底座（无挡脚）', sortOrder: 1, status: true }],
+    },
+    {
+        id: 2102n,
+        categoryId: 1003n,
+        parentId: null,
+        kind: 'SECTION',
+        name: '五金件',
+        groupKey: null,
+        multi: null,
+        sortOrder: 2,
+        status: true,
+        items: [],
+    },
+    {
+        id: 2114n,
+        categoryId: 1003n,
+        parentId: 2102n,
+        kind: 'GROUP',
+        name: '支架',
+        groupKey: 'bracket',
+        multi: false,
+        sortOrder: 1,
+        status: true,
+        items: [
+            { id: 3112n, groupId: 2114n, name: '6.3支架：铜镀银', sortOrder: 1, status: true },
+            { id: 3113n, groupId: 2114n, name: '6.3支架：铜镀镍', sortOrder: 2, status: true },
+        ],
+    },
+    {
+        id: 2103n,
+        categoryId: 1003n,
+        parentId: null,
+        kind: 'SECTION',
+        name: '停用分区',
+        groupKey: null,
+        multi: null,
+        sortOrder: 3,
+        status: false,
+        items: [],
+    },
+    {
+        id: 2118n,
+        categoryId: 1003n,
+        parentId: 2103n,
+        kind: 'GROUP',
+        name: '弹片',
+        groupKey: 'spring-plate',
+        multi: false,
+        sortOrder: 5,
+        status: true,
+        items: [{ id: 3127n, groupId: 2118n, name: '0.12', sortOrder: 1, status: true }],
+    },
+];
 
-const mkCategory = (overrides: CategoryFixture = {}): BomCategory => {
-    const { specSchema, ...rest } = overrides;
-    return {
+const mkCategories = (): CategoryFixture[] => [
+    {
         id: 1001n,
         categoryKey: 'rotary-switch',
-        name: '旋转开关',
+        name: '旋转XK2',
         codePrefix: 'XK2',
         seqWidth: 3,
-        specSchema: specSchema ?? { fields: rotaryFields },
+        childCategories: null,
         status: true,
         rowVersion: 1n,
         createdAt: new Date(Date.UTC(2026, 8, 1)),
         updatedAt: new Date(Date.UTC(2026, 8, 1)),
-        ...rest,
-    } as unknown as BomCategory;
-};
+        groups: rotaryGroups(),
+    },
+    {
+        id: 1003n,
+        categoryKey: 'new-micro-switch',
+        name: '新微动',
+        codePrefix: 'KW',
+        seqWidth: 4,
+        childCategories: null,
+        status: true,
+        rowVersion: 1n,
+        createdAt: new Date(Date.UTC(2026, 8, 1)),
+        updatedAt: new Date(Date.UTC(2026, 8, 1)),
+        groups: microGroups(),
+    },
+    {
+        id: 1006n,
+        categoryKey: 'dead-switch',
+        name: '停用品类',
+        codePrefix: 'DD',
+        seqWidth: 3,
+        childCategories: null,
+        status: false,
+        rowVersion: 1n,
+        createdAt: new Date(Date.UTC(2026, 8, 1)),
+        updatedAt: new Date(Date.UTC(2026, 8, 1)),
+        groups: [],
+    },
+];
+
+interface BomItemFixture {
+    bomId: bigint;
+    materialId: bigint;
+    groupKey: string;
+    groupName: string;
+    name: string;
+    position: number;
+}
 
 interface Store {
-    categories: BomCategory[];
+    categories: CategoryFixture[];
     boms: BomTable[];
+    bomItems: BomItemFixture[];
     createdBoms: Array<Record<string, unknown>>;
+    createdItems: Array<Record<string, unknown>>;
 }
 
 const mkBom = (overrides: Partial<BomTable> = {}): BomTable =>
@@ -72,9 +236,7 @@ const mkBom = (overrides: Partial<BomTable> = {}): BomTable =>
         id: 5000n,
         bomCode: 'ZMXK2010',
         categoryId: 1001n,
-        modelCode: '1-1',
-        spec: { 脚位: '二脚' },
-        specHash: Buffer.from(specHash({ 脚位: '二脚' })),
+        specHash: Buffer.from(materialSetHash(['3003', '3008'])),
         unit: '个',
         status: true,
         rowVersion: 1n,
@@ -87,8 +249,8 @@ const mkBom = (overrides: Partial<BomTable> = {}): BomTable =>
     }) as unknown as BomTable;
 
 /**
- * 内存事务客户端：直通实现 service 触碰的 Prisma 面。
- * modelCode 判重按大写等值比较，模拟列 collation utf8mb4_0900_ai_ci 的大小写不敏感语义。
+ * 内存事务客户端：直通实现 service 触碰的 Prisma 面。listCategories 的
+ * include 过滤（品类/组 status 与物料 status where）在 mock 内忠实执行。
  */
 const createStore = (store: Store) => {
     const tx = {
@@ -98,28 +260,19 @@ const createStore = (store: Store) => {
                 async ({ where }: { where: { name: string } }) =>
                     store.categories.find(category => category.name === where.name) ?? null,
             ),
-            findMany: vi.fn(async ({ where }: { where?: { status: boolean } } = {}) =>
-                store.categories.filter(category => where?.status === undefined || category.status === where.status),
+        },
+        materialGroup: {
+            findMany: vi.fn(
+                async ({ where }: { where: { categoryId: bigint } }) =>
+                    store.categories.find(category => category.id === where.categoryId)?.groups ?? [],
             ),
         },
         bomTable: {
-            findMany: vi.fn(async () =>
-                [...store.boms]
-                    .sort((a, b) => {
-                        const byCreated = b.createdAt.getTime() - a.createdAt.getTime();
-                        return byCreated !== 0 ? byCreated : b.id > a.id ? 1 : b.id < a.id ? -1 : 0;
-                    })
-                    .map(bom => {
-                        const category = store.categories.find(item => item.id === bom.categoryId)!;
-                        return { ...bom, category: { id: category.id, name: category.name } };
-                    }),
-            ),
             findFirst: vi.fn(
-                async ({ where }: { where: { categoryId: bigint; modelCode: string; specHash: Uint8Array } }) =>
+                async ({ where }: { where: { categoryId: bigint; specHash: Uint8Array } }) =>
                     store.boms.find(
                         bom =>
                             bom.categoryId === where.categoryId &&
-                            bom.modelCode.toUpperCase() === where.modelCode.toUpperCase() &&
                             Buffer.compare(
                                 bom.specHash as Buffer,
                                 Buffer.from(where.specHash as unknown as Uint8Array),
@@ -133,19 +286,88 @@ const createStore = (store: Store) => {
                 return created;
             }),
         },
+        bomItem: {
+            createMany: vi.fn(async ({ data }: { data: Array<Record<string, unknown>> }) => {
+                for (const row of data) {
+                    store.bomItems.push({
+                        bomId: row.bomId as bigint,
+                        materialId: row.materialId as bigint,
+                        groupKey: row.groupKey as string,
+                        groupName: row.groupName as string,
+                        name: row.name as string,
+                        position: row.position as number,
+                    });
+                    store.createdItems.push(row);
+                }
+            }),
+        },
     };
+    const prisma = Object.assign(tx, {
+        bomCategory: {
+            findUnique: vi.fn(
+                async ({ where }: { where: { name: string } }) =>
+                    store.categories.find(category => category.name === where.name) ?? null,
+            ),
+            findMany: vi.fn(
+                async ({
+                    where,
+                    include,
+                }: {
+                    where?: { status: boolean };
+                    include?: { groups?: { include?: { items?: { where?: { status: boolean } } } } };
+                }) =>
+                    store.categories
+                        .filter(category => where?.status === undefined || category.status === where.status)
+                        .map(category => ({
+                            ...category,
+                            groups: category.groups
+                                .filter(group => group.status)
+                                .map(group => ({
+                                    ...group,
+                                    items:
+                                        include?.groups?.include?.items?.where?.status === undefined
+                                            ? group.items
+                                            : group.items.filter(
+                                                  item =>
+                                                      item.status === include!.groups!.include!.items!.where!.status,
+                                              ),
+                                })),
+                        })),
+            ),
+        },
+        bomTable: {
+            findFirst: tx.bomTable.findFirst,
+            create: tx.bomTable.create,
+            findMany: vi.fn(async () =>
+                [...store.boms]
+                    .sort((a, b) => {
+                        const byCreated = b.createdAt.getTime() - a.createdAt.getTime();
+                        return byCreated !== 0 ? byCreated : b.id > a.id ? 1 : b.id < a.id ? -1 : 0;
+                    })
+                    .map(bom => {
+                        const category = store.categories.find(item => item.id === bom.categoryId)!;
+                        return {
+                            ...bom,
+                            category: { id: category.id, name: category.name },
+                            items: store.bomItems.filter(item => item.bomId === bom.id),
+                        };
+                    }),
+            ),
+        },
+    });
     return Object.assign(tx, {
         $transaction: vi.fn(async (fn: (client: typeof tx) => Promise<unknown>) => fn(tx)),
+        prisma,
     });
 };
 
 const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>, nextBomCode?: ReturnType<typeof vi.fn>) => {
-    const tx = createStore(store);
+    const ctx = createStore(store);
     const prisma = {
-        $transaction: tx.$transaction,
-        $queryRaw: tx.$queryRaw,
-        bomCategory: tx.bomCategory,
-        bomTable: tx.bomTable,
+        $transaction: ctx.$transaction,
+        $queryRaw: ctx.$queryRaw,
+        bomCategory: ctx.prisma.bomCategory,
+        bomTable: ctx.prisma.bomTable,
     } as unknown as PrismaService;
     const snowflake = { next: vi.fn(() => 9000000000000000n) } as unknown as SnowflakeGenerator;
     const idempotency = {
@@ -165,7 +387,7 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>, nextB
     } as unknown as BusinessSequenceService & Record<string, ReturnType<typeof vi.fn>>;
     return {
         service: new BomsService(prisma, snowflake, new TransactionRunner(prisma), idempotency, sequence),
-        tx,
+        tx: ctx,
         idempotency,
         sequence,
         store,
@@ -173,76 +395,84 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>, nextB
 };
 
 const dtoOf = (overrides: Partial<CreateBomDto> = {}): CreateBomDto =>
-    ({ name: '旋转开关', modelCode: '9-9', specs: { 脚位: '三脚' }, ...overrides }) as CreateBomDto;
+    ({ name: '旋转XK2', materialItemIds: ['3003', '3008'], ...overrides }) as CreateBomDto;
 
 describe('BomsService', () => {
     let store: Store;
 
     beforeEach(() => {
-        store = {
-            categories: [
-                mkCategory({}),
-                mkCategory({
-                    id: 1003n,
-                    categoryKey: 'new-micro-switch',
-                    name: '新微动',
-                    codePrefix: 'KW',
-                    seqWidth: 4,
-                    specSchema: { fields: microFields },
-                }),
-                mkCategory({
-                    id: 1005n,
-                    categoryKey: 'dead-switch',
-                    name: '停用品类',
-                    codePrefix: 'DD',
-                    status: false,
-                }),
-            ],
-            boms: [],
-            createdBoms: [],
-        };
+        store = { categories: mkCategories(), boms: [], bomItems: [], createdBoms: [], createdItems: [] };
     });
 
     describe('listCategories', () => {
-        it('仅返回启用品类；seqWidth 为 3 时省略、非 3 时保留；fields 透传目录元数据', async () => {
+        it('仅启用品类；分区/分组树、停用分区与停用物料不输出；seqWidth=3 省略', async () => {
             const { service } = mkService(store);
             const categories = await service.listCategories();
             expect(categories).toHaveLength(2);
-            expect(categories[0]).toMatchObject({ key: 'rotary-switch', name: '旋转开关', codePrefix: 'XK2' });
-            expect(categories[0]).not.toHaveProperty('seqWidth');
-            expect(categories[1]).toMatchObject({ key: 'new-micro-switch', seqWidth: 4 });
-            expect(categories[0]!.fields).toEqual(rotaryFields);
+            const rotary = categories[0]!;
+            expect(rotary).toMatchObject({ key: 'rotary-switch', name: '旋转XK2', codePrefix: 'XK2' });
+            expect(rotary).not.toHaveProperty('seqWidth');
+            expect(rotary.groups.map(group => [group.kind, group.name, group.parentId])).toEqual([
+                ['group', '型号', null],
+                ['group', '银丝厚度', null],
+                ['group', '弹簧', null],
+            ]);
+            expect(rotary.groups[1]!.items).toEqual([{ id: '3003', name: '0.2' }]);
+            const micro = categories[1]!;
+            expect(micro.seqWidth).toBe(4);
+            expect(micro.groups.map(group => group.name)).toEqual(['PA66塑料', '底座', '五金件', '支架']);
+            expect(micro.groups[0]).toMatchObject({ kind: 'section', key: null, multi: null, items: [] });
+            expect(micro.groups[3]).toMatchObject({ kind: 'group', parentId: '2102', key: 'bracket', multi: false });
         });
     });
 
     describe('listBoms', () => {
-        it('映射契约 Bom：品类名、规格摘要过滤品类常量、created 为北京日、新建置顶', async () => {
-            store.boms = [
-                mkBom({ id: 5001n, createdAt: new Date(Date.UTC(2026, 8, 1, 4)) }),
-                mkBom({
-                    id: 5002n,
-                    bomCode: 'ZMXK2011',
-                    modelCode: '2-2',
-                    spec: { 脚位: '二脚', 杆子高度: '4.8' },
-                    specHash: Buffer.from(specHash({ 脚位: '二脚', 杆子高度: '4.8' })),
-                    createdAt: new Date(Date.UTC(2026, 8, 2, 16)),
-                }),
+        it('由冻结快照派生：position 排序、modelCode 取 model 组、摘要“组名：物料名”、北京日', async () => {
+            store.boms = [mkBom({ id: 5000n, createdAt: new Date(Date.UTC(2026, 8, 1, 4)) })];
+            store.bomItems = [
+                {
+                    bomId: 5000n,
+                    materialId: 3003n,
+                    groupKey: 'silver-wire-thickness',
+                    groupName: '银丝厚度',
+                    name: '0.2',
+                    position: 2,
+                },
+                { bomId: 5000n, materialId: 3001n, groupKey: 'model', groupName: '型号', name: '1-1', position: 1 },
             ];
             const { service } = mkService(store);
             const boms = await service.listBoms();
-            // createdAt desc：后创建的在前
-            expect(boms.map(bom => bom.code)).toEqual(['ZMXK2011', 'ZMXK2010']);
-            expect(boms[1]).toEqual({
+            expect(boms).toHaveLength(1);
+            expect(boms[0]).toEqual({
                 code: 'ZMXK2010',
-                name: '旋转开关',
+                name: '旋转XK2',
                 modelCode: '1-1',
-                specs: { 脚位: '二脚' },
-                spec: '1-1 · 脚位 二脚',
+                items: [
+                    { materialId: '3001', groupKey: 'model', groupName: '型号', name: '1-1' },
+                    { materialId: '3003', groupKey: 'silver-wire-thickness', groupName: '银丝厚度', name: '0.2' },
+                ],
+                spec: '型号：1-1 · 银丝厚度：0.2',
                 created: '2026-09-01',
                 unit: '个',
             });
-            // 品类常量（杆子高度=defaultValue 4.8）不进摘要
-            expect(boms[0]!.spec).toBe('2-2 · 脚位 二脚');
+        });
+
+        it('未选 model 组时 modelCode 为空字符串', async () => {
+            store.boms = [mkBom()];
+            store.bomItems = [
+                {
+                    bomId: 5000n,
+                    materialId: 3003n,
+                    groupKey: 'silver-wire-thickness',
+                    groupName: '银丝厚度',
+                    name: '0.2',
+                    position: 1,
+                },
+            ];
+            const { service } = mkService(store);
+            const boms = await service.listBoms();
+            expect(boms[0]!.modelCode).toBe('');
+            expect(boms[0]!.spec).toBe('银丝厚度：0.2');
         });
     });
 
@@ -254,11 +484,6 @@ describe('BomsService', () => {
                 { bom_code: 'ZMKW0001', stock_qty: 0 },
             ]);
             await expect(service.listStocks()).resolves.toEqual({ ZMXK2010: 200, ZMKW0001: 0 });
-        });
-
-        it('无流水的 BOM 不在视图返回中，余量映射为空对象', async () => {
-            const { service } = mkService(store);
-            await expect(service.listStocks()).resolves.toEqual({});
         });
     });
 
@@ -273,88 +498,93 @@ describe('BomsService', () => {
             );
         });
 
-        it('规格非对象 / 值非字符串 / 未定义字段均 400', async () => {
+        it('空集合 / 非法 id / 未知或停用物料均 400', async () => {
             const { service } = mkService(store);
-            await expect(
-                service.createBom(dtoOf({ specs: 'x' as unknown as Record<string, unknown> }), actor, ID_KEY),
-            ).rejects.toThrow(new BadRequestException('规格必须是对象'));
-            await expect(
-                service.createBom(dtoOf({ specs: { 脚位: 3 } as unknown as Record<string, unknown> }), actor, ID_KEY),
-            ).rejects.toThrow(new BadRequestException('规格值必须是字符串'));
-            await expect(service.createBom(dtoOf({ specs: { 未知: 'x' } }), actor, ID_KEY)).rejects.toThrow(
-                new BadRequestException('规格中包含当前品类未定义的字段'),
+            await expect(service.createBom(dtoOf({ materialItemIds: [] }), actor, ID_KEY)).rejects.toThrow(
+                new BadRequestException('请至少选择一项物料'),
             );
+            await expect(service.createBom(dtoOf({ materialItemIds: ['abc'] }), actor, ID_KEY)).rejects.toThrow(
+                new BadRequestException('物料编号格式无效'),
+            );
+            await expect(service.createBom(dtoOf({ materialItemIds: ['9999'] }), actor, ID_KEY)).rejects.toThrow(
+                new BadRequestException('物料不存在、已停用或不属于该品类'),
+            );
+            // 停用物料（0.3）与停用分区下的物料（弹片 0.12）同样不可选
+            await expect(service.createBom(dtoOf({ materialItemIds: ['3004'] }), actor, ID_KEY)).rejects.toThrow(
+                new BadRequestException('物料不存在、已停用或不属于该品类'),
+            );
+            await expect(
+                service.createBom(dtoOf({ name: '新微动', materialItemIds: ['3127'] }), actor, ID_KEY),
+            ).rejects.toThrow(new BadRequestException('物料不存在、已停用或不属于该品类'));
         });
 
-        it('必填缺失与选项无效按目录校验；空规格拒绝', async () => {
+        it('单选组超过一项 400（同类部件互斥由分组结构表达）', async () => {
             const { service } = mkService(store);
-            await expect(service.createBom(dtoOf({ specs: {} }), actor, ID_KEY)).rejects.toThrow(
-                new BadRequestException('请填写规格：脚位'),
-            );
-            await expect(service.createBom(dtoOf({ specs: { 脚位: '百脚' } }), actor, ID_KEY)).rejects.toThrow(
-                new BadRequestException('规格值无效：脚位'),
-            );
-            const noRequired = mkCategory({
-                id: 1006n,
-                categoryKey: 'free',
-                name: '自由规格',
-                specSchema: { fields: [{ key: '备注', label: '备注', type: 'text' }] },
-            });
-            store.categories.push(noRequired);
-            await expect(service.createBom(dtoOf({ name: '自由规格', specs: {} }), actor, ID_KEY)).rejects.toThrow(
-                new BadRequestException('请至少填写一项规格'),
-            );
+            await expect(
+                service.createBom(dtoOf({ name: '新微动', materialItemIds: ['3112', '3113'] }), actor, ID_KEY),
+            ).rejects.toThrow(new BadRequestException('分组「支架」只能选择一项物料'));
         });
 
-        it('固定规格强制覆盖客户端同名值并落库；客户端只填非固定字段', async () => {
+        it('建档成功：冻结快照按目录顺序分配 position，hash 与输入顺序无关', async () => {
             const { service, store: written } = mkService(store);
-            const bom = await service.createBom(dtoOf({ specs: { 脚位: '三脚', 杆子高度: '6.6' } }), actor, ID_KEY);
-            expect(bom.specs).toEqual({ 脚位: '三脚', 杆子高度: '4.8' });
-            expect(written.createdBoms[0]).toMatchObject({
-                bomCode: 'ZMXK2011',
-                modelCode: '9-9',
+            // 输入顺序与目录顺序相反，验证 position 仍按目录序冻结
+            const bom = await service.createBom(dtoOf({ materialItemIds: ['3008', '3003'] }), actor, ID_KEY);
+            expect(bom).toMatchObject({
+                code: 'ZMXK2011',
+                name: '旋转XK2',
+                modelCode: '',
+                spec: '银丝厚度：0.2 · 弹簧：0.5',
                 unit: '个',
-                spec: { 脚位: '三脚', 杆子高度: '4.8' },
             });
-            // 固定规格无区分度，摘要只含脚位
-            expect(bom.spec).toBe('9-9 · 脚位 三脚');
+            expect(bom.items).toEqual([
+                { materialId: '3003', groupKey: 'silver-wire-thickness', groupName: '银丝厚度', name: '0.2' },
+                { materialId: '3008', groupKey: 'spring', groupName: '弹簧', name: '0.5' },
+            ]);
+            expect(written.createdBoms[0]).toMatchObject({ bomCode: 'ZMXK2011', unit: '个', categoryId: 1001n });
+            expect(
+                Buffer.compare(
+                    written.createdBoms[0]!.specHash as Buffer,
+                    Buffer.from(materialSetHash(['3003', '3008'])),
+                ) === 0,
+            ).toBe(true);
+            expect(written.createdItems.map(item => [item.materialId, item.position])).toEqual([
+                [3003n, 1],
+                [3008n, 2],
+            ]);
         });
 
-        it('新微动支架与静片规格不一致 400', async () => {
+        it('选中 model 组物料时响应 modelCode 为其名称', async () => {
             const { service } = mkService(store);
-            await expect(
-                service.createBom(
-                    dtoOf({
-                        name: '新微动',
-                        specs: { 底座: '二脚底座（无挡脚）', 支架: '6.3支架：铜镀银', 静片: '4.8静片：铜镀镍' },
-                    }),
-                    actor,
-                    ID_KEY,
-                ),
-            ).rejects.toThrow(new BadRequestException('新微动的支架与静片必须使用相同的 6.3/4.8 规格'));
+            const bom = await service.createBom(dtoOf({ materialItemIds: ['3001', '3003'] }), actor, ID_KEY);
+            expect(bom.modelCode).toBe('1-1');
+            expect(bom.spec).toBe('型号：1-1 · 银丝厚度：0.2');
         });
 
-        it('规范化后同品类+型号+规格判重 409（型号大小写不敏感，模拟 ai_ci）', async () => {
-            // 判重口径含固定规格合并：存量行与新建行都带品类常量 杆子高度=4.8
-            const identitySpec = { 脚位: '三脚', 杆子高度: '4.8' };
-            store.boms = [
-                mkBom({ modelCode: 'AB-1', spec: identitySpec, specHash: Buffer.from(specHash(identitySpec)) }),
-            ];
+        it('重复 id 静默去重：只落一条明细、判重不受影响', async () => {
+            const { service, store: written } = mkService(store);
+            const bom = await service.createBom(dtoOf({ materialItemIds: ['3003', '3003'] }), actor, ID_KEY);
+            expect(bom.items).toHaveLength(1);
+            expect(written.createdItems).toHaveLength(1);
+        });
+
+        it('同集合判重 409 并返回已有 bomCode（输入顺序与重复项不影响指纹）', async () => {
+            store.boms = [mkBom()];
             const { service } = mkService(store);
             await expect(
-                service.createBom(dtoOf({ modelCode: '  ab-1  ', specs: { 脚位: '三脚' } }), actor, ID_KEY),
+                service.createBom(dtoOf({ materialItemIds: ['3008', '3003', '3003'] }), actor, ID_KEY),
             ).rejects.toThrow(new ConflictException('BOM 已存在：ZMXK2010'));
         });
 
         it('取号参数携带品类元数据；建档前锁定品类行；幂等重放直接返回原响应', async () => {
-            const replayBody = { code: 'ZMXK2099', name: '旋转开关' };
+            const replayBody = { code: 'ZMXK2099', name: '旋转XK2' };
             const beginOrReplay = vi.fn(async () => ({ replay: { body: replayBody }, placeholderId: null }));
-            const { service } = mkService(store, beginOrReplay);
+            const { service, store: written } = mkService(store, beginOrReplay);
             await expect(service.createBom(dtoOf(), actor, ID_KEY)).resolves.toBe(replayBody);
+            expect(written.createdBoms).toHaveLength(0);
 
             const nextBomCode = vi.fn(async () => 'ZMXK2012');
             const fresh = mkService(store, undefined, nextBomCode);
-            await fresh.service.createBom(dtoOf({ modelCode: '3-3' }), actor, ID_KEY);
+            await fresh.service.createBom(dtoOf({ materialItemIds: ['3001'] }), actor, ID_KEY);
             expect(nextBomCode).toHaveBeenCalledWith(expect.anything(), {
                 categoryKey: 'rotary-switch',
                 codePrefix: 'XK2',

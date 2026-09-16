@@ -30,9 +30,7 @@ const mkBom = (overrides: Partial<BomTable> = {}): BomTable =>
     ({
         id: 10n,
         bomCode: 'ZMKW0001',
-        categoryId: 1005n,
-        modelCode: 'KW',
-        spec: { 额定电压: '250V' },
+        categoryId: 1003n,
         specHash: new Uint8Array(32),
         unit: '个',
         status: true,

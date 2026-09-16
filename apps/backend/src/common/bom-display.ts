@@ -1,56 +1,86 @@
 /**
- * BOM 品类目录解析与规格摘要（db-scheme.md §5）：纯展示层工具，供 BOM 列表
- * 映射与出库打印文档共用（订单/出库快照的规格摘要必须与 BOM 档案同构）。
- * 目录（bom_category.spec_schema）是字段序与固定规格的唯一权威。
+ * BOM 物料目录契约与快照摘要（db-scheme.md §5）：BOM = 品类 + 选中物料集合，
+ * 建档时冻结 groupKey/groupName/name/position 到 bom_item；展示与摘要
+ * （“组名：物料名”按冻结 position 排序）不依赖当前目录——目录后续改名、
+ * 排序调整或停用都不影响已建 BOM 与订单/出库打印快照。
  */
 
-/** 契约 BomSpecField（openapi boms tag）：品类规格字段元数据 */
-export interface BomSpecField {
-    key: string;
-    label: string;
-    type: 'select' | 'text';
-    options?: string[];
-    required?: boolean;
-    placeholder?: string;
-    initial?: string;
-    defaultValue?: string;
+/** 契约 BomCatalogNode（openapi boms tag）：分区为纯展示树节点，分组挂可选物料 */
+export interface BomCatalogNode {
+    id: string;
+    parentId: string | null;
+    kind: 'section' | 'group';
+    name: string;
+    /** 分组稳定标识（如 model）；分区为 null */
+    key: string | null;
+    /** 分组选择语义：false 单选（0/1 项，换选替换）/ true 多选；分区为 null */
+    multi: boolean | null;
+    /** 分区恒为空数组 */
+    items: Array<{ id: string; name: string }>;
 }
 
-/** bom_category.spec_schema 的存储形态：{ fields: [...] } */
-interface SpecSchemaShape {
-    fields?: unknown;
+/** 契约 BomItemView：GET /boms 的明细行（按建档 position 排序返回） */
+export interface BomItemView {
+    materialId: string;
+    groupKey: string;
+    groupName: string;
+    name: string;
 }
 
-/** 解析品类字段元数据；目录由迁移播种，结构异常视为服务端错误及早暴露 */
-export function parseCategoryFields(specSchema: unknown): BomSpecField[] {
-    const fields = (specSchema as SpecSchemaShape | null)?.fields;
-    if (!Array.isArray(fields) || fields.some(field => typeof field?.key !== 'string')) {
-        throw new Error('品类规格元数据结构异常');
-    }
-    return fields as BomSpecField[];
+/** bom_item 行的快照字段（Prisma 行或其投影，materialId 序列化为 string） */
+export interface BomItemSnapshotInput {
+    materialId: bigint | string;
+    groupKey: string;
+    groupName: string;
+    name: string;
+    position: number;
 }
 
-/** 品类常量属性（defaultValue 字段）：建档时强制并入档，客户端同名值不能覆盖 */
-export const fixedSpecsOf = (fields: BomSpecField[]): Record<string, string> =>
-    Object.fromEntries(
-        fields.filter(field => field.defaultValue !== undefined).map(field => [field.key, field.defaultValue!]),
-    );
+/** 订单 bom_spec_snapshot 的冻结形态（JSON 对象，满足列 CHECK） */
+export interface BomItemsSnapshot {
+    items: Array<BomItemSnapshotInput & { materialId: string }>;
+    modelCode: string;
+    spec: string;
+}
+
+/** 规格摘要项：“组名：物料名”（全角冒号，与前端展示一致） */
+const summaryPartOf = (item: { groupName: string; name: string }): string => `${item.groupName}：${item.name}`;
+
+/** 由冻结明细构建快照：position 升序；modelCode 取 groupKey=model 的选中项 */
+export function bomItemsSnapshotOf(items: readonly BomItemSnapshotInput[]): BomItemsSnapshot {
+    const sorted = [...items]
+        .sort((a, b) => a.position - b.position)
+        .map(item => ({ ...item, materialId: item.materialId.toString() }));
+    const model = sorted.find(item => item.groupKey === 'model');
+    return {
+        items: sorted,
+        modelCode: model?.name ?? '',
+        spec: sorted.map(summaryPartOf).join(' · '),
+    };
+}
+
+/** 规格摘要视图（不含 position，GET /boms 明细行） */
+export function bomItemViewsOf(items: readonly BomItemSnapshotInput[]): BomItemView[] {
+    return bomItemsSnapshotOf(items).items.map(({ materialId, groupKey, groupName, name }) => ({
+        materialId,
+        groupKey,
+        groupName,
+        name,
+    }));
+}
 
 /**
- * 规格摘要（契约 Bom.spec / 出库打印 bomSpec）：型号在前，非空且非品类常量的
- * 规格项 “键 值” 以 “ · ” 连接；品类常量（defaultValue）各条目一致、无区分度，
- * 不进摘要。按目录字段顺序生成（spec JSON 列经 MySQL 键序重排，插入序不可依赖）；
- * 目录外的存量键防御性附加在尾部，不丢信息。
+ * 打印文档 bomSpec（契约 outbound:print）：直接取订单冻结快照的 spec 字符串；
+ * 存量/异常快照缺失 spec 时按冻结 items 以同一规则拼装，绝不读当前目录。
  */
-export function specSummaryOf(modelCode: string, specs: Record<string, string>, fields: BomSpecField[]): string {
-    const visible = (value: string | undefined, defaultValue?: string): value is string =>
-        !!value && !!value.trim() && value !== defaultValue;
-    const inOrder = fields
-        .filter(field => visible(specs[field.key], field.defaultValue))
-        .map(field => `${field.key} ${specs[field.key]}`);
-    const knownKeys = new Set(fields.map(field => field.key));
-    const extras = Object.keys(specs)
-        .filter(key => !knownKeys.has(key) && visible(specs[key]))
-        .map(key => `${key} ${specs[key]}`);
-    return [modelCode, ...inOrder, ...extras].filter(Boolean).join(' · ');
+export function bomSpecOf(snapshot: unknown): string {
+    const shape = snapshot as { spec?: unknown; items?: unknown } | null;
+    if (typeof shape?.spec === 'string' && shape.spec.trim()) {
+        return shape.spec;
+    }
+    const items = Array.isArray(shape?.items) ? (shape!.items as Array<{ groupName?: unknown; name?: unknown }>) : [];
+    return items
+        .filter(item => typeof item?.groupName === 'string' && typeof item?.name === 'string')
+        .map(item => summaryPartOf(item as { groupName: string; name: string }))
+        .join(' · ');
 }

@@ -99,6 +99,12 @@ enum OutboundStateEventType {
   VOID_EMERGENCY
 }
 
+/// material_group.kind：分区（纯展示树节点，不挂物料）与分组（可选物料叶子）
+enum MaterialGroupKind {
+  SECTION
+  GROUP
+}
+
 /// op_log.action：业务里程碑动作，一个 (action, target_id) 只记一次（uk 兜底）
 enum OpLogAction {
   ship
@@ -266,30 +272,75 @@ model BizSequence {
   @@map("biz_sequence")
 }
 
-/// BOM 品类目录：spec_schema 定义规格字段；1–9999 为内置参考数据保留 id（种子 1001–1005）
+/// BOM 品类目录：1–9999 为内置参考数据保留 id（种子 1001-1006）；
+/// child_categories 标记该品类建档必须选择列表内品类的某个 BOM 作为子件（如跌倒开关嵌入微动开关）
 model BomCategory {
   id          BigInt   @id
   categoryKey String   @unique(map: "uk_bom_category_key") @map("category_key") @db.VarChar(40)
   name        String   @unique(map: "uk_bom_category_name") @db.VarChar(64)
   codePrefix  String   @unique(map: "uk_bom_category_prefix") @map("code_prefix") @db.VarChar(16)
   seqWidth    Int      @default(3) @map("seq_width") @db.UnsignedTinyInt
-  specSchema  Json     @map("spec_schema")
+  childCategories Json? @map("child_categories")
   status      Boolean  @default(true)
   rowVersion  BigInt   @default(1) @map("row_version") @db.UnsignedBigInt
   createdAt   DateTime @map("created_at") @db.DateTime(3)
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
   boms        BomTable[]
+  groups      MaterialGroup[]
 
   @@map("bom_category")
 }
 
-/// BOM 物料：(category_id, model_code, spec_hash) 业务去重；spec_hash 为 NFKC 规范化规格的 SHA-256
+/// 物料目录节点：分区（SECTION，仅展示与折叠）或分组（GROUP，挂可选物料）；
+/// 分组 key 为稳定标识（如 model），目录修改只走迁移（db-scheme.md §5）
+model MaterialGroup {
+  id        BigInt           @id
+  categoryId BigInt          @map("category_id")
+  parentId  BigInt?          @map("parent_id")
+  kind      MaterialGroupKind
+  name      String           @db.VarChar(64)
+  groupKey  String?          @map("group_key") @db.VarChar(40)
+  multi     Boolean?
+  sortOrder Int              @default(0) @map("sort_order") @db.UnsignedSmallInt
+  status    Boolean          @default(true)
+  createdAt DateTime         @map("created_at") @db.DateTime(3)
+  updatedAt DateTime         @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  category  BomCategory       @relation(fields: [categoryId], references: [id])
+  parent    MaterialGroup?    @relation("MaterialGroupTree", fields: [parentId], references: [id])
+  children  MaterialGroup[]   @relation("MaterialGroupTree")
+  items     MaterialItem[]
+
+  @@unique([categoryId, name], map: "uk_material_group_name")
+  @@unique([categoryId, groupKey], map: "uk_material_group_key")
+  @@index([categoryId, status], map: "idx_material_group_category_status")
+  @@map("material_group")
+}
+
+/// 可选物料项：建档时冻结名称到 bom_item，此处改名/停用不影响已建 BOM；
+/// 已被引用的物料不得改名、移组或复用 id（规格变化 = 新增项 + 旧项停用）
+model MaterialItem {
+  id        BigInt   @id
+  groupId   BigInt   @map("group_id")
+  name      String   @db.VarChar(64)
+  sortOrder Int      @default(0) @map("sort_order") @db.UnsignedSmallInt
+  status    Boolean  @default(true)
+  createdAt DateTime @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  group     MaterialGroup @relation(fields: [groupId], references: [id])
+  bomItems  BomItem[]
+
+  @@unique([groupId, name], map: "uk_material_item_name")
+  @@index([groupId, status], map: "idx_material_item_group_status")
+  @@map("material_item")
+}
+
+/// BOM 物料：(category_id, spec_hash) 业务去重；spec_hash 为选中物料 id 集合
+/// （BigInt 十进制规范化、去重、数值升序 JSON 数组）的 SHA-256。
+/// 跌倒开关等品类通过 child_categories 标记合并子品类目录，物料统一走勾选，不引用 BOM。
 model BomTable {
   id          BigInt   @id
   bomCode     String   @unique(map: "uk_bom_code") @map("bom_code") @db.VarChar(32)
   categoryId  BigInt   @map("category_id")
-  modelCode   String   @map("model_code") @db.VarChar(64)
-  spec        Json
   specHash    Bytes    @map("spec_hash") @db.Binary(32)
   unit        String   @default("个") @db.VarChar(16)
   status      Boolean  @default(true)
@@ -305,11 +356,30 @@ model BomTable {
   orders      SalesOrderTable[]
   inboundEntries InboundLedger[]
   adjustments StockAdjustment[]
+  items       BomItem[]
 
-  @@unique([categoryId, modelCode, specHash], map: "uk_bom_identity")
+  @@unique([categoryId, specHash], map: "uk_bom_identity")
   @@index([categoryId, status], map: "idx_bom_category_status")
-  @@index([modelCode], map: "idx_bom_model")
   @@map("bom_table")
+}
+
+/// BOM 明细行（无数量）：建档时冻结 groupKey/groupName/name/position，
+/// 展示与摘要（“组名：物料名”按 position 排序）完全不依赖当前目录
+model BomItem {
+  id         BigInt   @id
+  bomId      BigInt   @map("bom_id")
+  materialId BigInt   @map("material_id")
+  groupKey   String   @map("group_key") @db.VarChar(40)
+  groupName  String   @map("group_name") @db.VarChar(64)
+  name       String   @db.VarChar(64)
+  position   Int      @db.UnsignedInt
+  createdAt  DateTime @map("created_at") @db.DateTime(3)
+  bom        BomTable     @relation(fields: [bomId], references: [id])
+  material   MaterialItem @relation(fields: [materialId], references: [id])
+
+  @@unique([bomId, materialId], map: "uk_bom_item_once")
+  @@index([materialId], map: "idx_bom_item_material")
+  @@map("bom_item")
 }
 
 /// 客户档案：customer_code 形如 CUS-0001；owner_id 为负责销售

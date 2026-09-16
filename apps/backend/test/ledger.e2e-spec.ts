@@ -11,7 +11,7 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/main';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { SnowflakeGenerator } from '../src/common/snowflake';
-import { specHash } from '../src/common/bom-spec';
+import { materialSetHash } from '../src/common/bom-spec';
 
 const RUN = Date.now().toString(36);
 const accountOf = (name: string): string => `qa_${name}_${RUN}`;
@@ -20,8 +20,10 @@ const today = (): string => new Date().toISOString().slice(0, 10);
 
 /** 固定测试 BOM（重跑复用，不撞唯一键） */
 const BOM_CODE = 'ZME2E0002';
-const BOM_MODEL = 'E2E-KW2';
-const BOM_SPEC = { 底座: '二脚底座（无挡脚）', 按钮高度: '7.6mm（常用装跌倒）' };
+const BOM_ITEMS = [
+    { groupKey: 'base', groupName: '底座', name: '二脚底座（无挡脚）', position: 1 },
+    { groupKey: 'button', groupName: '按钮', name: '7.6mm（常用装跌倒）', position: 2 },
+];
 
 const inboundInput = (bomCode: string, qty: number) => ({
     bomCode,
@@ -107,24 +109,49 @@ describe('成品出入库 (e2e)', () => {
         warehouseToken = await login(accountOf('wh01'));
         await createUser(accountOf('sales01'), 'sales');
 
-        // 固定测试 BOM：存在则复用（重跑不撞唯一键）
+        // 固定测试 BOM：存在则复用（重跑不撞唯一键）；明细按建档冻结快照造数
         const existing = await prisma.bomTable.findUnique({ where: { bomCode: BOM_CODE } });
         if (!existing) {
             const category = await prisma.bomCategory.findUnique({ where: { categoryKey: 'new-micro-switch' } });
             const superUser = await prisma.sysUser.findUnique({ where: { account: 'guojun' } });
+            const now = new Date();
+            const bomId = snowflake.next();
+            const materialIds = (
+                await Promise.all(
+                    BOM_ITEMS.map(item =>
+                        prisma.materialItem.findFirst({
+                            where: {
+                                group: { name: item.groupName, category: { categoryKey: 'new-micro-switch' } },
+                                name: item.name,
+                            },
+                            select: { id: true },
+                        }),
+                    ),
+                )
+            ).map(row => row!.id);
             await prisma.bomTable.create({
                 data: {
-                    id: snowflake.next(),
+                    id: bomId,
                     bomCode: BOM_CODE,
                     categoryId: category!.id,
-                    modelCode: BOM_MODEL,
-                    spec: BOM_SPEC,
-                    specHash: specHash(BOM_SPEC),
+                    specHash: materialSetHash(materialIds.map(id => id.toString())),
                     requestKey: `e2e-bom-${BOM_CODE}`,
                     createdBy: superUser!.id,
                     updatedBy: superUser!.id,
-                    createdAt: new Date(),
+                    createdAt: now,
                 },
+            });
+            await prisma.bomItem.createMany({
+                data: BOM_ITEMS.map((item, index) => ({
+                    id: snowflake.next(),
+                    bomId,
+                    materialId: materialIds[index]!,
+                    groupKey: item.groupKey,
+                    groupName: item.groupName,
+                    name: item.name,
+                    position: item.position,
+                    createdAt: now,
+                })),
             });
         }
 
@@ -324,7 +351,7 @@ describe('成品出入库 (e2e)', () => {
             orderNo,
             qty: 100,
             printedBy: '郭均',
-            bomSpec: expect.stringContaining(BOM_MODEL),
+            bomSpec: expect.stringContaining('底座：二脚底座（无挡脚）'),
         });
 
         // 已打印出库不可普通作废
@@ -522,14 +549,19 @@ describe('成品出入库 (e2e)', () => {
         if (!otherBom) {
             const category = await prisma.bomCategory.findUnique({ where: { categoryKey: 'new-micro-switch' } });
             const superUser = await prisma.sysUser.findUnique({ where: { account: 'guojun' } });
+            const otherBase = await prisma.materialItem.findFirst({
+                where: {
+                    group: { name: '底座', category: { categoryKey: 'new-micro-switch' } },
+                    name: '三脚底座（有挡脚）',
+                },
+                select: { id: true },
+            });
             otherBom = await prisma.bomTable.create({
                 data: {
                     id: snowflake.next(),
                     bomCode: 'ZME2E0003',
                     categoryId: category!.id,
-                    modelCode: 'E2E-KW3',
-                    spec: BOM_SPEC,
-                    specHash: specHash({ ...BOM_SPEC, 底座: '三脚底座' }),
+                    specHash: materialSetHash([otherBase!.id.toString()]),
                     requestKey: `e2e-bom-ZME2E0003-${RUN}`,
                     createdBy: superUser!.id,
                     updatedBy: superUser!.id,

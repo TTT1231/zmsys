@@ -20,13 +20,19 @@ const actor = {
 
 const ID_KEY = 'idem-key-01';
 
-const SPEC_SCHEMA = {
-    fields: [{ key: '额定电压', label: '额定电压', type: 'select', options: ['250V'], required: true }],
+/** 订单冻结快照（建档形态）：打印 bomSpec 直接取其中的 spec 字符串 */
+const BOM_SNAPSHOT = {
+    items: [
+        { materialId: '3101', groupKey: 'base', groupName: '底座', name: '二脚底座（无挡脚）', position: 1 },
+        { materialId: '3112', groupKey: 'bracket', groupName: '支架', name: '6.3支架：铜镀银', position: 2 },
+    ],
+    modelCode: '',
+    spec: '底座：二脚底座（无挡脚） · 支架：6.3支架：铜镀银',
 };
 
 type OrderRow = SalesOrderTable & {
     customer: { customerCode: string };
-    bom: { bomCode: string; category: { specSchema: unknown } };
+    bom: { bomCode: string };
 };
 
 const mkOrder = (overrides: Partial<OrderRow> = {}): OrderRow =>
@@ -41,8 +47,8 @@ const mkOrder = (overrides: Partial<OrderRow> = {}): OrderRow =>
         remark: '',
         customerNameSnapshot: '深圳市智造电子',
         bomNameSnapshot: '新微动',
-        bomModelSnapshot: 'E2E-KW2',
-        bomSpecSnapshot: { 额定电压: '250V' },
+        bomModelSnapshot: '',
+        bomSpecSnapshot: BOM_SNAPSHOT,
         lifecycleStatus: 'ACTIVE',
         cancelledAt: null,
         cancelledBy: null,
@@ -54,7 +60,7 @@ const mkOrder = (overrides: Partial<OrderRow> = {}): OrderRow =>
         createdAt: new Date(),
         updatedAt: new Date(),
         customer: { customerCode: 'CUS-0900' },
-        bom: { bomCode: 'ZMKW0001', category: { specSchema: SPEC_SCHEMA } },
+        bom: { bomCode: 'ZMKW0001' },
         ...overrides,
     }) as OrderRow;
 
@@ -390,7 +396,7 @@ describe('OutboundService.printOutbound', () => {
             no: 'CK26091301',
             orderNo: 'ZM260913001',
             customer: '深圳市智造电子',
-            bomSpec: 'E2E-KW2 · 额定电压 250V',
+            bomSpec: '底座：二脚底座（无挡脚） · 支架：6.3支架：铜镀银',
             qty: 200,
             operator: '郭均',
             printedBy: '郭均',

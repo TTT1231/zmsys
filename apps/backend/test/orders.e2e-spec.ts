@@ -11,17 +11,20 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/main';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { SnowflakeGenerator } from '../src/common/snowflake';
-import { specHash } from '../src/common/bom-spec';
+import { materialSetHash } from '../src/common/bom-spec';
 
 const RUN = Date.now().toString(36);
 const accountOf = (name: string): string => `qa_${name}_${RUN}`;
 const authHeaders = (token: string) => ({ authorization: `Bearer ${token}` });
 const today = (): string => new Date().toISOString().slice(0, 10);
 
-/** 固定测试 BOM（重跑复用，不撞唯一键） */
+/** 固定测试 BOM（重跑复用，不撞唯一键）：新微动 三脚底座 + 8.5mm 按钮。
+ * 物料集合与 ledger e2e 的夹具不同（判重键为品类+集合，并行文件不得撞同一集合）。 */
 const BOM_CODE = 'ZME2E0001';
-const BOM_MODEL = 'E2E-KW';
-const BOM_SPEC = { 底座: '二脚底座（无挡脚）', 按钮高度: '7.6mm（常用装跌倒）' };
+const BOM_ITEMS = [
+    { groupKey: 'base', groupName: '底座', name: '三脚底座（有挡脚）', position: 1 },
+    { groupKey: 'button', groupName: '按钮', name: '8.5mm', position: 2 },
+];
 
 const orderInput = (customerCode: string) => ({
     customerCode,
@@ -147,25 +150,49 @@ describe('销售订单 (e2e)', () => {
         await createUser(salesAccount, 'sales');
         salesToken = await login(salesAccount);
 
-        // 固定测试 BOM：存在则复用（重跑不撞唯一键）
+        // 固定测试 BOM：存在则复用（重跑不撞唯一键）；明细按建档冻结快照造数
         const existing = await prisma.bomTable.findUnique({ where: { bomCode: BOM_CODE } });
         if (!existing) {
             const category = await prisma.bomCategory.findUnique({ where: { categoryKey: 'new-micro-switch' } });
             const superUser = await prisma.sysUser.findUnique({ where: { account: 'guojun' } });
             const now = new Date();
+            const bomId = snowflake.next();
+            const materialIds = (
+                await Promise.all(
+                    BOM_ITEMS.map(item =>
+                        prisma.materialItem.findFirst({
+                            where: {
+                                group: { name: item.groupName, category: { categoryKey: 'new-micro-switch' } },
+                                name: item.name,
+                            },
+                            select: { id: true },
+                        }),
+                    ),
+                )
+            ).map(row => row!.id);
             await prisma.bomTable.create({
                 data: {
-                    id: snowflake.next(),
+                    id: bomId,
                     bomCode: BOM_CODE,
                     categoryId: category!.id,
-                    modelCode: BOM_MODEL,
-                    spec: BOM_SPEC,
-                    specHash: specHash(BOM_SPEC),
+                    specHash: materialSetHash(materialIds.map(id => id.toString())),
                     requestKey: `e2e-bom-${BOM_CODE}`,
                     createdBy: superUser!.id,
                     updatedBy: superUser!.id,
                     createdAt: now,
                 },
+            });
+            await prisma.bomItem.createMany({
+                data: BOM_ITEMS.map((item, index) => ({
+                    id: snowflake.next(),
+                    bomId,
+                    materialId: materialIds[index]!,
+                    groupKey: item.groupKey,
+                    groupName: item.groupName,
+                    name: item.name,
+                    position: item.position,
+                    createdAt: now,
+                })),
             });
         }
 
@@ -230,7 +257,13 @@ describe('销售订单 (e2e)', () => {
         expect(stored).toMatchObject({
             customerNameSnapshot: `订单联调客户_${RUN}`,
             bomNameSnapshot: '新微动',
-            bomModelSnapshot: BOM_MODEL,
+            bomModelSnapshot: '',
+        });
+        // 冻结形态：{ items, modelCode, spec }，与建档快照同构
+        expect(stored!.bomSpecSnapshot).toMatchObject({
+            modelCode: '',
+            spec: '底座：三脚底座（有挡脚） · 按钮：8.5mm',
+            items: BOM_ITEMS.map(item => expect.objectContaining({ groupName: item.groupName, name: item.name })),
         });
         const opLog = await prisma.opLog.findFirst({ where: { action: 'create_order', targetCode: orderNo } });
         expect(opLog).not.toBeNull();

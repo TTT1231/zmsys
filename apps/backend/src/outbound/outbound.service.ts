@@ -7,7 +7,7 @@ import type { Tx } from '../prisma/transaction.runner';
 import { SnowflakeGenerator } from '../common/snowflake';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import { formatDateColumn, formatBeijingStamp, toDateColumn } from '../common/datetime';
-import { parseCategoryFields, specSummaryOf } from '../common/bom-display';
+import { bomSpecOf } from '../common/bom-display';
 import { lockRowsById } from '../domain/concurrency';
 import { computeShippableQty } from '../domain/inventory';
 import { recordOpLog } from '../domain/op-log';
@@ -23,16 +23,15 @@ const voidOperationKeyOf = (no: string): string => `outbound:void:${no}`;
 const printOperationKeyOf = (no: string): string => `outbound:print:${no}`;
 const emergencyVoidOperationKeyOf = (no: string): string => `outbound:emergency-void:${no}`;
 
-/** 单头 + 响应映射与打印快照必需的关联（规格摘要用订单快照 + 品类字段序生成） */
+/** 单头 + 响应映射与打印快照必需的关联（规格摘要取订单冻结快照，不读目录） */
 type ShipmentRow = OutboundShipment & {
     order: {
         orderNo: string;
         lifecycleStatus: string;
         customerNameSnapshot: string;
-        bomModelSnapshot: string;
         bomSpecSnapshot: Prisma.JsonValue;
         customer: { customerCode: string };
-        bom: { bomCode: string; category: { specSchema: Prisma.JsonValue } };
+        bom: { bomCode: string };
     };
     registrar: { name: string };
     ledgers: Array<{ entryType: string; remark: string }>;
@@ -45,10 +44,9 @@ const SHIPMENT_INCLUDE = {
             orderNo: true,
             lifecycleStatus: true,
             customerNameSnapshot: true,
-            bomModelSnapshot: true,
             bomSpecSnapshot: true,
             customer: { select: { customerCode: true } },
-            bom: { select: { bomCode: true, category: { select: { specSchema: true } } } },
+            bom: { select: { bomCode: true } },
         },
     },
     registrar: { select: { name: true } },
@@ -313,7 +311,7 @@ export class OutboundService {
             }
 
             const printVersion = this.printVersionOf(current) + 1;
-            // 文档快照源：订单冻结快照 + 品类字段序（不读当前客户/BOM 主数据，防漂移）
+            // 文档快照源：订单冻结快照（不读当前客户/BOM 主数据与物料目录，防漂移）
             const document: OutboundPrintDocument = {
                 no: current.shipmentNo,
                 printVersion,
@@ -321,11 +319,7 @@ export class OutboundService {
                 customer: current.order.customerNameSnapshot,
                 customerCode: current.order.customer.customerCode,
                 bomCode: current.order.bom.bomCode,
-                bomSpec: specSummaryOf(
-                    current.order.bomModelSnapshot,
-                    (current.order.bomSpecSnapshot ?? {}) as Record<string, string>,
-                    parseCategoryFields(current.order.bom.category.specSchema),
-                ),
+                bomSpec: bomSpecOf(current.order.bomSpecSnapshot),
                 qty: current.originalQty,
                 date: formatDateColumn(current.businessDate),
                 operator: current.registrar.name,

@@ -30,9 +30,7 @@ const mkBom = (overrides: Partial<BomTable> = {}): BomTable & { category: { name
     ({
         id: 10n,
         bomCode: 'ZMKW0001',
-        categoryId: 1005n,
-        modelCode: 'KW',
-        spec: { 额定电压: '250V' },
+        categoryId: 1003n,
         specHash: new Uint8Array(32),
         unit: '个',
         status: true,
@@ -82,8 +80,8 @@ const mkOrder = (overrides: Partial<OrderRow> = {}): OrderRow =>
         remark: '',
         customerNameSnapshot: '深圳市智造电子',
         bomNameSnapshot: '新微动',
-        bomModelSnapshot: 'KW',
-        bomSpecSnapshot: { 额定电压: '250V' },
+        bomModelSnapshot: '',
+        bomSpecSnapshot: {},
         cancelledAt: null,
         cancelledBy: null,
         cancelReason: null,
@@ -101,6 +99,15 @@ const mkOrder = (overrides: Partial<OrderRow> = {}): OrderRow =>
 
 interface Store {
     boms: Array<BomTable & { category: { name: string } }>;
+    /** BOM 建档冻结明细（订单快照冻结的读取面） */
+    bomItems: Array<{
+        bomId: bigint;
+        materialId: bigint;
+        groupKey: string;
+        groupName: string;
+        name: string;
+        position: number;
+    }>;
     customers: CustomTable[];
     orders: OrderRow[];
     shipments: OutboundShipment[];
@@ -153,6 +160,11 @@ const createStore = (store: Store) => {
             findUnique: vi.fn(
                 async ({ where }: { where: { bomCode: string } }) =>
                     store.boms.find(b => b.bomCode === where.bomCode) ?? null,
+            ),
+        },
+        bomItem: {
+            findMany: vi.fn(async ({ where }: { where: { bomId: bigint } }) =>
+                store.bomItems.filter(item => item.bomId === where.bomId),
             ),
         },
         salesOrderTable: {
@@ -250,6 +262,10 @@ const createInput = {
 
 const emptyStore = (): Store => ({
     boms: [mkBom()],
+    bomItems: [
+        { bomId: 10n, materialId: 3101n, groupKey: 'base', groupName: '底座', name: '二脚底座（无挡脚）', position: 1 },
+        { bomId: 10n, materialId: 3112n, groupKey: 'bracket', groupName: '支架', name: '6.3支架：铜镀银', position: 2 },
+    ],
     customers: [mkCustomer()],
     orders: [],
     shipments: [],
@@ -316,7 +332,16 @@ describe('OrdersService.createOrder', () => {
         const stored = store.orders[0]!;
         expect(stored.customerNameSnapshot).toBe('深圳市智造电子');
         expect(stored.bomNameSnapshot).toBe('新微动');
-        expect(stored.bomModelSnapshot).toBe('KW');
+        // 冻结形态：{ items, modelCode, spec }，全部取自建档快照（无 model 组 → modelCode 为空）
+        expect(stored.bomModelSnapshot).toBe('');
+        expect(stored.bomSpecSnapshot).toMatchObject({
+            modelCode: '',
+            spec: '底座：二脚底座（无挡脚） · 支架：6.3支架：铜镀银',
+            items: [
+                { materialId: '3101', groupName: '底座', name: '二脚底座（无挡脚）', position: 1 },
+                { materialId: '3112', groupName: '支架', name: '6.3支架：铜镀银', position: 2 },
+            ],
+        });
         expect(store.changeLogs).toHaveLength(1);
         expect(store.changeLogs[0]).toMatchObject({ eventType: 'CREATE' });
         expect(store.opLogs).toHaveLength(1);

@@ -4,23 +4,73 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TransactionRunner } from '../prisma/transaction.runner';
 import type { Tx } from '../prisma/transaction.runner';
 import { SnowflakeGenerator } from '../common/snowflake';
-import { normalizeModelCode, specHash } from '../common/bom-spec';
+import { materialSetHash } from '../common/bom-spec';
+import { bomItemViewsOf, bomItemsSnapshotOf } from '../common/bom-display';
 import { beijingDayKey } from '../common/beijing-day';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import { BusinessSequenceService } from '../sequence/business-sequence.service';
-import type { BomCategory, Bom } from './types';
-import { parseCategoryFields, specSummaryOf, validateSpecs } from './bom-rules';
+import type { Bom, BomCategory, BomCatalogNode } from './types';
+import { resolveMaterialSelection, type CatalogEntry } from './bom-rules';
 import type { CreateBomDto } from './dto/create-bom.dto';
 import type { AuthUser } from '../common/types/auth-user';
-import type { BomCategory as BomCategoryRow, BomTable } from '../generated/prisma/client';
+import type { BomCategory as BomCategoryRow, BomTable, MaterialGroup } from '../generated/prisma/client';
 
 /** api_idempotency 的 operation_key，与前端 mock 同粒度 */
 const CREATE_OPERATION_KEY = 'boms:create';
 
-/** 品类行 + 规格字段解析结果（fields 元数据随行携带） */
-interface CategoryWithFields {
-    row: BomCategoryRow;
-    fields: ReturnType<typeof parseCategoryFields>;
+type CategoryRowWithGroups = BomCategoryRow & { groups: CatalogNodeRow[] };
+
+type BomItemRow = {
+    materialId: bigint;
+    groupKey: string;
+    groupName: string;
+    name: string;
+    position: number;
+};
+
+type BomRowWithItems = BomTable & {
+    category: { name: string };
+    items: BomItemRow[];
+};
+
+/** bom_category.child_categories 的存储形态：JSON 数组存品类 key */
+const childCategoriesOf = (value: unknown): string[] => {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    return value.filter((item): item is string => typeof item === 'string');
+};
+
+/** 同级节点排序：sortOrder 优先，id 兜底（迁移种子保证稳定）；节点与物料行通用 */
+const bySiblingOrder = <T extends { sortOrder: number; id: bigint }>(a: T, b: T): number =>
+    a.sortOrder !== b.sortOrder ? a.sortOrder - b.sortOrder : a.id < b.id ? -1 : 1;
+
+type CatalogNodeRow = MaterialGroup & {
+    items: Array<{ id: bigint; name: string; sortOrder: number; status: boolean }>;
+};
+
+/**
+ * 目录树序：顶级节点（分区与根分组）按 sortOrder 混排，分区的启用分组紧随
+ * （停用分区及其分组整支跳过；parentId 缺失/跨品类的分组防御性跳过）。
+ * 列表输出与建档 position 分配使用同一顺序。
+ */
+function orderedCatalog(groups: CatalogNodeRow[]): Array<{ isSection: boolean; node: CatalogNodeRow }> {
+    const nodes: Array<{ isSection: boolean; node: CatalogNodeRow }> = [];
+    const topLevel = groups.filter(group => group.parentId === null && group.status).sort(bySiblingOrder);
+    for (const node of topLevel) {
+        if (node.kind !== 'SECTION') {
+            nodes.push({ isSection: false, node });
+            continue;
+        }
+        nodes.push({ isSection: true, node });
+        nodes.push(
+            ...groups
+                .filter(group => group.kind === 'GROUP' && group.status && group.parentId === node.id)
+                .sort(bySiblingOrder)
+                .map(child => ({ isSection: false, node: child })),
+        );
+    }
+    return nodes;
 }
 
 @Injectable()
@@ -33,24 +83,26 @@ export class BomsService {
         private readonly sequence: BusinessSequenceService,
     ) {}
 
-    /** 品类目录（契约 bom:view）：仅启用品类，目录修改只走数据库迁移 */
+    /** 品类目录（契约 bom:view）：仅启用品类与启用目录节点，目录修改只走数据库迁移 */
     async listCategories(): Promise<BomCategory[]> {
-        const rows = await this.prisma.bomCategory.findMany({ where: { status: true }, orderBy: { id: 'asc' } });
+        const rows = await this.prisma.bomCategory.findMany({
+            where: { status: true },
+            orderBy: { id: 'asc' },
+            include: { groups: { include: { items: { where: { status: true } } } } },
+        });
         return rows.map(row => this.toCategory(row));
     }
 
     /**
-     * BOM 档案列表（契约 bom:view）：全量返回（契约无分页），新建置顶
-     * （createdAt desc 与 mock unshift 体验一致）。
+     * BOM 档案列表（契约 bom:view）：全量返回（契约无分页），新建置顶。
+     * 明细、modelCode 与摘要全部取自建档冻结快照，不读当前目录。
      */
     async listBoms(): Promise<Bom[]> {
-        const categories = await this.prisma.bomCategory.findMany();
-        const fieldsOf = new Map(categories.map(row => [row.id, parseCategoryFields(row.specSchema)]));
         const rows = await this.prisma.bomTable.findMany({
             orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-            include: { category: { select: { id: true, name: true } } },
+            include: { category: { select: { name: true } }, items: true },
         });
-        return rows.map(row => this.toBom(row, row.category.name, fieldsOf.get(row.category.id) ?? []));
+        return rows.map(row => this.toBom(row));
     }
 
     /**
@@ -69,8 +121,12 @@ export class BomsService {
 
     /**
      * 新建唯一 BOM（契约 bom:create，幂等）：锁品类行（db-scheme.md §2 锁序表——
-     * BOM 新建锁品类与其序列表，串行化同品类建档）；规格校验按品类目录，
-     * 规范化后 (category, model, spec_hash) 命中即 409 并返回已有 bomCode。
+     * BOM 新建锁品类与其序列表，串行化同品类建档）；物料集合按品类目录校验
+     * （归属/启用/单选组）；品类标记 childCategories 时必须携带 childCategory
+     * （子品类 key），该子品类的完整物料目录并入校验范围——跌倒开关的物料
+     * 树 = 跌倒盖/跌倒底/钢球/翘板 + 所选微动开关品类的底座/盖子/支架等。
+     * 规范化后 (category, spec_hash) 命中即 409 并返回已有 bomCode。
+     * 幂等与判重分开：同键同请求摘要重放原响应，换键撞同一集合才 409。
      */
     async createBom(dto: CreateBomDto, actor: AuthUser, idempotencyKey: string | undefined): Promise<Bom> {
         const key = this.idempotency.requireKey(idempotencyKey);
@@ -91,17 +147,30 @@ export class BomsService {
             }
 
             const category = await this.lockCategoryByName(tx, dto.name);
-            const modelCode = normalizeModelCode(dto.modelCode);
-            // DTO 的 MaxLength(64) 量在 NFKC 之前；兼容分解会膨胀长度（ﬁ→fi），
-            // 规范化后复检避免连字长串落到数据库 CHECK 约束（500）
-            if (modelCode.length > 64) {
-                throw new BadRequestException('型号最多 64 个字符');
+            const childCategories = childCategoriesOf(category.childCategories);
+            let childCategoryRow: BomCategoryRow | null = null;
+            if (childCategories.length > 0) {
+                if (!dto.childCategory) {
+                    throw new BadRequestException('请选择微动开关类型');
+                }
+                if (!childCategories.includes(dto.childCategory)) {
+                    throw new BadRequestException('微动开关类型不在本品类允许范围内');
+                }
+                childCategoryRow = await tx.bomCategory.findUnique({ where: { categoryKey: dto.childCategory } });
+                if (!childCategoryRow || !childCategoryRow.status) {
+                    throw new BadRequestException('微动开关类型不存在或已停用');
+                }
             }
-            const specs = validateSpecs(category.row.categoryKey, category.fields, dto.specs);
-            const hash = specHash(specs);
+
+            const catalog = [
+                ...(await this.loadCatalog(tx, category.id)),
+                ...(childCategoryRow ? await this.loadCatalog(tx, childCategoryRow.id) : []),
+            ];
+            const selection = resolveMaterialSelection(catalog, dto.materialItemIds);
+            const hash = materialSetHash(selection.ids);
 
             const duplicate = await tx.bomTable.findFirst({
-                where: { categoryId: category.row.id, modelCode, specHash: hash },
+                where: { categoryId: category.id, specHash: hash },
                 select: { bomCode: true },
             });
             if (duplicate) {
@@ -110,17 +179,16 @@ export class BomsService {
 
             const now = new Date();
             const bomCode = await this.sequence.nextBomCode(tx, {
-                categoryKey: category.row.categoryKey,
-                codePrefix: category.row.codePrefix,
-                seqWidth: category.row.seqWidth,
+                categoryKey: category.categoryKey,
+                codePrefix: category.codePrefix,
+                seqWidth: category.seqWidth,
             });
-            const created = await tx.bomTable.create({
+            const bomId = this.snowflake.next();
+            await tx.bomTable.create({
                 data: {
-                    id: this.snowflake.next(),
+                    id: bomId,
                     bomCode,
-                    categoryId: category.row.id,
-                    modelCode,
-                    spec: specs as Prisma.InputJsonValue,
+                    categoryId: category.id,
                     specHash: hash,
                     unit: '个',
                     requestKey: this.idempotency.requestKey(BigInt(actor.id), CREATE_OPERATION_KEY, key),
@@ -129,8 +197,35 @@ export class BomsService {
                     createdAt: now,
                 },
             });
+            // 建档冻结快照：目录后续改名/排序/停用不影响本档展示与判重
+            await tx.bomItem.createMany({
+                data: selection.snapshots.map(snapshot => ({
+                    id: this.snowflake.next(),
+                    bomId,
+                    materialId: snapshot.materialId,
+                    groupKey: snapshot.groupKey,
+                    groupName: snapshot.groupName,
+                    name: snapshot.name,
+                    position: snapshot.position,
+                    createdAt: now,
+                })),
+            });
 
-            const bom = this.toBom(created, category.row.name, category.fields);
+            const snapshot = bomItemsSnapshotOf(selection.snapshots);
+            const bom: Bom = {
+                code: bomCode,
+                name: category.name,
+                modelCode: snapshot.modelCode,
+                items: snapshot.items.map(({ materialId, groupKey, groupName, name }) => ({
+                    materialId,
+                    groupKey,
+                    groupName,
+                    name,
+                })),
+                spec: snapshot.spec,
+                created: beijingDayKey(now),
+                unit: '个',
+            };
             await this.idempotency.complete(tx, {
                 id: placeholderId,
                 httpStatus: 200,
@@ -142,35 +237,81 @@ export class BomsService {
     }
 
     /** 定位启用品类并锁定其行：同品类建档串行化，判重与取号在锁内无并发窗口 */
-    private async lockCategoryByName(tx: Tx, name: string): Promise<CategoryWithFields> {
+    private async lockCategoryByName(tx: Tx, name: string): Promise<BomCategoryRow> {
         const located = await tx.bomCategory.findUnique({ where: { name } });
         if (!located || !located.status) {
             throw new NotFoundException('品类不存在');
         }
         await tx.$queryRaw`SELECT id FROM bom_category WHERE id = ${located.id} FOR UPDATE`;
-        return { row: located, fields: parseCategoryFields(located.specSchema) };
+        return located;
     }
 
-    /** 契约 BomCategory 映射：seqWidth 为 3 时省略（与 mock 目录形态一致） */
-    private toCategory(row: BomCategoryRow): BomCategory {
+    /**
+     * 建档可用的物料目录（树序 = 分区 → 组 → 物料的 sortOrder）：
+     * 品类/分区/分组/物料任一停用即整支不可用；分区缺失（跨品类挂接或
+     * 超两级目录）防御性跳过。目录锁跟随品类行锁，与建档同事务。
+     */
+    private async loadCatalog(tx: Tx, categoryId: bigint): Promise<CatalogEntry[]> {
+        const groups = (await tx.materialGroup.findMany({
+            where: { categoryId },
+            include: { items: true },
+        })) as CatalogNodeRow[];
+        const entries: CatalogEntry[] = [];
+        for (const { isSection, node } of orderedCatalog(groups)) {
+            if (isSection || node.groupKey === null || node.multi === null) {
+                continue;
+            }
+            for (const item of [...node.items].sort(bySiblingOrder)) {
+                if (!item.status) {
+                    continue;
+                }
+                entries.push({
+                    materialId: item.id,
+                    groupKey: node.groupKey,
+                    groupName: node.name,
+                    multi: node.multi,
+                    name: item.name,
+                });
+            }
+        }
+        return entries;
+    }
+
+    /** 契约 BomCategory 映射：seqWidth 为 3 时省略；groups 为分区/分组扁平树（parentId 关联） */
+    private toCategory(row: CategoryRowWithGroups): BomCategory {
+        const childCategories = childCategoriesOf(row.childCategories);
         return {
             key: row.categoryKey,
             name: row.name,
             codePrefix: row.codePrefix,
             ...(row.seqWidth !== 3 ? { seqWidth: row.seqWidth } : {}),
-            fields: parseCategoryFields(row.specSchema),
+            ...(childCategories.length > 0 ? { childCategories } : {}),
+            groups: orderedCatalog(row.groups).map(({ node }) => this.toNode(node)),
         };
     }
 
-    /** 契约 Bom 映射：created 为北京日；spec 摘要按品类常量过滤 */
-    private toBom(row: BomTable, categoryName: string, fields: ReturnType<typeof parseCategoryFields>): Bom {
-        const specs = (row.spec ?? {}) as Record<string, string>;
+    private toNode(row: CatalogNodeRow): BomCatalogNode {
+        const isGroup = row.kind === 'GROUP';
+        return {
+            id: row.id.toString(),
+            parentId: row.parentId?.toString() ?? null,
+            kind: isGroup ? 'group' : 'section',
+            name: row.name,
+            key: isGroup ? row.groupKey : null,
+            multi: isGroup ? row.multi : null,
+            items: isGroup ? row.items.map(item => ({ id: item.id.toString(), name: item.name })) : [],
+        };
+    }
+
+    /** 契约 Bom 映射：created 为北京日；modelCode/spec/明细全部由冻结快照派生 */
+    private toBom(row: BomRowWithItems): Bom {
+        const snapshot = bomItemsSnapshotOf(row.items);
         return {
             code: row.bomCode,
-            name: categoryName,
-            modelCode: row.modelCode,
-            specs,
-            spec: specSummaryOf(row.modelCode, specs, fields),
+            name: row.category.name,
+            modelCode: snapshot.modelCode,
+            items: bomItemViewsOf(row.items),
+            spec: snapshot.spec,
             created: beijingDayKey(row.createdAt),
             unit: row.unit,
         };

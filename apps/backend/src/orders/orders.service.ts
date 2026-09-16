@@ -6,6 +6,7 @@ import type { Tx } from '../prisma/transaction.runner';
 import { SnowflakeGenerator } from '../common/snowflake';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import { formatDateColumn, toDateColumn } from '../common/datetime';
+import { bomItemsSnapshotOf } from '../common/bom-display';
 import { lockRowsById } from '../domain/concurrency';
 import { recordOpLog } from '../domain/op-log';
 import { BusinessSequenceService } from '../sequence/business-sequence.service';
@@ -86,6 +87,11 @@ export class OrdersService {
             if (!customer) {
                 throw new NotFoundException('客户不存在');
             }
+            // BOM 快照冻结（db-scheme.md §6.1）：明细取建档冻结行（position 排序），
+            // modelCode/spec 由其派生；下单后目录变更不影响本订单与打印
+            const bomSnapshot = bomItemsSnapshotOf(
+                await tx.bomItem.findMany({ where: { bomId: bom.id }, orderBy: { position: 'asc' } }),
+            );
 
             const now = new Date();
             const id = this.snowflake.next();
@@ -102,8 +108,8 @@ export class OrdersService {
                     remark: dto.remark,
                     customerNameSnapshot: customer.name,
                     bomNameSnapshot: bom.category.name,
-                    bomModelSnapshot: bom.modelCode,
-                    bomSpecSnapshot: bom.spec as Prisma.InputJsonValue,
+                    bomModelSnapshot: bomSnapshot.modelCode,
+                    bomSpecSnapshot: bomSnapshot as unknown as Prisma.InputJsonValue,
                     requestKey: this.idempotency.requestKey(BigInt(actor.id), CREATE_OPERATION_KEY, key),
                     createdBy: BigInt(actor.id),
                     updatedBy: BigInt(actor.id),

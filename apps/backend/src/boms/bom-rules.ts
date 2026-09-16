@@ -1,74 +1,91 @@
 import { BadRequestException } from '@nestjs/common';
-import { fixedSpecsOf, type BomSpecField } from '../common/bom-display';
-
-// 目录解析与规格摘要在共享层（common/bom-display），出库打印文档同样依赖；
-// 此处 re-export 保持 boms 模块内引用稳定
-export { fixedSpecsOf, parseCategoryFields, specSummaryOf } from '../common/bom-display';
+import { normalizeMaterialId } from '../common/bom-spec';
 
 /**
- * BOM 品类规则（db-scheme.md §5）：品类目录（bom_category.spec_schema）是
- * 有效品类、固定规格与编码规则的唯一权威；校验错误消息与前端 mock 逐字对齐。
+ * BOM 物料选择校验（db-scheme.md §5）：品类目录（material_group/material_item）
+ * 是可选物料与分组语义的唯一权威；所有组皆可不选，但整份 BOM 至少选 1 项；
+ * 单选组（multi=0）最多 1 项；不存在旧规格体系的跨字段规则（6.3/4.8 同口径
+ * 等组合约束已随预生成模式废除），同类部件互斥由单选分组结构表达。
  */
 
-/** 新微动支架/静片的安装规格（值前缀 6.3/4.8 互斥，两件必须同规格） */
-const gaugeOf = (value: string | undefined): '6.3' | '4.8' | undefined => {
-    const gauge = value?.trim().match(/^(6\.3|4\.8)/)?.[1];
-    return gauge === '6.3' || gauge === '4.8' ? gauge : undefined;
-};
+/** 目录可用物料（service 从品类聚合；数组顺序即建档 position 分配顺序） */
+export interface CatalogEntry {
+    materialId: bigint;
+    groupKey: string;
+    groupName: string;
+    multi: boolean;
+    name: string;
+}
+
+/** 校验通过的选中结果：snapshots 为建档冻结行（按目录顺序分配 position） */
+export interface MaterialSelection {
+    /** 规范化去重后的物料 id（hash 输入，顺序无关） */
+    ids: string[];
+    snapshots: Array<{
+        materialId: bigint;
+        groupKey: string;
+        groupName: string;
+        name: string;
+        position: number;
+    }>;
+}
 
 /**
- * 规格校验与规范化（创建事务内调用）：
- * 键 NFKC + trim 后必须命中目录键，存储键以目录键为准；值仅 trim、保留
- * 原样字符（存量档案与目录选项均含全角括号等全角字符，NFKC 只用于判重
- * hash，不得改写存储值导致选项校验失配）；固定规格覆盖客户端同名值；
- * 必填与选项按目录校验；新微动支架/静片跨字段规则强制。
+ * 解析并校验选中集合：id 数字串规范化（BigInt 十进制，消除前导零双表示）、
+ * 去重；物料必须属于当前品类目录（品类/分区/分组/物料均启用）；单选组最多
+ * 1 项。position 按传入目录顺序（分区 → 组 → 物料的 sortOrder）冻结。
  */
-export function validateSpecs(
-    categoryKey: string,
-    fields: BomSpecField[],
-    input: Record<string, unknown>,
-): Record<string, string> {
-    if (input === null || Array.isArray(input) || typeof input !== 'object') {
-        throw new BadRequestException('规格必须是对象');
+export function resolveMaterialSelection(catalog: CatalogEntry[], ids: string[]): MaterialSelection {
+    if (!Array.isArray(ids) || ids.length === 0) {
+        throw new BadRequestException('请至少选择一项物料');
     }
-    const fieldByKey = new Map(fields.map(field => [field.key, field]));
-    const entries = Object.entries(input);
-    if (entries.some(([, value]) => typeof value !== 'string')) {
-        throw new BadRequestException('规格值必须是字符串');
-    }
-    const specs: Record<string, string> = {};
-    for (const [key, value] of entries as Array<[string, string]>) {
-        const field = fieldByKey.get(key.normalize('NFKC').trim());
-        if (!field) {
-            throw new BadRequestException('规格中包含当前品类未定义的字段');
+    const normalized = ids.map(id => {
+        const value = normalizeMaterialId(id);
+        if (value === null) {
+            throw new BadRequestException('物料编号格式无效');
         }
-        specs[field.key] = value.trim();
-    }
-    // 固定规格以后端目录为准（客户端同名值不能覆盖）
-    Object.assign(specs, fixedSpecsOf(fields));
-    for (const key of Object.keys(specs)) {
-        if (specs[key] === '') {
-            delete specs[key];
+        return value;
+    });
+    const uniqueIds = [...new Set(normalized)];
+
+    const entryById = new Map(catalog.map(entry => [entry.materialId.toString(), entry]));
+    const selected = uniqueIds.map(id => {
+        const entry = entryById.get(id);
+        if (!entry) {
+            throw new BadRequestException('物料不存在、已停用或不属于该品类');
         }
+        return entry;
+    });
+
+    const bucketByGroup = new Map<string, { groupName: string; multi: boolean; count: number }>();
+    for (const entry of selected) {
+        const bucket = bucketByGroup.get(entry.groupKey) ?? {
+            groupName: entry.groupName,
+            multi: entry.multi,
+            count: 0,
+        };
+        bucket.count += 1;
+        bucketByGroup.set(entry.groupKey, bucket);
     }
-    for (const field of fields) {
-        const value = specs[field.key];
-        if (field.required && !value) {
-            throw new BadRequestException(`请填写规格：${field.label}`);
-        }
-        if (value && field.options && !field.options.includes(value)) {
-            throw new BadRequestException(`规格值无效：${field.label}`);
-        }
-    }
-    if (Object.keys(specs).length === 0) {
-        throw new BadRequestException('请至少填写一项规格');
-    }
-    if (categoryKey === 'new-micro-switch') {
-        const bracket = gaugeOf(specs['支架']);
-        const plate = gaugeOf(specs['静片']);
-        if (!bracket || bracket !== plate) {
-            throw new BadRequestException('新微动的支架与静片必须使用相同的 6.3/4.8 规格');
+    for (const { groupName, multi, count } of bucketByGroup.values()) {
+        if (!multi && count > 1) {
+            throw new BadRequestException(`分组「${groupName}」只能选择一项物料`);
         }
     }
-    return specs;
+
+    const selectedIdSet = new Set(uniqueIds);
+    const snapshots: MaterialSelection['snapshots'] = [];
+    for (const entry of catalog) {
+        if (!selectedIdSet.has(entry.materialId.toString())) {
+            continue;
+        }
+        snapshots.push({
+            materialId: entry.materialId,
+            groupKey: entry.groupKey,
+            groupName: entry.groupName,
+            name: entry.name,
+            position: snapshots.length + 1,
+        });
+    }
+    return { ids: uniqueIds, snapshots };
 }
