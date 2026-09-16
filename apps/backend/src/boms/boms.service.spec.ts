@@ -1,5 +1,6 @@
 // 覆盖物料目录模式的 BomsService：目录树下发、快照派生（modelCode/spec/明细）、
-// 物料集合校验（归属/停用/单选组）、判重 409 与幂等重放、取号与品类行锁
+// 物料集合校验（归属/停用/单选组）、判重 409 与幂等重放、取号与品类行锁；
+// 删除未引用 BOM（订单/台账引用 409、行锁、op_log 快照与幂等）
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BomsService } from './boms.service';
@@ -229,6 +230,10 @@ interface Store {
     bomItems: BomItemFixture[];
     createdBoms: Array<Record<string, unknown>>;
     createdItems: Array<Record<string, unknown>>;
+    orderRefs: bigint[];
+    inboundRefs: bigint[];
+    adjustmentRefs: bigint[];
+    opLogs: Array<Record<string, unknown>>;
 }
 
 const mkBom = (overrides: Partial<BomTable> = {}): BomTable =>
@@ -257,8 +262,10 @@ const createStore = (store: Store) => {
         $queryRaw: vi.fn(async (..._parts: unknown[]): Promise<unknown[]> => []),
         bomCategory: {
             findUnique: vi.fn(
-                async ({ where }: { where: { name: string } }) =>
-                    store.categories.find(category => category.name === where.name) ?? null,
+                async ({ where }: { where: { name?: string; id?: bigint } }) =>
+                    store.categories.find(category =>
+                        where.name !== undefined ? category.name === where.name : category.id === where.id,
+                    ) ?? null,
             ),
         },
         materialGroup: {
@@ -279,11 +286,21 @@ const createStore = (store: Store) => {
                             ) === 0,
                     ) ?? null,
             ),
+            findUnique: vi.fn(
+                async ({ where }: { where: { bomCode: string } }) =>
+                    store.boms.find(bom => bom.bomCode === where.bomCode) ?? null,
+            ),
             create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
                 const created = { ...data, rowVersion: 1n } as BomTable & Record<string, unknown>;
                 store.boms.push(created);
                 store.createdBoms.push(data);
                 return created;
+            }),
+            delete: vi.fn(async ({ where }: { where: { id: bigint } }) => {
+                const index = store.boms.findIndex(bom => bom.id === where.id);
+                if (index >= 0) {
+                    store.boms.splice(index, 1);
+                }
             }),
         },
         bomItem: {
@@ -300,14 +317,43 @@ const createStore = (store: Store) => {
                     store.createdItems.push(row);
                 }
             }),
+            findMany: vi.fn(async ({ where }: { where: { bomId: bigint } }) =>
+                store.bomItems.filter(item => item.bomId === where.bomId).map(item => ({ ...item })),
+            ),
+            deleteMany: vi.fn(async ({ where }: { where: { bomId: bigint } }) => {
+                store.bomItems = store.bomItems.filter(item => item.bomId !== where.bomId);
+            }),
+        },
+        // 删除 BOM 的引用计数面：订单（含已取消）与入库/调整流水（db-scheme §5.2）
+        salesOrderTable: {
+            count: vi.fn(
+                async ({ where }: { where: { bomId: bigint } }) =>
+                    store.orderRefs.filter(id => id === where.bomId).length,
+            ),
+        },
+        inboundLedger: {
+            count: vi.fn(
+                async ({ where }: { where: { bomId: bigint } }) =>
+                    store.inboundRefs.filter(id => id === where.bomId).length,
+            ),
+        },
+        stockAdjustment: {
+            count: vi.fn(
+                async ({ where }: { where: { bomId: bigint } }) =>
+                    store.adjustmentRefs.filter(id => id === where.bomId).length,
+            ),
+        },
+        opLog: {
+            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+                store.opLogs.push(data);
+            }),
         },
     };
     const prisma = Object.assign(tx, {
         bomCategory: {
-            findUnique: vi.fn(
-                async ({ where }: { where: { name: string } }) =>
-                    store.categories.find(category => category.name === where.name) ?? null,
-            ),
+            // Object.assign 会覆盖 tx 侧同名面，事务内 deleteBom 的 by-id 查询与
+            // lockCategoryByName 的 by-name 查询共用同一实现
+            findUnique: tx.bomCategory.findUnique,
             findMany: vi.fn(
                 async ({
                     where,
@@ -337,7 +383,9 @@ const createStore = (store: Store) => {
         },
         bomTable: {
             findFirst: tx.bomTable.findFirst,
+            findUnique: tx.bomTable.findUnique,
             create: tx.bomTable.create,
+            delete: tx.bomTable.delete,
             findMany: vi.fn(async () =>
                 [...store.boms]
                     .sort((a, b) => {
@@ -401,7 +449,17 @@ describe('BomsService', () => {
     let store: Store;
 
     beforeEach(() => {
-        store = { categories: mkCategories(), boms: [], bomItems: [], createdBoms: [], createdItems: [] };
+        store = {
+            categories: mkCategories(),
+            boms: [],
+            bomItems: [],
+            createdBoms: [],
+            createdItems: [],
+            orderRefs: [],
+            inboundRefs: [],
+            adjustmentRefs: [],
+            opLogs: [],
+        };
     });
 
     describe('listCategories', () => {
@@ -594,6 +652,88 @@ describe('BomsService', () => {
             const calls = fresh.tx.$queryRaw.mock.calls as unknown as Array<[TemplateStringsArray]>;
             const lockSql = calls.filter(call => /bom_category.*FOR UPDATE/s.test(String(call[0] ?? '')));
             expect(lockSql.length).toBeGreaterThan(0);
+        });
+    });
+
+    describe('deleteBom', () => {
+        it('BOM 不存在 404；幂等键缺失 400', async () => {
+            const { service } = mkService(store);
+            await expect(service.deleteBom('ZMXK2999', actor, ID_KEY)).rejects.toThrow(
+                new NotFoundException('BOM 不存在'),
+            );
+            store.boms = [mkBom()];
+            await expect(service.deleteBom('ZMXK2010', actor, undefined)).rejects.toThrow(BadRequestException);
+        });
+
+        it('被销售订单引用（含已取消订单）一律 409，不触碰任何行', async () => {
+            store.boms = [mkBom()];
+            store.orderRefs = [5000n];
+            const { service, store: written } = mkService(store);
+            await expect(service.deleteBom('ZMXK2010', actor, ID_KEY)).rejects.toThrow(
+                new ConflictException('BOM 已被销售订单引用，不可删除'),
+            );
+            expect(written.boms).toHaveLength(1);
+            expect(written.opLogs).toHaveLength(0);
+        });
+
+        it('存在入库或库存调整流水时 409（外键 RESTRICT 的前置友好校验）', async () => {
+            store.boms = [mkBom()];
+            store.inboundRefs = [5000n];
+            const { service } = mkService(store);
+            await expect(service.deleteBom('ZMXK2010', actor, ID_KEY)).rejects.toThrow(
+                new ConflictException('BOM 已有入库或库存调整流水，不可删除'),
+            );
+            store.inboundRefs = [];
+            store.adjustmentRefs = [5000n];
+            const again = mkService(store);
+            await expect(again.service.deleteBom('ZMXK2010', actor, ID_KEY)).rejects.toThrow(
+                new ConflictException('BOM 已有入库或库存调整流水，不可删除'),
+            );
+        });
+
+        it('未引用 BOM 删除成功：明细随行清理、行锁先行、op_log 记录删除前快照', async () => {
+            store.boms = [mkBom()];
+            store.bomItems = [
+                {
+                    bomId: 5000n,
+                    materialId: 3003n,
+                    groupKey: 'silver-wire-thickness',
+                    groupName: '银丝厚度',
+                    name: '0.2',
+                    position: 1,
+                },
+            ];
+            const { service, tx, idempotency, store: written } = mkService(store);
+            await expect(service.deleteBom('ZMXK2010', actor, ID_KEY)).resolves.toBeNull();
+            expect(written.boms).toHaveLength(0);
+            expect(written.bomItems).toHaveLength(0);
+            // BOM 行锁在引用校验之前（订单新建/入库登记竞争同一行锁，§2 锁序）
+            const calls = tx.$queryRaw.mock.calls as unknown as Array<[TemplateStringsArray]>;
+            expect(calls.some(call => /bom_table.*FOR UPDATE/s.test(String(call[0] ?? '')))).toBe(true);
+            expect(written.opLogs).toHaveLength(1);
+            expect(written.opLogs[0]).toMatchObject({
+                action: 'delete_bom',
+                targetType: 'bom',
+                targetId: 5000n,
+                targetCode: 'ZMXK2010',
+            });
+            expect(written.opLogs[0]!.detailJson).toMatchObject({ code: 'ZMXK2010', name: '旋转XK2' });
+            expect(idempotency.complete).toHaveBeenCalledWith(
+                expect.anything(),
+                expect.objectContaining({ httpStatus: 200, resource: { type: 'bom', code: 'ZMXK2010' } }),
+            );
+        });
+
+        it('幂等重放直接返回 null，不再执行删除', async () => {
+            store.boms = [mkBom()];
+            const beginOrReplay = vi.fn(async () => ({
+                replay: { httpStatus: 200, body: { deleted: true, code: 'ZMXK2010' } },
+                placeholderId: null,
+            }));
+            const { service, store: written } = mkService(store, beginOrReplay);
+            await expect(service.deleteBom('ZMXK2010', actor, ID_KEY)).resolves.toBeNull();
+            expect(written.boms).toHaveLength(1);
+            expect(written.opLogs).toHaveLength(0);
         });
     });
 });

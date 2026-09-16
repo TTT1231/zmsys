@@ -9,6 +9,7 @@ import { bomItemViewsOf, bomItemsSnapshotOf } from '../common/bom-display';
 import { beijingDayKey } from '../common/beijing-day';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import { BusinessSequenceService } from '../sequence/business-sequence.service';
+import { recordOpLog } from '../domain/op-log';
 import type { Bom, BomCategory, BomCatalogNode } from './types';
 import { resolveMaterialSelection, type CatalogEntry } from './bom-rules';
 import type { CreateBomDto } from './dto/create-bom.dto';
@@ -17,6 +18,7 @@ import type { BomCategory as BomCategoryRow, BomTable, MaterialGroup } from '../
 
 /** api_idempotency 的 operation_key，与前端 mock 同粒度 */
 const CREATE_OPERATION_KEY = 'boms:create';
+const DELETE_OPERATION_KEY = 'boms:delete';
 
 type CategoryRowWithGroups = BomCategoryRow & { groups: CatalogNodeRow[] };
 
@@ -236,8 +238,87 @@ export class BomsService {
         });
     }
 
-    /** 定位启用品类并锁定其行：同品类建档串行化，判重与取号在锁内无并发窗口 */
-    private async lockCategoryByName(tx: Tx, name: string): Promise<BomCategoryRow> {
+    /**
+     * 删除未被引用的 BOM（契约 bom:delete，幂等，仅超级管理员）：清理手误建档。
+     * 锁 BOM 行——订单新建与入库登记同样先锁 BOM（§2 锁序），删除与它们竞争
+     * 同一行锁，先提交者生效，引用校验因此无并发窗口。命中任一引用即 409：
+     * - sales_order_table：任意订单（含已取消，订单物理保留即视为引用）
+     * - inbound_ledger / stock_adjustment：出入库与调整流水（外键 RESTRICT 兜底）
+     * 校验通过后同事务删除 bom_item（外键要求先清子行）与 bom_table 行，
+     * op_log 记录 delete_bom 与删除前快照。BOM 建档后不可修改，无乐观锁版本。
+     */
+    async deleteBom(code: string, actor: AuthUser, idempotencyKey: string | undefined): Promise<null> {
+        const key = this.idempotency.requireKey(idempotencyKey);
+        const requestHash = this.idempotency.digest({ method: 'POST', pathParams: { code } });
+
+        return this.txRunner.run(async (tx: Tx) => {
+            const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
+                actorId: BigInt(actor.id),
+                operationKey: DELETE_OPERATION_KEY,
+                key,
+                requestHash,
+            });
+            // 删除的契约响应恒为 data:null，重放无需读快照，直接归一返回
+            if (replay) {
+                return null;
+            }
+            if (placeholderId === null) {
+                throw new Error('幂等占位缺失');
+            }
+
+            const bom = await tx.bomTable.findUnique({ where: { bomCode: code } });
+            if (!bom) {
+                throw new NotFoundException('BOM 不存在');
+            }
+            await tx.$queryRaw`SELECT id FROM bom_table WHERE id = ${bom.id} FOR UPDATE`;
+
+            const orderRefs = await tx.salesOrderTable.count({ where: { bomId: bom.id } });
+            if (orderRefs > 0) {
+                throw new ConflictException('BOM 已被销售订单引用，不可删除');
+            }
+            const ledgerRefs =
+                (await tx.inboundLedger.count({ where: { bomId: bom.id } })) +
+                (await tx.stockAdjustment.count({ where: { bomId: bom.id } }));
+            if (ledgerRefs > 0) {
+                throw new ConflictException('BOM 已有入库或库存调整流水，不可删除');
+            }
+
+            const [category, items] = await Promise.all([
+                tx.bomCategory.findUnique({ where: { id: bom.categoryId }, select: { name: true } }),
+                tx.bomItem.findMany({ where: { bomId: bom.id } }),
+            ]);
+            const snapshot = this.toBom({
+                ...bom,
+                category: { name: category?.name ?? '' },
+                items,
+            });
+
+            await tx.bomItem.deleteMany({ where: { bomId: bom.id } });
+            await tx.bomTable.delete({ where: { id: bom.id } });
+            const now = new Date();
+            await recordOpLog(tx, this.snowflake, actor, {
+                action: 'delete_bom',
+                targetType: 'bom',
+                targetId: bom.id,
+                targetCode: bom.bomCode,
+                detail: snapshot as unknown as Prisma.InputJsonValue,
+                now,
+            });
+            await this.idempotency.complete(tx, {
+                id: placeholderId,
+                httpStatus: 200,
+                // JSON 列不接受 null 占位；重放路径已归一为 null，此快照仅审计兜底
+                responseBody: { deleted: true, code: bom.bomCode },
+                resource: { type: 'bom', code: bom.bomCode },
+            });
+            return null;
+        });
+    }
+
+    /** 定位启用品类并锁定其行：同品类建档串行化，判重与取号在锁内无并发窗口 */ private async lockCategoryByName(
+        tx: Tx,
+        name: string,
+    ): Promise<BomCategoryRow> {
         const located = await tx.bomCategory.findUnique({ where: { name } });
         if (!located || !located.status) {
             throw new NotFoundException('品类不存在');

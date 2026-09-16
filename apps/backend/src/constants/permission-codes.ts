@@ -32,6 +32,7 @@ export const PERMISSIONS = {
     // ---- BOM ----
     BOM_VIEW: 'bom:view',
     BOM_CREATE: 'bom:create',
+    BOM_DELETE: 'bom:delete', // 受保护
 
     // ---- 入库 ----
     INBOUND_VIEW: 'inbound:view',
