@@ -193,7 +193,7 @@ paths:
             tags: [orders]
             operationId: deleteOrder
             summary: 删除完全未发货的销售订单
-            description: 受保护权限 `orders:delete`，仅 super。用于清理手误创建的订单：累计已发必须为 0，且不得存在任何出库单（含已作废）引用该订单，否则返回 409。删除为物理移除：订单行与其变更日志同事务删除，`op_log` 记录删除事件与订单快照；删除后订单不再出现在列表中。删除与取消、出库登记、打印竞争同一订单锁，先提交者生效。
+            description: 受保护权限 `orders:delete`，仅 super。用于清理手误创建的订单：累计已发必须为 0，且不得存在任何出库单（含已作废）引用该订单，否则返回 409。删除为物理移除：订单行与其变更日志同事务删除，`op_log` 记录删除事件与订单快照（含取消审计三要素与 BOM 冻结名称/规格，可独立还原删除前形态）；删除后订单不再出现在列表中。删除与取消、出库登记、打印竞争同一订单锁，先提交者生效。
             parameters:
                 - $ref: "#/components/parameters/OrderNo"
                 - $ref: "#/components/parameters/IdempotencyKey"

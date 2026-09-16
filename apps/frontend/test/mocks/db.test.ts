@@ -524,12 +524,24 @@ describe("mock db backend constraint contract", () => {
     });
 
     it("deletes a never-shipped order with stale change log and audit entry, rejecting shipped or ledgered ones", () => {
-        // 手误创建的零发货订单：删除后列表消失，专属变更日志随行清理，操作日志留痕
+        // 手误创建的零发货订单：删除后列表消失，专属变更日志随行清理，操作日志留删除前快照
         const order = newShippableOrder();
         db.deleteOrder(order.orderNo, order.version, superActor);
         expect(db.orders.some(item => item.orderNo === order.orderNo)).toBe(false);
         expect(db.salesOrderChangeLog.some(entry => entry.orderNo === order.orderNo)).toBe(false);
-        expect(db.opLog[0]).toMatchObject({ action: "删除销售订单", target: order.orderNo });
+        expect(db.opLog[0]).toMatchObject({
+            action: "删除销售订单",
+            target: order.orderNo,
+            detail: {
+                orderNo: order.orderNo,
+                lifecycleStatus: "active",
+                cancelledAt: null,
+                cancelReason: null,
+                bomCode: order.bomCode,
+                bomName: rotaryBom.name,
+                rowVersion: order.version,
+            },
+        });
 
         // 乐观锁与不存在分支
         expect(() => db.deleteOrder(order.orderNo, order.version, superActor)).toThrow("订单不存在");
@@ -553,21 +565,62 @@ describe("mock db backend constraint contract", () => {
         expect(db.outboundLedger.some(row => row.orderNo === voidedCase.orderNo)).toBe(true);
     });
 
+    it("keeps cancellation context in the delete snapshot after cancelling then deleting an order", () => {
+        // 先取消再删除：变更日志随行清理，op_log 快照是取消原因/操作人的唯一留存
+        const order = newShippableOrder();
+        db.cancelOrder(order.orderNo, order.version, "客户撤单", superActor);
+        const cancelled = db.orders.find(item => item.orderNo === order.orderNo)!;
+        db.deleteOrder(cancelled.orderNo, cancelled.version, superActor);
+        expect(db.opLog[0]).toMatchObject({
+            action: "删除销售订单",
+            detail: {
+                lifecycleStatus: "cancelled",
+                cancelReason: "客户撤单",
+                cancelledBy: superActor.name,
+                bomName: rotaryBom.name,
+                bomSpec: rotaryBom.spec,
+            },
+        });
+    });
+
     it("deletes an unreferenced bom with audit entry, rejecting referenced or ledgered ones", () => {
-        // 手误建档：未被订单引用、无台账流水，删除后档案消失并留痕
+        // 手误建档：未被订单引用、无台账流水，删除后档案消失并留完整快照
         const spare = db.createBom({
             name: "旋转XK2",
             materialItemIds: [idOf("旋转XK2", "2-1"), idOf("旋转XK2", "正面"), idOf("旋转XK2", "0.5")],
         });
         db.deleteBom(spare.code, superActor);
         expect(db.boms.some(item => item.code === spare.code)).toBe(false);
-        expect(db.opLog[0]).toMatchObject({ action: "删除 BOM", target: spare.code });
+        expect(db.opLog[0]).toMatchObject({
+            action: "删除 BOM",
+            target: spare.code,
+            detail: { code: spare.code, name: spare.name, spec: spare.spec, unit: spare.unit },
+        });
 
         // 不存在分支
         expect(() => db.deleteBom(spare.code, superActor)).toThrow("BOM 不存在");
 
-        // 被销售订单引用（含已取消订单，订单物理保留即视为引用）不可删除
+        // 被销售订单引用（活跃订单）不可删除
         expect(() => db.deleteBom(rotaryBom.code, superActor)).toThrow("已被销售订单引用");
+
+        // 被已取消订单引用同样不可删除：取消不解除引用，只有物理删除才解除
+        const cancelledRef = db.createBom({
+            name: "旋转XK2",
+            materialItemIds: [idOf("旋转XK2", "0-2"), idOf("旋转XK2", "正面"), idOf("旋转XK2", "0.5")],
+        });
+        const holder = db.createOrder(
+            {
+                customerCode: "CUS-0542",
+                bomCode: cancelledRef.code,
+                qty: 2,
+                deliverDate: "2026-12-31",
+                orderDate: ANCHOR,
+                remark: "",
+            },
+            actor,
+        );
+        db.cancelOrder(holder.orderNo, holder.version, "客户撤单", superActor);
+        expect(() => db.deleteBom(cancelledRef.code, superActor)).toThrow("已被销售订单引用");
 
         // 存在入库/库存调整流水不可删除，台账与档案的引用保持完整
         const ledgered = db.createBom({

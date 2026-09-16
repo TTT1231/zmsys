@@ -160,8 +160,9 @@ const buildCustomers = (): Customer[] =>
 
 /* ---- 内存库（handler 侧单例） ---- */
 const MOCK_PASSWORD = "123456";
-const GRANT_LS_KEY = "zm-permissions";
-const GRANT_LS_VERSION = 5;
+/** 授权持久化键与结构版本（测试注入脏数据用，见 test/mocks/grants.test.ts） */
+export const GRANT_LS_KEY = "zm-permissions";
+export const GRANT_LS_VERSION = 5;
 
 type DbUser = WbUser & { password: string; tokenVersion: number };
 
@@ -579,6 +580,7 @@ class MockDb {
         }
         this.orders = this.orders.filter(item => item.orderNo !== orderNo);
         this.salesOrderChangeLog = this.salesOrderChangeLog.filter(entry => entry.orderNo !== orderNo);
+        const deletedBom = this.bomByCode(order.bomCode);
         this.opLog.unshift({
             date: ANCHOR,
             time: nowTime(),
@@ -586,6 +588,24 @@ class MockDb {
             role: actor.roleLabel,
             action: "删除销售订单",
             target: orderNo,
+            // 与真实后端 detail_json 同口径：变更日志随订单删除，这里是取消语境的唯一留存
+            detail: {
+                orderNo: order.orderNo,
+                qty: order.qty,
+                orderDate: order.orderDate,
+                deliverDate: order.deliverDate,
+                remark: order.remark,
+                lifecycleStatus: order.lifecycleStatus,
+                cancelledAt: order.cancelledAt ?? null,
+                cancelledBy: order.cancelledBy ?? null,
+                cancelReason: order.cancelReason ?? null,
+                customer: order.customer,
+                customerCode: order.customerCode,
+                bomCode: order.bomCode,
+                bomName: deletedBom?.name ?? null,
+                bomSpec: deletedBom?.spec ?? null,
+                rowVersion: order.version,
+            },
         });
         this.version += 1;
     }
@@ -801,6 +821,8 @@ class MockDb {
             role: actor.roleLabel,
             action: "删除 BOM",
             target: code,
+            // 与真实后端 detail_json 同口径：删除后档案不再返回，快照供长期审计独立还原
+            detail: { code: bom.code, name: bom.name, modelCode: bom.modelCode, spec: bom.spec, unit: bom.unit },
         });
         this.version += 1;
     }
@@ -1301,6 +1323,26 @@ class MockDb {
 }
 
 /* 授权持久化：模拟 sys_grant 表的落库（Node 环境跳过） */
+/* 受保护权限只允许 super：保存接口已拒绝，这里对 localStorage 回放数据再清洗一次——
+   存储被手工篡改出脏授权行（protected 授给普通角色、permissions 菜单外泄）时，
+   不会进入授权面（对齐真实后端 JWT 构建时按 sys_permission.protected 过滤） */
+function sanitizePersistedGrant(role: RoleId, grant: RoleGrant): RoleGrant {
+    if (role === "super") return grant;
+    const menus = grant.menus.filter(menu => menu !== "permissions" && !menu.startsWith("permissions-"));
+    const actions = Object.fromEntries(
+        Object.entries(grant.actions).map(([menu, list]) => [
+            menu,
+            list.filter(
+                action =>
+                    !(
+                        (ACTION_CATALOG as Record<string, readonly { id: string; protected?: boolean }[]>)[menu] ?? []
+                    ).find(item => item.id === action)?.protected,
+            ),
+        ]),
+    );
+    return { ...grant, menus, actions };
+}
+
 function loadGrants(): GrantMap {
     const merged = buildDefaultGrants();
     if (typeof localStorage === "undefined") return merged;
@@ -1310,7 +1352,7 @@ function loadGrants(): GrantMap {
             const parsed = JSON.parse(raw) as { version?: number; grants?: GrantMap };
             if (parsed?.version === GRANT_LS_VERSION && parsed.grants) {
                 ROLES.forEach(({ id }) => {
-                    if (parsed.grants![id]) merged[id] = parsed.grants![id];
+                    if (parsed.grants![id]) merged[id] = sanitizePersistedGrant(id, parsed.grants![id]);
                 });
             }
         }

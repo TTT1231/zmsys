@@ -188,6 +188,8 @@ export interface OpLogEntry {
     role: string;
     action: string;
     target: string;
+    /** 删除类事件携带删除前快照（对齐真实后端 op_log.detail_json），其余事件为空 */
+    detail?: Record<string, boolean | number | string | null>;
 }
 
 /** 聚合快照：由各资源端点在前端聚合（库存由出入库台账推导） */

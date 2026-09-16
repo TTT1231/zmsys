@@ -187,7 +187,7 @@ BOM = **品类 + 使用者勾选的物料集合**（无数量）。建档人在�
 - 订单删除与 BOM 删除（5.2）是全库仅有的两个业务 DELETE，只服务"手误创建/建档后无法清理"场景：
     - 仅超级管理员（受保护权限 `orders:delete`）；前端无权限不显示删除入口，后端仍独立校验。
     - 累计已发必须为 0，且 `outbound_shipment` 无任何引用（含已作废单）。曾有出库又被作废的订单也不可删除，只能取消——保证台账与审计链不悬空。
-    - 删除事务固定先锁 BOM、再锁订单；校验 `row_version` 后同事务删除订单行、该订单全部 `sales_order_change_log`（外键 RESTRICT 要求先清理），并写 `op_log(action=delete_order)`，`detail_json` 保存删除前订单快照。
+    - 删除事务固定先锁 BOM、再锁订单；校验 `row_version` 后同事务删除订单行、该订单全部 `sales_order_change_log`（外键 RESTRICT 要求先清理），并写 `op_log(action=delete_order)`，`detail_json` 保存删除前订单快照——含取消审计三要素（`cancelledAt`/`cancelledBy`/`cancelReason`）与订单冻结的 BOM 名称/规格（变更日志随行删除、BOM 行其后亦可能被删，快照须能独立还原）。
     - 删除与取消、出库登记、打印竞争同一订单锁，先提交者生效，后提交者返回 409。
 
 ### 6.2 出库可发量
