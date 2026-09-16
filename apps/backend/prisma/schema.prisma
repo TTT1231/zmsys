@@ -111,6 +111,7 @@ enum OpLogAction {
   create_customer
   create_order
   delete_bom
+  delete_order
 }
 
 /// 固定角色目录；grant_version 是整组授权的乐观锁版本

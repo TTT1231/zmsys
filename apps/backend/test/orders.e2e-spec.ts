@@ -445,4 +445,63 @@ describe('销售订单 (e2e)', () => {
         const me = customers.json().data.find((item: { code: string }) => item.code === customerCode);
         expect(me.cooperation).toBe('合作中');
     });
+
+    it('删除完全未发货订单：非超管 403、版本不匹配 409、成功后订单消失并写 op_log、重放幂等', async () => {
+        const created = await createOrder(superToken, orderInput(customerCode), `e2e-ord-${RUN}-del`);
+        expect(created.statusCode).toBe(200);
+        const target = created.json().data as { orderNo: string; version: number };
+
+        await createUser(accountOf('admin01'), 'admin');
+        const adminToken = await login(accountOf('admin01'));
+        const denied = await app.inject({
+            method: 'POST',
+            url: `/api/orders/${target.orderNo}/delete`,
+            headers: { ...authHeaders(adminToken), 'idempotency-key': `e2e-ord-${RUN}-del-admin` },
+            payload: { expectedVersion: target.version },
+        });
+        expect(denied.statusCode).toBe(403);
+        expect(denied.json().message).toContain('超级管理员');
+
+        const stale = await app.inject({
+            method: 'POST',
+            url: `/api/orders/${target.orderNo}/delete`,
+            headers: { ...authHeaders(superToken), 'idempotency-key': `e2e-ord-${RUN}-del-stale` },
+            payload: { expectedVersion: target.version + 5 },
+        });
+        expect(stale.statusCode).toBe(409);
+
+        const key = `e2e-ord-${RUN}-del-ok`;
+        const removed = await app.inject({
+            method: 'POST',
+            url: `/api/orders/${target.orderNo}/delete`,
+            headers: { ...authHeaders(superToken), 'idempotency-key': key },
+            payload: { expectedVersion: target.version },
+        });
+        expect(removed.statusCode).toBe(200);
+        expect(removed.json()).toEqual({ code: 0, data: null, message: 'ok' });
+
+        const replay = await app.inject({
+            method: 'POST',
+            url: `/api/orders/${target.orderNo}/delete`,
+            headers: { ...authHeaders(superToken), 'idempotency-key': key },
+            payload: { expectedVersion: target.version },
+        });
+        expect(replay.statusCode).toBe(200);
+        expect(replay.json().data).toBeNull();
+
+        const gone = await app.inject({
+            method: 'POST',
+            url: `/api/orders/${target.orderNo}/delete`,
+            headers: { ...authHeaders(superToken), 'idempotency-key': `e2e-ord-${RUN}-del-gone` },
+            payload: { expectedVersion: target.version },
+        });
+        expect(gone.statusCode).toBe(404);
+
+        const list = await app.inject({ method: 'GET', url: '/api/orders', headers: authHeaders(superToken) });
+        expect(list.json().data.some((item: { orderNo: string }) => item.orderNo === target.orderNo)).toBe(false);
+        const opLog = await prisma.opLog.findFirst({
+            where: { action: 'delete_order', targetCode: target.orderNo },
+        });
+        expect(opLog?.detailJson).toMatchObject({ orderNo: target.orderNo, customerCode });
+    });
 });

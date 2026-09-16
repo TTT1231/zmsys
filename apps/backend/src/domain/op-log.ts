@@ -9,7 +9,7 @@ import type { Tx } from '../prisma/transaction.runner';
  * uk(action, target_id) 保证一个目标每个动作只记一次——重放/重试路径撞唯一键静默跳过。
  */
 
-export type OpLogAction = 'ship' | 'create_customer' | 'create_order' | 'delete_bom';
+export type OpLogAction = 'ship' | 'create_customer' | 'create_order' | 'delete_bom' | 'delete_order';
 
 export interface RecordOpLogParams {
     action: OpLogAction;

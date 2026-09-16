@@ -22,6 +22,7 @@ export const PERMISSIONS = {
     ORDERS_CREATE: 'orders:create',
     ORDERS_EDIT: 'orders:edit',
     ORDERS_CANCEL: 'orders:cancel',
+    ORDERS_DELETE: 'orders:delete', // 受保护
 
     // ---- 客户 ----
     CUSTOMERS_VIEW: 'customers:view',

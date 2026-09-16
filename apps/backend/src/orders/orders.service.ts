@@ -16,10 +16,12 @@ import type { Order } from './types';
 import type { CreateOrderDto } from './dto/create-order.dto';
 import type { UpdateOrderDto } from './dto/update-order.dto';
 import type { CancelOrderDto } from './dto/cancel-order.dto';
+import type { DeleteOrderDto } from './dto/delete-order.dto';
 
-/** api_idempotency 的 operation_key；取消按订单号独立域，与前端 mock 同粒度 */
+/** api_idempotency 的 operation_key；取消/删除按订单号独立域，与前端 mock 同粒度 */
 const CREATE_OPERATION_KEY = 'orders:create';
 const cancelOperationKeyOf = (orderNo: string): string => `orders:cancel:${orderNo}`;
+const deleteOperationKeyOf = (orderNo: string): string => `orders:delete:${orderNo}`;
 
 /** 订单行 + 响应映射必需的关联（canceller 仅取消后有值） */
 type OrderRow = SalesOrderTable & {
@@ -157,7 +159,7 @@ export class OrdersService {
     }
 
     /**
-     * 修改销售订单（订单不可删除）：乐观锁 + 已取消不可改；新数量不得低于
+     * 修改销售订单：乐观锁 + 已取消不可改；新数量不得低于
      * 该订单有效出库净额（db-scheme.md §6.1）。锁序：BOM → 订单。
      */
     async updateOrder(orderNo: string, dto: UpdateOrderDto, actor: AuthUser): Promise<Order> {
@@ -300,6 +302,82 @@ export class OrdersService {
                 resource: { type: 'order', code: orderNo },
             });
             return order;
+        });
+    }
+
+    /**
+     * 删除完全未发货的订单（契约 orders:delete，幂等，仅超级管理员）：清理手误创建。
+     * 锁序与编辑/取消一致（先 BOM 后订单），删除与它们及出库登记、打印竞争同一
+     * 订单行锁，先提交者生效。命中任一条件即 409：
+     * - 有效出库净额 > 0（曾发货即不可删，只能取消）
+     * - outbound_shipment 存在任意单据（含已作废——台账审计链不悬空，外键 RESTRICT 兜底）
+     * 校验通过后同事务删除该订单全部 sales_order_change_log（外键要求先清子行）与
+     * 订单行，op_log 记录 delete_order 与删除前快照。
+     */
+    async deleteOrder(
+        orderNo: string,
+        dto: DeleteOrderDto,
+        actor: AuthUser,
+        idempotencyKey: string | undefined,
+    ): Promise<null> {
+        const operationKey = deleteOperationKeyOf(orderNo);
+        const key = this.idempotency.requireKey(idempotencyKey);
+        const requestHash = this.idempotency.digest({ method: 'POST', pathParams: { orderNo }, body: dto });
+
+        return this.txRunner.run(async (tx: Tx) => {
+            const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
+                actorId: BigInt(actor.id),
+                operationKey,
+                key,
+                requestHash,
+            });
+            // 删除的契约响应恒为 data:null，重放无需读快照，直接归一返回
+            if (replay) {
+                return null;
+            }
+            if (placeholderId === null) {
+                throw new Error('幂等占位缺失');
+            }
+
+            const now = new Date();
+            const current = await this.lockOrderForWrite(tx, orderNo);
+            if (current.rowVersion !== BigInt(dto.expectedVersion)) {
+                throw new ConflictException('订单已被其他人修改，请刷新后重试');
+            }
+            const outbound = await this.outboundNetOf(tx, current.id);
+            if (outbound > 0) {
+                throw new ConflictException('订单已有发货记录，不可删除');
+            }
+            const shipmentRefs = await tx.outboundShipment.count({ where: { orderId: current.id } });
+            if (shipmentRefs > 0) {
+                throw new ConflictException('订单存在出库流水（含已作废），不可删除');
+            }
+
+            await tx.salesOrderChangeLog.deleteMany({ where: { orderId: current.id } });
+            await tx.salesOrderTable.delete({ where: { id: current.id } });
+            // op_log 快照：行内字段 + 关联编码（客户/BOM），审计可独立还原删除前形态
+            const snapshot = this.orderSnapshot(current) as Record<string, unknown>;
+            await recordOpLog(tx, this.snowflake, actor, {
+                action: 'delete_order',
+                targetType: 'order',
+                targetId: current.id,
+                targetCode: current.orderNo,
+                detail: {
+                    ...snapshot,
+                    customer: current.customerNameSnapshot,
+                    customerCode: current.customer.customerCode,
+                    bomCode: current.bom.bomCode,
+                } as unknown as Prisma.InputJsonValue,
+                now,
+            });
+            await this.idempotency.complete(tx, {
+                id: placeholderId,
+                httpStatus: 200,
+                // JSON 列不接受 null 占位；重放路径已归一为 null，此快照仅审计兜底
+                responseBody: { deleted: true, orderNo: current.orderNo },
+                resource: { type: 'order', code: current.orderNo },
+            });
+            return null;
         });
     }
 

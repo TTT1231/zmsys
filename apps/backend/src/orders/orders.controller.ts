@@ -6,10 +6,12 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { CancelOrderDto } from './dto/cancel-order.dto';
+import { DeleteOrderDto } from './dto/delete-order.dto';
 import type { AuthUser } from '../common/types/auth-user';
 import type { Order } from './types';
 
-/** 销售订单（openapi orders tag）：订单不可删除，取消为生命周期终态 */
+/** 销售订单（openapi orders tag）：取消为生命周期终态；完全未发货的手误订单
+ * 可由超级管理员物理删除（专用端点 :orderNo/delete），已发货订单只能取消 */
 @Controller('orders')
 export class OrdersController {
     constructor(private readonly ordersService: OrdersService) {}
@@ -51,5 +53,17 @@ export class OrdersController {
         @Headers('idempotency-key') idempotencyKey: string | undefined,
     ): Promise<Order> {
         return this.ordersService.cancelOrder(orderNo, dto, actor, idempotencyKey);
+    }
+
+    @Post(':orderNo/delete')
+    @Permissions([PERMISSIONS.ORDERS_DELETE], '只有超级管理员可以删除销售订单')
+    @HttpCode(HttpStatus.OK)
+    async deleteOrder(
+        @Param('orderNo') orderNo: string,
+        @Body() dto: DeleteOrderDto,
+        @CurrentUser() actor: AuthUser,
+        @Headers('idempotency-key') idempotencyKey: string | undefined,
+    ): Promise<null> {
+        return this.ordersService.deleteOrder(orderNo, dto, actor, idempotencyKey);
     }
 }

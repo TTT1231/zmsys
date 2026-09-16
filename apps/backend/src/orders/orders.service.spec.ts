@@ -191,17 +191,34 @@ const createStore = (store: Store) => {
                 store.orders[index] = applied;
                 return applied;
             }),
+            delete: vi.fn(async ({ where }: { where: { id: bigint } }) => {
+                const index = store.orders.findIndex(o => o.id === where.id);
+                if (index >= 0) {
+                    store.orders.splice(index, 1);
+                }
+            }),
         },
         outboundShipment: {
             findFirst: vi.fn(
                 async ({ where }: { where: { orderId: bigint; state: string } }) =>
                     store.shipments.find(s => s.orderId === where.orderId && s.state === where.state) ?? null,
             ),
+            count: vi.fn(
+                async ({ where }: { where: { orderId: bigint } }) =>
+                    store.shipments.filter(s => s.orderId === where.orderId).length,
+            ),
         },
         salesOrderChangeLog: {
             create: vi.fn(async ({ data }: { data: unknown }) => {
                 store.changeLogs.push(data);
                 return data;
+            }),
+            deleteMany: vi.fn(async ({ where }: { where: { orderId: bigint } }) => {
+                const before = store.changeLogs.length;
+                store.changeLogs = store.changeLogs.filter(
+                    entry => (entry as { orderId?: bigint }).orderId !== where.orderId,
+                );
+                return { count: before - store.changeLogs.length };
             }),
         },
         opLog: {
@@ -494,5 +511,71 @@ describe('OrdersService.cancelOrder', () => {
         );
         expect(result).toEqual(replayBody);
         expect(local.tx.salesOrderTable.update).not.toHaveBeenCalled();
+    });
+});
+
+describe('OrdersService.deleteOrder', () => {
+    let store: Store;
+    let ctx: ReturnType<typeof mkService>;
+
+    beforeEach(() => {
+        store = emptyStore();
+        store.orders.push(mkOrder());
+        ctx = mkService(store);
+    });
+
+    it('订单不存在 404；幂等键非法 400；版本不匹配 409', async () => {
+        await expect(ctx.service.deleteOrder('ZM999999999', { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
+            new NotFoundException('订单不存在'),
+        );
+        await expect(ctx.service.deleteOrder('ZM260912001', { expectedVersion: 1 }, actor, 'short')).rejects.toThrow(
+            BadRequestException,
+        );
+        await expect(ctx.service.deleteOrder('ZM260912001', { expectedVersion: 9 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException('订单已被其他人修改，请刷新后重试'),
+        );
+        expect(ctx.tx.salesOrderTable.delete).not.toHaveBeenCalled();
+    });
+
+    it('有效出库净额大于 0 或存在任意出库单（含已作废）均 409，台账引用保持完整', async () => {
+        store.outboundNet.set(500n, 20);
+        await expect(ctx.service.deleteOrder('ZM260912001', { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException('订单已有发货记录，不可删除'),
+        );
+
+        // 曾发货又作废：净额回到 0，但出库单（VOIDED）仍在——审计链不悬空，同样拒绝
+        store.outboundNet.delete(500n);
+        store.shipments.push({ orderId: 500n, state: 'VOIDED' } as OutboundShipment);
+        await expect(ctx.service.deleteOrder('ZM260912001', { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException('订单存在出库流水（含已作废），不可删除'),
+        );
+        expect(store.orders).toHaveLength(1);
+    });
+
+    it('删除成功：订单与专属变更日志同事务清理，op_log 留快照，幂等重放归一为 null', async () => {
+        store.changeLogs.push({ orderId: 500n, eventType: 'CREATE' });
+        const result = await ctx.service.deleteOrder('ZM260912001', { expectedVersion: 1 }, actor, ID_KEY);
+        expect(result).toBeNull();
+        expect(store.orders).toHaveLength(0);
+        expect(store.changeLogs).toHaveLength(0);
+        expect(store.opLogs.at(-1)).toMatchObject({
+            action: 'delete_order',
+            targetCode: 'ZM260912001',
+        });
+        expect(ctx.idempotency.complete).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+                httpStatus: 200,
+                resource: { type: 'order', code: 'ZM260912001' },
+            }),
+        );
+
+        const local = mkService(
+            store,
+            vi.fn(async () => ({ replay: { httpStatus: 200, body: { deleted: true } }, placeholderId: null })),
+        );
+        const replay = await local.service.deleteOrder('ZM260912001', { expectedVersion: 1 }, actor, ID_KEY);
+        expect(replay).toBeNull();
+        expect(local.idempotency.complete).not.toHaveBeenCalled();
     });
 });
