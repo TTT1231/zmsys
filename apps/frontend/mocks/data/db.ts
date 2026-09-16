@@ -161,7 +161,7 @@ const buildCustomers = (): Customer[] =>
 /* ---- 内存库（handler 侧单例） ---- */
 const MOCK_PASSWORD = "123456";
 const GRANT_LS_KEY = "zm-permissions";
-const GRANT_LS_VERSION = 4;
+const GRANT_LS_VERSION = 5;
 
 type DbUser = WbUser & { password: string; tokenVersion: number };
 
