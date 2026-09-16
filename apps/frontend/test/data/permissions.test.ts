@@ -25,6 +25,14 @@ describe("can / menuVisible", () => {
         expect(can(grantOf("staff"), "orders:create")).toBe(false);
     });
 
+    it("reserves bom deletion for the super admin only", () => {
+        expect(grantOf("super").actions.bom).toEqual(["view", "create", "delete"]);
+        expect(can(grantOf("super"), "bom:delete")).toBe(true);
+        for (const role of ["admin", "warehouse", "sales", "staff"] as const) {
+            expect(can(grantOf(role), "bom:delete")).toBe(false);
+        }
+    });
+
     it("returns false without grant", () => {
         expect(can(undefined, "orders:view")).toBe(false);
     });

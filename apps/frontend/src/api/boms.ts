@@ -18,3 +18,8 @@ export function fetchBomStocks(): Promise<BomStockMap> {
 export function createBom(input: CreateBomInput): Promise<Bom> {
     return requestClient.post<Bom>("/boms", input, idempotencyConfig());
 }
+
+/** 删除未被引用的 BOM（仅超级管理员）；删除后档案不再返回 */
+export function deleteBom(code: string): Promise<null> {
+    return requestClient.post<null>(`/boms/${code}/delete`, {}, idempotencyConfig());
+}

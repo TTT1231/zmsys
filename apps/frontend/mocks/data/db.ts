@@ -161,7 +161,7 @@ const buildCustomers = (): Customer[] =>
 /* ---- 内存库（handler 侧单例） ---- */
 const MOCK_PASSWORD = "123456";
 const GRANT_LS_KEY = "zm-permissions";
-const GRANT_LS_VERSION = 3;
+const GRANT_LS_VERSION = 4;
 
 type DbUser = WbUser & { password: string; tokenVersion: number };
 
@@ -753,6 +753,32 @@ class MockDb {
         this.boms.unshift(bom);
         this.version += 1;
         return structuredClone(bom);
+    }
+
+    /** 删除未被引用的 BOM（权限由 handler 按 bom:delete 校验，仅超级管理员可到这）。
+        被销售订单引用（含已取消）或存在入库/库存调整流水时拒绝；BOM 行删除后
+        档案不再返回，删除事件写入不可变操作日志留痕（与真实后端一致） */
+    deleteBom(code: string, actor: Actor): void {
+        const bom = this.bomByCode(code);
+        if (!bom) throw new Error("BOM 不存在");
+        if (this.orders.some(order => order.bomCode === code)) {
+            throw new Error("BOM 已被销售订单引用，不可删除");
+        }
+        const hasLedger =
+            this.inboundLedger.some(row => row.bomCode === code) ||
+            this.stockAdjustments.some(row => row.bomCode === code);
+        if (hasLedger) throw new Error("BOM 已有入库或库存调整流水，不可删除");
+        this.boms = this.boms.filter(item => item.code !== code);
+        this.stock.delete(code);
+        this.opLog.unshift({
+            date: ANCHOR,
+            time: nowTime(),
+            user: actor.name,
+            role: actor.roleLabel,
+            action: "删除 BOM",
+            target: code,
+        });
+        this.version += 1;
     }
 
     createInbound(input: { bomCode: string; qty: number; date: string; remark: string }, actor: Actor): InboundRow {

@@ -523,6 +523,32 @@ describe("mock db backend constraint contract", () => {
         expect(completed.lifecycleStatus).toBe("active");
     });
 
+    it("deletes an unreferenced bom with audit entry, rejecting referenced or ledgered ones", () => {
+        // 手误建档：未被订单引用、无台账流水，删除后档案消失并留痕
+        const spare = db.createBom({
+            name: "旋转XK2",
+            materialItemIds: [idOf("旋转XK2", "2-1"), idOf("旋转XK2", "正面"), idOf("旋转XK2", "0.5")],
+        });
+        db.deleteBom(spare.code, superActor);
+        expect(db.boms.some(item => item.code === spare.code)).toBe(false);
+        expect(db.opLog[0]).toMatchObject({ action: "删除 BOM", target: spare.code });
+
+        // 不存在分支
+        expect(() => db.deleteBom(spare.code, superActor)).toThrow("BOM 不存在");
+
+        // 被销售订单引用（含已取消订单，订单物理保留即视为引用）不可删除
+        expect(() => db.deleteBom(rotaryBom.code, superActor)).toThrow("已被销售订单引用");
+
+        // 存在入库/库存调整流水不可删除，台账与档案的引用保持完整
+        const ledgered = db.createBom({
+            name: "旋转XK2",
+            materialItemIds: [idOf("旋转XK2", "2-1"), idOf("旋转XK2", "反面"), idOf("旋转XK2", "0.5")],
+        });
+        db.createInbound({ bomCode: ledgered.code, qty: 3, date: ANCHOR, remark: "" }, actor);
+        expect(() => db.deleteBom(ledgered.code, superActor)).toThrow("入库或库存调整流水");
+        expect(db.boms.some(item => item.code === ledgered.code)).toBe(true);
+    });
+
     it("treats printing as release, versions reprints, and preserves printed quantity when cancelling the remainder", () => {
         const order = newShippableOrder();
         const outboundBefore = order.outbound;

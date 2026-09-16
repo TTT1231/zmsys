@@ -84,6 +84,7 @@ export const ACTION_CATALOG = {
     bom: [
         { id: "view", label: "查看" },
         { id: "create", label: "新建 BOM" },
+        { id: "delete", label: "删除 BOM", protected: true },
     ],
     inbound: [
         { id: "view", label: "查看台账" },
@@ -154,9 +155,10 @@ export function buildDefaultGrants(): GrantMap {
             version: 1,
             menus: ["workbench", "orders", "customers", "bom", "inbound", "outbound"],
             actions: {
+                // 删除 BOM 为受保护动作（仅超级管理员），普通角色不随 allActions 下发
                 orders: allActions("orders"),
                 customers: ["view", "create", "edit"],
-                bom: allActions("bom"),
+                bom: ["view", "create"],
                 inbound: ["view"],
                 outbound: ["view", "print"],
             },
@@ -177,7 +179,7 @@ export function buildDefaultGrants(): GrantMap {
             actions: {
                 orders: allActions("orders"),
                 customers: ["view", "create", "edit"],
-                bom: allActions("bom"),
+                bom: ["view", "create"],
                 inbound: ["view"],
                 outbound: ["view"],
             },
@@ -218,6 +220,7 @@ const ACTION_SHORT: Record<string, string> = {
     create: "新建",
     edit: "编辑",
     cancel: "取消",
+    delete: "删除",
     "bulk-transfer": "移交",
     register: "入库",
     adjust: "调整",

@@ -19,7 +19,11 @@ import { db } from "../data/db";
 import { authenticate, authorized, fail, idempotent, ok } from "./shared";
 
 const statusOf = (message: string) =>
-    message.includes("不存在") ? 404 : /已被|已存在|已取消|请先|不能打印|只能|库存|同一/.test(message) ? 409 : 400;
+    message.includes("不存在")
+        ? 404
+        : /已被|已存在|已取消|请先|不能打印|只能|不可删除|库存|同一/.test(message)
+          ? 409
+          : 400;
 
 export const orderHandlers = [
     http.get("/api/orders", ({ request }) => {
@@ -309,5 +313,23 @@ export const bomHandlers = [
         if (!auth) return fail("登录已过期，请重新登录", 401);
         if (!authorized(auth, "bom:view")) return fail("无权查看 BOM 库存", 403);
         return ok(Object.fromEntries(db.stock));
+    }),
+
+    http.post("/api/boms/:code/delete", async ({ request, params }) => {
+        const auth = authenticate(request);
+        if (!auth) return fail("登录已过期，请重新登录", 401);
+        if (!authorized(auth, "bom:delete")) return fail("只有超级管理员可以删除 BOM", 403);
+        try {
+            const code = String(params.code);
+            return ok(
+                idempotent(request, auth.user.account, `boms:delete:${code}`, null, () => {
+                    db.deleteBom(code, auth.actor);
+                    return null;
+                }),
+            );
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "BOM 删除失败";
+            return fail(message, statusOf(message));
+        }
     }),
 ];

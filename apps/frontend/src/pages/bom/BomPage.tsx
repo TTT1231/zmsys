@@ -12,7 +12,15 @@ import { Button, TableLink } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { SelectField } from "@/components/ui/Field";
-import { useBomCategories, useBomRefresh, useBomStocks, useBoms, useCreateBom } from "@/data/queries";
+import {
+    useBomCategories,
+    useBomRefresh,
+    useBomStocks,
+    useBoms,
+    useCreateBom,
+    useDeleteBom,
+    useOrders,
+} from "@/data/queries";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { useToast } from "@/components/ui/Toast";
@@ -66,6 +74,64 @@ const catalogBlocksOf = (category: { groups: BomCatalogNode[] }): CatalogBlock[]
     }
     return blocks;
 };
+
+/* 删除 BOM 二次确认（仅超级管理员）：只服务"手误建档后无法清理"场景，
+ * 入口仅对未被销售订单引用且无库存余量的档案显示；后端仍独立校验引用 */
+function DeleteBomModal({ bom, onClose }: { bom: Bom | null; onClose: () => void }) {
+    const deleteBom = useDeleteBom();
+    const toast = useToast();
+    if (!bom) return null;
+    const submit = () => {
+        if (deleteBom.isPending) return;
+        deleteBom.mutate(bom.code, {
+            onSuccess: () => {
+                toast(`BOM ${bom.code} 已删除`);
+                onClose();
+            },
+            onError: error => toast(error.message, true),
+        });
+    };
+    return (
+        <Modal
+            open
+            onClose={onClose}
+            label="危险操作"
+            title="删除 BOM"
+            subtitle={bom.code}
+            width={440}
+            footer={
+                <>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
+                    >
+                        取消
+                    </button>
+                    <button
+                        type="button"
+                        disabled={deleteBom.isPending}
+                        onClick={submit}
+                        className="min-h-10 rounded-btn bg-danger px-4 text-13 font-medium text-white transition hover:opacity-90 disabled:opacity-60"
+                    >
+                        {deleteBom.isPending ? "正在删除…" : "确认删除"}
+                    </button>
+                </>
+            }
+        >
+            <div className="flex items-start gap-3 rounded-panel border border-[#fecdca] bg-danger-soft/60 p-4">
+                <Icon name="alert" size={20} className="mt-0.5 shrink-0 text-danger" />
+                <div className="text-13 leading-6 text-td">
+                    即将删除 BOM <span className="tnum font-semibold text-ink">{bom.code}</span>（{bom.name}
+                    ）。该 BOM 未被任何销售订单引用。
+                    <p className="mt-1 font-medium text-danger">
+                        删除后该档案将从系统永久移除，不可恢复。请确认它是手误创建的档案。
+                    </p>
+                </div>
+            </div>
+        </Modal>
+    );
+}
 
 /* 新建 BOM：品类 →（品类子选，跌倒开关选微动类型）→ 左框树状目录勾选（无搜索）→ 右框已选 → 保存 */
 export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -469,6 +535,7 @@ export function BomPage() {
     const bomsQuery = useBoms();
     const categoriesQuery = useBomCategories();
     const stocksQuery = useBomStocks();
+    const ordersQuery = useOrders();
     const { refresh } = useBomRefresh();
     const isLoading = bomsQuery.isLoading || categoriesQuery.isLoading || stocksQuery.isLoading;
     const isFetching = bomsQuery.isFetching || categoriesQuery.isFetching || stocksQuery.isFetching;
@@ -481,9 +548,18 @@ export function BomPage() {
     const [pageSize, setPageSize] = useState(10);
     const [newOpen, setNewOpen] = useState(false);
     const [detail, setDetail] = useState<Bom | null>(null);
+    const [deleting, setDeleting] = useState<Bom | null>(null);
 
     const boms = bomsQuery.data ?? EMPTY_BOMS;
     const categories = useMemo(() => [...new Set(boms.map(bom => bom.name))], [boms]);
+    /* 无删除权限（仅超级管理员）、被订单引用或有库存余量的档案不显示删除入口，
+     * 前端先挡一层误操作；曾被出入库/调整触碰过的边界由后端权威校验兜底 */
+    const canDeleteBom = can("bom:delete");
+    const referencedCodes = useMemo(
+        () => new Set((ordersQuery.data ?? []).map(order => order.bomCode)),
+        [ordersQuery.data],
+    );
+    const deletable = (bom: Bom) => !referencedCodes.has(bom.code) && (stocksQuery.data?.[bom.code] ?? 0) === 0;
 
     const filtered = useMemo(() => {
         const kw = keyword.trim().toLowerCase();
@@ -607,7 +683,16 @@ export function BomPage() {
                                 key={bom.code}
                                 title={bom.name}
                                 subtitle={bom.code}
-                                actions={<Button onClick={() => setDetail(bom)}>查看物料</Button>}
+                                actions={
+                                    <>
+                                        {canDeleteBom && deletable(bom) && (
+                                            <Button variant="secondary" onClick={() => setDeleting(bom)}>
+                                                删除
+                                            </Button>
+                                        )}
+                                        <Button onClick={() => setDetail(bom)}>查看物料</Button>
+                                    </>
+                                }
                             >
                                 <BomSpecs bom={bom} layout="list" showIdentity={false} />
                                 <div className="mt-2">
@@ -675,7 +760,18 @@ export function BomPage() {
                                             <BomSpecs bom={bom} layout="list" showIdentity={false} />
                                         </td>
                                         <td className="px-5 py-3 text-right">
-                                            <TableLink onClick={() => setDetail(bom)}>查看详情</TableLink>
+                                            <div className="flex items-center justify-end gap-3">
+                                                <TableLink onClick={() => setDetail(bom)}>查看详情</TableLink>
+                                                {canDeleteBom && deletable(bom) && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDeleting(bom)}
+                                                        className="text-13 font-medium text-danger underline-offset-2 transition hover:underline"
+                                                    >
+                                                        删除
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -701,6 +797,7 @@ export function BomPage() {
 
             {canCreate && <NewBomModal open={newOpen} onClose={() => setNewOpen(false)} />}
             <BomDetailModal bom={detail} onClose={() => setDetail(null)} />
+            <DeleteBomModal bom={deleting} onClose={() => setDeleting(null)} />
         </div>
     );
 }

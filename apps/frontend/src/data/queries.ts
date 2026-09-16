@@ -11,6 +11,7 @@ import {
     createOutbound,
     createStockAdjustment,
     createUser,
+    deleteBom,
     emergencyVoidOutbound,
     fetchBomCategories,
     fetchBoms,
@@ -74,6 +75,11 @@ export function useBomStocks() {
 export function useBomRefresh() {
     const queryClient = useQueryClient();
     return { refresh: () => void queryClient.invalidateQueries({ queryKey: bomKeys.all }) };
+}
+
+/** 订单列表独立查询：BOM 页据此判断档案是否被订单引用（引用关系低频变化，挂载即取） */
+export function useOrders() {
+    return useQuery({ queryKey: ["orders", "list"], queryFn: fetchOrders });
 }
 
 /* 过渡实现：并发拉取当前完整计算窗口；库存按有效入库 + 库存调整 − 有效出库推导。
@@ -181,6 +187,17 @@ export const useCreateBom = () => {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: createBom,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: bomKeys.list });
+            queryClient.invalidateQueries({ queryKey: wbKeys.all });
+        },
+    });
+};
+/** 删除 BOM 仅超级管理员可用；同新建只失效 BOM 列表与聚合快照 */
+export const useDeleteBom = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: deleteBom,
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: bomKeys.list });
             queryClient.invalidateQueries({ queryKey: wbKeys.all });
