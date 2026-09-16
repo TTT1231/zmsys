@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 /* BOM 页接入独立查询：表格渲染物料行，移动卡片库存列在余量未加载时降级为占位符；
-   删除入口仅对持 bom:delete 且未被订单引用、无库存余量的档案显示。 */
+   删除入口仅对持 bom:delete、订单引用与库存已成功加载、未被引用且无余量的档案显示；
+   点击后需二次确认，确认才发起删除请求、取消不发起。 */
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
@@ -15,7 +16,8 @@ vi.mock("@/components/ui/Toast", () => ({ useToast: () => vi.fn() }));
 
 /* 用例间替换库存余量/订单引用返回值：工厂被提升到模块顶部，须经 ref 惰性读取 */
 const stocksRef = vi.hoisted(() => ({ current: undefined as Record<string, number> | undefined }));
-const ordersRef = vi.hoisted(() => ({ current: [] as Array<{ bomCode: string }> }));
+const ordersRef = vi.hoisted(() => ({ current: undefined as Array<{ bomCode: string }> | undefined }));
+const deleteMutate = vi.hoisted(() => vi.fn());
 vi.mock("@/data/queries", () => ({
     useBoms: () => ({ data: [detailBom], isLoading: false, isFetching: false }),
     useBomCategories: () => ({ data: [], isLoading: false, isFetching: false }),
@@ -23,7 +25,7 @@ vi.mock("@/data/queries", () => ({
     useOrders: () => ({ data: ordersRef.current, isLoading: false, isFetching: false }),
     useBomRefresh: () => ({ refresh: vi.fn() }),
     useCreateBom: () => ({ mutate: vi.fn(), isPending: false }),
-    useDeleteBom: () => ({ mutate: vi.fn(), isPending: false }),
+    useDeleteBom: () => ({ mutate: deleteMutate, isPending: false }),
 }));
 
 const renderPage = () =>
@@ -35,8 +37,9 @@ const renderPage = () =>
 afterEach(() => {
     cleanup();
     stocksRef.current = undefined;
-    ordersRef.current = [];
+    ordersRef.current = undefined;
     authRef.current = { can: () => false };
+    deleteMutate.mockClear();
 });
 
 it("表格渲染 BOM 行，编码入口可打开详情", () => {
@@ -60,8 +63,9 @@ it("库存余量已加载时移动卡片显示数量，未加载时降级为占�
     expect(screen.queryByText("200 件")).not.toBeInTheDocument();
 });
 
-it("删除入口仅超级管理员且未被订单引用时显示，点击后需二次确认", () => {
+it("删除入口仅超级管理员且未被订单引用时显示；确认后才发起请求，取消不发起", () => {
     // 无删除权限（员工/管理员等）：桌面与移动端都不出现删除入口
+    ordersRef.current = [];
     stocksRef.current = { [detailBom.code]: 0 };
     const { unmount } = renderPage();
     expect(screen.queryAllByRole("button", { name: "删除" })).toHaveLength(0);
@@ -76,6 +80,17 @@ it("删除入口仅超级管理员且未被订单引用时显示，点击后需�
     fireEvent.click(entries[0]!);
     expect(screen.getByText("删除 BOM")).toBeInTheDocument();
     expect(screen.getByText(/未被任何销售订单引用/)).toBeInTheDocument();
+    expect(deleteMutate).not.toHaveBeenCalled();
+
+    // 二次确认的“取消”退出弹窗，不发起删除
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    expect(screen.queryByText("删除 BOM")).not.toBeInTheDocument();
+    expect(deleteMutate).not.toHaveBeenCalled();
+
+    // 再次进入并“确认删除”：按编码发起请求
+    fireEvent.click(screen.getAllByRole("button", { name: "删除" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
+    expect(deleteMutate).toHaveBeenCalledWith(detailBom.code, expect.anything());
 });
 
 it("被销售订单引用或有库存余量的档案不显示删除入口", () => {
@@ -91,6 +106,23 @@ it("被销售订单引用或有库存余量的档案不显示删除入口", () =
     // 有库存余量（必有流水）同样不显示，后端权威校验兜底
     ordersRef.current = [];
     stocksRef.current = { [detailBom.code]: 120 };
+    renderPage();
+    expect(screen.queryAllByRole("button", { name: "删除" })).toHaveLength(0);
+});
+
+it("订单引用或库存余量未加载（含首次请求失败）时，不能把“没有数据”当成“没有引用”", () => {
+    authRef.current = { can: (perm: string) => perm === "bom:delete" };
+
+    // 订单引用未加载：即使库存为 0 也不显示删除入口
+    ordersRef.current = undefined;
+    stocksRef.current = { [detailBom.code]: 0 };
+    const { unmount } = renderPage();
+    expect(screen.queryAllByRole("button", { name: "删除" })).toHaveLength(0);
+    unmount();
+
+    // 库存余量未加载：即使无订单引用也不显示删除入口
+    ordersRef.current = [];
+    stocksRef.current = undefined;
     renderPage();
     expect(screen.queryAllByRole("button", { name: "删除" })).toHaveLength(0);
 });

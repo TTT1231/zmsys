@@ -553,13 +553,17 @@ export function BomPage() {
     const boms = bomsQuery.data ?? EMPTY_BOMS;
     const categories = useMemo(() => [...new Set(boms.map(bom => bom.name))], [boms]);
     /* 无删除权限（仅超级管理员）、被订单引用或有库存余量的档案不显示删除入口，
-     * 前端先挡一层误操作；曾被出入库/调整触碰过的边界由后端权威校验兜底 */
+     * 前端先挡一层误操作；订单引用与库存余量须已成功加载才参与判断——
+     * 未加载或加载失败按“引用未知”处理，不能把“没有数据”当成“没有引用”；
+     * 曾被出入库/调整触碰过的边界由后端权威校验兜底 */
     const canDeleteBom = can("bom:delete");
     const referencedCodes = useMemo(
         () => new Set((ordersQuery.data ?? []).map(order => order.bomCode)),
         [ordersQuery.data],
     );
-    const deletable = (bom: Bom) => !referencedCodes.has(bom.code) && (stocksQuery.data?.[bom.code] ?? 0) === 0;
+    const referencesLoaded = ordersQuery.data !== undefined && stocksQuery.data !== undefined;
+    const deletable = (bom: Bom) =>
+        referencesLoaded && !referencedCodes.has(bom.code) && (stocksQuery.data![bom.code] ?? 0) === 0;
 
     const filtered = useMemo(() => {
         const kw = keyword.trim().toLowerCase();
