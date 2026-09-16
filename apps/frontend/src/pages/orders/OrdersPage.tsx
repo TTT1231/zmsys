@@ -1,3 +1,4 @@
+import { DataTable } from "@/components/ui/DataTable";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { ListState, OrderTaskCard } from "@/components/ui/MobileList";
@@ -487,7 +488,7 @@ export function OrderDetailModal({
                     status={<StatusBadge status={status.key} label={status.label} />}
                     note={order.lifecycleStatus === "cancelled" ? "订单已取消，剩余数量不再安排交付。" : undefined}
                 />
-                <RecordProduct bom={bom} bomCode={order.bomCode} />
+                <RecordProduct categories={snap.bomCategories} bom={bom} bomCode={order.bomCode} />
                 <RecordFields
                     title="订单信息"
                     items={[
@@ -893,14 +894,16 @@ export function OrdersPage() {
                         ))}
                     </ListState>
                 </div>
-                <div
-                    ref={tableScrollRef}
-                    className="hidden overflow-auto lg:block lg:max-h-[calc(100dvh-26rem)] lg:min-h-[18.75rem]"
-                >
+                <div className="hidden lg:block">
                     {isLoading ? (
                         <PageLoading className="py-16" />
                     ) : (
-                        <table className="data-table w-full min-w-245 border-collapse">
+                        <DataTable
+                            tableId="orders"
+                            defaultWidths={[150, 155, 230, 100, 140, 135, 100, 110]}
+                            identityColumn={0}
+                            scrollRef={tableScrollRef}
+                        >
                             <thead>
                                 <tr className="text-12 text-muted">
                                     <SortTh
@@ -985,7 +988,11 @@ export function OrdersPage() {
                                                 <CustomerCell name={order.customer} sub={order.customerCode} />
                                             </td>
                                             <td className="px-3 py-4">
-                                                <BomCell bom={bom} bomCode={order.bomCode} />
+                                                <BomCell
+                                                    categories={snap.bomCategories}
+                                                    bom={bom}
+                                                    bomCode={order.bomCode}
+                                                />
                                             </td>
                                             <td className="px-3 py-4 text-right">
                                                 <QtyCell value={order.qty} />
@@ -1040,7 +1047,7 @@ export function OrdersPage() {
                                     );
                                 })}
                             </tbody>
-                        </table>
+                        </DataTable>
                     )}
                 </div>
 

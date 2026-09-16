@@ -1,3 +1,5 @@
+import { regionText, cleanAddressPart } from "@/lib/address";
+import { DataTable } from "@/components/ui/DataTable";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -16,7 +18,7 @@ import { SortTh } from "@/components/ui/SortTh";
 import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { nextSortState, type SortState } from "@/lib/tableSort";
 import { SelectField, TextField } from "@/components/ui/Field";
-import { RegionCascader, regionText, type RegionValue } from "@/components/ui/RegionCascader";
+import { RegionCascader, type RegionValue } from "@/components/ui/RegionCascader";
 import { useCreateCustomer, useUpdateCustomer, useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
@@ -58,10 +60,15 @@ function CustomerFormModal({
     const [phone, setPhone] = useState("");
     const [region, setRegion] = useState<RegionValue>(
         customer
-            ? { province: customer.province, city: customer.city, district: customer.district, town: customer.town }
+            ? {
+                  province: cleanAddressPart(customer.province),
+                  city: cleanAddressPart(customer.city),
+                  district: cleanAddressPart(customer.district),
+                  town: cleanAddressPart(customer.town),
+              }
             : { province: "", city: "", district: "", town: "" },
     );
-    const [address, setAddress] = useState(customer?.address ?? "");
+    const [address, setAddress] = useState(cleanAddressPart(customer?.address));
     const [payTerms, setPayTerms] = useState(customer?.payTerms ?? "");
     const { user } = useApp();
     const [ownerAccount, setOwnerAccount] = useState(() => {
@@ -290,8 +297,8 @@ export function CustomerDetailModal({
                         {[
                             ["客户联系人", customer.contact],
                             ["客户联系电话", customer.phone],
-                            ["所在地区", regionText(customer)],
-                            ["详细地址", customer.address || "—"],
+                            ["所在地区", regionText(customer) || "未填写"],
+                            ["详细地址", cleanAddressPart(customer.address) || "未填写"],
                             ["付款方式", customer.payTerms || "—"],
                             ["客户负责人", customer.owner],
                             ["待交付数量", `${pendingQty.toLocaleString("zh-CN")} 件`],
@@ -552,7 +559,7 @@ export function CustomersPage() {
                             <RecordCard
                                 key={customer.code}
                                 title={customer.name}
-                                subtitle={`${customer.code} · ${regionText(customer)}`}
+                                subtitle={`${customer.code} · ${regionText(customer) || "未填写"}`}
                                 badge={
                                     <Badge tone={customer.cooperation === "合作中" ? "success" : "pending"}>
                                         {customer.cooperation}
@@ -575,14 +582,16 @@ export function CustomersPage() {
                         ))}
                     </ListState>
                 </div>
-                <div
-                    ref={tableScrollRef}
-                    className="hidden overflow-auto lg:block lg:max-h-[calc(100dvh-23rem)] lg:min-h-[18.75rem]"
-                >
+                <div className="hidden lg:block">
                     {isLoading ? (
                         <PageLoading className="py-16" />
                     ) : (
-                        <table className="data-table w-full min-w-240 border-collapse">
+                        <DataTable
+                            tableId="customers"
+                            defaultWidths={[180, 110, 135, 150, 100, 100, 120, 105, 110]}
+                            identityColumn={0}
+                            scrollRef={tableScrollRef}
+                        >
                             <thead>
                                 <tr className="text-left text-12 text-muted">
                                     <th className="px-5 py-2.5 font-semibold">客户信息</th>
@@ -649,8 +658,14 @@ export function CustomersPage() {
                                         </td>
                                         <td className="px-3 py-3">
                                             <span className="flex items-center gap-1.5 text-13 text-td">
-                                                <Icon name="location" size={14} className="text-subtle" />
-                                                {regionText(row.customer)}
+                                                {regionText(row.customer) ? (
+                                                    <>
+                                                        <Icon name="location" size={14} className="text-subtle" />
+                                                        {regionText(row.customer)}
+                                                    </>
+                                                ) : (
+                                                    <span className="text-subtle">未填写</span>
+                                                )}
                                             </span>
                                         </td>
                                         <td className="px-3 py-3 tnum text-right text-13 text-td">{row.orderCount}</td>
@@ -673,7 +688,7 @@ export function CustomersPage() {
                                     </tr>
                                 ))}
                             </tbody>
-                        </table>
+                        </DataTable>
                     )}
                 </div>
 

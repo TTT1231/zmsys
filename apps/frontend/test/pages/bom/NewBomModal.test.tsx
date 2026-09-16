@@ -120,6 +120,7 @@ it("切换品类清空选择；右框移除联动左框取消勾选", async () =
     expect(screen.getByRole("group", { name: /已选物料（2）/ })).toBeInTheDocument();
 
     await pickCategory(user, "老微动");
+    await user.click(screen.getByRole("button", { name: "确认切换" }));
     expect(screen.getByRole("group", { name: /已选物料（0）/ })).toBeInTheDocument();
     expect(screen.queryByRole("checkbox", { name: "1-1" })).not.toBeInTheDocument();
 
@@ -254,7 +255,7 @@ it("跌倒开关：品类子选微动类型后合并树展示，提交携带 chi
     expect(mutate).not.toHaveBeenCalled();
 
     // 选新微动 → 合并树：跌倒物料 + "微动开关"大类（可折叠）+ 微动分区/分组
-    await user.selectOptions(screen.getByLabelText(/微动开关类型/), "new-micro-switch");
+    await user.click(screen.getByRole("radio", { name: "新微动" }));
     expect(screen.getByRole("button", { name: "跌倒盖" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "微动开关" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "PA66塑料" })).toBeInTheDocument();
@@ -288,7 +289,8 @@ it("跌倒开关：品类子选微动类型后合并树展示，提交携带 chi
     );
 
     // 切换到老微动 → 树切换、选择清空
-    await user.selectOptions(screen.getByLabelText(/微动开关类型/), "old-micro-switch");
+    await user.click(screen.getByRole("radio", { name: "老微动" }));
+    await user.click(screen.getByRole("button", { name: "确认切换" }));
     expect(screen.getByRole("button", { name: "跌倒盖" })).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "带CB" })).toBeInTheDocument();
     expect(screen.queryByRole("checkbox", { name: "二脚底座（无挡脚）" })).not.toBeInTheDocument();
@@ -300,4 +302,17 @@ it("普通品类不出现子选下拉", async () => {
     await pickCategory(user, "新微动");
     expect(screen.queryByLabelText(/微动开关类型/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "PA66塑料" })).toBeInTheDocument();
+});
+
+it("初始即预留配置区；取消切换保留原品类和已选物料", async () => {
+    const user = userEvent.setup();
+    render(<NewBomModal open onClose={vi.fn()} />);
+    expect(screen.getByText("请选择产品品类，随后配置物料")).toBeInTheDocument();
+    await pickCategory(user, "新微动");
+    await user.click(itemCheckbox("二脚底座（无挡脚）"));
+    await pickCategory(user, "老微动");
+    expect(screen.getByRole("dialog", { name: "切换后将清空已选物料" })).toHaveTextContent("当前已选 1 项物料");
+    await user.click(screen.getByRole("button", { name: "保留当前配置" }));
+    expect(screen.getByLabelText(/产品品类/)).toHaveValue("新微动");
+    expect(itemCheckbox("二脚底座（无挡脚）")).toBeChecked();
 });

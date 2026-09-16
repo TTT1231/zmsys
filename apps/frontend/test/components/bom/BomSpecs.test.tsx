@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 /* 覆盖物料集合呈现：分组行、品类身份块、record 键值网格与 list 行内形态、摘要兜底。 */
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { BomSpecs } from "@/components/bom/BomSpecs";
+import { BOM_CATEGORIES } from "@/data/categories";
 import type { Bom } from "@/api";
 
 afterEach(cleanup);
@@ -82,4 +83,23 @@ it("没有结构化明细时保留摘要兜底，全空显示占位文案", () =
     expect(screen.getByText(microBom.spec)).toBeInTheDocument();
     rerender(<BomSpecs bom={{ ...microBom, items: [], spec: "" }} />);
     expect(screen.getByText("暂无物料信息")).toBeInTheDocument();
+});
+
+it("跌倒开关按新建目录分为本体和老微动，详情和行内展开保持同一结构", () => {
+    const bom = {
+        ...microBom,
+        name: "跌倒开关",
+        items: [
+            { materialId: "3601", groupKey: "tipover-cover", groupName: "跌倒盖", name: "跌倒盖KW16 / 有CB字" },
+            { materialId: "3201", groupKey: "base", groupName: "底座", name: "带CB" },
+        ],
+    };
+    const { rerender } = render(<BomSpecs bom={bom} categories={BOM_CATEGORIES} />);
+    expect(
+        within(screen.getByRole("region", { name: "跌倒开关本体" })).getByText("跌倒盖KW16 / 有CB字"),
+    ).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "微动开关 · 老微动" })).getByText("带CB")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "跌倒开关本体" })).queryByText("带CB")).not.toBeInTheDocument();
+    rerender(<BomSpecs bom={bom} categories={BOM_CATEGORIES} layout="list" showIdentity={false} />);
+    expect(screen.getByRole("region", { name: "微动开关 · 老微动" })).toHaveTextContent("带CB");
 });

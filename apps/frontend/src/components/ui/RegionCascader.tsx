@@ -32,10 +32,6 @@ const loadStreets = () => {
     return streetsPromise;
 };
 
-/** 拼接展示：广东省 深圳市 南山区 粤海街道（跳过空段） */
-export const regionText = (region: Pick<RegionValue, "province" | "city" | "district" | "town">) =>
-    [region.province, region.city, region.district, region.town].filter(Boolean).join(" ");
-
 export function RegionCascader({
     value,
     onChange,

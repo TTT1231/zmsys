@@ -60,7 +60,8 @@ it("输入 BOM 编码即回显成品档案，容错大小写与首尾空格，�
     expect(screen.getByText(/新微动/)).toBeInTheDocument();
     expect(screen.getByText(/6.3静片：铜镀银/)).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText(/^客户/), detailOrder.customerCode);
+    await user.click(screen.getByRole("combobox", { name: /^客户/ }));
+    await user.click(screen.getByRole("option", { name: new RegExp(detailOrder.customerCode) }));
     await user.type(screen.getByLabelText(/订单数量/), "300");
     fireEvent.change(screen.getByLabelText(/交货日期/), { target: { value: "2026-09-30" } });
     await user.click(screen.getByRole("button", { name: "提交订单" }));
@@ -109,7 +110,8 @@ it("提交报错后补填某字段，只消除该字段验证词，其余保留"
     expect(error("请填写订单数量")).toBeInTheDocument();
     expect(error("请选择交货日期")).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText(/^客户/), detailOrder.customerCode);
+    await user.click(screen.getByRole("combobox", { name: /^客户/ }));
+    await user.click(screen.getByRole("option", { name: new RegExp(detailOrder.customerCode) }));
     expect(queryError("请选择客户")).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText(/订单数量/), "300");

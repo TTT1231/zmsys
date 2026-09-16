@@ -9,10 +9,7 @@
     align-items: center;
     gap: 9px;
     width: max-content;
-    max-width: min(
-        420px,
-        calc(100vw - 48px - env(safe-area-inset-left) - env(safe-area-inset-right))
-    );
+    max-width: min(420px, calc(100vw - 48px - env(safe-area-inset-left) - env(safe-area-inset-right)));
     min-height: 44px;
     padding: 10px 15px;
     border: 1px solid var(--color-line);
@@ -548,4 +545,121 @@ button:active:not(:disabled) {
 
 @utility tnum {
     font-variant-numeric: tabular-nums;
+}
+
+/* 共用列表：固定标识/操作列；列宽拖动不会与排序按钮争抢点击。 */
+.managed-table .data-table th,
+.managed-table .data-table td {
+    overflow: hidden;
+    border-bottom: 1px solid var(--color-line);
+    overflow-wrap: normal;
+}
+.managed-table .data-table td {
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+.managed-table[data-density="compact"] .data-table td {
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+.managed-table .data-table .managed-th {
+    padding-right: 16px;
+}
+.managed-table [data-pinned] {
+    position: sticky;
+    background: var(--color-white, white);
+    z-index: 2;
+}
+.managed-table [data-pinned="start"] {
+    left: 0;
+    border-right: 1px solid var(--color-line);
+}
+.managed-table [data-pinned="end"] {
+    right: 0;
+    border-left: 1px solid var(--color-line);
+}
+.managed-table .data-table thead th[data-pinned] {
+    z-index: 3;
+    background: var(--color-soft);
+}
+.managed-table tbody tr:hover td {
+    background: var(--color-row-hover);
+}
+.column-resizer {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: col-resize;
+    touch-action: none;
+    user-select: none;
+}
+.column-resizer::after {
+    content: "";
+    width: 2px;
+    height: 16px;
+    background: var(--color-line-strong);
+}
+.column-resizer:hover::after,
+.column-resizer:focus-visible::after {
+    background: var(--color-primary);
+    height: 24px;
+}
+.column-resizer:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
+}
+
+/* 表头在纵向滚动区之外；滚动条从第一行数据开始，不侵入操作列表头。 */
+.managed-table-header {
+    background: var(--color-soft);
+    /* 底线由整个表头绘制，覆盖为纵向滚动条预留的右侧槽位。 */
+    border-bottom: 1px solid var(--color-line-strong);
+}
+.managed-table-header .data-table th {
+    border-bottom: 0;
+    box-shadow: none;
+}
+.managed-table .managed-th {
+    white-space: nowrap;
+}
+.managed-table .managed-th > button {
+    max-width: 100%;
+    white-space: nowrap;
+}
+.managed-table td.tnum,
+.managed-table td .tnum,
+.managed-table [data-pinned="end"] button,
+.managed-table [data-pinned="start"] button {
+    white-space: nowrap;
+    overflow-wrap: normal;
+}
+.managed-table [data-pinned="end"] button {
+    flex-shrink: 0;
+}
+.managed-table td[data-pinned="end"] > .flex {
+    flex-wrap: wrap;
+}
+.managed-table-body::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+}
+@media (min-width: 1024px) {
+    @supports selector(::-webkit-scrollbar) {
+        .managed-table-body {
+            /* Chromium 的标准 thin 样式会接管原生滚动条，使箭头隐藏规则失效。
+               仅在支持自定义滚动条的桌面浏览器中恢复已有的 WebKit 样式。 */
+            scrollbar-width: auto;
+            scrollbar-color: auto;
+        }
+    }
+}
+.column-resizer[data-dragging]::after {
+    height: 100%;
+    background: var(--color-primary);
 }

@@ -1,34 +1,45 @@
-import type { Bom } from "@/api";
+import { bomComposition } from "@/data/bomComposition";
+import type { Bom, BomCategory } from "@/api";
+import { bomSummary } from "@/data/bomSummary";
+import { BomSpecs } from "./BomSpecs";
 
-/** 固定宽度的成品物料预览：编码 + 品类 + 前 3 项物料，完整核对走详情。 */
-export function BomCell({ bom, bomCode }: { bom?: Bom; bomCode: string }) {
-    const items = bom?.items ?? [];
-    const preview = items.slice(0, 3);
+/** 列表显示关键规格，完整物料用显式展开入口核对。 */
+export function BomCell({
+    bom,
+    bomCode,
+    showIdentity = true,
+    categories,
+}: {
+    bom?: Bom;
+    bomCode: string;
+    showIdentity?: boolean;
+    categories?: BomCategory[];
+}) {
+    const composition = bom ? bomComposition(bom, categories) : undefined;
+    const summary = bom ? bomSummary(bom) : "暂无物料信息";
     return (
-        <div className="w-64 min-w-0 max-w-full">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="tnum text-13 font-medium text-td wrap-anywhere">{bomCode}</span>
-                {bom && <span className="text-12 text-muted">{bom.name}</span>}
-            </div>
-            {preview.length > 0 && (
-                <ul className="mt-1.5 space-y-0.5">
-                    {preview.map(item => (
-                        <li
-                            key={item.materialId}
-                            className="truncate text-13 leading-5 text-td"
-                            title={`${item.groupName}：${item.name}`}
-                        >
-                            <span className="text-muted">{item.groupName}：</span>
-                            {item.name}
-                        </li>
-                    ))}
-                    {items.length > preview.length && <li className="text-12 text-muted">等 {items.length} 项物料</li>}
-                </ul>
+        <div className="min-w-0 text-left">
+            {showIdentity && (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="tnum text-13 font-medium text-td wrap-anywhere">{bomCode}</span>
+                    {bom && <span className="text-12 text-muted">{bom.name}</span>}
+                </div>
             )}
-            {(!bom || items.length === 0) && (
-                <p className="mt-1 truncate text-12 text-muted" title={bom?.spec}>
-                    {bom?.spec?.trim() || "暂无物料信息"}
-                </p>
+            {composition?.composite && (
+                <p className="mt-1 text-12 font-medium text-primary-strong">微动组件：{composition.series}</p>
+            )}
+            <p className="mt-1 line-clamp-2 text-12 leading-5 text-muted" title={summary}>
+                {summary}
+            </p>
+            {!!bom?.items?.length && (
+                <details className="mt-1">
+                    <summary className="w-fit cursor-pointer text-12 text-primary-strong underline-offset-2 hover:underline">
+                        查看物料（{bom.items.length}）
+                    </summary>
+                    <div className="mt-2 max-h-60 overflow-y-auto rounded-input border border-line bg-panel p-2">
+                        <BomSpecs bom={bom} categories={categories} layout="list" showIdentity={false} />
+                    </div>
+                </details>
             )}
         </div>
     );

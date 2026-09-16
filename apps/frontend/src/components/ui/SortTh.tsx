@@ -1,6 +1,7 @@
 // 可排序列表头：aria-sort 语义 + 方向指示（未激活淡显、激活后主题色），排序状态由页面持有
 import { Icon } from "@/lib/icons";
 import type { SortDir } from "@/lib/tableSort";
+import type { ReactNode } from "react";
 
 export function SortTh({
     label,
@@ -10,6 +11,8 @@ export function SortTh({
     align = "left",
     width,
     className = "",
+    resizeControl,
+    "data-pinned": pinned,
 }: {
     label: string;
     active: boolean;
@@ -18,9 +21,14 @@ export function SortTh({
     align?: "left" | "right";
     width?: string;
     className?: string;
+    resizeControl?: ReactNode;
+    "data-pinned"?: string;
 }) {
     return (
         <th
+            role="columnheader"
+            aria-label={label}
+            data-pinned={pinned}
             aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
             className={`py-2.5 text-12 font-semibold ${align === "right" ? "text-right" : "text-left"} ${className}`}
             style={width ? { width } : undefined}
@@ -28,7 +36,7 @@ export function SortTh({
             <button
                 type="button"
                 onClick={onSort}
-                title={active ? `当前${dir === "asc" ? "升" : "降"}序，点击切换` : "点击按升序排序"}
+                title={`${label} · ${active ? `当前${dir === "asc" ? "升" : "降"}序，点击切换` : "点击按升序排序"}`}
                 className={`inline-flex items-center gap-1 underline-offset-2 transition hover:text-primary-strong hover:underline ${
                     active ? "text-primary-strong" : "text-muted"
                 }`}
@@ -43,6 +51,7 @@ export function SortTh({
                     />
                 </span>
             </button>
+            {resizeControl}
         </th>
     );
 }

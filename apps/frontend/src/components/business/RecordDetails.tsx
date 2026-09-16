@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { Bom } from "@/api";
+import type { Bom, BomCategory } from "@/api";
 import { BomSpecs } from "@/components/bom/BomSpecs";
 import { num } from "@/lib/format";
 
@@ -36,7 +36,15 @@ export function RecordSummary({
     );
 }
 
-export function RecordProduct({ bom, bomCode }: { bom?: Bom; bomCode: string }) {
+export function RecordProduct({
+    bom,
+    bomCode,
+    categories,
+}: {
+    bom?: Bom;
+    bomCode: string;
+    categories?: BomCategory[];
+}) {
     return (
         <section aria-label="物料组成" className="min-w-0">
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -44,7 +52,7 @@ export function RecordProduct({ bom, bomCode }: { bom?: Bom; bomCode: string }) 
                 <p className="tnum text-12 text-muted wrap-anywhere">{bomCode}</p>
             </div>
             {bom ? (
-                <BomSpecs bom={bom} layout="record" />
+                <BomSpecs bom={bom} categories={categories} layout="record" />
             ) : (
                 <p className="text-14 text-muted">未找到该成品的物料信息</p>
             )}

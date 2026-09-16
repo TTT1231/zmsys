@@ -23,9 +23,20 @@ interface ModalProps {
     width?: number;
     children: ReactNode;
     footer?: ReactNode;
+    layout?: "default" | "workspace";
 }
 
-export function Modal({ open, onClose, title, subtitle, label = "", width = 560, children, footer }: ModalProps) {
+export function Modal({
+    open,
+    onClose,
+    title,
+    subtitle,
+    label = "",
+    width = 560,
+    children,
+    footer,
+    layout = "default",
+}: ModalProps) {
     const panelRef = useRef<HTMLDivElement>(null);
     const overlayRef = useRef<HTMLDivElement>(null);
     const restoreRef = useRef<HTMLElement | null>(null);
@@ -114,7 +125,7 @@ export function Modal({ open, onClose, title, subtitle, label = "", width = 560,
                 aria-label={title}
                 tabIndex={-1}
                 style={{ maxWidth: width }}
-                className="flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-panel bg-white shadow-modal max-md:max-h-[calc(100dvh-16px)] max-md:rounded-b-none max-md:rounded-t-[22px]"
+                className={`flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-panel bg-white shadow-modal max-md:max-h-[calc(100dvh-16px)] max-md:rounded-b-none max-md:rounded-t-[22px] ${layout === "workspace" ? "h-[min(760px,88dvh)]" : ""}`}
             >
                 <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-4">
                     <div>
@@ -133,7 +144,11 @@ export function Modal({ open, onClose, title, subtitle, label = "", width = 560,
                         <Icon name="close" size={18} />
                     </button>
                 </div>
-                <div className="modal-body min-h-0 flex-1 overflow-y-auto px-6 py-4">{children}</div>
+                <div
+                    className={`modal-body min-h-0 flex-1 px-6 py-4 ${layout === "workspace" ? "overflow-y-auto lg:flex lg:flex-col lg:overflow-hidden" : "overflow-y-auto"}`}
+                >
+                    {children}
+                </div>
                 {footer && (
                     <div className="modal-footer flex justify-end gap-2 border-t border-line bg-panel px-6 py-3.5">
                         {footer}

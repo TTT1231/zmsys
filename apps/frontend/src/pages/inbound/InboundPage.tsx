@@ -1,3 +1,4 @@
+import { DataTable } from "@/components/ui/DataTable";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -235,7 +236,7 @@ export function VoucherModal({ row, snap, onClose }: { row: InboundRow | null; s
                     }
                     note={row.status === "voided" ? "此记录已作废，以上数量不再计入库存。" : undefined}
                 />
-                <RecordProduct bom={bom} bomCode={row.bomCode} />
+                <RecordProduct categories={snap.bomCategories} bom={bom} bomCode={row.bomCode} />
                 <RecordFields
                     title="入库信息"
                     items={[
@@ -611,14 +612,16 @@ export function InboundPage() {
                         ))}
                     </ListState>
                 </div>
-                <div
-                    ref={tableScrollRef}
-                    className="hidden overflow-auto lg:block lg:max-h-[calc(100dvh-23rem)] lg:min-h-[18.75rem]"
-                >
+                <div className="hidden lg:block">
                     {isLoading ? (
                         <PageLoading className="py-16" />
                     ) : (
-                        <table className="data-table w-full min-w-215 border-collapse">
+                        <DataTable
+                            tableId="inbound"
+                            defaultWidths={[185, 170, 155, 155, 150, 245]}
+                            identityColumn={0}
+                            scrollRef={tableScrollRef}
+                        >
                             <thead>
                                 <tr className="text-left text-12 text-muted">
                                     <th className="px-5 py-2.5 font-semibold">入库单号</th>
@@ -699,7 +702,7 @@ export function InboundPage() {
                                     </tr>
                                 ))}
                             </tbody>
-                        </table>
+                        </DataTable>
                     )}
                 </div>
 

@@ -2,12 +2,14 @@
 
 业务规则与字典，不含数据、不发请求。开发期数据本体在根目录 `mocks/data/db.ts`，请求在 `src/api/`。
 
-| 文件             | 职责                                                                                                |
-| ---------------- | --------------------------------------------------------------------------------------------------- |
-| `permissions.ts` | 权限字典（MENU_CATALOG / ACTION_CATALOG / PermCode）+ 纯工具（can / buildNavSections / diffGrants） |
-| `categories.ts`  | 开发期 BOM 物料目录 mock 种子（3 品类分区/分组树）；真实目录由后端 `GET /bom-categories` 返回       |
-| `views.ts`       | 派生统计纯函数（快照 → 待发货 / 缺口 / 趋势 / TOP），出库可发量的前端口径                           |
-| `queries.ts`     | react-query hooks，页面数据入口，含签名适配                                                         |
+| 文件                | 职责                                                                                                |
+| ------------------- | --------------------------------------------------------------------------------------------------- |
+| `permissions.ts`    | 权限字典（MENU_CATALOG / ACTION_CATALOG / PermCode）+ 纯工具（can / buildNavSections / diffGrants） |
+| `categories.ts`     | 开发期 BOM 物料目录 mock 种子（3 品类分区/分组树）；真实目录由后端 `GET /bom-categories` 返回       |
+| `bomComposition.ts` | 根据接口目录将复合 BOM 的冻结物料分为本体与微动系列，不修改历史内容                                 |
+| `bomSummary.ts`     | 列表关键规格摘要的展示优先级，不参与目录校验；完整物料仍可展开核对                                  |
+| `views.ts`          | 派生统计纯函数（快照 → 待发货 / 缺口 / 趋势 / TOP），出库可发量的前端口径                           |
+| `queries.ts`        | react-query hooks，页面数据入口，含签名适配                                                         |
 
 链路：`页面 → queries.ts → api/ → http/ → [MSW | 后端]`。当前演示由完整快照在 `views.ts` 派生统计；真实后端分页前须补聚合端点。
 

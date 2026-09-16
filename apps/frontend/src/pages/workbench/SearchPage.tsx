@@ -185,6 +185,7 @@ export function SearchPage() {
                 onClose={() => setSelected(null)}
             />
             <BomDetailModal
+                categories={snap.bomCategories}
                 bom={data?.boms.find(item => selected?.kind === "boms" && item.code === selected.id) ?? null}
                 onClose={() => setSelected(null)}
             />
