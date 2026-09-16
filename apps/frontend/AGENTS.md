@@ -88,6 +88,7 @@ admin-manage/
 pnpm dev             # 开发服务器
 pnpm build           # 类型检查（tsc -b）+ 生产构建
 pnpm lint            # oxlint 检查
+pnpm typecheck       # 类型检查
 pnpm format          # oxfmt 格式化 src / mocks / test 及根目录配置与文档
 pnpm test            # vitest 跑全部单元 + 组件测试（test/ 目录）
 pnpm test:coverage   # vitest 全量测试 + v8 覆盖率报告
