@@ -2,7 +2,9 @@
 -- Prisma 无法表达 CHECK 约束与 ascii_bin 字符集，因此迁移 SQL 手写。
 
 -- DropTable（临时验证模型，验证链路已完成）
-DROP TABLE `user`;
+-- init 建的是大写 `User`；Linux MySQL 大小写敏感（lower_case_table_names=0），
+-- 小写 user 会 1051 中止迁移，须大小写一致并容忍表已不存在
+DROP TABLE IF EXISTS `User`;
 
 -- CreateTable
 CREATE TABLE sys_role (
