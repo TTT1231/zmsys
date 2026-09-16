@@ -149,6 +149,7 @@ INSERT INTO sys_permission (code, kind, menu_key, action_id, label, protected) V
     ('orders:create', 'ACTION', 'orders', 'create', '新建订单', 0),
     ('orders:edit', 'ACTION', 'orders', 'edit', '编辑订单', 0),
     ('orders:cancel', 'ACTION', 'orders', 'cancel', '取消订单', 0),
+    ('orders:delete', 'ACTION', 'orders', 'delete', '删除订单', 1),
     ('customers:view', 'ACTION', 'customers', 'view', '查看', 0),
     ('customers:create', 'ACTION', 'customers', 'create', '新建客户', 0),
     ('customers:edit', 'ACTION', 'customers', 'edit', '编辑客户', 0),
@@ -1103,7 +1104,7 @@ CREATE TABLE op_log (
     operator_id BIGINT NOT NULL,
     operator_name_snapshot VARCHAR(64) NOT NULL,
     operator_role_snapshot VARCHAR(32) NOT NULL,
-    action ENUM('ship', 'create_customer', 'create_order', 'delete_bom') NOT NULL,
+    action ENUM('ship', 'create_customer', 'create_order', 'delete_order', 'delete_bom') NOT NULL,
     target_type VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     target_id BIGINT NOT NULL,
     target_code VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -1119,9 +1120,12 @@ CREATE TABLE op_log (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 生产运行账号权限原则（实际账号名由部署环境替换）：
--- 1. 不授予 custom_table / sales_order_table / sys_user 的 DELETE。bom_table / bom_item 的
---    DELETE 仅授予 BOM 删除专用服务：仅超级管理员、无任何销售订单引用且无入库/调整流水，
---    事务内先清理 bom_item 再删档案行并写 op_log(delete_bom) 快照（见 db-scheme.md 5.2）。
+-- 1. 不授予 custom_table / sys_user 的 DELETE。sales_order_table 的 DELETE 仅授予订单删除
+--    专用服务/存储过程：仅超级管理员、累计已发为 0 且无任何出库单引用，事务内先清理
+--    该订单 sales_order_change_log，再删订单行并写 op_log(delete_order) 快照（见 db-scheme.md 6.1）。
+--    bom_table / bom_item 的 DELETE 仅授予 BOM 删除专用服务：仅超级管理员、无任何销售订单
+--    引用且无入库/调整流水，事务内先清理 bom_item 再删档案行并写 op_log(delete_bom) 快照
+--    （见 db-scheme.md 5.2）。
 -- 2. inbound_ledger 仅由带当天窗口、版本检查和审计日志的业务事务 UPDATE；不授予 DELETE。
 -- 3. 不授予 stock_adjustment / outbound_ledger / 各日志表的 UPDATE 或 DELETE。
 -- 4. 仅迁移账号拥有 ALTER / DROP / REFERENCES。

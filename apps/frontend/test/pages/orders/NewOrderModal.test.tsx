@@ -17,6 +17,7 @@ vi.mock("@/data/queries", () => ({
     useWbRefresh: () => ({ refresh: vi.fn() }),
     useCreateOrder: () => ({ mutate, isPending: false }),
     useUpdateOrder: () => ({ mutate: vi.fn(), isPending: false }),
+    useDeleteOrder: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 const snapshot: Snapshot = {

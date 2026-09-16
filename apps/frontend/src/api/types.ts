@@ -264,6 +264,11 @@ export interface CancelOrderInput {
     reason: string;
 }
 
+/** 删除订单仅限超级管理员，且订单须完全未发货（累计已发为 0、无任何出库流水） */
+export interface DeleteOrderInput {
+    expectedVersion: number;
+}
+
 export interface CreateCustomerInput {
     name: string;
     contact: string;

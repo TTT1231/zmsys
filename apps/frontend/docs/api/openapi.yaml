@@ -30,7 +30,7 @@ tags:
     - name: auth
       description: JWT 会话与个人资料
     - name: orders
-      description: 销售订单及取消
+      description: 销售订单、取消与删除
     - name: customers
       description: 客户档案与负责人候选
     - name: boms
@@ -144,7 +144,7 @@ paths:
             tags: [orders]
             operationId: updateOrder
             summary: 修改销售订单
-            description: 权限 `orders:edit`。订单不可删除；新数量不得小于该订单有效出库净额；已取消订单不可修改。
+            description: 权限 `orders:edit`。新数量不得小于该订单有效出库净额；已取消订单不可修改。删除走专用端点 POST /orders/{orderNo}/delete。
             parameters:
                 - $ref: "#/components/parameters/OrderNo"
             requestBody:
@@ -183,6 +183,27 @@ paths:
                     content:
                         application/json:
                             schema: { $ref: "#/components/schemas/OrderEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
+
+    /orders/{orderNo}/delete:
+        post:
+            tags: [orders]
+            operationId: deleteOrder
+            summary: 删除完全未发货的销售订单
+            description: 受保护权限 `orders:delete`，仅 super。用于清理手误创建的订单：累计已发必须为 0，且不得存在任何出库单（含已作废）引用该订单，否则返回 409。删除为物理移除：订单行与其变更日志同事务删除，`op_log` 记录删除事件与订单快照；删除后订单不再出现在列表中。删除与取消、出库登记、打印竞争同一订单锁，先提交者生效。
+            parameters:
+                - $ref: "#/components/parameters/OrderNo"
+                - $ref: "#/components/parameters/IdempotencyKey"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/DeleteOrderInput" }
+            responses:
+                "200": { $ref: "#/components/responses/SuccessWithoutData" }
                 "400": { $ref: "#/components/responses/BadRequest" }
                 "403": { $ref: "#/components/responses/Forbidden" }
                 "404": { $ref: "#/components/responses/NotFound" }
@@ -993,6 +1014,13 @@ components:
             properties:
                 expectedVersion: { type: integer, minimum: 1 }
                 reason: { type: string, minLength: 2, maxLength: 500 }
+
+        DeleteOrderInput:
+            type: object
+            additionalProperties: false
+            required: [expectedVersion]
+            properties:
+                expectedVersion: { type: integer, minimum: 1 }
 
         Customer:
             type: object

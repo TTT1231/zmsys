@@ -7,6 +7,7 @@ import type {
     CreateOrderInput,
     CreateOutboundInput,
     CreateStockAdjustmentInput,
+    DeleteOrderInput,
     EmergencyVoidOutboundInput,
     PrintOutboundInput,
     UpdateCustomerInput,
@@ -79,6 +80,26 @@ export const orderHandlers = [
             );
         } catch (error) {
             const message = error instanceof Error ? error.message : "订单取消失败";
+            return fail(message, statusOf(message));
+        }
+    }),
+
+    http.post("/api/orders/:orderNo/delete", async ({ request, params }) => {
+        const auth = authenticate(request);
+        if (!auth) return fail("登录已过期，请重新登录", 401);
+        if (!authorized(auth, "orders:delete")) return fail("只有超级管理员可以删除销售订单", 403);
+        const body = (await request.json().catch(() => null)) as DeleteOrderInput | null;
+        if (!body || !Number.isSafeInteger(body.expectedVersion)) return fail("请求参数错误");
+        try {
+            const orderNo = String(params.orderNo);
+            return ok(
+                idempotent(request, auth.user.account, `orders:delete:${orderNo}`, body, () => {
+                    db.deleteOrder(orderNo, body.expectedVersion, auth.actor);
+                    return null;
+                }),
+            );
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "订单删除失败";
             return fail(message, statusOf(message));
         }
     }),

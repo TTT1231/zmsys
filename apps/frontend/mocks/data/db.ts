@@ -566,6 +566,30 @@ class MockDb {
         return { ...order };
     }
 
+    /** 删除完全未发货的订单（权限由 handler 按 orders:delete 校验，仅超级管理员可到这）。
+        累计已发 > 0 或存在任何出库流水（含已作废）时拒绝；订单行与其专属变更日志
+        同事务移除（与真实后端一致），删除事件写入不可变操作日志留痕 */
+    deleteOrder(orderNo: string, expectedVersion: number, actor: Actor): void {
+        const order = this.orders.find(item => item.orderNo === orderNo);
+        if (!order) throw new Error("订单不存在");
+        if (order.version !== expectedVersion) throw new Error("订单已被其他人修改，请刷新后重试");
+        if (order.outbound > 0) throw new Error("订单已有发货记录，不可删除");
+        if (this.outboundLedger.some(row => row.orderNo === orderNo)) {
+            throw new Error("订单存在出库流水（含已作废），不可删除");
+        }
+        this.orders = this.orders.filter(item => item.orderNo !== orderNo);
+        this.salesOrderChangeLog = this.salesOrderChangeLog.filter(entry => entry.orderNo !== orderNo);
+        this.opLog.unshift({
+            date: ANCHOR,
+            time: nowTime(),
+            user: actor.name,
+            role: actor.roleLabel,
+            action: "删除销售订单",
+            target: orderNo,
+        });
+        this.version += 1;
+    }
+
     /** 校验并解析负责人账号（须为在职 sales 或 super 用户） */
     private ownerOf(ownerAccount: string): DbUser {
         const owner = this.users.find(item => item.account === ownerAccount.trim() && item.active);

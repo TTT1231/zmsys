@@ -74,6 +74,7 @@ export const ACTION_CATALOG = {
         { id: "create", label: "新建订单" },
         { id: "edit", label: "编辑订单" },
         { id: "cancel", label: "取消订单" },
+        { id: "delete", label: "删除订单", protected: true },
     ],
     customers: [
         { id: "view", label: "查看" },
@@ -155,8 +156,8 @@ export function buildDefaultGrants(): GrantMap {
             version: 1,
             menus: ["workbench", "orders", "customers", "bom", "inbound", "outbound"],
             actions: {
-                // 删除 BOM 为受保护动作（仅超级管理员），普通角色不随 allActions 下发
-                orders: allActions("orders"),
+                // 删除订单/删除 BOM 为受保护动作（仅超级管理员），普通角色不随 allActions 下发
+                orders: ["view", "create", "edit", "cancel"],
                 customers: ["view", "create", "edit"],
                 bom: ["view", "create"],
                 inbound: ["view"],
@@ -177,7 +178,7 @@ export function buildDefaultGrants(): GrantMap {
             version: 1,
             menus: ["workbench", "orders", "customers", "bom", "inbound", "outbound"],
             actions: {
-                orders: allActions("orders"),
+                orders: ["view", "create", "edit", "cancel"],
                 customers: ["view", "create", "edit"],
                 bom: ["view", "create"],
                 inbound: ["view"],

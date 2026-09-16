@@ -19,7 +19,7 @@ import { SortTh } from "@/components/ui/SortTh";
 import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { nextSortState, type SortState } from "@/lib/tableSort";
 import { Field, TextArea, TextField, DateField } from "@/components/ui/Field";
-import { useCreateOrder, useUpdateOrder, useWbRefresh, useWbSnapshot } from "@/data/queries";
+import { useCreateOrder, useDeleteOrder, useUpdateOrder, useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { EMPTY_SNAPSHOT, bomByCode, maxShipOf, orderStatusOf, remainingOf } from "@/data/views";
 import { addDays, addMonths, todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/Toast";
@@ -255,14 +255,19 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
     );
 }
 
-/* 编辑销售订单弹窗（订单不可删除；新数量不能低于累计已发） */
+/* 编辑销售订单弹窗（新数量不能低于累计已发；完全未发货的订单可由超级管理员删除） */
 function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void }) {
+    const { can } = useApp();
     const updateOrder = useUpdateOrder();
+    const deleteOrder = useDeleteOrder();
     const toast = useToast();
     const [qty, setQty] = useState(String(order.qty));
     const [deliverDate, setDeliverDate] = useState(order.deliverDate);
     const [remark, setRemark] = useState(order.remark);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [confirmDelete, setConfirmDelete] = useState(false);
+    /* 无删除权限（仅超级管理员）或已有发货的订单不显示删除入口，前端先挡一层误操作 */
+    const canDelete = can("orders:delete") && order.outbound === 0;
 
     const submit = () => {
         if (!order) return;
@@ -294,6 +299,21 @@ function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void 
         );
     };
 
+    const submitDelete = () => {
+        if (deleteOrder.isPending) return;
+        deleteOrder.mutate(
+            { orderNo: order.orderNo, expectedVersion: order.version },
+            {
+                onSuccess: () => {
+                    toast(`订单 ${order.orderNo} 已删除`);
+                    setConfirmDelete(false);
+                    onClose();
+                },
+                onError: error => toast(error.message, true),
+            },
+        );
+    };
+
     return (
         <Modal
             open={!!order}
@@ -303,6 +323,15 @@ function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void 
             width={520}
             footer={
                 <>
+                    {canDelete && (
+                        <button
+                            type="button"
+                            onClick={() => setConfirmDelete(true)}
+                            className="mr-auto min-h-10 rounded-btn px-2 text-13 font-medium text-danger transition hover:bg-danger-soft"
+                        >
+                            删除订单
+                        </button>
+                    )}
                     <button
                         type="button"
                         onClick={onClose}
@@ -346,7 +375,52 @@ function EditOrderModal({ order, onClose }: { order: Order; onClose: () => void 
                             该订单累计已发 {order.outbound} 件，新数量不能低于此值。
                         </p>
                     )}
+                    {canDelete && (
+                        <p className="text-12 text-subtle sm:col-span-2">
+                            该订单一件未发，可由超级管理员删除；删除前需二次确认。
+                        </p>
+                    )}
                 </div>
+            )}
+            {confirmDelete && (
+                <Modal
+                    open
+                    onClose={() => setConfirmDelete(false)}
+                    label="危险操作"
+                    title="删除销售订单"
+                    subtitle={order ? `${order.orderNo} · ${order.customer}` : ""}
+                    width={440}
+                    footer={
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => setConfirmDelete(false)}
+                                className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
+                            >
+                                取消
+                            </button>
+                            <button
+                                type="button"
+                                disabled={deleteOrder.isPending}
+                                onClick={submitDelete}
+                                className="min-h-10 rounded-btn bg-danger px-4 text-13 font-medium text-white transition hover:opacity-90 disabled:opacity-60"
+                            >
+                                {deleteOrder.isPending ? "正在删除…" : "确认删除"}
+                            </button>
+                        </>
+                    }
+                >
+                    <div className="flex items-start gap-3 rounded-panel border border-[#fecdca] bg-danger-soft/60 p-4">
+                        <Icon name="alert" size={20} className="mt-0.5 shrink-0 text-danger" />
+                        <div className="text-13 leading-6 text-td">
+                            即将删除订单 <span className="tnum font-semibold text-ink">{order.orderNo}</span>（
+                            {order.customer} · {num(order.qty)} 件）。该订单累计已发 0 件。
+                            <p className="mt-1 font-medium text-danger">
+                                删除后该订单将从系统永久移除，不可恢复。请确认它是手误创建的订单。
+                            </p>
+                        </div>
+                    </div>
+                </Modal>
             )}
         </Modal>
     );

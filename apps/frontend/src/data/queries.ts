@@ -12,6 +12,7 @@ import {
     createStockAdjustment,
     createUser,
     deleteBom,
+    deleteOrder as deleteOrderReq,
     emergencyVoidOutbound,
     fetchBomCategories,
     fetchBoms,
@@ -168,6 +169,11 @@ export const useCancelOrder = () =>
     useWbMutation((input: { orderNo: string; expectedVersion: number; reason: string }) => {
         const { orderNo, ...body } = input;
         return cancelOrder(orderNo, body);
+    });
+export const useDeleteOrder = () =>
+    useWbMutation((input: { orderNo: string; expectedVersion: number }) => {
+        const { orderNo, ...body } = input;
+        return deleteOrderReq(orderNo, body);
     });
 
 /* 页面沿用旧签名 {orderNo, ...变更}，此处拆参适配契约 PUT /orders/:orderNo */

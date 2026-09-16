@@ -523,6 +523,36 @@ describe("mock db backend constraint contract", () => {
         expect(completed.lifecycleStatus).toBe("active");
     });
 
+    it("deletes a never-shipped order with stale change log and audit entry, rejecting shipped or ledgered ones", () => {
+        // 手误创建的零发货订单：删除后列表消失，专属变更日志随行清理，操作日志留痕
+        const order = newShippableOrder();
+        db.deleteOrder(order.orderNo, order.version, superActor);
+        expect(db.orders.some(item => item.orderNo === order.orderNo)).toBe(false);
+        expect(db.salesOrderChangeLog.some(entry => entry.orderNo === order.orderNo)).toBe(false);
+        expect(db.opLog[0]).toMatchObject({ action: "删除销售订单", target: order.orderNo });
+
+        // 乐观锁与不存在分支
+        expect(() => db.deleteOrder(order.orderNo, order.version, superActor)).toThrow("订单不存在");
+        const another = newShippableOrder();
+        expect(() => db.deleteOrder(another.orderNo, another.version - 1, superActor)).toThrow("请刷新后重试");
+
+        // 已发货订单不可删除（即使后来降到只剩部分）
+        const shipped = newShippableOrder();
+        db.createOutbound({ orderNo: shipped.orderNo, qty: 1, date: ANCHOR, remark: "" }, superActor);
+        expect(() => db.deleteOrder(shipped.orderNo, shipped.version, superActor)).toThrow("已有发货记录");
+
+        // 曾有出库又被作废（累计已发回到 0）也不可删除，台账引用保持完整
+        const voidedCase = newShippableOrder();
+        const shipment = db.createOutbound(
+            { orderNo: voidedCase.orderNo, qty: 1, date: ANCHOR, remark: "" },
+            superActor,
+        );
+        db.voidOutbound(shipment.no, shipment.version, "登记错误", superActor);
+        expect(voidedCase.outbound).toBe(0);
+        expect(() => db.deleteOrder(voidedCase.orderNo, voidedCase.version, superActor)).toThrow("存在出库流水");
+        expect(db.outboundLedger.some(row => row.orderNo === voidedCase.orderNo)).toBe(true);
+    });
+
     it("deletes an unreferenced bom with audit entry, rejecting referenced or ledgered ones", () => {
         // 手误建档：未被订单引用、无台账流水，删除后档案消失并留痕
         const spare = db.createBom({
