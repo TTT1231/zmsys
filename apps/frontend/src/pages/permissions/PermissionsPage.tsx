@@ -831,7 +831,11 @@ function RolesTab({ users }: { users: WbUser[] }) {
                     </div>
 
                     <div>
-                        <h3 className="mb-2.5 text-13 font-semibold text-ink">操作权限（按钮 / 动作级）</h3>
+                        <h3 className="mb-1 text-13 font-semibold text-ink">操作权限（按钮 / 动作级）</h3>
+                        <p className="mb-2.5 text-11.5 leading-5 text-subtle">
+                            灰色不可勾选项为受保护权限（如删除订单、删除 BOM、紧急撤销），仅超级管理员持有，
+                            不能授权给其他角色。
+                        </p>
                         <div className="rounded-xl border border-line bg-[#fdfdff] px-4 py-1">
                             {Object.entries(ACTION_CATALOG).map(([menuKey, actions]) => {
                                 const menuOn = effective.menus.includes(menuKey);
@@ -855,11 +859,17 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                         <div className="flex flex-wrap gap-2">
                                             {actions.map(action => {
                                                 const checked = chosen.includes(action.id);
+                                                const isProtected = "protected" in action && action.protected;
                                                 return (
                                                     <label
                                                         key={action.id}
+                                                        title={
+                                                            isProtected
+                                                                ? "受保护权限：仅超级管理员持有，不可授权"
+                                                                : undefined
+                                                        }
                                                         className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 text-12.5 transition ${
-                                                            "protected" in action && action.protected
+                                                            isProtected
                                                                 ? "cursor-not-allowed border-line bg-soft text-subtle opacity-60"
                                                                 : "cursor-pointer " +
                                                                   (checked
@@ -871,7 +881,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                                             type="checkbox"
                                                             className="sr-only"
                                                             checked={checked}
-                                                            disabled={"protected" in action && action.protected}
+                                                            disabled={isProtected}
                                                             onChange={event =>
                                                                 toggleAction(menuKey, action.id, event.target.checked)
                                                             }
@@ -880,6 +890,9 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                                             className={`h-1.5 w-1.5 rounded-full ${checked ? "bg-primary" : "bg-line-strong"}`}
                                                         />
                                                         {action.label}
+                                                        {isProtected && (
+                                                            <span className="sr-only">（仅超级管理员）</span>
+                                                        )}
                                                     </label>
                                                 );
                                             })}
