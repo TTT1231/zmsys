@@ -29,7 +29,7 @@ describe("categoryOf", () => {
         expect(categoryOf("不存在")).toBeUndefined();
     });
 
-    it("旋转XK2为无分区的单选组；新微动/老微动为 PA66塑料/五金件/触点 分区树", () => {
+    it("旋转XK2为单选根组+尾部触点分区；新微动/老微动为 PA66塑料/五金件/触点 分区树", () => {
         const rotary = cat("旋转XK2");
         expect(rotary.groups.map(group => [group.kind, group.name, group.multi])).toEqual([
             ["group", "型号", false],
@@ -39,6 +39,10 @@ describe("categoryOf", () => {
             ["group", "A面", false],
             ["group", "B面", false],
             ["group", "弹簧", false],
+            ["section", "触点", null],
+            ["group", "触点大小", false],
+            ["group", "触点厚度", false],
+            ["group", "触点类别", false],
         ]);
         const micro = cat("新微动");
         expect(micro.seqWidth).toBe(4);
@@ -143,6 +147,7 @@ describe("catalogRowsOf", () => {
             "右脚银点",
             "右脚铜点",
             "全方位左脚铜点",
+            "左脚铜点",
         ];
         expect(itemsOf("A面")).toEqual(faceOptions);
         expect(itemsOf("B面")).toEqual(faceOptions);
@@ -192,6 +197,22 @@ describe("旋转XK3 / 安全开关目录", () => {
         const long = safety.groups.find(node => node.name === "长款/43mm系列配件")!;
         expect(long.multi).toBe(true);
         expect(long.items.map(item => item.name)).toEqual(["动片", "静片", "长杆子", "长帽子", "长弹簧"]);
+        // 30mm/41mm 系列与既有 31mm/43mm 内容一致，物料 ids 独立
+        const short30 = safety.groups.find(node => node.name === "短款/30mm系列配件")!;
+        expect(short30).toMatchObject({ kind: "group", multi: true, parentId: "2503" });
+        expect(short30.items.map(item => item.name)).toEqual(["动片", "静片", "短杆子", "短帽子", "短弹簧"]);
+        expect(short30.items.map(item => item.id)).toEqual(["3607", "3608", "3609", "3610", "3611"]);
+        const long41 = safety.groups.find(node => node.name === "长款/41mm系列配件")!;
+        expect(long41).toMatchObject({ kind: "group", multi: true, parentId: "2503" });
+        expect(long41.items.map(item => item.name)).toEqual(["动片", "静片", "长杆子", "长帽子", "长弹簧"]);
+        expect(long41.items.map(item => item.id)).toEqual(["3612", "3613", "3614", "3615", "3616"]);
+        // 四个系列按 短款30→短款31→长款41→长款43 排列，分组 id 连续递增
+        expect(safety.groups.filter(node => node.parentId === "2503").map(node => node.id)).toEqual([
+            "2611",
+            "2612",
+            "2613",
+            "2614",
+        ]);
     });
 });
 
