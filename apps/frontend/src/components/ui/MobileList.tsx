@@ -112,11 +112,7 @@ export function OrderTaskCard({
                 </>
             }
         >
-            <BomCell
-                bom={bom}
-                bomCode={order.bomCode}
-                category={snap.bomCategories.find(category => category.name === bom?.name)}
-            />
+            <BomCell bom={bom} bomCode={order.bomCode} />
             <div className="mt-3 flex flex-col gap-1.5 border-t border-line pt-3">
                 <CardField label="交货日期" value={order.deliverDate} />
                 <CardField label="已发 / 订单" value={`${num(order.outbound)} / ${num(order.qty)} 件`} />

@@ -35,8 +35,14 @@ describe("mysql backend baseline", () => {
     it("seeds every backend-authoritative BOM category and field", () => {
         BOM_CATEGORIES.forEach(category => {
             expect(sql).toContain(`'${category.key}', '${category.name}', '${category.codePrefix}'`);
-            category.fields.forEach(field => expect(sql).toContain(`"key":"${field.key}"`));
+            category.groups.forEach(node => {
+                node.items.forEach(item => expect(sql).toContain(`(${item.id}, ${node.id}, '${item.name}'`));
+            });
         });
+        // 预生成组合模式已移除：XK3 / 琴键开关 与 spec_schema 不再落库
+        expect(sql).not.toContain("'xk3'");
+        expect(sql).not.toContain("'piano-key-switch'");
+        expect(sql).not.toContain("spec_schema");
     });
 
     it("stores only a JWT invalidation version, not JWT values", () => {

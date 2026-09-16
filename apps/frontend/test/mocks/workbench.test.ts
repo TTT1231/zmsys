@@ -5,7 +5,7 @@ import { customerRanking, workbenchRisks } from "@/data/workbench";
 
 it("所有订单引用已知BOM，累计出入库差与各BOM当前库存一致", () => {
     const data = createWorkbenchDemo("2026-09-12");
-    expect(data.products).toHaveLength(15);
+    expect(data.products).toHaveLength(9);
     for (const order of data.orders) {
         expect(data.products.some(product => product.code === order.bomCode)).toBe(true);
         expect(order.shipped).toBeLessThanOrEqual(order.qty);

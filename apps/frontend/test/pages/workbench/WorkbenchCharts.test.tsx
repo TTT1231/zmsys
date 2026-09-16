@@ -29,7 +29,7 @@ it("产品图在交付与库存之间切换，图表点击映射到正确品类"
     expect(screen.getByRole("button", { name: "库存与缺口" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("img")).toHaveAttribute("aria-label", expect.stringContaining("备货缺口"));
     await user.click(screen.getByRole("button", { name: "测试点击第一条形" }));
-    expect(onDetails).toHaveBeenCalledWith("旋转开关");
+    expect(onDetails).toHaveBeenCalledWith("旋转XK2");
 });
 it("客户图支持切换笔数，并将条形点击映射到客户编码", async () => {
     const user = userEvent.setup();

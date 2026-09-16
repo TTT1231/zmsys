@@ -11,7 +11,7 @@ it("打印情况与关联订单完整呈现，作废后仍保留历史打印次�
     expect(screen.getByText("已打印")).toBeInTheDocument();
     expect(screen.getByText("第 1 次打印")).toBeInTheDocument();
     expect(screen.getByText(detailOutbound.orderNo)).toBeInTheDocument();
-    expect(screen.getByText("辅助动片")).toBeInTheDocument();
+    expect(screen.getByText("6.3静片：铜镀银")).toBeInTheDocument();
     rerender(
         <OutboundDetailModal
             row={{ ...detailOutbound, state: "voided", voidReason: "纸质单已作废，货物未离开" }}

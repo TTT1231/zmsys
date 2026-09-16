@@ -568,7 +568,7 @@ export function OutboundDetailModal({
                     }
                     note={row.state === "voided" ? "此记录已作废，以上数量不再计入有效出库。" : undefined}
                 />
-                <RecordProduct bom={bom} bomCode={row.bomCode} categories={snap.bomCategories} />
+                <RecordProduct bom={bom} bomCode={row.bomCode} />
                 <RecordFields
                     title="出库信息"
                     items={[

@@ -1,28 +1,95 @@
 import { describe, expect, it } from "vitest";
 
 import { maxShipOf, readyToShip } from "@/data/views";
-import { newMicroSwitchGaugeOf } from "@/data/categories";
+import { catalogRowsOf, categoryOf } from "@/data/categories";
 import { ANCHOR, db } from "../../mocks/data/db";
 
 // db 是 import 即 init 的单例，同文件内 it 顺序执行；
 // 非法写入一律被整体拒绝（不改快照），因此前两个 it 不产生状态变化。
 const actor = { name: "测试", roleLabel: "检验员" };
 
-describe("mock db inventory rules", () => {
-    it("seeds new micro switches with one matching-gauge bracket and static plate", () => {
-        const rows = db.boms.filter(bom => bom.name === "新微动");
-        expect(rows).toHaveLength(3744);
-        expect(
-            rows.every(
-                bom =>
-                    !Object.hasOwn(bom.specs, "6.3支架") &&
-                    !Object.hasOwn(bom.specs, "4.8支架") &&
-                    !Object.hasOwn(bom.specs, "6.3静片") &&
-                    !Object.hasOwn(bom.specs, "4.8静片") &&
-                    bom.specs["盖子"] === "盖子" &&
-                    newMicroSwitchGaugeOf(bom.specs["支架"]) === newMicroSwitchGaugeOf(bom.specs["静片"]),
-            ),
-        ).toBe(true);
+/* 物料目录模式：mock 业务数据从 0 开始，用例自行手建 BOM/订单/库存夹具 */
+const idOf = (categoryName: string, itemName: string) =>
+    catalogRowsOf(categoryOf(categoryName)!).find(row => row.name === itemName)!.id;
+
+const rotaryBom = db.createBom({
+    name: "旋转XK2",
+    materialItemIds: [idOf("旋转XK2", "1-1"), idOf("旋转XK2", "正面"), idOf("旋转XK2", "0.5")],
+});
+const microBom = db.createBom({
+    name: "新微动",
+    materialItemIds: [
+        idOf("新微动", "二脚底座（无挡脚）"),
+        idOf("新微动", "盖子"),
+        idOf("新微动", "8.5mm"),
+        idOf("新微动", "6.3支架：铜镀银"),
+        idOf("新微动", "6.3静片：铜镀银"),
+    ],
+});
+db.createInbound({ bomCode: rotaryBom.code, qty: 100, date: ANCHOR, remark: "测试备货" }, actor);
+const stockedOrder = db.createOrder(
+    {
+        customerCode: "CUS-1024",
+        bomCode: rotaryBom.code,
+        qty: 5,
+        deliverDate: "2026-12-31",
+        orderDate: ANCHOR,
+        remark: "",
+    },
+    actor,
+);
+
+/* 每个出库用例独立开一笔可发订单，互不消耗库存配额 */
+const newShippableOrder = () => {
+    const created = db.createOrder(
+        {
+            customerCode: "CUS-0316",
+            bomCode: rotaryBom.code,
+            qty: 4,
+            deliverDate: "2026-12-31",
+            orderDate: ANCHOR,
+            remark: "",
+        },
+        actor,
+    );
+    return db.orders.find(order => order.orderNo === created.orderNo)!;
+};
+
+describe("mock db material catalog rules", () => {
+    it("archives BOM from selected materials: frozen items, derived modelCode and summary", () => {
+        expect(rotaryBom).toMatchObject({ code: "ZMXK2001", name: "旋转XK2", modelCode: "1-1" });
+        expect(rotaryBom.items.map(item => item.name)).toEqual(["1-1", "正面", "0.5"]);
+        expect(rotaryBom.spec).toBe("型号：1-1 · 方向：正面 · 弹簧：0.5");
+        expect(microBom.modelCode).toBe("");
+        expect(microBom.items).toHaveLength(5);
+    });
+
+    it("rejects unknown categories, empty sets, foreign ids and single-group over-picks", () => {
+        expect(() => db.createBom({ name: "琴键开关", materialItemIds: ["3003"] })).toThrow("品类不存在");
+        expect(() => db.createBom({ name: "旋转XK2", materialItemIds: [] })).toThrow("请至少选择一项物料");
+        expect(() => db.createBom({ name: "旋转XK2", materialItemIds: ["9999"] })).toThrow(
+            "物料不存在、已停用或不属于该品类",
+        );
+        expect(() =>
+            db.createBom({
+                name: "新微动",
+                materialItemIds: [idOf("新微动", "6.3支架：铜镀银"), idOf("新微动", "6.3支架：铜镀镍")],
+            }),
+        ).toThrow("分组「支架」只能选择一项物料");
+    });
+
+    it("dedupes repeated ids and rejects identical material sets regardless of input order", () => {
+        const deduped = db.createBom({
+            name: "旋转XK2",
+            materialItemIds: [idOf("旋转XK2", "反面"), idOf("旋转XK2", "反面")],
+        });
+        expect(deduped.items).toHaveLength(1);
+        expect(() =>
+            db.createBom({
+                name: "旋转XK2",
+                materialItemIds: [idOf("旋转XK2", "反面"), deduped.items[0]!.materialId],
+            }),
+        ).toThrow(`BOM 已存在：${deduped.code}`);
     });
 
     it("allocates stock without over-promising one pool twice", () => {
@@ -103,16 +170,15 @@ describe("mock db business write rules", () => {
         const order = newOrder();
         // 2026-03-10 无既有订单，按日序号从 001 起
         expect(order.orderNo).toBe("ZM260310001");
-        expect(db.orders[0]!.orderNo).toBe(order.orderNo);
         expect(order.outbound).toBe(0);
         // 同日第二单序号递增
         expect(newOrder().orderNo).toBe("ZM260310002");
     });
 
     it("rejects qty below shipped and validates delivery window", () => {
-        const shipped = db.orders.find(order => order.outbound > 0);
-        expect(shipped).toBeTruthy();
-        if (!shipped) return;
+        // 自建已发订单：发 3 件后数量下限即 3
+        db.createOutbound({ orderNo: stockedOrder.orderNo, date: ANCHOR, remark: "", qty: 3 }, actor);
+        const shipped = db.orders.find(order => order.orderNo === stockedOrder.orderNo)!;
         expect(() =>
             db.updateOrder(
                 {
@@ -339,43 +405,8 @@ describe("mock db backend constraint contract", () => {
         expect(updated.createdAt).toBe(user.createdAt);
     });
 
-    it("validates the backend BOM schema and rejects canonical duplicates", () => {
-        const created = db.createBom({
-            name: "琴键开关",
-            modelCode: "AUDIT-MODEL-01",
-            specs: { 类型: "四键焊线", 弹簧: "0.3" },
-        });
-        expect(created.code).toMatch(/^ZMKQ\d{3,}$/);
-
-        expect(() =>
-            db.createBom({
-                name: "琴键开关",
-                modelCode: " audit-model-01 ",
-                specs: { 弹簧: "0.3", 类型: "四键焊线" },
-            }),
-        ).toThrow(`BOM 已存在：${created.code}`);
-
-        expect(() => db.createBom({ name: "琴键开关", modelCode: "AUDIT-MISSING", specs: { 弹簧: "0.3" } })).toThrow(
-            "请填写规格：类型",
-        );
-        expect(() =>
-            db.createBom({
-                name: "琴键开关",
-                modelCode: "AUDIT-UNKNOWN",
-                specs: { 类型: "四键焊线", 未定义字段: "值" },
-            }),
-        ).toThrow("未定义的字段");
-
-        const fixed = db.createBom({
-            name: "旋转开关",
-            modelCode: "AUDIT-FIXED-01",
-            specs: { 脚位: "二脚", 档位: "一档", 杆子高度: "客户端错误值" },
-        });
-        expect(fixed.specs.杆子高度).toBe("4.8");
-    });
-
     it("allows same-day inbound correction with audit, rejects stale versions, and voids without deletion", () => {
-        const bomCode = db.boms[0]!.code;
+        const bomCode = microBom.code;
         const initialStock = db.stockOf(bomCode);
         const logBefore = db.inboundChangeLog.length;
         const inbound = db.createInbound({ bomCode, qty: 10, date: ANCHOR, remark: "原记录" }, superActor);
@@ -408,27 +439,30 @@ describe("mock db backend constraint contract", () => {
         expect(db.stockOf(bomCode)).toBe(initialStock);
         expect(db.inboundChangeLog).toHaveLength(logBefore + 2);
 
-        const historical = db.inboundLedger.find(
-            row => row.status === "active" && row.createdAt.slice(0, 10) !== ANCHOR,
-        )!;
+        // 直插一条跨日历史入库，验证跨日只能走库存调整、不可原地修正
+        db.inboundLedger.push({
+            no: "RK26010190",
+            bomCode,
+            qty: 7,
+            date: "2026-01-05",
+            time: "10:00",
+            inspector: "历史检验员",
+            remark: "",
+            status: "active",
+            version: 1,
+            createdAt: "2026-01-05T10:00:00+08:00",
+        });
         expect(() =>
             db.updateInbound(
-                historical.no,
-                {
-                    expectedVersion: historical.version,
-                    bomCode: historical.bomCode,
-                    qty: historical.qty,
-                    date: historical.date,
-                    remark: historical.remark ?? "",
-                    reason: "跨日修正",
-                },
+                "RK26010190",
+                { expectedVersion: 1, bomCode, qty: 8, date: "2026-01-05", remark: "", reason: "跨日修正" },
                 superActor,
             ),
         ).toThrow("只能修正北京时间当天");
     });
 
     it("uses immutable stock adjustments for cross-day corrections", () => {
-        const bomCode = db.boms[0]!.code;
+        const bomCode = microBom.code;
         const initialStock = db.stockOf(bomCode);
         expect(() =>
             db.createStockAdjustment(
@@ -450,8 +484,7 @@ describe("mock db backend constraint contract", () => {
     });
 
     it("blocks order cancellation while an unprinted shipment exists, then reverses that shipment before cancel", () => {
-        const candidate = readyToShip(db.snapshot()).find(row => row.maxShip >= 1)!;
-        const order = db.orders.find(item => item.orderNo === candidate.orderNo)!;
+        const order = newShippableOrder();
         const initialOutbound = order.outbound;
         const initialStock = db.stockOf(order.bomCode);
         const initialOrderVersion = order.version;
@@ -476,7 +509,14 @@ describe("mock db backend constraint contract", () => {
     });
 
     it("does not relabel a fully shipped order as cancelled", () => {
-        const completed = db.orders.find(order => order.lifecycleStatus === "active" && order.outbound >= order.qty)!;
+        const order = newShippableOrder();
+        const shipment = db.createOutbound(
+            { orderNo: order.orderNo, qty: order.qty, date: ANCHOR, remark: "" },
+            superActor,
+        );
+        // 已打印出库视为正式安排发货，才进入“无剩余量可取消”的终态口径
+        db.printOutbound(shipment.no, shipment.version, "", superActor);
+        const completed = db.orders.find(item => item.orderNo === order.orderNo)!;
         expect(() => db.cancelOrder(completed.orderNo, completed.version, "客户取消", superActor)).toThrow(
             "没有剩余数量",
         );
@@ -484,8 +524,7 @@ describe("mock db backend constraint contract", () => {
     });
 
     it("treats printing as release, versions reprints, and preserves printed quantity when cancelling the remainder", () => {
-        const candidate = readyToShip(db.snapshot()).find(row => row.maxShip >= 1)!;
-        const order = db.orders.find(item => item.orderNo === candidate.orderNo)!;
+        const order = newShippableOrder();
         const outboundBefore = order.outbound;
         const shipment = db.createOutbound({ orderNo: order.orderNo, qty: 1, date: ANCHOR, remark: "" }, superActor);
         const registeredVersion = shipment.version;
@@ -515,8 +554,7 @@ describe("mock db backend constraint contract", () => {
     });
 
     it("allows only confirmed super emergency void of a printed shipment", () => {
-        const candidate = readyToShip(db.snapshot()).find(row => row.maxShip >= 1)!;
-        const order = db.orders.find(item => item.orderNo === candidate.orderNo)!;
+        const order = newShippableOrder();
         const initialOutbound = order.outbound;
         const initialStock = db.stockOf(order.bomCode);
         const shipment = db.createOutbound({ orderNo: order.orderNo, qty: 1, date: ANCHOR, remark: "" }, superActor);

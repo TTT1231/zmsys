@@ -265,8 +265,8 @@ paths:
         get:
             tags: [boms]
             operationId: listBomCategories
-            summary: 后端权威 BOM 品类与规格目录
-            description: 权限 `bom:view`。前端不得自行决定有效品类、固定规格或编码前缀。
+            summary: 后端权威 BOM 品类与物料目录
+            description: 权限 `bom:view`。返回 6 品类及分区/分组/可选物料树；跌倒开关品类额外下发 childCategories 标记（须从列表品类中选一个已建 BOM 作为子件）；前端不得自行决定有效品类、目录结构或编码前缀。
             responses:
                 "200":
                     description: 成功
@@ -280,7 +280,7 @@ paths:
             tags: [boms]
             operationId: listBoms
             summary: BOM/成品档案列表
-            description: 权限 `bom:view`。
+            description: 权限 `bom:view`。明细、modelCode 与摘要全部取自建档冻结快照，不依赖当前目录。
             responses:
                 "200":
                     description: 成功
@@ -291,8 +291,8 @@ paths:
         post:
             tags: [boms]
             operationId: createBom
-            summary: 新建唯一 BOM
-            description: 权限 `bom:create`。服务端按品类目录验证必填、选项、固定规格和跨字段规则；规范化后相同品类+型号+规格返回 409 及已有 bomCode。
+            summary: 新建唯一 BOM（品类 + 选中物料集合）
+            description: 权限 `bom:create`。服务端按品类目录校验（ids 非空、去重、归属且品类/分区/分组/物料启用、单选组最多 1 项）；品类标记 childCategories 时 childCategory 必填（如跌倒开关选微动开关类型），该子品类的完整物料目录并入校验范围。规范化物料集合（BigInt 十进制、去重、数值升序 JSON）的 SHA-256 命中相同品类即 409 并返回已有 bomCode，输入顺序与重复 id 不影响指纹。同幂等键同请求摘要重放原成功响应，同键异内容 409。
             parameters:
                 - $ref: "#/components/parameters/IdempotencyKey"
             requestBody:
@@ -1033,49 +1033,74 @@ components:
                 name: { type: string }
                 account: { type: string }
 
-        BomSpecField:
+        BomCatalogNode:
             type: object
-            required: [key, label, type]
+            required: [id, parentId, kind, name, key, multi, items]
+            description: 目录树节点；分区（section）为纯展示节点（不挂物料、不提供全选），分组（group）挂可选物料
             properties:
-                key: { type: string }
-                label: { type: string }
-                type: { type: string, enum: [select, text] }
-                options: { type: array, items: { type: string } }
-                required: { type: boolean }
-                placeholder: { type: string }
-                initial: { type: string }
-                defaultValue: { type: string }
+                id: { type: string }
+                parentId: { type: [string, "null"] }
+                kind: { type: string, enum: [section, group] }
+                name: { type: string }
+                key: { type: [string, "null"], description: 分组稳定标识（model 用于型号派生）；分区为 null }
+                multi: { type: [boolean, "null"], description: 分组选择语义（false 单选 / true 多选）；分区为 null }
+                items:
+                    type: array
+                    description: 分区恒为空数组
+                    items: { type: object, required: [id, name], properties: { id: { type: string }, name: { type: string } } }
 
         BomCategory:
             type: object
-            required: [key, name, codePrefix, fields]
+            required: [key, name, codePrefix, groups]
             properties:
                 key: { type: string }
                 name: { type: string }
                 codePrefix: { type: string }
                 seqWidth: { type: integer, minimum: 3, maximum: 8 }
-                fields: { type: array, items: { $ref: "#/components/schemas/BomSpecField" } }
+                childCategories:
+                    type: array
+                    items: { type: string }
+                    description: 标记该品类建档必须从列表品类中选择一个已建 BOM 作为子件（如跌倒开关嵌入微动开关）；普通品类无此字段
+                groups: { type: array, items: { $ref: "#/components/schemas/BomCatalogNode" } }
+
+        BomItemView:
+            type: object
+            required: [materialId, groupKey, groupName, name]
+            description: 建档冻结明细（无数量），按 position 排序返回
+            properties:
+                materialId: { type: string }
+                groupKey: { type: string }
+                groupName: { type: string }
+                name: { type: string }
 
         Bom:
             type: object
-            required: [code, name, modelCode, specs, spec, created, unit]
+            required: [code, name, modelCode, items, spec, created, unit]
             properties:
                 code: { type: string }
                 name: { type: string }
-                modelCode: { type: string }
-                specs: { type: object, additionalProperties: { type: string } }
-                spec: { type: string }
+                modelCode: { type: string, description: model 组选中项名称（品类无 model 组时为空串） }
+                items: { type: array, items: { $ref: "#/components/schemas/BomItemView" } }
+                spec: { type: string, description: "摘要（“组名：物料名”以 “ · ” 连接）" }
                 created: { type: string, format: date }
                 unit: { type: string }
 
         CreateBomInput:
             type: object
             additionalProperties: false
-            required: [name, modelCode, specs]
+            required: [name, materialItemIds]
             properties:
                 name: { type: string, description: 必须匹配启用的后端品类名称 }
-                modelCode: { type: string, minLength: 1, maxLength: 64 }
-                specs: { type: object, additionalProperties: { type: string } }
+                materialItemIds:
+                    type: array
+                    minItems: 1
+                    maxItems: 200
+                    description: 选中物料 id（正十进制 BIGINT 数字串）；服务端去重后按集合判重
+                    items: { type: string, pattern: "^[0-9]+$" }
+                childCategory:
+                    type: string
+                    maxLength: 40
+                    description: 品类子选 key（品类标记 childCategories 时必填，如跌倒开关的微动开关类型 new-micro-switch / old-micro-switch）；该子品类完整物料目录并入校验范围
 
         InboundRow:
             type: object

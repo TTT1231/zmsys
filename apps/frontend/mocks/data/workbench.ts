@@ -28,12 +28,11 @@ const customerNames = [
     "嘉兴佳禾电子有限公司",
     "湖州明达机电有限公司",
 ];
+/* 演示品类与系统一致：仅 旋转XK2 / 新微动 / 老微动（物料目录模式） */
 const categories = [
-    { name: "旋转开关", prefix: "XK2", models: ["222-1", "232-2", "242-3"] },
-    { name: "XK3", prefix: "XK3", models: ["XK3-101", "XK3-102", "XK3-103"] },
-    { name: "新微动", prefix: "KW0", models: ["KW-01", "KW-02", "KW-03"] },
-    { name: "老微动", prefix: "KW16", models: ["KW16-1", "KW16-2", "KW16-3"] },
-    { name: "琴键开关", prefix: "KQ", models: ["KQ-4", "KQ-5", "KQ-6"] },
+    { name: "旋转XK2", prefix: "XK2", models: ["1-1", "2-1", "3-1"] },
+    { name: "新微动", prefix: "KW0", models: ["", "", ""] },
+    { name: "老微动", prefix: "KW16", models: ["", "", ""] },
 ];
 
 export function createWorkbenchDemo(asOf: string): WorkbenchData {
@@ -43,11 +42,13 @@ export function createWorkbenchDemo(asOf: string): WorkbenchData {
             category: category.name,
             model,
             spec: [
-                ["二脚 · 两档 · 正面", "三脚 · 三档 · 正面", "四脚 · 四档 · 正面"],
-                ["圆孔长外壳 · 圆轴长杆", "圆孔短外壳 · 圆轴短杆", "无耳外壳 · 扁轴4.8"],
-                ["6.3支架 · 铜镀银", "4.8支架 · 铜镀镍", "6.3支架 · 复合铜镀镍"],
-                ["长柄 · 铜镀银", "短柄 · 铜镀镍", "无柄 · 复合铜"],
-                ["四键 · 标准款", "五键 · 标准款", "六键 · 定制款"],
+                ["方向：正面 · 弹簧：0.5", "方向：反面 · 弹簧：0.55", "方向：正面 · A面：三脚银点"],
+                [
+                    "底座：二脚底座（无挡脚） · 支架：6.3支架：铜镀银",
+                    "底座：三脚底座（有挡脚） · 静片：6.3静片：铜镀银",
+                    "盖子：盖子 · 按钮：8.5mm · 弹片：0.12",
+                ],
+                ["底座：带CB · 按钮：8.5mm", "底座：不带CB · 按钮：8.9mm · 挡脚：挡脚", "底座：带CB · 弹簧：0.27"],
             ][categoryIndex][index],
             unit: "个",
             stock: [800, 1600, 400][index] + categoryIndex * 150,
@@ -60,9 +61,7 @@ export function createWorkbenchDemo(asOf: string): WorkbenchData {
         const date = addDays(asOf, -age);
         const recent = age <= 24;
         // 近期大单按品类体现不同备货压力，避免各品类进度看起来完全相同。
-        const scale = recent
-            ? [7, 4, 8, 5, 2][categories.findIndex(category => category.name === product.category)]
-            : 1;
+        const scale = recent ? [7, 8, 5][categories.findIndex(category => category.name === product.category)] : 1;
         const qty = (8 + ((index * 13) % 24) + (24 - customerIndex)) * 100 * scale;
         const cancelled = index % 59 === 0;
         return {

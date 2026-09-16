@@ -51,5 +51,5 @@ it("表格规格摘要共用同行详情入口，不额外增加规格按钮", (
     expect(table.getByRole("columnheader", { name: "成品 / BOM" })).toBeInTheDocument();
     expect(table.queryByRole("button", { name: /查看全部规格/ })).not.toBeInTheDocument();
     fireEvent.click(table.getAllByRole("button", { name: "查看详情" })[0]);
-    expect(screen.getByRole("dialog", { name: "CANCELLED" })).toHaveTextContent("辅助动片");
+    expect(screen.getByRole("dialog", { name: "CANCELLED" })).toHaveTextContent("6.3静片：铜镀银");
 });

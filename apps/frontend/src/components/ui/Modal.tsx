@@ -2,6 +2,18 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@/lib/icons";
 
+/* 弹窗叠加：栈记录打开顺序，只有栈顶响应 ESC/Tab 并在关闭时解锁滚动、恢复焦点；
+   非栈顶层挂 inert（阻焦点/指针并移出无障碍树），栈变化时同步各层 */
+const modalStack: symbol[] = [];
+const stackOverlays = new Map<symbol, HTMLElement>();
+const syncStackTop = () => {
+    const top = modalStack.at(-1);
+    for (const [token, element] of stackOverlays) {
+        if (token === top) element.removeAttribute("inert");
+        else element.setAttribute("inert", "");
+    }
+};
+
 interface ModalProps {
     open: boolean;
     onClose: () => void;
@@ -15,6 +27,7 @@ interface ModalProps {
 
 export function Modal({ open, onClose, title, subtitle, label = "", width = 560, children, footer }: ModalProps) {
     const panelRef = useRef<HTMLDivElement>(null);
+    const overlayRef = useRef<HTMLDivElement>(null);
     const restoreRef = useRef<HTMLElement | null>(null);
     const onCloseRef = useRef(onClose);
 
@@ -25,7 +38,12 @@ export function Modal({ open, onClose, title, subtitle, label = "", width = 560,
     useEffect(() => {
         if (!open) return;
         restoreRef.current = document.activeElement as HTMLElement;
-        document.body.style.overflow = "hidden";
+        const token = Symbol();
+        modalStack.push(token);
+        if (overlayRef.current) stackOverlays.set(token, overlayRef.current);
+        // 栈从空变非空才锁滚动，叠加时关掉内层不提前解锁外层的锁定
+        if (modalStack.length === 1) document.body.style.overflow = "hidden";
+        syncStackTop();
         const getFocusables = () =>
             Array.from(
                 panelRef.current?.querySelectorAll<HTMLElement>(
@@ -36,6 +54,8 @@ export function Modal({ open, onClose, title, subtitle, label = "", width = 560,
         const focusables = getFocusables();
         (focusables[0] ?? panelRef.current)?.focus();
         const onKey = (event: KeyboardEvent) => {
+            // 叠加时只让栈顶响应，避免一次 ESC 关掉多层、焦点陷阱互相拉扯
+            if (modalStack.at(-1) !== token) return;
             if (event.key === "Escape") {
                 event.preventDefault();
                 onCloseRef.current();
@@ -65,8 +85,13 @@ export function Modal({ open, onClose, title, subtitle, label = "", width = 560,
         document.addEventListener("keydown", onKey);
         return () => {
             document.removeEventListener("keydown", onKey);
-            document.body.style.overflow = "";
-            restoreRef.current?.focus?.();
+            const wasTop = modalStack.at(-1) === token;
+            modalStack.splice(modalStack.indexOf(token), 1);
+            stackOverlays.delete(token);
+            syncStackTop();
+            if (modalStack.length === 0) document.body.style.overflow = "";
+            // 仅栈顶正常关闭时恢复焦点；外层先于内层卸载时不与内层抢焦点
+            if (wasTop) restoreRef.current?.focus?.();
         };
     }, [open]);
 
@@ -76,6 +101,7 @@ export function Modal({ open, onClose, title, subtitle, label = "", width = 560,
        fixed 定位基准,弹窗会被压进祖先盒子;挂 body 才保证遮罩铺满视口 */
     return createPortal(
         <div
+            ref={overlayRef}
             className="fixed inset-0 z-150 flex items-center justify-center bg-scrim p-4 backdrop-blur-[2px] max-md:items-end max-md:p-0"
             onMouseDown={event => {
                 if (event.target === event.currentTarget) onClose();

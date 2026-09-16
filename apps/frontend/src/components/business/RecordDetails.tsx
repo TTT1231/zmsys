@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
-import type { Bom, BomCategory } from "@/api";
+import type { Bom } from "@/api";
 import { BomSpecs } from "@/components/bom/BomSpecs";
 import { num } from "@/lib/format";
 
-/** 业务凭证共用的数量概览、成品规格与登记信息，保持一致的阅读顺序。 */
+/** 业务凭证共用的数量概览、物料组成与登记信息，保持一致的阅读顺序。 */
 export function RecordSummary({
     metrics,
     status,
@@ -36,23 +36,17 @@ export function RecordSummary({
     );
 }
 
-export function RecordProduct({ bom, bomCode, categories }: { bom?: Bom; bomCode: string; categories: BomCategory[] }) {
+export function RecordProduct({ bom, bomCode }: { bom?: Bom; bomCode: string }) {
     return (
-        <section aria-label="成品规格" className="min-w-0">
+        <section aria-label="物料组成" className="min-w-0">
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <h3 className="text-14 font-medium text-ink">成品规格</h3>
-                <p className="text-12 text-muted wrap-anywhere">
-                    BOM 编码 <span className="tnum">{bomCode}</span>
-                </p>
+                <h3 className="text-14 font-medium text-ink">物料组成</h3>
+                <p className="tnum text-12 text-muted wrap-anywhere">{bomCode}</p>
             </div>
             {bom ? (
-                <BomSpecs
-                    bom={bom}
-                    category={categories.find(category => category.name === bom.name)}
-                    layout="record"
-                />
+                <BomSpecs bom={bom} layout="record" />
             ) : (
-                <p className="text-14 text-muted">未找到该成品的规格信息</p>
+                <p className="text-14 text-muted">未找到该成品的物料信息</p>
             )}
         </section>
     );

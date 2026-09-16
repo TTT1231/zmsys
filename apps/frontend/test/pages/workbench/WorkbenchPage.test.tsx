@@ -37,13 +37,13 @@ it("周期影响订单汇总，不改变当前风险；型号和客户明细可�
     await user.click(screen.getByRole("button", { name: "本月" }));
     expect(screen.getByRole("button", { name: "本月" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: /已逾期未发完/ }).textContent).toBe(riskText);
-    await user.click(screen.getByRole("button", { name: "旋转开关" }));
-    expect(screen.getByRole("dialog", { name: "旋转开关 · 型号与规格" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "旋转开关 / 222-1" }));
-    expect(screen.getByRole("dialog", { name: "222-1 · 订单明细" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "旋转XK2" }));
+    expect(screen.getByRole("dialog", { name: "旋转XK2 · 型号与规格" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "旋转XK2 / 1-1" }));
+    expect(screen.getByRole("dialog", { name: "1-1 · 订单明细" })).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toHaveFocus();
     await user.click(screen.getByRole("button", { name: "返回产品明细" }));
-    expect(screen.getByRole("dialog", { name: "旋转开关 · 型号与规格" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "旋转XK2 · 型号与规格" })).toBeInTheDocument();
     await user.keyboard("{Escape}");
     await user.click(screen.getByRole("button", { name: "累计" }));
     await user.click(screen.getByRole("button", { name: "排行明细" }));

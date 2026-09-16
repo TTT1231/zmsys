@@ -26,8 +26,8 @@ const data = (orders: WorkbenchOrder[]): WorkbenchData => ({
     orders,
     movements: [],
     products: [
-        { code: "B1", category: "旋转开关", model: "M1", spec: "二脚", unit: "个", stock: 50 },
-        { code: "B2", category: "旋转开关", model: "M2", spec: "三脚", unit: "个", stock: 1000 },
+        { code: "B1", category: "旋转XK2", model: "M1", spec: "二脚", unit: "个", stock: 50 },
+        { code: "B2", category: "旋转XK2", model: "M2", spec: "三脚", unit: "个", stock: 1000 },
     ],
 });
 const all = { start: "2026-01-01", end: "2026-09-12" };
@@ -94,7 +94,7 @@ describe("工作台统计", () => {
             { date: "2026-09-12", bomCode: "B2", inbound: 300, outbound: 100 },
         ];
         const range = { start: "2026-09-10", end: "2026-09-12" };
-        expect(workbenchTrend(snapshot, range, "旋转开关")).toEqual([
+        expect(workbenchTrend(snapshot, range, "旋转XK2")).toEqual([
             { date: "2026-09-10", inbound: 100, outbound: 0 },
             { date: "2026-09-11", inbound: 0, outbound: 0 },
             { date: "2026-09-12", inbound: 0, outbound: 80 },

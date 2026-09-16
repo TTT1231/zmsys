@@ -1,6 +1,7 @@
 /* Mock 内存数据库（原 src/data/store.ts 迁移）
- * - 日期锚点动态取「今天」，种子数据按相对天数生成，演示数据始终新鲜
- * - mulberry32 固定种子：同一天内刷新结果一致
+ * - 日期锚点动态取「今天」
+ * - 物料目录模式：品类/分区/分组/物料目录由 categories.ts 播种；BOM、订单、
+ *   出入库、库存、日志一律从 0 开始，由使用者建档/开单逐步生成（与真实后端一致）
  * - 不变量：每 BOM Σ有效入库 + Σ库存调整 − Σ有效出库净额 = 当前可用库存
  * - 仅授权（grants）落 localStorage 模拟后端持久化；Node 环境下自动跳过
  * - 无浏览器顶层 API，可被 node --test 直接导入 */
@@ -21,21 +22,11 @@ import type {
 import type { GrantMap, RoleGrant, RoleId } from "@/data/permissions";
 import { ACTION_CATALOG, MENU_CATALOG, ROLES, buildDefaultGrants } from "../../src/data/permissions.ts";
 import type { GrantLogEntry } from "@/api";
-import {
-    BOM_CATEGORIES,
-    categoryOf,
-    defaultsOf,
-    NEW_MICRO_SWITCH_BRACKET_OPTIONS,
-    NEW_MICRO_SWITCH_STATIC_PLATE_OPTIONS,
-    newMicroSwitchGaugeOf,
-    nextBomCode,
-} from "../../src/data/categories.ts";
+import { bomSpecOfItems, BOM_CATEGORIES, catalogRowsOf, categoryOf, nextBomCode } from "../../src/data/categories.ts";
 import { addDays, addMonths, nowStamp, nowTime, todayIso } from "../../src/lib/date.ts";
 import { maxShipOf } from "../../src/data/views.ts";
 
 export const ANCHOR = todayIso();
-
-const clampDate = (isoDate: string, min: string, max: string) => (isoDate < min ? min : isoDate > max ? max : isoDate);
 
 const isIsoDate = (value: string) => {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -48,20 +39,6 @@ const isIsoDate = (value: string) => {
 const assertIsoDate = (value: string, label: string) => {
     if (!isIsoDate(value)) throw new Error(`${label}格式不正确`);
 };
-
-// 确定性 PRNG（mulberry32）
-function mulberry32(seed: number) {
-    let a = seed >>> 0;
-    return () => {
-        a |= 0;
-        a = (a + 0x6d2b79f5) | 0;
-        let t = Math.imul(a ^ (a >>> 15), 1 | a);
-        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-}
-const rng = mulberry32(20260905);
-const randInt = (min: number, max: number) => min + Math.floor(rng() * (max - min + 1));
 
 /** 操作人（来自当前 token），写台账/日志时落名 */
 export interface Actor {
@@ -180,550 +157,6 @@ const buildCustomers = (): Customer[] =>
             created: addDays(ANCHOR, -(120 + index * 37)),
         };
     });
-
-// 33 条人工审核旋转开关主数据（编码 ZMXK2001 起，specs 键值对见品类模板）
-const ROTARY_ROWS: Array<{
-    modelCode: string;
-    foot: string;
-    gear: string;
-    gearSpec: string;
-    gearDir: string;
-    thickness: string;
-    spring: string;
-}> = [
-    {
-        modelCode: "1-1",
-        foot: "二脚",
-        gear: "一档",
-        gearSpec: "211-1",
-        gearDir: "正面",
-        thickness: "0.2",
-        spring: "0.5",
-    },
-    {
-        modelCode: "2-1",
-        foot: "三脚",
-        gear: "两档",
-        gearSpec: "222-1",
-        gearDir: "正面",
-        thickness: "0.2",
-        spring: "0.5",
-    },
-    {
-        modelCode: "2-1",
-        foot: "四脚",
-        gear: "两档",
-        gearSpec: "2-1-4",
-        gearDir: "正面",
-        thickness: "0.2",
-        spring: "0.5",
-    },
-    {
-        modelCode: "2-2",
-        foot: "三脚",
-        gear: "两档",
-        gearSpec: "222-2",
-        gearDir: "正面",
-        thickness: "0.2",
-        spring: "0.5",
-    },
-    {
-        modelCode: "3-1",
-        foot: "五脚",
-        gear: "三档",
-        gearSpec: "233-4",
-        gearDir: "正面",
-        thickness: "0.2",
-        spring: "0.5",
-    },
-    {
-        modelCode: "3-2",
-        foot: "三脚",
-        gear: "三档",
-        gearSpec: "233-1-B",
-        gearDir: "反面",
-        thickness: "0.2",
-        spring: "0.5",
-    },
-    {
-        modelCode: "3-2",
-        foot: "五脚",
-        gear: "三档",
-        gearSpec: "233-1",
-        gearDir: "反面",
-        thickness: "0.2",
-        spring: "0.5",
-    },
-    { modelCode: "4-1", foot: "六脚", gear: "四档", gearSpec: "", gearDir: "正面", thickness: "0.2", spring: "0.5" },
-    {
-        modelCode: "4-2",
-        foot: "五脚",
-        gear: "四档",
-        gearSpec: "243-1-2",
-        gearDir: "正面",
-        thickness: "0.2",
-        spring: "0.5",
-    },
-    {
-        modelCode: "4-3",
-        foot: "三脚",
-        gear: "四档",
-        gearSpec: "243-5B",
-        gearDir: "正面反轴",
-        thickness: "0.2",
-        spring: "0.5",
-    },
-    {
-        modelCode: "4-3",
-        foot: "五脚",
-        gear: "四档",
-        gearSpec: "243-5A",
-        gearDir: "正面反轴",
-        thickness: "0.2",
-        spring: "0.5",
-    },
-    {
-        modelCode: "4-3",
-        foot: "五脚",
-        gear: "四档",
-        gearSpec: "243-5",
-        gearDir: "反面转90°扇位朝上",
-        thickness: "0.2",
-        spring: "0.5",
-    },
-    {
-        modelCode: "4-4",
-        foot: "五脚",
-        gear: "四档",
-        gearSpec: "243-1",
-        gearDir: "反面",
-        thickness: "0.2",
-        spring: "0.5",
-    },
-    { modelCode: "4-8", foot: "五脚", gear: "四档", gearSpec: "", gearDir: "正面", thickness: "0.2", spring: "0.5" },
-    { modelCode: "4-9", foot: "五脚", gear: "四档", gearSpec: "", gearDir: "正面", thickness: "0.2", spring: "0.5" },
-    {
-        modelCode: "0-2",
-        foot: "六脚",
-        gear: "八档",
-        gearSpec: "全方位/冷风扇/284-1B",
-        gearDir: "正面",
-        thickness: "0.2",
-        spring: "0.55",
-    },
-    {
-        modelCode: "0-2",
-        foot: "六脚",
-        gear: "八档",
-        gearSpec: "全方位/冷风扇/284-1B",
-        gearDir: "正面转90°扇位朝上",
-        thickness: "0.3",
-        spring: "0.55",
-    },
-    {
-        modelCode: "0-2",
-        foot: "五脚",
-        gear: "八档",
-        gearSpec: "全方位/284-2B",
-        gearDir: "正面",
-        thickness: "0.2",
-        spring: "0.55",
-    },
-    {
-        modelCode: "0-3",
-        foot: "三脚",
-        gear: "两档",
-        gearSpec: "212-1",
-        gearDir: "正面",
-        thickness: "0.2",
-        spring: "0.55",
-    },
-    {
-        modelCode: "0-3",
-        foot: "五脚",
-        gear: "四档",
-        gearSpec: "263-1-A",
-        gearDir: "正面",
-        thickness: "0.2",
-        spring: "0.55",
-    },
-    {
-        modelCode: "0-3",
-        foot: "五脚",
-        gear: "四档",
-        gearSpec: "263-1-A",
-        gearDir: "正面反轴",
-        thickness: "0.2",
-        spring: "0.55",
-    },
-    {
-        modelCode: "0-4",
-        foot: "六脚",
-        gear: "八档",
-        gearSpec: "284-1A",
-        gearDir: "正面",
-        thickness: "0.2",
-        spring: "0.5",
-    },
-    {
-        modelCode: "0-4-1",
-        foot: "六脚",
-        gear: "八档",
-        gearSpec: "284-2",
-        gearDir: "正面",
-        thickness: "0.2",
-        spring: "0.55",
-    },
-    {
-        modelCode: "0-4",
-        foot: "五脚",
-        gear: "八档",
-        gearSpec: "284-1",
-        gearDir: "正面",
-        thickness: "0.2",
-        spring: "0.5",
-    },
-    {
-        modelCode: "0-5",
-        foot: "六脚",
-        gear: "八档",
-        gearSpec: "284-3",
-        gearDir: "正面",
-        thickness: "0.2",
-        spring: "0.55",
-    },
-    { modelCode: "0-5", foot: "六脚", gear: "八档", gearSpec: "", gearDir: "正面", thickness: "0.3", spring: "0.55" },
-    {
-        modelCode: "0-5",
-        foot: "五脚",
-        gear: "八档",
-        gearSpec: "284-4",
-        gearDir: "正面",
-        thickness: "0.2",
-        spring: "0.55",
-    },
-    { modelCode: "0-6", foot: "六脚", gear: "五档", gearSpec: "", gearDir: "正面", thickness: "0.2", spring: "0.6" },
-    { modelCode: "0-7", foot: "五脚", gear: "四档", gearSpec: "", gearDir: "正面", thickness: "0.2", spring: "0.6" },
-    { modelCode: "0-8", foot: "三脚", gear: "四档", gearSpec: "", gearDir: "反面", thickness: "0.2", spring: "0.55" },
-    { modelCode: "0-9", foot: "五脚", gear: "", gearSpec: "", gearDir: "", thickness: "0.2", spring: "0.55" },
-    {
-        modelCode: "0-9-1",
-        foot: "五脚",
-        gear: "六档",
-        gearSpec: "全方位",
-        gearDir: "反面",
-        thickness: "0.2",
-        spring: "0.55",
-    },
-    { modelCode: "3-1", foot: "五脚", gear: "三档", gearSpec: "", gearDir: "", thickness: "0.2", spring: "0.5" },
-];
-
-// XK3 / 新微动 / 老微动 / 琴键开关种子数据（按真实物料清单建档，品类常量由 defaultsOf 并入）
-
-/* 规格维度笛卡尔积：[[键, 选项], ...] → 逐维展开的键值对数组 */
-const specCombos = (dims: Array<[string, string[]]>): Record<string, string>[] =>
-    dims.reduce<Record<string, string>[]>(
-        (rows, [key, options]) => rows.flatMap(row => options.map(option => ({ ...row, [key]: option }))),
-        [{}],
-    );
-
-// XK3 全组合：外壳5 × 底座2 × 杆子4 × 小静片2 × 半圆静片2 × 动片2 × 卡线片2 × 弹簧2 = 1280 种
-const XK3_BOMS: Array<Pick<Bom, "code" | "name" | "modelCode" | "specs">> = specCombos([
-    [
-        "外壳",
-        [
-            "圆孔长外壳（茶色）",
-            "圆孔长外壳（透明）",
-            "圆孔短外壳（茶色）",
-            "椭圆孔长外壳无CB字（茶色）",
-            "无耳外壳无CB字（茶色）",
-        ],
-    ],
-    ["底座", ["茶色", "透明"]],
-    ["杆子", ["圆轴长杆子", "圆轴短杆子", "扁轴4.8", "扁轴4.8转90°"]],
-    ["小静片", ["不电镀", "镀锡"]],
-    ["半圆静片", ["不电镀", "镀锡"]],
-    ["动片", ["不电镀", "镀锡"]],
-    ["卡线片", ["0.15", "0.2"]],
-    ["弹簧", ["0.45长弹簧", "0.45短弹簧"]],
-]).map((specs, index) => ({
-    code: `ZMXK3${String(index + 1).padStart(3, "0")}`,
-    name: "XK3",
-    modelCode: "XK3",
-    specs,
-}));
-
-// 老微动全组合：底座2 × 按钮3 × 弹簧2 = 12 种
-const OLD_KW_BOMS: Array<Pick<Bom, "code" | "name" | "modelCode" | "specs">> = specCombos([
-    ["底座", ["带CB", "不带CB"]],
-    ["按钮", ["8.5mm（常用装跌倒）", "8.9mm", "9.6mm"]],
-    ["弹簧", ["0.25", "0.27"]],
-]).map((specs, index) => ({
-    code: `ZMKW16${String(index + 1).padStart(3, "0")}`,
-    name: "老微动",
-    modelCode: "KW16",
-    specs,
-}));
-
-// 新微动全组合：底座2 × 按钮8 × (6.3支架3×6.3静片3 + 4.8支架2×4.8静片2) × 动片2 × 摆片3 × 弹片3 = 3744 种
-const NEW_KW_BOMS: Array<Pick<Bom, "code" | "name" | "modelCode" | "specs">> = specCombos([
-    ["底座", ["二脚底座（无挡脚）", "三脚底座（有挡脚）"]],
-    ["按钮高度", ["7.6mm（常用装跌倒）", "8.0mm", "8.1mm", "8.2mm圆弧", "8.3mm", "8.5mm", "8.8mm", "9.1mm"]],
-    ["支架", NEW_MICRO_SWITCH_BRACKET_OPTIONS],
-    ["静片", NEW_MICRO_SWITCH_STATIC_PLATE_OPTIONS],
-    ["动片", ["铜镀银", "镀锡"]],
-    ["摆片", ["铜镀银摆片", "铁镀镍摆片", "复合铜镀镍摆片"]],
-    ["弹片", ["0.12", "0.15", "0.2"]],
-])
-    .filter(specs => {
-        const bracketGauge = newMicroSwitchGaugeOf(specs["支架"]);
-        const staticPlateGauge = newMicroSwitchGaugeOf(specs["静片"]);
-        return bracketGauge !== undefined && bracketGauge === staticPlateGauge;
-    })
-    .map((specs, index) => ({
-        code: `ZMKW${String(index + 1).padStart(4, "0")}`,
-        name: "新微动",
-        modelCode: "KW",
-        specs,
-    }));
-
-const EXTRA_BOMS: Array<Pick<Bom, "code" | "name" | "modelCode" | "specs">> = [
-    ...XK3_BOMS,
-    ...NEW_KW_BOMS,
-    ...OLD_KW_BOMS,
-    {
-        code: "ZMKQ001",
-        name: "琴键开关",
-        modelCode: "KQ-1",
-        specs: {
-            类型: "四键焊线",
-            卡板: "大卡板18mm+小卡板18mm+短卡板16mm",
-            弹簧: "0.3",
-            触点: "不带点",
-            五金件明细: "扣板+连锁片×2+不带点静片+不带点动片",
-        },
-    },
-    {
-        code: "ZMKQ002",
-        name: "琴键开关",
-        modelCode: "KQ-2",
-        specs: {
-            类型: "四键插线",
-            卡板: "大卡板18mm+小卡板18mm+短卡板16mm",
-            弹簧: "0.3",
-            触点: "不带点",
-            五金件明细: "扣板+连锁片×2+不带点静片+不带点动片",
-        },
-    },
-    {
-        code: "ZMKQ003",
-        name: "琴键开关",
-        modelCode: "KQ-3",
-        specs: {
-            类型: "小太阳四键三档（摇头）",
-            卡板: "小卡板18mm+短卡板16mm",
-            弹簧: "0.35",
-            触点: "带点",
-            五金件明细: "扣板×2+连锁片+带点静片+带点动片",
-        },
-    },
-    {
-        code: "ZMKQ004",
-        name: "琴键开关",
-        modelCode: "KQ-4",
-        specs: {
-            类型: "小太阳四键二档（不摇头）",
-            卡板: "小卡板18mm+短卡板16mm",
-            弹簧: "0.35",
-            触点: "带点",
-            五金件明细: "扣板+连锁片+带点静片+带点动片",
-        },
-    },
-    {
-        code: "ZMKQ005",
-        name: "琴键开关",
-        modelCode: "KQ-5",
-        specs: {
-            类型: "冷风扇琴键（茶色）",
-            卡板: "小卡板18mm+大卡板18mm",
-            弹簧: "0.35",
-            触点: "不带点",
-            五金件明细: "扣板×2+连锁片+不带点静片+不带点动片+辅助动片",
-        },
-    },
-    {
-        code: "ZMKQ006",
-        name: "琴键开关",
-        modelCode: "KQ-6",
-        specs: {
-            类型: "冷风扇琴键（透明大功率带触点）",
-            卡板: "小卡板18mm+大卡板18mm",
-            弹簧: "0.35",
-            触点: "带点",
-            五金件明细: "扣板×2+连锁片+带点静片+带点动片+辅助动片",
-        },
-    },
-];
-
-const specOf = (bom: Pick<Bom, "name" | "modelCode" | "specs">) => {
-    const def = categoryOf(bom.name);
-    const parts = Object.entries(bom.specs)
-        .filter(([key, value]) => {
-            if (!value || !value.trim()) return false;
-            const field = def?.fields.find(item => item.key === key);
-            // 品类常量（defaultValue）各条目一致、无区分度，不进摘要
-            return !(field?.defaultValue && field.defaultValue === value);
-        })
-        .map(([key, value]) => `${key} ${value}`);
-    return [bom.modelCode, ...parts].filter(Boolean).join(" · ");
-};
-
-const normalizeText = (value: string) => value.normalize("NFKC").trim();
-
-const normalizedSpecs = (specs: Record<string, string>) =>
-    Object.fromEntries(
-        Object.entries(specs)
-            .map(([key, value]) => [normalizeText(key), normalizeText(value)] as const)
-            .filter(([key, value]) => key && value)
-            .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)),
-    );
-
-const bomIdentityOf = (input: Pick<Bom, "name" | "modelCode" | "specs">) =>
-    JSON.stringify([
-        normalizeText(input.name),
-        normalizeText(input.modelCode).replace(/[a-z]/g, char => char.toUpperCase()),
-        normalizedSpecs(input.specs),
-    ]);
-
-const buildBoms = (): Bom[] => {
-    const rotary = categoryOf("旋转开关")!;
-    const rotaryBoms: Bom[] = ROTARY_ROWS.map((row, index) => {
-        const bom: Bom = {
-            code: `ZMXK2${String(index + 1).padStart(3, "0")}`,
-            name: "旋转开关",
-            modelCode: row.modelCode,
-            specs: {
-                脚位: row.foot,
-                档位: row.gear,
-                规格: row.gearSpec,
-                方向: row.gearDir,
-                银点厚度: row.thickness,
-                弹簧: row.spring,
-                ...defaultsOf(rotary),
-            },
-            spec: "",
-            created: addDays(ANCHOR, -3),
-            unit: "个",
-        };
-        return { ...bom, spec: specOf(bom) };
-    });
-    const extraBoms: Bom[] = EXTRA_BOMS.map(row => {
-        const bom: Bom = {
-            ...row,
-            // 品类常量（固定部件）并入 specs，行数据优先
-            specs: { ...defaultsOf(categoryOf(row.name)!), ...row.specs },
-            spec: "",
-            created: addDays(ANCHOR, -3),
-            unit: "个",
-        };
-        return { ...bom, spec: specOf(bom) };
-    });
-    return [...rotaryBoms, ...extraBoms];
-};
-
-const INSPECTORS = ["王师傅", "赵师傅", "周丽"];
-const OPERATORS = ["王师傅", "周丽", "赵师傅"];
-
-type SeededOrder = Order & { seedStock: number };
-
-/** 静态订单：日期相对锚点生成，单号 ZM+yyMMdd+序号 */
-function staticOrders(): SeededOrder[] {
-    const mk = (
-        seq: number,
-        orderDaysAgo: number,
-        deliverInDays: number,
-        customerIndex: number,
-        bomCode: string,
-        qty: number,
-        outbound: number,
-        seedStock: number,
-    ): SeededOrder => {
-        const orderDate = addDays(ANCHOR, -orderDaysAgo);
-        return {
-            version: 1,
-            orderNo: `ZM${orderDate.slice(2).replaceAll("-", "")}${String(seq).padStart(3, "0")}`,
-            customer: CUSTOMER_SEEDS[customerIndex][0],
-            customerCode: CUSTOMER_SEEDS[customerIndex][1],
-            bomCode,
-            qty,
-            outbound,
-            orderDate,
-            deliverDate: addDays(orderDate, deliverInDays),
-            remark: "",
-            lifecycleStatus: "active",
-            seedStock,
-        };
-    };
-    return [
-        mk(86, 4, 15, 0, "ZMXK2001", 2400, 0, 1600),
-        mk(85, 4, 19, 1, "ZMXK2002", 800, 0, 0),
-        mk(84, 5, 13, 2, "ZMXK2003", 1200, 1200, 0),
-        mk(83, 6, 11, 3, "ZMKW0001", 560, 560, 0),
-        mk(82, 7, 20, 4, "ZMXK2005", 3000, 0, 1200),
-        mk(81, 8, 17, 5, "ZMKW16001", 960, 0, 0),
-        // 两笔 7 个月前的已完成历史订单：让成都锐成 / 天津远达在合作状态派生中落为「待跟进」
-        mk(2, 215, 232, 8, "ZMKW0003", 400, 400, 0),
-        mk(1, 226, 243, 9, "ZMXK2010", 500, 500, 0),
-        // 取消终态两种形态（db-scheme §6.1）：完全未发取消 / 部分发货后取消（保留已发数量）
-        {
-            ...mk(80, 3, 12, 6, "ZMXK2003", 700, 0, 0),
-            lifecycleStatus: "cancelled" as const,
-            cancelledBy: "郭均",
-            cancelledAt: `${addDays(ANCHOR, -2)}T15:30:00+08:00`,
-            cancelReason: "客户临时缩减需求，整单取消",
-        },
-        {
-            ...mk(79, 5, 14, 7, "ZMKW0001", 900, 360, 0),
-            version: 3,
-            lifecycleStatus: "cancelled" as const,
-            cancelledBy: "郭均",
-            cancelledAt: `${addDays(ANCHOR, -1)}T10:12:00+08:00`,
-            cancelReason: "已发 360 件后客户取消剩余欠量",
-        },
-    ];
-}
-
-function buildOrders(boms: Bom[]): SeededOrder[] {
-    const plan = [
-        ...Array<string>(63).fill("已完成"),
-        ...Array<string>(11).fill("可发货"),
-        ...Array<string>(6).fill("待生产"),
-    ];
-    const seeded: SeededOrder[] = plan.map((status, index) => {
-        const seq = 80 - index;
-        // 近期订单只落在前 8 家客户：成都锐成 / 天津远达仅有 7 个月前的历史单，合作状态派生为「待跟进」
-        const [customer, customerCode] = CUSTOMER_SEEDS[(seq * 7) % 8];
-        const bom = boms[(seq * 3) % boms.length];
-        const qty = 300 + ((seq * 137) % 4200);
-        const done = status === "已完成" ? qty : status === "可发货" ? Math.floor(qty * (0.2 + (seq % 5) * 0.15)) : 0;
-        const orderDate = addDays(ANCHOR, -9 - Math.floor(index / 2));
-        return {
-            version: 1,
-            orderNo: `ZM${orderDate.slice(2).replaceAll("-", "")}${String(seq).padStart(3, "0")}`,
-            customer,
-            customerCode,
-            bomCode: bom.code,
-            qty,
-            outbound: status === "已完成" ? qty : 0,
-            orderDate,
-            deliverDate: addDays(orderDate, 12 + (seq % 8)),
-            remark: "",
-            lifecycleStatus: "active",
-            seedStock: status === "可发货" ? done : 0,
-        };
-    });
-    return [...staticOrders().map(order => ({ ...order })), ...seeded];
-}
 
 /* ---- 内存库（handler 侧单例） ---- */
 const MOCK_PASSWORD = "123456";
@@ -860,27 +293,21 @@ class MockDb {
     ];
 
     init() {
-        this.boms = buildBoms();
-        const orders = buildOrders(this.boms);
+        // 物料目录模式（与真实后端一致）：目录随 categories.ts 播种，业务数据从 0 开始——
+        // BOM、订单、出入库、库存、日志全部为空，由使用者建档/开单逐步生成
+        this.boms = [];
+        this.orders = [];
         this.customers = buildCustomers();
-
-        // 共享库存：Σ 可发货订单种子库存（同 BOM 库存跨订单共享）
-        orders.forEach(order => {
-            if (order.seedStock > 0)
-                this.stock.set(order.bomCode, (this.stock.get(order.bomCode) || 0) + order.seedStock);
-        });
-        this.orders = orders.map(({ seedStock: _seedStock, ...order }) => order);
-
-        this.outboundLedger = this.buildOutboundLedger();
-        this.outboundQuantityEvents = this.outboundLedger.map(row => ({
-            eventNo: `${row.no}-E01`,
-            shipmentNo: row.no,
-            qtyDelta: row.qty,
-            operator: row.operator,
-            time: `${row.date}T${row.time}:00+08:00`,
-        }));
-        this.inboundLedger = this.buildInboundLedger();
-        this.opLog = this.buildOpLog();
+        this.inboundLedger = [];
+        this.outboundLedger = [];
+        this.stockAdjustments = [];
+        this.inboundChangeLog = [];
+        this.salesOrderChangeLog = [];
+        this.outboundQuantityEvents = [];
+        this.outboundStateLog = [];
+        this.outboundPrintLog = [];
+        this.opLog = [];
+        this.stock.clear();
     }
 
     bomByCode(code: string) {
@@ -914,221 +341,6 @@ class MockDb {
 
     listCustomers(): Customer[] {
         return this.customers.map(customer => ({ ...customer, cooperation: this.cooperationOf(customer.code) }));
-    }
-
-    private timeOf(seedIndex: number) {
-        return `${String(8 + (seedIndex % 9)).padStart(2, "0")}:${String((seedIndex * 17) % 60).padStart(2, "0")}`;
-    }
-
-    private buildOutboundLedger(): OutboundRow[] {
-        const raw: Array<Omit<OutboundRow, "no">> = [];
-        const shipped = this.orders.filter(order => order.outbound > 0);
-        const recent = [...shipped]
-            .sort((a, b) => a.deliverDate.localeCompare(b.deliverDate))
-            .slice(-12)
-            .map(order => order.orderNo);
-        const recentSet = new Set([
-            ...recent,
-            ...staticOrders()
-                .slice(2, 4)
-                .map(order => order.orderNo),
-        ]);
-        const todayFirst = new Set(recent.slice(-6));
-
-        shipped.forEach(order => {
-            const parts = order.qty > 2000 ? 2 : 1;
-            const firstQty = parts === 2 ? Math.round(order.qty * (0.45 + rng() * 0.15)) : order.qty;
-            let cursor = 0;
-            [firstQty, order.qty - firstQty].slice(0, parts).forEach((qty, partIndex) => {
-                cursor += 1;
-                let date: string;
-                if (recentSet.has(order.orderNo)) {
-                    date = partIndex === 0 && todayFirst.has(order.orderNo) ? ANCHOR : addDays(ANCHOR, -randInt(1, 6));
-                } else {
-                    date = clampDate(addDays(order.deliverDate, -randInt(0, 3)), addDays(ANCHOR, -55), ANCHOR);
-                }
-                raw.push({
-                    orderNo: order.orderNo,
-                    customer: order.customer,
-                    customerCode: order.customerCode,
-                    bomCode: order.bomCode,
-                    qty,
-                    date,
-                    time: this.timeOf(raw.length * 3 + partIndex),
-                    operator: OPERATORS[raw.length % OPERATORS.length],
-                    state: "printed",
-                    version: 2,
-                    printVersion: 1,
-                });
-            });
-        });
-
-        raw.sort((a, b) => (a.date === b.date ? a.orderNo.localeCompare(b.orderNo) : a.date.localeCompare(b.date)));
-        const counter = new Map<string, number>();
-        const numbered = raw.map(row => {
-            const seq = (counter.get(row.date) || 0) + 1;
-            counter.set(row.date, seq);
-            return { ...row, no: `CK${row.date.slice(2).replaceAll("-", "")}${String(seq).padStart(2, "0")}` };
-        });
-        // 演示作废形态：一张打印前作废（历史日）、一张紧急撤销（当天），不参与库存/订单已发的种子设定
-        const demoSource = numbered[0];
-        if (demoSource) {
-            numbered.push(
-                {
-                    ...demoSource,
-                    no: `CK${demoSource.date.slice(2).replaceAll("-", "")}90`,
-                    state: "voided",
-                    version: 2,
-                    printVersion: 0,
-                    voidReason: "登记时选错了产品型号，作废后重新登记",
-                },
-                {
-                    ...demoSource,
-                    no: `CK${ANCHOR.slice(2).replaceAll("-", "")}91`,
-                    date: ANCHOR,
-                    state: "voided",
-                    version: 3,
-                    printVersion: 1,
-                    voidReason: "打印后发现数量错误，货物未走且纸质单已废，紧急撤销",
-                },
-            );
-        }
-        // 演示已登记未打印：挂在活动订单名下（已完成订单的出库必须均已打印），
-        // 数量不超过该订单剩余欠量，同样不参与库存/订单已发的种子设定
-        const activeOrder = this.orders.find(
-            order => order.lifecycleStatus === "active" && order.qty - order.outbound >= 2,
-        );
-        if (activeOrder) {
-            const half = Math.max(1, Math.floor((activeOrder.qty - activeOrder.outbound) / 2));
-            [half, activeOrder.qty - activeOrder.outbound - half].forEach((qty, index) => {
-                numbered.push({
-                    orderNo: activeOrder.orderNo,
-                    customer: activeOrder.customer,
-                    customerCode: activeOrder.customerCode,
-                    bomCode: activeOrder.bomCode,
-                    qty,
-                    date: ANCHOR,
-                    time: index === 0 ? "09:40" : "11:05",
-                    operator: OPERATORS[index % OPERATORS.length],
-                    state: "registered",
-                    version: 1,
-                    printVersion: 0,
-                    no: `CK${ANCHOR.slice(2).replaceAll("-", "")}${index === 0 ? "92" : "93"}`,
-                });
-            });
-        }
-        return numbered;
-    }
-
-    private buildInboundLedger(): InboundRow[] {
-        const outByBom = new Map<string, number>();
-        const firstOutByBom = new Map<string, OutboundRow>();
-        // 库存口径同 v_bom_stock：作废出库不占库存，反推有效入库时排除
-        this.outboundLedger.forEach(row => {
-            if (row.state === "voided") return;
-            outByBom.set(row.bomCode, (outByBom.get(row.bomCode) || 0) + row.qty);
-            const prev = firstOutByBom.get(row.bomCode);
-            if (!prev || row.date < prev.date) firstOutByBom.set(row.bomCode, row);
-        });
-
-        const weekStart = addDays(ANCHOR, -6);
-        const recentBoms = new Set(this.outboundLedger.filter(row => row.date >= weekStart).map(row => row.bomCode));
-        const anchorBoms = new Set(
-            this.outboundLedger
-                .filter(row => row.date === ANCHOR)
-                .map(row => row.bomCode)
-                .slice(0, 3),
-        );
-
-        const raw: Array<Omit<InboundRow, "no">> = [];
-        this.boms.forEach(bom => {
-            const totalIn = (outByBom.get(bom.code) || 0) + this.stockOf(bom.code);
-            if (totalIn <= 0) return;
-            const partCount = Math.min(5, Math.max(2, Math.ceil(totalIn / 1600)));
-            const weights = Array.from({ length: partCount }, () => 0.7 + rng() * 0.6);
-            const weightSum = weights.reduce((sum, value) => sum + value, 0);
-            const firstOut = firstOutByBom.get(bom.code);
-            const baseDate = firstOut ? firstOut.date : addDays(ANCHOR, -randInt(10, 20));
-            let allocated = 0;
-            for (let i = 0; i < partCount; i += 1) {
-                const isLast = i === partCount - 1;
-                const qty = isLast
-                    ? totalIn - allocated
-                    : Math.max(100, Math.round((totalIn * weights[i]) / weightSum));
-                allocated += qty;
-                let date: string;
-                if (isLast && anchorBoms.has(bom.code)) date = ANCHOR;
-                else if (isLast && recentBoms.has(bom.code)) date = addDays(ANCHOR, -randInt(0, 6));
-                else
-                    date = clampDate(
-                        addDays(baseDate, -randInt(1, 4) - i * randInt(2, 8)),
-                        addDays(ANCHOR, -60),
-                        ANCHOR,
-                    );
-                raw.push({
-                    bomCode: bom.code,
-                    qty,
-                    date,
-                    time: this.timeOf(raw.length * 5 + i),
-                    inspector: INSPECTORS[raw.length % INSPECTORS.length],
-                    status: "active",
-                    version: 1,
-                    createdAt: `${date}T${this.timeOf(raw.length * 5 + i)}:00+08:00`,
-                });
-            }
-        });
-
-        raw.sort((a, b) => (a.date === b.date ? a.bomCode.localeCompare(b.bomCode) : a.date.localeCompare(b.date)));
-        const counter = new Map<string, number>();
-        const numbered = raw.map(row => {
-            const seq = (counter.get(row.date) || 0) + 1;
-            counter.set(row.date, seq);
-            return { ...row, no: `RK${row.date.slice(2).replaceAll("-", "")}${String(seq).padStart(2, "0")}` };
-        });
-        // 演示当天作废：入库只能作废当天录入的记录，故锚定今天；qty 不参与库存种子设定
-        const inboundDemoBom = numbered[0]?.bomCode ?? this.boms[0]?.code;
-        if (inboundDemoBom) {
-            numbered.push({
-                no: `RK${ANCHOR.slice(2).replaceAll("-", "")}90`,
-                bomCode: inboundDemoBom,
-                qty: 150,
-                date: ANCHOR,
-                time: "14:20",
-                inspector: INSPECTORS[0],
-                remark: "",
-                status: "voided",
-                version: 2,
-                createdAt: `${ANCHOR}T14:20:00+08:00`,
-                updatedBy: INSPECTORS[0],
-                updatedAt: `${ANCHOR}T15:05:00+08:00`,
-            });
-        }
-        return numbered;
-    }
-
-    /* op_log 口径（db-scheme §2.4）：只记三种操作——登记发货 / 新建客户 / 新建销售订单 */
-    private buildOpLog(): OpLogEntry[] {
-        const entries: OpLogEntry[] = [];
-        const push = (date: string, time: string, user: string, role: string, action: string, target: string) =>
-            entries.push({ date, time, user, role, action, target });
-        this.outboundLedger
-            .filter(row => row.date === ANCHOR || row.date === addDays(ANCHOR, -1) || row.date === addDays(ANCHOR, -2))
-            .forEach(row =>
-                push(
-                    row.date,
-                    row.time,
-                    row.operator,
-                    row.operator === "周丽" ? "仓库管理员" : "检验员",
-                    "登记发货",
-                    row.no,
-                ),
-            );
-        const newestOrder = staticOrders()[0]?.orderNo ?? "—";
-        push(ANCHOR, "09:12", "陈洁", "销售", "新建销售订单", newestOrder);
-        push(ANCHOR, "08:47", "陈洁", "销售", "新建客户档案", "CUS-0906");
-        return entries.sort((a, b) =>
-            a.date === b.date ? b.time.localeCompare(a.time) : b.date.localeCompare(a.date),
-        );
     }
 
     // ---- 认证 ----
@@ -1482,51 +694,65 @@ class MockDb {
         return { ...customer, cooperation: this.cooperationOf(customer.code) };
     }
 
-    createBom(input: { name: string; modelCode: string; specs: Record<string, string> }): Bom {
-        const name = normalizeText(input.name);
-        const modelCode = normalizeText(input.modelCode);
-        const category = categoryOf(name);
+    createBom(input: { name: string; materialItemIds: string[] }): Bom {
+        const category = categoryOf(input.name.trim());
         if (!category) throw new Error("品类不存在");
-        if (!modelCode) throw new Error("请输入型号");
-        if (modelCode.length > 64) throw new Error("型号最多 64 个字符");
-        if (!input.specs || Array.isArray(input.specs) || typeof input.specs !== "object") {
-            throw new Error("规格必须是对象");
+        if (!Array.isArray(input.materialItemIds) || input.materialItemIds.length === 0) {
+            throw new Error("请至少选择一项物料");
         }
-        if (Object.values(input.specs).some(value => typeof value !== "string")) throw new Error("规格值必须是字符串");
-        const allowedKeys = new Set(category.fields.map(field => field.key));
-        if (Object.keys(input.specs).some(key => !allowedKeys.has(normalizeText(key)))) {
-            throw new Error("规格中包含当前品类未定义的字段");
+        const rows = catalogRowsOf(category);
+        const rowById = new Map(rows.map(row => [row.id, row]));
+        const selected = [...new Set(input.materialItemIds)].map(id => {
+            const row = rowById.get(id);
+            if (!row) throw new Error("物料不存在、已停用或不属于该品类");
+            return row;
+        });
+        const byGroup = new Map<string, { groupName: string; multi: boolean; count: number }>();
+        const multiOf = new Map(
+            category.groups.filter(node => node.kind === "group").map(node => [node.key, node.multi ?? false]),
+        );
+        for (const row of selected) {
+            const bucket = byGroup.get(row.groupKey) ?? {
+                groupName: row.groupName,
+                multi: multiOf.get(row.groupKey) ?? false,
+                count: 0,
+            };
+            bucket.count += 1;
+            byGroup.set(row.groupKey, bucket);
         }
-        // 固定规格以后端目录为准，客户端同名值不能覆盖。
-        const specs = normalizedSpecs({ ...input.specs, ...defaultsOf(category) });
-        for (const field of category.fields) {
-            const value = specs[field.key];
-            if (field.required && !value) throw new Error(`请填写规格：${field.label}`);
-            if (value && field.options && !field.options.includes(value)) throw new Error(`规格值无效：${field.label}`);
+        for (const { groupName, multi, count } of byGroup.values()) {
+            if (!multi && count > 1) throw new Error(`分组「${groupName}」只能选择一项物料`);
         }
-        if (!Object.keys(specs).length) throw new Error("请至少填写一项规格");
-        if (name === "新微动") {
-            const bracket = newMicroSwitchGaugeOf(specs["支架"]);
-            const plate = newMicroSwitchGaugeOf(specs["静片"]);
-            if (!bracket || bracket !== plate) throw new Error("新微动的支架与静片必须使用相同的 6.3/4.8 规格");
-        }
-        const identity = bomIdentityOf({ name, modelCode, specs });
-        const duplicate = this.boms.find(bom => bomIdentityOf(bom) === identity);
+        const identity = JSON.stringify([
+            category.key,
+            [...new Set(input.materialItemIds)].sort((a, b) => (BigInt(a) < BigInt(b) ? -1 : 1)),
+        ]);
+        const duplicate = this.boms.find(
+            bom =>
+                JSON.stringify([
+                    category.key,
+                    bom.items.map(item => item.materialId).sort((a, b) => (BigInt(a) < BigInt(b) ? -1 : 1)),
+                ]) === identity,
+        );
         if (duplicate) throw new Error(`BOM 已存在：${duplicate.code}`);
         const code = nextBomCode(category, this.boms);
+        // 建档冻结快照：明细按目录序（position）落 items；modelCode 由 model 组派生
+        const selectedIds = new Set(input.materialItemIds);
+        const items = rows
+            .filter(row => selectedIds.has(row.id))
+            .map(row => ({ materialId: row.id, groupKey: row.groupKey, groupName: row.groupName, name: row.name }));
         const bom: Bom = {
             code,
-            name,
-            modelCode,
-            specs,
-            spec: "",
+            name: category.name,
+            modelCode: items.find(item => item.groupKey === "model")?.name ?? "",
+            items,
+            spec: bomSpecOfItems(items),
             created: ANCHOR,
             unit: "个",
         };
-        bom.spec = specOf(bom);
         this.boms.unshift(bom);
         this.version += 1;
-        return { ...bom, specs: { ...bom.specs } };
+        return structuredClone(bom);
     }
 
     createInbound(input: { bomCode: string; qty: number; date: string; remark: string }, actor: Actor): InboundRow {
@@ -1876,7 +1102,7 @@ class MockDb {
         return {
             version: this.version,
             orders: this.orders.map(order => ({ ...order })),
-            boms: this.boms.map(bom => ({ ...bom, specs: { ...bom.specs } })),
+            boms: structuredClone(this.boms),
             bomCategories: structuredClone(BOM_CATEGORIES),
             customers: this.listCustomers(),
             inboundLedger: this.inboundLedger.map(row => ({ ...row })),

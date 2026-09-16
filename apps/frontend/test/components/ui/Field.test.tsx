@@ -45,7 +45,7 @@ describe("DateField / SelectField / TextArea", () => {
         const onChange = vi.fn();
         render(
             <SelectField label="品类" value="x" onChange={onChange}>
-                <option value="x">旋转开关</option>
+                <option value="x">旋转XK2</option>
                 <option value="y">琴键开关</option>
             </SelectField>,
         );

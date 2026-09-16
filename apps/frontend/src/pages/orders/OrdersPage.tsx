@@ -18,7 +18,7 @@ import { CustomerCell, DateCell, QtyCell } from "@/components/ui/cells";
 import { SortTh } from "@/components/ui/SortTh";
 import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { nextSortState, type SortState } from "@/lib/tableSort";
-import { Field, SelectField, TextArea, TextField, DateField } from "@/components/ui/Field";
+import { Field, TextArea, TextField, DateField } from "@/components/ui/Field";
 import { useCreateOrder, useUpdateOrder, useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { EMPTY_SNAPSHOT, bomByCode, maxShipOf, orderStatusOf, remainingOf } from "@/data/views";
 import { addDays, addMonths, todayIso } from "@/lib/date";
@@ -26,7 +26,6 @@ import { useToast } from "@/components/ui/Toast";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import type { Order, Snapshot } from "@/api";
-import { bomSelectorOptionLabel, buildBomSelectorSchema, resolveBomSelection } from "@/data/bomSelection";
 
 const STATUS_OPTIONS = ["全部状态", "待备货", "可发货", "部分发货", "已完成", "已取消", "部分发货后取消"];
 const EMPTY_BOMS: Snapshot["boms"] = [];
@@ -45,7 +44,7 @@ const ORDER_SORT_COLUMNS: Array<{ key: OrderSortKey; label: string }> = [
 const shortDate = (isoDate: string) => `${isoDate.slice(5, 7)}/${isoDate.slice(8, 10)}`;
 
 /* 新建销售订单弹窗（三步表单：客户与交付 → BOM 编码 → 备注） */
-function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     const { data } = useWbSnapshot();
     const createOrder = useCreateOrder();
     const toast = useToast();
@@ -56,10 +55,12 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
     const [qty, setQty] = useState("");
     const [orderDate, setOrderDate] = useState(todayIso);
     const [deliverDate, setDeliverDate] = useState("");
-    const [category, setCategory] = useState("");
-    const [bomSelections, setBomSelections] = useState<Record<string, string>>({});
+    const [bomCode, setBomCode] = useState("");
     const [remark, setRemark] = useState("");
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    /* 用户改动某字段即清除该字段的报错，避免补填后验证词残留 */
+    const clearError = (key: string) => setErrors(current => ({ ...current, [key]: "" }));
 
     const customerOptions = useMemo(
         () =>
@@ -69,40 +70,15 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
             })),
         [customers],
     );
-    const categories = useMemo(() => [...new Set(boms.map(bom => bom.name))], [boms]);
-    const categoryBoms = useMemo(() => (category ? boms.filter(bom => bom.name === category) : []), [boms, category]);
-    const selectorSchema = useMemo(
-        () =>
-            buildBomSelectorSchema(
-                categoryBoms,
-                data?.bomCategories.find(item => item.name === category)?.fields.map(field => field.key),
-            ),
-        [categoryBoms, category, data],
-    );
-    const resolution = useMemo(
-        () => resolveBomSelection(categoryBoms, selectorSchema.fields, bomSelections),
-        [categoryBoms, selectorSchema.fields, bomSelections],
-    );
-    const selectedBom =
-        !resolution.pending && resolution.candidates.length === 1 ? resolution.candidates[0] : undefined;
+    /* 输入即解析：编码在物料与BOM建档时已生成，这里按编码回捞档案（容错首尾空格与大小写） */
+    const matchedBom = useMemo(() => {
+        const code = bomCode.trim().toLowerCase();
+        return code ? boms.find(bom => bom.code.toLowerCase() === code) : undefined;
+    }, [boms, bomCode]);
 
-    const pickCategory = (nextCategory: string) => {
-        setCategory(nextCategory);
-        setBomSelections({});
-        setErrors(current => ({ ...current, category: "", bom: "" }));
-    };
-
-    const pickBomDimension = (fieldId: string, value: string) => {
-        const fieldIndex = selectorSchema.fields.findIndex(field => field.id === fieldId);
-        setBomSelections(current => {
-            const next: Record<string, string> = {};
-            selectorSchema.fields.slice(0, fieldIndex).forEach(field => {
-                if (current[field.id]) next[field.id] = current[field.id];
-            });
-            if (value) next[fieldId] = value;
-            return next;
-        });
-        setErrors(current => ({ ...current, bom: "" }));
+    const inputBomCode = (nextCode: string) => {
+        setBomCode(nextCode);
+        clearError("bom");
     };
 
     const reset = () => {
@@ -110,8 +86,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
         setQty("");
         setOrderDate(todayIso());
         setDeliverDate("");
-        setCategory("");
-        setBomSelections({});
+        setBomCode("");
         setRemark("");
         setErrors({});
     };
@@ -123,8 +98,8 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
         if (!customerCode) nextErrors.customerCode = "请选择客户";
         if (!qty || Number(qty) <= 0) nextErrors.qty = "请填写订单数量";
         if (!deliverDate) nextErrors.deliverDate = "请选择交货日期";
-        if (!category) nextErrors.category = "请选择 BOM 品类";
-        else if (!selectedBom) nextErrors.bom = "请完成规格选择";
+        if (!bomCode.trim()) nextErrors.bom = "请输入 BOM 编码";
+        else if (!matchedBom) nextErrors.bom = "未找到该 BOM 编码，请核对";
         setErrors(nextErrors);
         if (Object.keys(nextErrors).length)
             requestAnimationFrame(() =>
@@ -135,7 +110,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
         createOrder.mutate(
             {
                 customerCode,
-                bomCode: selectedBom!.code,
+                bomCode: matchedBom!.code,
                 qty: Number(qty),
                 deliverDate,
                 orderDate,
@@ -157,7 +132,7 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
             open={open}
             onClose={onClose}
             title="新建销售订单"
-            subtitle="按品类与部件组合定位 BOM，无需滚动长清单"
+            subtitle="输入 BOM 编码自动带出成品档案"
             width={640}
             footer={
                 <>
@@ -188,7 +163,10 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
                             required
                             error={errors.customerCode}
                             value={customerCode}
-                            onChange={setCustomerCode}
+                            onChange={code => {
+                                setCustomerCode(code);
+                                clearError("customerCode");
+                            }}
                             options={customerOptions}
                         />
                         <TextField
@@ -198,104 +176,66 @@ function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }
                             placeholder="如 2400"
                             error={errors.qty}
                             value={qty}
-                            onChange={event => setQty(event.target.value.replace(/\D/g, ""))}
+                            onChange={event => {
+                                setQty(event.target.value.replace(/\D/g, ""));
+                                clearError("qty");
+                            }}
                         />
                         <DateField
                             label="下单日期"
                             error={errors.orderDate}
                             required
                             value={orderDate}
-                            onChange={event => setOrderDate(event.target.value)}
+                            onChange={event => {
+                                setOrderDate(event.target.value);
+                                clearError("orderDate");
+                            }}
                         />
                         <DateField
                             label="交货日期"
                             required
                             error={errors.deliverDate}
                             value={deliverDate}
-                            onChange={event => setDeliverDate(event.target.value)}
+                            onChange={event => {
+                                setDeliverDate(event.target.value);
+                                clearError("deliverDate");
+                            }}
                         />
                     </div>
                 </fieldset>
 
                 <fieldset className="rounded-panel border border-line p-4">
-                    <legend className="px-1.5 text-12.5 font-semibold text-primary">② 选择 BOM</legend>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <SelectField
-                            label="品类"
+                    <legend className="px-1.5 text-12.5 font-semibold text-primary">② BOM 编码</legend>
+                    <div className="flex flex-col gap-3">
+                        <TextField
+                            label="BOM 编码"
                             required
-                            error={errors.category}
-                            value={category}
-                            onChange={event => pickCategory(event.target.value)}
-                        >
-                            <option value="">请选择品类</option>
-                            {categories.map(item => (
-                                <option key={item} value={item}>
-                                    {item}
-                                </option>
-                            ))}
-                        </SelectField>
-
-                        {resolution.steps.map((step, index) => (
-                            <SelectField
-                                key={step.field.id}
-                                label={step.field.label}
-                                required
-                                error={index === resolution.steps.length - 1 ? errors.bom : undefined}
-                                value={bomSelections[step.field.id] ?? ""}
-                                onChange={event => pickBomDimension(step.field.id, event.target.value)}
-                            >
-                                <option value="">请选择{step.field.label}</option>
-                                {step.options.map(option => (
-                                    <option key={option} value={option}>
-                                        {bomSelectorOptionLabel(option)}
-                                    </option>
-                                ))}
-                            </SelectField>
-                        ))}
-
-                        {category && selectorSchema.fixedSpecs.length > 0 && (
-                            <div className="rounded-btn border border-line bg-panel px-3 py-2.5 sm:col-span-2">
-                                <p className="text-11.5 font-semibold text-td">固定规格（无需选择）</p>
-                                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                                    {selectorSchema.fixedSpecs.map(item => (
-                                        <span
-                                            key={item.key}
-                                            className="rounded-md bg-white px-2 py-1 text-11.5 text-muted shadow-xs"
-                                        >
-                                            {item.key}：{item.value}
-                                        </span>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {category && !selectedBom && categoryBoms.length > 0 && (
-                            <p className="text-12 text-muted sm:col-span-2" aria-live="polite">
-                                当前匹配 {num(resolution.candidates.length)} 条 BOM，继续选择下一项即可自动定位。
+                            placeholder="如 ZMKW0042"
+                            error={errors.bom}
+                            value={bomCode}
+                            onChange={event => inputBomCode(event.target.value)}
+                        />
+                        {/* 输入即反馈：命中回显成品档案即完成选择；失配仅中性提示，提交时才拦截报错 */}
+                        {bomCode.trim() && !matchedBom && (
+                            <p className="text-12 text-muted" aria-live="polite">
+                                未找到编码「{bomCode.trim()}」对应的 BOM，请到「物料与BOM」核对
                             </p>
                         )}
-                        {errors.bom && resolution.steps.length === 0 && (
-                            <p role="alert" className="text-12 text-danger sm:col-span-2">
-                                {errors.bom}
-                            </p>
-                        )}
-                        {selectedBom && (
+                        {matchedBom && (
                             <div
-                                className="rounded-btn border border-primary-border bg-primary-soft/70 px-3.5 py-3 sm:col-span-2"
+                                className="rounded-btn border border-primary-border bg-primary-soft/70 px-3.5 py-3"
                                 aria-live="polite"
                             >
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                     <span className="tnum text-14 font-semibold text-primary-strong">
-                                        {selectedBom.code}
+                                        {matchedBom.code}
                                     </span>
                                     <span className="rounded-full bg-white px-2 py-1 text-11 font-medium text-success">
                                         已匹配
                                     </span>
                                 </div>
-                                <p className="mt-1 text-12.5 text-td">
-                                    {selectedBom.name} · {selectedBom.modelCode}
-                                </p>
-                                <p className="mt-1 break-words text-11.5 text-muted">{selectedBom.spec}</p>
+                                <p className="mt-1 text-12.5 text-td">{matchedBom.name}</p>
+                                <p className="mt-1 break-words text-11.5 text-muted">{matchedBom.spec}</p>
                             </div>
                         )}
                     </div>
@@ -464,7 +404,7 @@ export function OrderDetailModal({
                     status={<StatusBadge status={status.key} label={status.label} />}
                     note={order.lifecycleStatus === "cancelled" ? "订单已取消，剩余数量不再安排交付。" : undefined}
                 />
-                <RecordProduct bom={bom} bomCode={order.bomCode} categories={snap.bomCategories} />
+                <RecordProduct bom={bom} bomCode={order.bomCode} />
                 <RecordFields
                     title="订单信息"
                     items={[
@@ -962,13 +902,7 @@ export function OrdersPage() {
                                                 <CustomerCell name={order.customer} sub={order.customerCode} />
                                             </td>
                                             <td className="px-3 py-4">
-                                                <BomCell
-                                                    bom={bom}
-                                                    bomCode={order.bomCode}
-                                                    category={snap.bomCategories.find(
-                                                        category => category.name === bom?.name,
-                                                    )}
-                                                />
+                                                <BomCell bom={bom} bomCode={order.bomCode} />
                                             </td>
                                             <td className="px-3 py-4 text-right">
                                                 <QtyCell value={order.qty} />

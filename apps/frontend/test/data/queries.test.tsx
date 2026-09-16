@@ -48,9 +48,9 @@ it("新建 BOM 成功后 BOM 列表失效重新拉取", async () => {
     await waitFor(() => expect(list.result.current.data).toEqual([detailBom]));
     list.unmount();
 
-    api.createBom.mockResolvedValue({ ...detailBom, code: "ZMKQ007" });
+    api.createBom.mockResolvedValue({ ...detailBom, code: "ZMKW0043" });
     const mutation = mount(() => useCreateBom(), client);
-    await act(() => mutation.result.current.mutateAsync({ name: detailBom.name, modelCode: "KQ-7", specs: {} }));
+    await act(() => mutation.result.current.mutateAsync({ name: detailBom.name, materialItemIds: ["3101", "3103"] }));
     mutation.unmount();
 
     const refreshed = mount(() => useBoms(), client);

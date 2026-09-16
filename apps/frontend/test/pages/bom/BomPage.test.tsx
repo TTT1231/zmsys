@@ -36,7 +36,7 @@ it("表格渲染 BOM 行，编码入口可打开详情", () => {
     renderPage();
     const table = screen.getByRole("table");
     expect(table).toHaveTextContent(detailBom.code);
-    expect(table).toHaveTextContent(detailBom.modelCode);
+    expect(table).toHaveTextContent("6.3支架：铜镀银");
 });
 
 it("库存余量已加载时移动卡片显示数量，未加载时降级为占位符", () => {

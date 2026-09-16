@@ -28,32 +28,46 @@ export interface Order {
     cancelReason?: string;
 }
 
-export interface BomSpecField {
-    key: string;
-    label: string;
-    type: "select" | "text";
-    options?: string[];
-    required?: boolean;
-    placeholder?: string;
-    initial?: string;
-    defaultValue?: string;
+/** 目录节点：分区（section）为纯展示树节点（不挂物料、不提供全选），分组（group）挂可选物料 */
+export interface BomCatalogNode {
+    id: string;
+    parentId: string | null;
+    kind: "section" | "group";
+    name: string;
+    /** 分组稳定标识（如 model）；分区为 null */
+    key: string | null;
+    /** 分组选择语义：false 单选（0/1 项，换选替换）/ true 多选；分区为 null */
+    multi: boolean | null;
+    /** 分区恒为空数组 */
+    items: Array<{ id: string; name: string }>;
 }
 
-/** 后端权威 BOM 品类目录 */
+/** 后端权威 BOM 品类目录（分区/分组扁平树，parentId 关联，数组顺序即展示序）。
+ * childCategories 存在时（跌倒开关），建档必须先选一个子品类（childCategory），
+ * 该子品类的完整物料目录并入本品类的选择范围（左框树合并展示）。 */
 export interface BomCategory {
     key: string;
     name: string;
     codePrefix: string;
     seqWidth?: number;
-    fields: BomSpecField[];
+    childCategories?: string[];
+    groups: BomCatalogNode[];
+}
+
+/** BOM 明细行（建档冻结快照，按 position 排序返回；目录后续变更不影响已建档案） */
+export interface BomItemView {
+    materialId: string;
+    groupKey: string;
+    groupName: string;
+    name: string;
 }
 
 export interface Bom {
-    code: string; // 编码，如 ZMXK2001 / ZMXK3001 / ZMKW0001 / ZMKW16001 / ZMKQ001
-    name: string; // 品类：旋转开关 / XK3 / 新微动 / 老微动 / 琴键开关
-    modelCode: string; // 型号
-    specs: Record<string, string>; // 品类规格键值对（对应库表 spec JSON）
-    spec: string; // 规格摘要（列表/搜索用）
+    code: string; // 编码，如 ZMXK2001 / ZMKW0001 / ZMKW16001 / ZMDD001
+    name: string; // 品类：旋转XK2 / 旋转XK3 / 新微动 / 老微动 / 安全开关 / 跌倒开关
+    modelCode: string; // model 组选中项名称（品类无 model 组时为空串）
+    items: BomItemView[]; // 选中物料集合（无数量，跌倒开关含微动物料）
+    spec: string; // 摘要（"组名：物料名"以 " · " 连接）
     created: string;
     unit: string;
 }
@@ -282,8 +296,9 @@ export interface UpdateCustomerInput {
 
 export interface CreateBomInput {
     name: string;
-    modelCode: string;
-    specs: Record<string, string>;
+    materialItemIds: string[];
+    /** 品类子选（category key）：品类标记 childCategories 时必填（跌倒开关的微动开关类型） */
+    childCategory?: string;
 }
 
 export interface CreateInboundInput {

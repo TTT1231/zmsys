@@ -22,7 +22,7 @@ describe("SelectMenuField", () => {
                 label="品类"
                 value=""
                 placeholder="请选择品类"
-                options={[{ value: "旋转开关", label: "旋转开关" }]}
+                options={[{ value: "旋转XK2", label: "旋转XK2" }]}
                 onValueChange={() => {}}
             />,
         );
@@ -63,7 +63,7 @@ describe("SelectMenuField", () => {
                     value=""
                     placeholder="请选择品类"
                     options={[
-                        { value: "旋转开关", label: "旋转开关" },
+                        { value: "旋转XK2", label: "旋转XK2" },
                         { value: "琴键开关", label: "琴键开关" },
                     ]}
                     onValueChange={onValueChange}

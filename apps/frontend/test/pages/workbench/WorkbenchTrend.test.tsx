@@ -11,8 +11,8 @@ afterEach(cleanup);
 it("筛选品类后展示可访问数据表，今年趋势按月汇总", async () => {
     const user = userEvent.setup();
     render(<WorkbenchTrend data={createWorkbenchDemo("2026-09-12")} />);
-    await user.selectOptions(screen.getByLabelText("趋势品类"), "旋转开关");
-    expect(screen.getByRole("img").getAttribute("aria-label")).toContain("旋转开关");
+    await user.selectOptions(screen.getByLabelText("趋势品类"), "旋转XK2");
+    expect(screen.getByRole("img").getAttribute("aria-label")).toContain("旋转XK2");
     await user.selectOptions(screen.getByLabelText("趋势时间"), "year");
     await user.click(screen.getByRole("button", { name: "查看数据表" }));
     expect(screen.getByRole("table")).toBeInTheDocument();

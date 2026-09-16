@@ -2,15 +2,16 @@ import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
 import { useApp } from "@/context/AppContext";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Pagination } from "@/components/ui/Pagination";
-import { Badge, Button, TableLink } from "@/components/ui/Badge";
+import { Badge, Button, StatusBadge, TableLink } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { CustomerCell } from "@/components/ui/cells";
+import { OrderDetailModal } from "@/pages/orders/OrdersPage";
 import { SortTh } from "@/components/ui/SortTh";
 import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { nextSortState, type SortState } from "@/lib/tableSort";
@@ -19,7 +20,7 @@ import { RegionCascader, regionText, type RegionValue } from "@/components/ui/Re
 import { useCreateCustomer, useUpdateCustomer, useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
-import { EMPTY_SNAPSHOT } from "@/data/views";
+import { EMPTY_SNAPSHOT, orderStatusOf } from "@/data/views";
 import { useToast } from "@/components/ui/Toast";
 import type { Customer, Snapshot } from "@/api";
 
@@ -207,108 +208,162 @@ export function CustomerDetailModal({
     onClose: () => void;
     onEdit?: (customer: Customer) => void;
 }) {
+    const navigate = useNavigate();
+    // 叠加在客户详情之上的订单详情；存 orderNo 渲染时回捞，刷新后数据保持同步
+    const [orderNo, setOrderNo] = useState<string | null>(null);
+    // 切换查看的客户时在渲染期清掉上层订单详情，避免残留上一个客户的弹窗
+    const viewedCode = customer?.code;
+    const [lastViewedCode, setLastViewedCode] = useState(viewedCode);
+    if (viewedCode !== lastViewedCode) {
+        setLastViewedCode(viewedCode);
+        setOrderNo(null);
+    }
     if (!customer) return null;
     const orders = snap.orders.filter(order => order.customerCode === customer.code);
     const pendingQty = orders.reduce((sum, order) => sum + Math.max(0, order.qty - order.outbound), 0);
     const timeline = [...orders].sort((a, b) => b.orderDate.localeCompare(a.orderDate)).slice(0, 3);
+    const orderDetail = orderNo ? (snap.orders.find(order => order.orderNo === orderNo) ?? null) : null;
 
     return (
-        <Modal
-            open={!!customer}
-            onClose={onClose}
-            label="客户档案详情"
-            title={customer.name}
-            subtitle={`${customer.code} · 建档 ${customer.created}`}
-            width={560}
-            footer={
-                <>
-                    {onEdit && (
+        <>
+            <Modal
+                open={!!customer}
+                onClose={onClose}
+                label="客户档案详情"
+                title={customer.name}
+                subtitle={`${customer.code} · 建档 ${customer.created}`}
+                width={560}
+                footer={
+                    <>
+                        {onEdit && (
+                            <button
+                                type="button"
+                                onClick={() => onEdit(customer)}
+                                className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
+                            >
+                                编辑档案
+                            </button>
+                        )}
                         <button
                             type="button"
-                            onClick={() => onEdit(customer)}
-                            className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
+                            onClick={onClose}
+                            className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover"
                         >
-                            编辑档案
+                            关闭
                         </button>
-                    )}
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover"
-                    >
-                        关闭
-                    </button>
-                </>
-            }
-        >
-            <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-3 rounded-panel border border-line bg-gradient-to-r from-[#f7f7ff] to-white px-4 py-3">
-                    <span
-                        className={`flex h-11 w-11 items-center justify-center rounded-full text-16 font-semibold ${AVATAR_TONES[0]}`}
-                    >
-                        {customer.name.slice(0, 1)}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                        <div className="text-14 font-semibold text-ink">{customer.name}</div>
-                        <div className="tnum text-12 text-muted">
-                            {customer.code} · 建档 {customer.created}
-                        </div>
-                    </div>
-                    <Badge tone={customer.cooperation === "合作中" ? "done" : "pending"}>{customer.cooperation}</Badge>
-                </div>
-                <div className="grid grid-cols-2 gap-2.5">
-                    <div className="rounded-xl border border-line px-3 py-2.5 text-center">
-                        <div className="text-11.5 text-muted">累计订单</div>
-                        <div className="tnum text-20 font-bold text-ink">
-                            {orders.length} <i className="text-12 font-normal text-subtle not-italic">单</i>
-                        </div>
-                    </div>
-                    <div className="rounded-xl border border-line px-3 py-2.5 text-center">
-                        <div className="text-11.5 text-muted">已完成订单</div>
-                        <div className="tnum text-20 font-bold text-success">
-                            {orders.filter(order => order.outbound >= order.qty).length}
-                            <i className="ml-1 text-12 font-normal not-italic">单</i>
-                        </div>
-                    </div>
-                </div>
-                <div className="flex flex-col gap-2 text-13">
-                    {[
-                        ["客户联系人", customer.contact],
-                        ["客户联系电话", customer.phone],
-                        ["所在地区", regionText(customer)],
-                        ["详细地址", customer.address || "—"],
-                        ["付款方式", customer.payTerms || "—"],
-                        ["客户负责人", customer.owner],
-                        ["待交付数量", `${pendingQty.toLocaleString("zh-CN")} 件`],
-                    ].map(([label, value]) => (
-                        <div
-                            key={label}
-                            className="flex items-center justify-between gap-4 border-b border-line/70 pb-1.5"
+                    </>
+                }
+            >
+                <div className="flex flex-col gap-4">
+                    <div className="flex items-center gap-3 rounded-panel border border-line bg-gradient-to-r from-[#f7f7ff] to-white px-4 py-3">
+                        <span
+                            className={`flex h-11 w-11 items-center justify-center rounded-full text-16 font-semibold ${AVATAR_TONES[0]}`}
                         >
-                            <span className="text-muted">{label}</span>
-                            <span className="tnum font-medium text-ink">{value}</span>
+                            {customer.name.slice(0, 1)}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                            <div className="text-14 font-semibold text-ink">{customer.name}</div>
+                            <div className="tnum text-12 text-muted">
+                                {customer.code} · 建档 {customer.created}
+                            </div>
                         </div>
-                    ))}
-                </div>
-                <div>
-                    <div className="mb-2 text-12.5 font-semibold text-ink">最近动态</div>
-                    <ol className="flex flex-col gap-2.5 border-l border-line pl-4">
-                        {timeline.length === 0 && <li className="text-12.5 text-subtle">暂无订单动态。</li>}
-                        {timeline.map(order => (
-                            <li key={order.orderNo} className="relative">
-                                <span className="absolute top-1.5 -left-5.25 h-2 w-2 rounded-full bg-primary" />
-                                <div className="text-12.5 text-ink">
-                                    新建订单{" "}
-                                    <span className="tnum font-semibold text-primary-strong">{order.orderNo}</span> ·{" "}
-                                    {order.qty.toLocaleString("zh-CN")} 件
-                                </div>
-                                <div className="tnum text-11.5 text-muted">{order.orderDate}</div>
-                            </li>
+                        <Badge tone={customer.cooperation === "合作中" ? "done" : "pending"}>
+                            {customer.cooperation}
+                        </Badge>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                        <div className="rounded-xl border border-line px-3 py-2.5 text-center">
+                            <div className="text-11.5 text-muted">累计订单</div>
+                            <div className="tnum text-20 font-bold text-ink">
+                                {orders.length} <i className="text-12 font-normal text-subtle not-italic">单</i>
+                            </div>
+                        </div>
+                        <div className="rounded-xl border border-line px-3 py-2.5 text-center">
+                            <div className="text-11.5 text-muted">已完成订单</div>
+                            <div className="tnum text-20 font-bold text-success">
+                                {orders.filter(order => order.outbound >= order.qty).length}
+                                <i className="ml-1 text-12 font-normal not-italic">单</i>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex flex-col gap-2 text-13">
+                        {[
+                            ["客户联系人", customer.contact],
+                            ["客户联系电话", customer.phone],
+                            ["所在地区", regionText(customer)],
+                            ["详细地址", customer.address || "—"],
+                            ["付款方式", customer.payTerms || "—"],
+                            ["客户负责人", customer.owner],
+                            ["待交付数量", `${pendingQty.toLocaleString("zh-CN")} 件`],
+                        ].map(([label, value]) => (
+                            <div
+                                key={label}
+                                className="flex items-center justify-between gap-4 border-b border-line/70 pb-1.5"
+                            >
+                                <span className="text-muted">{label}</span>
+                                <span className="tnum font-medium text-ink">{value}</span>
+                            </div>
                         ))}
-                    </ol>
+                    </div>
+                    <div>
+                        <div className="mb-2 text-12.5 font-semibold text-ink">最近订单</div>
+                        <ol className="flex flex-col gap-2.5 border-l border-line pl-4">
+                            {timeline.length === 0 && <li className="text-12.5 text-subtle">暂无订单记录。</li>}
+                            {timeline.map(order => {
+                                const cancelled = order.lifecycleStatus === "cancelled";
+                                const status = orderStatusOf(snap, order);
+                                return (
+                                    <li key={order.orderNo} className="relative">
+                                        <span
+                                            className={`absolute top-1.5 -left-5.25 h-2 w-2 rounded-full ${cancelled ? "bg-subtle" : "bg-primary"}`}
+                                        />
+                                        {/* 整行可点保证触屏命中区，订单号 hover 出下划线 */}
+                                        <button
+                                            type="button"
+                                            onClick={() => setOrderNo(order.orderNo)}
+                                            aria-label={`查看订单 ${order.orderNo} 详情`}
+                                            className="group -mx-2 flex flex-col gap-0.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-row-hover"
+                                        >
+                                            <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                                                <span
+                                                    className={`tnum text-12.5 font-semibold underline-offset-2 group-hover:underline ${
+                                                        cancelled ? "text-td-strong" : "text-primary-strong"
+                                                    }`}
+                                                >
+                                                    {order.orderNo}
+                                                </span>
+                                                <span className="text-12.5 text-muted">
+                                                    · {order.qty.toLocaleString("zh-CN")} 件
+                                                </span>
+                                                <StatusBadge status={status.key} />
+                                            </span>
+                                            <span className="tnum text-11.5 text-muted">{order.orderDate}</span>
+                                        </button>
+                                    </li>
+                                );
+                            })}
+                        </ol>
+                        {orders.length > timeline.length && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    onClose();
+                                    navigate({
+                                        pathname: "/orders",
+                                        search: `?q=${encodeURIComponent(customer.name)}`,
+                                    });
+                                }}
+                                className="mt-3 inline-flex min-h-9 items-center gap-1 text-12.5 font-medium text-primary-strong transition hover:underline"
+                            >
+                                查看全部 {orders.length} 笔订单
+                                <Icon name="chevron-right" size={14} />
+                            </button>
+                        )}
+                    </div>
                 </div>
-            </div>
-        </Modal>
+            </Modal>
+            {orderDetail && <OrderDetailModal order={orderDetail} snap={snap} onClose={() => setOrderNo(null)} />}
+        </>
     );
 }
 

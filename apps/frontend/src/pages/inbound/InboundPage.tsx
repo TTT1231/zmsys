@@ -24,7 +24,7 @@ import { EMPTY_SNAPSHOT, bomByCode } from "@/data/views";
 import { todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/Toast";
 
-import { bomSelectorOptionLabel, buildBomSelectorSchema, resolveBomSelection } from "@/data/bomSelection";
+import { BomPicker } from "@/components/bom/BomPicker";
 import type { InboundRow, Snapshot } from "@/api";
 
 /* 可排序列：入库日期 / 入库数量；桌面表头与移动端排序下拉共用 */
@@ -35,68 +35,26 @@ const LEDGER_SORT_COLUMNS: Array<{ key: LedgerSortKey; label: string }> = [
 ];
 
 /**
- * 成品选择（与销售订单新建弹窗同一套逐维收敛模式）：品类 → 逐维下拉 →
- * 候选收敛到唯一 BOM 时自动生效。避免一次性渲染全部 BOM 选项造成卡顿。
+ * 成品选择（入库建档用）：品类 → 按编码 / 物料关键字搜索 + 列表点选；
+ * 点选即回填 bomCode。
  */
 function InboundBomPicker({
     boms,
-    categories,
     value,
     onChange,
     error,
 }: {
     boms: Snapshot["boms"];
-    categories: Snapshot["bomCategories"];
     value: string;
     onChange: (bomCode: string) => void;
     error?: string;
 }) {
     const currentBom = boms.find(bom => bom.code === value);
     const [category, setCategory] = useState(currentBom?.name ?? "");
-    const [bomSelections, setBomSelections] = useState<Record<string, string>>({});
 
     const categoryNames = useMemo(() => [...new Set(boms.map(bom => bom.name))], [boms]);
     const categoryBoms = useMemo(() => (category ? boms.filter(bom => bom.name === category) : []), [boms, category]);
-    const selectorSchema = useMemo(
-        () =>
-            buildBomSelectorSchema(
-                categoryBoms,
-                categories.find(item => item.name === category)?.fields.map(field => field.key),
-            ),
-        [categoryBoms, category, categories],
-    );
-    const resolution = useMemo(
-        () => resolveBomSelection(categoryBoms, selectorSchema.fields, bomSelections),
-        [categoryBoms, selectorSchema.fields, bomSelections],
-    );
-    const selectedBom =
-        !resolution.pending && resolution.candidates.length === 1 ? resolution.candidates[0] : undefined;
 
-    const onChangeRef = useRef(onChange);
-    useEffect(() => {
-        onChangeRef.current = onChange;
-    }, [onChange]);
-    useEffect(() => {
-        if (selectedBom && selectedBom.code !== value) onChangeRef.current(selectedBom.code);
-    }, [selectedBom, value]);
-
-    const pickCategory = (nextCategory: string) => {
-        setCategory(nextCategory);
-        setBomSelections({});
-    };
-    const pickBomDimension = (fieldId: string, nextValue: string) => {
-        const fieldIndex = selectorSchema.fields.findIndex(field => field.id === fieldId);
-        setBomSelections(current => {
-            const next: Record<string, string> = {};
-            selectorSchema.fields.slice(0, fieldIndex).forEach(field => {
-                if (current[field.id]) next[field.id] = current[field.id];
-            });
-            if (nextValue) next[fieldId] = nextValue;
-            return next;
-        });
-    };
-
-    const effectiveBom = selectedBom ?? currentBom;
     return (
         <div className="col-span-full flex flex-col gap-3">
             <SelectMenuField
@@ -106,57 +64,20 @@ function InboundBomPicker({
                 value={category}
                 placeholder="请选择品类"
                 options={categoryNames.map(item => ({ value: item, label: item }))}
-                onValueChange={pickCategory}
+                onValueChange={setCategory}
             />
-            {resolution.steps.map(step => (
-                <SelectMenuField
-                    key={step.field.id}
-                    label={step.field.label}
-                    required
-                    value={bomSelections[step.field.id] ?? ""}
-                    placeholder={`请选择${step.field.label}`}
-                    options={step.options.map(option => ({
-                        value: option,
-                        label: bomSelectorOptionLabel(option),
-                    }))}
-                    onValueChange={value => pickBomDimension(step.field.id, value)}
-                />
-            ))}
-            {category && selectorSchema.fixedSpecs.length > 0 && (
-                <div className="rounded-btn border border-line bg-panel px-3 py-2.5">
-                    <p className="text-11.5 font-semibold text-td">固定规格（无需选择）</p>
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {selectorSchema.fixedSpecs.map(item => (
-                            <span
-                                key={item.key}
-                                className="rounded-md bg-white px-2 py-1 text-11.5 text-muted shadow-xs"
-                            >
-                                {item.key}：{item.value}
-                            </span>
-                        ))}
-                    </div>
-                </div>
-            )}
-            {category && !selectedBom && categoryBoms.length > 0 && (
-                <p className="text-12 text-muted" aria-live="polite">
-                    当前匹配 {num(resolution.candidates.length)} 条 BOM，继续选择下一项即可自动定位。
-                </p>
-            )}
-            {effectiveBom && (
+            {category && <BomPicker boms={categoryBoms} selected={currentBom} onSelect={bom => onChange(bom.code)} />}
+            {currentBom && currentBom.name === category && (
                 <div
                     className="rounded-btn border border-primary-border bg-primary-soft/70 px-3.5 py-3"
                     aria-live="polite"
                 >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="tnum text-14 font-semibold text-primary-strong">{effectiveBom.code}</span>
-                        <span className="rounded-full bg-white px-2 py-1 text-11 font-medium text-success">
-                            {selectedBom ? "已匹配" : "当前成品"}
-                        </span>
+                        <span className="tnum text-14 font-semibold text-primary-strong">{currentBom.code}</span>
+                        <span className="rounded-full bg-white px-2 py-1 text-11 font-medium text-success">已选择</span>
                     </div>
-                    <p className="mt-1 text-12.5 text-td">
-                        {effectiveBom.name} · {effectiveBom.modelCode}
-                    </p>
-                    <p className="mt-1 break-words text-11.5 text-muted">{effectiveBom.spec}</p>
+                    <p className="mt-1 text-12.5 text-td">{currentBom.name}</p>
+                    <p className="mt-1 break-words text-11.5 text-muted">{currentBom.spec}</p>
                 </div>
             )}
         </div>
@@ -249,13 +170,7 @@ export function InboundModal({
             }
         >
             <div className="grid gap-4 sm:grid-cols-2">
-                <InboundBomPicker
-                    boms={boms}
-                    categories={snap.bomCategories}
-                    value={bomCode}
-                    onChange={setBomCode}
-                    error={errors.bomCode}
-                />
+                <InboundBomPicker boms={boms} value={bomCode} onChange={setBomCode} error={errors.bomCode} />
                 <TextField
                     label="入库数量（件）"
                     required
@@ -320,7 +235,7 @@ export function VoucherModal({ row, snap, onClose }: { row: InboundRow | null; s
                     }
                     note={row.status === "voided" ? "此记录已作废，以上数量不再计入库存。" : undefined}
                 />
-                <RecordProduct bom={bom} bomCode={row.bomCode} categories={snap.bomCategories} />
+                <RecordProduct bom={bom} bomCode={row.bomCode} />
                 <RecordFields
                     title="入库信息"
                     items={[
@@ -404,13 +319,7 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
             }
         >
             <div className="grid gap-4 sm:grid-cols-2">
-                <InboundBomPicker
-                    boms={snap.boms}
-                    categories={snap.bomCategories}
-                    value={bomCode}
-                    onChange={setBomCode}
-                    error={errors.bomCode}
-                />
+                <InboundBomPicker boms={snap.boms} value={bomCode} onChange={setBomCode} error={errors.bomCode} />
                 <TextField
                     label="入库数量（件）"
                     required

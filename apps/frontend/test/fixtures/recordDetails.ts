@@ -1,21 +1,21 @@
-/* 三类业务凭证共用的边界样本：长规格、长备注与实际数量状态。 */
+/* 三类业务凭证共用的边界样本：多物料 BOM、长备注与实际数量状态。 */
 import type { Bom, InboundRow, Order, OutboundRow, Snapshot } from "@/api";
 import { EMPTY_SNAPSHOT } from "@/data/views";
 
 export const detailBom: Bom = {
-    code: "ZMKQ006",
-    name: "琴键开关",
-    modelCode: "KQ-6",
-    spec: "旧的拼接规格摘要",
-    unit: "件",
+    code: "ZMKW0042",
+    name: "新微动",
+    modelCode: "",
+    spec: "底座：二脚底座（无挡脚） · 盖子：盖子 · 按钮：8.5mm · 支架：6.3支架：铜镀银 · 静片：6.3静片：铜镀银",
+    unit: "个",
     created: "2026-09-13",
-    specs: {
-        类型: "冷风扇琴键（透明大功率带触点）",
-        卡板: "小卡板18mm+大卡板18mm",
-        弹簧: "0.35",
-        触点: "带点",
-        五金件明细: "扣板×2+连锁片+带点静片+带点动片+辅助动片",
-    },
+    items: [
+        { materialId: "3101", groupKey: "base", groupName: "底座", name: "二脚底座（无挡脚）" },
+        { materialId: "3103", groupKey: "cover", groupName: "盖子", name: "盖子" },
+        { materialId: "3109", groupKey: "button", groupName: "按钮", name: "8.5mm" },
+        { materialId: "3112", groupKey: "bracket", groupName: "支架", name: "6.3支架：铜镀银" },
+        { materialId: "3117", groupKey: "static-plate", groupName: "静片", name: "6.3静片：铜镀银" },
+    ],
 };
 export const detailOrder: Order = {
     version: 1,

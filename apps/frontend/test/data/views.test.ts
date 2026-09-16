@@ -19,10 +19,13 @@ const TODAY = "2026-03-15";
 
 const bom = (over: Partial<Bom> = {}): Bom => ({
     code: "ZMXK001",
-    name: "旋转开关",
+    name: "旋转XK2",
     modelCode: "M-100",
-    specs: {},
-    spec: "二脚 / 一档",
+    items: [
+        { materialId: "3001", groupKey: "model", groupName: "型号", name: "M-100" },
+        { materialId: "3003", groupKey: "silver-wire-thickness", groupName: "银丝厚度", name: "0.2" },
+    ],
+    spec: "型号：M-100 · 银丝厚度：0.2",
     created: "2026-01-01",
     unit: "个",
     ...over,

@@ -1,107 +1,85 @@
 // @vitest-environment jsdom
-/* 覆盖五类规格完整呈现、组合部件数量、固定规格分层与未知字段兼容。 */
+/* 覆盖物料集合呈现：分组行、品类身份块、record 键值网格与 list 行内形态、摘要兜底。 */
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { BomSpecs } from "@/components/bom/BomSpecs";
-import type { Bom, BomCategory } from "@/api";
+import type { Bom } from "@/api";
 
 afterEach(cleanup);
 
-const examples: Pick<Bom, "name" | "modelCode" | "specs">[] = [
-    {
-        name: "琴键开关",
-        modelCode: "KQ-6",
-        specs: {
-            类型: "冷风扇琴键（透明大功率带触点）",
-            卡板: "小卡板18mm+大卡板18mm",
-            弹簧: "0.35",
-            触点: "带点",
-            五金件明细: "扣板×2+连锁片+带点静片+带点动片+辅助动片",
-        },
-    },
-    { name: "老微动", modelCode: "KW16", specs: { 底座: "不带CB", 按钮: "9.6mm", 弹簧: "0.27" } },
-    {
-        name: "新微动",
-        modelCode: "KW",
-        specs: {
-            底座: "三脚底座（有挡脚）",
-            按钮高度: "9.1mm",
-            支架: "4.8支架：复合铜镀镍",
-            静片: "4.8静片：复合铜镀镍",
-            动片: "镀锡",
-            摆片: "铁镀镍摆片",
-            弹片: "0.12",
-        },
-    },
-    {
-        name: "XK3",
-        modelCode: "XK3",
-        specs: {
-            外壳: "无耳外壳无CB字（茶色）",
-            底座: "透明",
-            杆子: "扁轴4.8转90°",
-            小静片: "镀锡",
-            半圆静片: "镀锡",
-            动片: "镀锡",
-            卡线片: "0.2",
-            弹簧: "0.45短弹簧",
-        },
-    },
-    { name: "旋转开关", modelCode: "3-1", specs: { 脚位: "五脚", 档位: "三档", 银点厚度: "0.2", 弹簧: "0.5" } },
-];
+const rotaryBom: Bom = {
+    code: "ZMXK2001",
+    name: "旋转XK2",
+    modelCode: "1-1",
+    spec: "型号：1-1 · 银丝厚度：0.2 · A面：A面银点",
+    created: "2026-09-13",
+    unit: "个",
+    items: [
+        { materialId: "3001", groupKey: "model", groupName: "型号", name: "1-1" },
+        { materialId: "3003", groupKey: "silver-wire-thickness", groupName: "银丝厚度", name: "0.2" },
+        { materialId: "3006", groupKey: "face-a", groupName: "A面", name: "A面银点" },
+    ],
+};
 
-it.each(examples)("$name 的字段和值完整保留，型号只在标识处出现", example => {
-    const bom = { ...example, spec: "旧的拼接摘要" };
-    const { container } = render(<BomSpecs bom={bom} />);
-    expect(container.querySelector("strong")).toHaveTextContent(bom.modelCode);
-    for (const [key, value] of Object.entries(bom.specs)) {
-        const label = [...container.querySelectorAll("dt")].find(item => item.textContent === key);
-        expect(label).toBeDefined();
-        for (const part of value.split("+")) expect(label?.nextElementSibling).toHaveTextContent(part);
-    }
-    expect(screen.queryByText(bom.spec)).not.toBeInTheDocument();
+const microBom: Bom = {
+    code: "ZMKW0042",
+    name: "新微动",
+    modelCode: "",
+    spec: "底座：二脚底座（无挡脚） · 盖子：盖子 · 按钮：8.5mm",
+    created: "2026-09-13",
+    unit: "个",
+    items: [
+        { materialId: "3101", groupKey: "base", groupName: "底座", name: "二脚底座（无挡脚）" },
+        { materialId: "3103", groupKey: "cover", groupName: "盖子", name: "盖子" },
+        { materialId: "3109", groupKey: "button", groupName: "按钮", name: "8.5mm" },
+    ],
+};
+
+it("详情形态按分组渲染物料行，型号不再作身份块特殊展示", () => {
+    const { container } = render(<BomSpecs bom={rotaryBom} />);
+    // 身份块只剩品类，无型号大字
+    expect(container.querySelector("strong")).toBeNull();
+    expect(container.textContent).toContain("品类");
+    expect(screen.getByText(rotaryBom.name)).toBeInTheDocument();
+    const dts = [...container.querySelectorAll("dt")].map(dt => dt.textContent);
+    expect(dts).toEqual(["型号", "银丝厚度", "A面"]);
+    expect(container.querySelectorAll("dd")[0]).toHaveTextContent("1-1");
+    expect(container.querySelectorAll("dd")[1]).toHaveTextContent("0.2");
+    // 摘要字段不再重复展示
+    expect(screen.queryByText(rotaryBom.spec)).not.toBeInTheDocument();
 });
 
-it("组合部件逐项呈现并保留数量，不拆解自定义字段中的加号", () => {
-    const bom = { ...examples[0], specs: { ...examples[0].specs, 公差: "+0.2/-0.1" }, spec: "" };
-    render(<BomSpecs bom={bom} layout="list" showIdentity={false} />);
-    const parts = screen.getByRole("list", { name: "五金件明细" });
-    expect(parts.querySelectorAll("li")).toHaveLength(5);
-    expect(parts.querySelector("li")).toHaveTextContent("扣板×2");
-    expect(screen.getByText("+0.2/-0.1")).toBeInTheDocument();
+it("身份块显示品类，物料行不受影响", () => {
+    render(<BomSpecs bom={microBom} />);
+    expect(screen.getByText(microBom.name)).toBeInTheDocument();
+    expect(screen.getByText("二脚底座（无挡脚）")).toBeInTheDocument();
 });
 
-it("按接口目录识别固定项，修改过的固定值与新增字段仍作为区分规格展示", () => {
-    const bom = {
-        ...examples[1],
-        specs: { 底座: "不带CB", 支架: "6.3镀银", 静片: "特殊镀层", 新增字段: "新值" },
-        spec: "",
-    };
-    const category: BomCategory = {
-        key: "old",
-        name: "老微动",
-        codePrefix: "KW16",
-        fields: [
-            { key: "底座", label: "底座", type: "text" },
-            { key: "支架", label: "支架", type: "text", defaultValue: "6.3镀银" },
-            { key: "静片", label: "静片", type: "text", defaultValue: "6.3镀银" },
+it("record 形态呈两列键值网格，list 形态保持「组名：物料名」行内", () => {
+    const { rerender, container } = render(<BomSpecs bom={microBom} layout="record" />);
+    const dts = [...container.querySelectorAll("dt")].map(dt => dt.textContent);
+    expect(dts).toEqual(["底座", "盖子", "按钮"]);
+    expect(container.querySelector("dd")).toHaveTextContent("二脚底座（无挡脚）");
+    rerender(<BomSpecs bom={microBom} layout="list" showIdentity={false} />);
+    expect(screen.getByText(/盖子：/)).toBeInTheDocument();
+});
+
+it("多选组同名分组的物料以顿号连接", () => {
+    const multi: Bom = {
+        ...microBom,
+        items: [
+            { materialId: "1", groupKey: "cards", groupName: "卡板", name: "大卡板18mm" },
+            { materialId: "2", groupKey: "cards", groupName: "卡板", name: "短卡板16mm" },
         ],
     };
-    const { rerender } = render(<BomSpecs bom={bom} category={category} layout="list" />);
-    expect(screen.queryByText("6.3镀银")).not.toBeInTheDocument();
-    expect(screen.getByText("特殊镀层")).toBeInTheDocument();
-    expect(screen.getByText("新值")).toBeInTheDocument();
-    rerender(<BomSpecs bom={bom} category={category} />);
-    expect(screen.getByText("品类固定规格").parentElement).toHaveTextContent("6.3镀银");
+    const { container } = render(<BomSpecs bom={multi} />);
+    expect(container.querySelectorAll("dd")[0]).toHaveTextContent("大卡板18mm、短卡板16mm");
 });
 
-it("没有目录时保留全部字段，没有结构化字段时保留摘要兜底", () => {
-    const bom = { ...examples[1], spec: "历史规格：特殊底座" };
-    const { rerender } = render(<BomSpecs bom={bom} layout="list" />);
-    expect(screen.getByText("不带CB")).toBeInTheDocument();
-    rerender(<BomSpecs bom={{ ...bom, specs: {} }} />);
-    expect(screen.getByText(bom.spec)).toBeInTheDocument();
-    rerender(<BomSpecs bom={{ ...bom, specs: {}, spec: "" }} />);
-    expect(screen.getByText("暂无规格信息")).toBeInTheDocument();
+it("没有结构化明细时保留摘要兜底，全空显示占位文案", () => {
+    const { rerender } = render(<BomSpecs bom={{ ...microBom, items: [] }} />);
+    expect(screen.getByText(microBom.spec)).toBeInTheDocument();
+    rerender(<BomSpecs bom={{ ...microBom, items: [], spec: "" }} />);
+    expect(screen.getByText("暂无物料信息")).toBeInTheDocument();
 });

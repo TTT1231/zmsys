@@ -140,23 +140,29 @@
 
 ## 5. BOM/成品档案
 
-### 5.1 `bom_category`
+BOM = **品类 + 使用者勾选的物料集合**（无数量）。建档人在前端“左框树状目录勾选 / 右框已选确认”后保存，服务端按品类目录校验、判重并生成编号；不做规格组合的预生成。这里的 BOM 仍是订单所引用的“成品档案”，不是生产过程中的原材料用量 BOM；生产与原材料库存在线下。
 
-品类目录由后端提供，保存稳定 key、显示名称、编码前缀、最小序号宽度和规格 JSON Schema/元数据。前端只能消费该目录，不能独立决定有效品类或编码规则。
+### 5.1 `bom_category` + 物料目录三张表
 
-已用品类前缀：旋转开关 `XK2`、XK3 `XK3`、新微动 `KW`（4 位）、老微动 `KW16`、琴键开关 `KQ`。
+品类目录由后端提供（`bom_category`：稳定 key、显示名称、编码前缀、最小序号宽度、可空 `child_categories` JSON 数组），前端只能消费。已用品类前缀：旋转XK2 `XK2`、旋转XK3 `XK3`、新微动 `KW`（4 位）、老微动 `KW16`、安全开关 `AQ`、跌倒开关 `KD`。`child_categories` 标记该品类建档必须从列表品类中选一个已建 BOM 作为子件（跌倒开关 → `["new-micro-switch", "old-micro-switch"]`）。
 
-建表脚本已播种这五个品类及完整字段元数据；后端读取 `spec_schema.fields` 后映射为 `/bom-categories` 响应。修改目录必须走数据库迁移并同步 mock 种子，不能只改前端常量。
+可选物料目录由三张表表达，目录修改只走数据库迁移并同步 mock 种子：
+
+- `material_group`：目录树节点。`kind=SECTION` 为分区（纯展示与折叠，只能为根节点、不挂物料、无 key/multi，如“PA66塑料 / 五金件”）；`kind=GROUP` 为分组（挂可选物料），必须有稳定 `group_key` 与 `multi` 选择语义——`multi=0` 单选（0/1 项，换选替换、可取消），`multi=1` 多选（可全选/清空）。分组可直接挂品类或挂同品类分区下；禁止跨品类挂接与超过两级的层级。分区停用后其下所有物料不可用于新建 BOM。`group_key='model'` 的分组选中项即 BOM 型号。
+- `material_item`：可选物料项（如“6.3支架：铜镀银”“二脚底座（无挡脚）”），完整物料名逐项可选，不再组合。
+- `bom_item`：BOM 明细行（**无数量列**），建档时冻结 `group_key/group_name/name/position` 快照。
+
+**目录不可变边界**：已被 `bom_item` 引用的物料不得改名、移组或复用 id；规格变化 = 新增物料项 + 旧项停用；停用只影响新建选择，已建 BOM 依靠快照完整显示。订单 `bom_spec_snapshot` 冻结 `{items: [{materialId, groupKey, groupName, name, position}], modelCode, spec}`（JSON 对象），出库打印的 `bomSpec` 直接取该冻结值，不读当前目录。
 
 ### 5.2 `bom_table`
 
-- `category_id` 外键到品类，`spec` 必须为 JSON 对象。
-- 后端先对型号、规格键和值执行 Unicode NFKC 与 trim；型号中的 ASCII 字母按大写参与判重，规格键按 Unicode 码点升序生成 UTF-8 无空白规范 JSON，并计算 SHA-256 `spec_hash`。显示值可保留原大小写，但判重只能使用这一套规范化算法。
-- 唯一键 `(category_id, model_code, spec_hash)` 禁止重复 BOM；命中时返回 409 及已有 `bom_code`。
-- 新微动的支架/静片规格匹配、固定规格和必填字段等关键规则必须在后端验证。
-- BOM 建档后不原地修改型号和规格。规格发生变化时新建 BOM；已引用 BOM 不删除，只可停用。
-
-这里的 BOM 是订单所引用的“成品 SKU/规格档案”，不是生产过程中的原材料用量 BOM；生产与原材料库存仍在线下。
+- `category_id` 外键到品类；无型号/规格列——型号与物料明细都在 `bom_item` 快照中。
+- 判重：materialItemIds 校验为正十进制 BIGINT 数字串 → `BigInt(id).toString()` 规范化（消除前导零双表示）→ 去重 → 按数值升序 → JSON 序列化 → SHA-256 `spec_hash`（BINARY(32)）。不得无分隔拼接、不得转 Number 排序。
+- 唯一键 `(category_id, spec_hash)` 禁止重复 BOM；命中时返回 409 及已有 `bom_code`（输入顺序与重复 id 不影响指纹）。
+- 建档校验（后端权威）：ids 非空、去重；物料经组归属该品类（品类标记 `child_categories` 时可同时归属所选子品类，目录合并校验）；品类/分区/分组/物料均启用；单选组最多 1 项。所有组皆可不选（客户决定要不要 A 面这类项），但整份 BOM 至少选 1 项。旧规格体系的跨字段规则（新微动支架/静片 6.3/4.8 同口径等）已废除，同类部件互斥由单选分组结构表达。
+- 跌倒开关等品类通过 `child_categories` 标记合并子品类目录：建档时先选子品类（`childCategory`，如 new-micro-switch / old-micro-switch 二选一），可选物料 = 本品类目录 + 所选子品类完整目录（分区/分组/物料原样并入树），统一走普通物料勾选，不引用任何已建 BOM。
+- BOM 建档后不原地修改物料集合；构成变化时新建 BOM，已引用 BOM 不删除只停用。
+- 幂等与判重分开：同用户、同操作、同幂等键且请求摘要一致时重放原成功响应；同键不同请求内容返回 409。事务顺序：幂等检查 → 锁品类行 → 目录校验（含子品类合并）→ 集合判重 → 取号（`ZM` + 品类前缀 + 至少 `seq_width` 位序号）→ 写 `bom_table` + `bom_item` 快照 → 落幂等响应。
 
 ## 6. 销售订单
 

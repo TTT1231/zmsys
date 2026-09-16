@@ -1,219 +1,404 @@
-/* 开发期 BOM 品类种子：真实后端以 bom_category + GET /bom-categories 为权威来源。
- * mock 用本文件播种接口；前端不得把这里的值当成绕过服务端校验的依据。
- * - 编码规则：ZM + 品类码 + 序号（宽度见 seqWidth，默认 3 位），如 ZMXK2001（旋转）、ZMXK3001（XK3）、ZMKW0001（新微动，4 位）、ZMKW16001（老微动）、ZMKQ001（琴键）。
- * - defaultValue：品类常量属性（固定部件构成），新建时自动并入档，不参与规格摘要。
- * - initial：已知规格的历史推荐值，仅作元数据保留。 */
-import type { BomCategory, BomSpecField } from "@/api";
+/* 开发期 BOM 物料目录种子：真实后端以 material_group/material_item 表 +
+ * GET /bom-categories 为权威来源。mock 用本文件播种接口；前端不得把这里的值
+ * 当成绕过服务端校验的依据。
+ * - 编码规则：ZM + 品类码 + 序号（宽度见 seqWidth，默认 3 位），如 ZMXK2001（旋转）、ZMKW0001（新微动，4 位）、ZMKW16001（老微动）。
+ * - 目录为“分区 → 分组 → 物料”树：分区纯展示；分组带 key 与单选/多选语义；
+ *   所有组皆可不选（客户决定要不要 A 面这类项），整份 BOM 至少选 1 项。
+ * - 系统共 6 品类：旋转XK2 / 旋转XK3 / 新微动 / 老微动 / 安全开关 / 跌倒开关。
+ * - 跌倒开关为嵌套档：建档必须额外选择一个新微动/老微动 BOM 作为子件（childCategories 标记）。 */
+import type { BomCatalogNode, BomCategory } from "@/api";
 
-export type SpecFieldDef = BomSpecField;
+export type CatalogNodeDef = BomCatalogNode;
 export type CategoryDef = BomCategory;
 
-/* 新微动：支架与静片各只装 1 个，6.3 / 4.8 是互斥规格；值中保留规格与镀层，便于级联筛选。 */
-export const NEW_MICRO_SWITCH_BRACKET_OPTIONS = [
-    "6.3支架：铜镀银",
-    "6.3支架：铜镀镍",
-    "6.3支架：复合铜镀镍",
-    "4.8支架：铜镀镍",
-    "4.8支架：复合铜镀镍",
-];
+const group = (
+    id: string,
+    name: string,
+    key: string,
+    parentId: string | null,
+    items: Array<[string, string]>,
+): BomCatalogNode => ({
+    id,
+    parentId,
+    kind: "group",
+    name,
+    key,
+    multi: false,
+    items: items.map(([itemId, itemName]) => ({ id: itemId, name: itemName })),
+});
 
-export const NEW_MICRO_SWITCH_STATIC_PLATE_OPTIONS = [
-    "6.3静片：铜镀银",
-    "6.3静片：铜镀镍",
-    "6.3静片：复合铜镀镍",
-    "4.8静片：铜镀镍",
-    "4.8静片：复合铜镀镍",
-];
+const section = (id: string, name: string): BomCatalogNode => ({
+    id,
+    parentId: null,
+    kind: "section",
+    name,
+    key: null,
+    multi: null,
+    items: [],
+});
 
-export function newMicroSwitchGaugeOf(value: string | undefined): "6.3" | "4.8" | undefined {
-    const gauge = value?.trim().match(/^(6\.3|4\.8)/)?.[1];
-    return gauge === "6.3" || gauge === "4.8" ? gauge : undefined;
-}
+const multiGroup = (
+    id: string,
+    name: string,
+    key: string,
+    parentId: string | null,
+    items: Array<[string, string]>,
+): BomCatalogNode => ({
+    ...group(id, name, key, parentId, items),
+    multi: true,
+});
+
+/* A面 / B面 共用的触点与盖板选项（ids 两组独立：A面 303x、B面 304x） */
+const FACE_ITEM_NAMES = [
+    "三脚银点",
+    "三脚铜点",
+    "塑料盖板",
+    "全方位左脚银点",
+    "全方位右脚银点",
+    "左脚银点（全银点）",
+    "右脚银点",
+    "右脚铜点",
+    "全方位左脚铜点",
+];
 
 export const BOM_CATEGORIES: CategoryDef[] = [
     {
         key: "rotary-switch",
-        name: "旋转开关",
+        name: "旋转XK2",
         codePrefix: "XK2",
-        fields: [
-            {
-                key: "脚位",
-                label: "脚位",
-                type: "select",
-                options: ["二脚", "三脚", "四脚", "五脚", "六脚"],
-                required: true,
-            },
-            {
-                key: "档位",
-                label: "档位",
-                type: "select",
-                options: ["一档", "两档", "三档", "四档", "五档", "六档", "八档"],
-                required: true,
-            },
-            { key: "规格", label: "规格", type: "text", placeholder: "如 222-1" },
-            { key: "方向", label: "方向", type: "text", placeholder: "如 正面" },
-            { key: "银点厚度", label: "银点厚度", type: "select", options: ["0.2", "0.3"], initial: "0.2" },
-            { key: "弹簧", label: "弹簧", type: "select", options: ["0.5", "0.55", "0.6"], initial: "0.5" },
-            { key: "杆子高度", label: "杆子高度", type: "text", defaultValue: "4.8" },
-            { key: "A面触点", label: "A面触点", type: "text", defaultValue: "A面银点" },
-            { key: "B面触点", label: "B面触点", type: "text", defaultValue: "B面塑料盖板" },
+        groups: [
+            group("2001", "型号", "model", null, [
+                ["3051", "0-2"],
+                ["3052", "0-3"],
+                ["3053", "0-4"],
+                ["3054", "0-4-1"],
+                ["3055", "0-5"],
+                ["3056", "0-6"],
+                ["3057", "0-7"],
+                ["3058", "0-8"],
+                ["3059", "0-9"],
+                ["3001", "1-1"],
+                ["3002", "2-1"],
+                ["3060", "2-2"],
+                ["3061", "3-1"],
+                ["3062", "3-2"],
+                ["3063", "4-1"],
+                ["3064", "4-2"],
+                ["3065", "4-3"],
+                ["3066", "4-4"],
+                ["3067", "4-8"],
+                ["3068", "4-9"],
+                ["3069", "无"],
+            ]),
+            group("2008", "规格", "spec", null, [
+                ["3071", "211-1"],
+                ["3072", "222-1"],
+                ["3073", "2-1-4"],
+                ["3074", "222-2"],
+                ["3075", "233-4"],
+                ["3076", "233-1-B"],
+                ["3077", "233-1"],
+                ["3078", "243-1-2"],
+                ["3079", "243-5B"],
+                ["3080", "243-5A"],
+                ["3081", "243-5"],
+                ["3082", "243-1"],
+                ["3083", "全方位/冷风扇/284-1B"],
+                ["3084", "全方位/284-2B"],
+                ["3085", "212-1"],
+                ["3086", "263-1-A"],
+                ["3087", "284-1A"],
+                ["3088", "284-2"],
+                ["3089", "284-1"],
+                ["3090", "284-3"],
+                ["3091", "284-4"],
+                ["3092", "无"],
+            ]),
+            group("2009", "方向", "direction", null, [
+                ["3093", "正面"],
+                ["3094", "反面"],
+                ["3095", "正面反轴"],
+                ["3096", "反面转90°扁位朝上"],
+                ["3097", "正面转90°扁位朝上"],
+            ]),
+            group("2004", "杆子点位厚度", "lever-point-thickness", null, [
+                ["3005", "4.8"],
+                ["3023", "4.9"],
+            ]),
+            group(
+                "2005",
+                "A面",
+                "face-a",
+                null,
+                FACE_ITEM_NAMES.map((name, index) => [`303${index + 1}`, name]),
+            ),
+            group(
+                "2006",
+                "B面",
+                "face-b",
+                null,
+                FACE_ITEM_NAMES.map((name, index) => [`304${index + 1}`, name]),
+            ),
+            group("2007", "弹簧", "spring", null, [
+                ["3008", "0.5"],
+                ["3009", "0.55"],
+                ["3010", "0.6"],
+            ]),
         ],
     },
     {
-        key: "xk3",
-        name: "XK3",
+        key: "rotary-xk3",
+        name: "旋转XK3",
         codePrefix: "XK3",
-        fields: [
-            {
-                key: "外壳",
-                label: "外壳",
-                type: "select",
-                options: [
-                    "圆孔长外壳（茶色）",
-                    "圆孔长外壳（透明）",
-                    "圆孔短外壳（茶色）",
-                    "椭圆孔长外壳无CB字（茶色）",
-                    "无耳外壳无CB字（茶色）",
-                ],
-                required: true,
-            },
-            { key: "底座", label: "底座", type: "select", options: ["茶色", "透明"], required: true },
-            {
-                key: "杆子",
-                label: "杆子",
-                type: "select",
-                options: ["圆轴长杆子", "圆轴短杆子", "扁轴4.8", "扁轴4.8转90°"],
-                required: true,
-            },
-            { key: "小静片", label: "小静片", type: "select", options: ["不电镀", "镀锡"], required: true },
-            { key: "半圆静片", label: "半圆静片", type: "select", options: ["不电镀", "镀锡"], required: true },
-            { key: "动片", label: "动片", type: "select", options: ["不电镀", "镀锡"], required: true },
-            { key: "卡线片", label: "卡线片", type: "select", options: ["0.15", "0.2"], required: true },
-            { key: "弹簧", label: "弹簧", type: "select", options: ["0.45长弹簧", "0.45短弹簧"], required: true },
-            { key: "带圈动片", label: "带圈动片", type: "text", defaultValue: "不电镀" },
-            { key: "钢球", label: "钢球", type: "text", defaultValue: "4.0mm电镀钢球" },
+        groups: [
+            group("2401", "PC塑料外壳", "pc-shell", null, [
+                ["3401", "圆孔长外壳（茶色）"],
+                ["3402", "圆孔长外壳（透明）"],
+                ["3403", "圆孔短外壳（茶色）"],
+                ["3404", "椭圆孔长外壳无CB字（茶色）"],
+                ["3405", "无耳外壳无CB字（茶色）"],
+            ]),
+            group("2402", "PC塑料底座", "pc-base", null, [
+                ["3406", "底座：茶色"],
+                ["3407", "底座：透明"],
+            ]),
+            group("2403", "PA66塑料杆子", "pa66-lever", null, [
+                ["3408", "圆轴长杆子"],
+                ["3409", "圆轴短杆子"],
+                ["3410", "扁轴4.8"],
+                ["3411", "扁轴4.8转90°"],
+            ]),
+            section("2404", "五金件"),
+            group("2411", "小静片", "small-static-plate", "2404", [
+                ["3412", "不电镀"],
+                ["3413", "镀锡"],
+            ]),
+            group("2412", "半圆静片", "half-round-static-plate", "2404", [
+                ["3414", "不电镀"],
+                ["3415", "镀锡"],
+            ]),
+            group("2413", "动片", "moving-plate", "2404", [
+                ["3416", "不电镀"],
+                ["3417", "镀锡"],
+            ]),
+            group("2414", "带圈动片", "ring-moving-plate", "2404", [["3418", "不电镀"]]),
+            group("2415", "钢球", "steel-ball", "2404", [["3419", "4.0mm电镀钢球"]]),
+            group("2416", "卡线片", "wire-clip", "2404", [
+                ["3420", "0.15"],
+                ["3421", "0.2"],
+            ]),
+            group("2417", "弹簧", "spring", "2404", [
+                ["3422", "0.45长弹簧"],
+                ["3423", "0.45短弹簧"],
+            ]),
+            section("2405", "触点"),
+            group("2418", "触点大小", "contact-size", "2405", [
+                ["3424", "0.3"],
+                ["3425", "0.35"],
+            ]),
+            group("2419", "触点厚度", "contact-thickness", "2405", [
+                ["3426", "0.15"],
+                ["3427", "0.2"],
+                ["3428", "0.3"],
+            ]),
+            group("2420", "触点类别", "contact-kind", "2405", [
+                ["3429", "铜"],
+                ["3430", "银"],
+            ]),
         ],
     },
+
     {
         key: "new-micro-switch",
         name: "新微动",
         codePrefix: "KW",
         seqWidth: 4,
-        fields: [
-            {
-                key: "底座",
-                label: "底座",
-                type: "select",
-                options: ["二脚底座（无挡脚）", "三脚底座（有挡脚）"],
-                required: true,
-            },
-            // 盖子是所有新微动开关都装的固定塑料件，无规格分支
-            { key: "盖子", label: "盖子", type: "text", defaultValue: "盖子" },
-            {
-                key: "按钮高度",
-                label: "按钮高度",
-                type: "select",
-                options: ["7.6mm（常用装跌倒）", "8.0mm", "8.1mm", "8.2mm圆弧", "8.3mm", "8.5mm", "8.8mm", "9.1mm"],
-                required: true,
-            },
-            {
-                key: "支架",
-                label: "支架",
-                type: "select",
-                options: NEW_MICRO_SWITCH_BRACKET_OPTIONS,
-                required: true,
-            },
-            {
-                key: "静片",
-                label: "静片",
-                type: "select",
-                options: NEW_MICRO_SWITCH_STATIC_PLATE_OPTIONS,
-                required: true,
-            },
-            { key: "动片", label: "动片", type: "select", options: ["铜镀银", "镀锡"], required: true },
-            {
-                key: "摆片",
-                label: "摆片",
-                type: "select",
-                options: ["铜镀银摆片", "铁镀镍摆片", "复合铜镀镍摆片"],
-                required: true,
-            },
-            { key: "弹片", label: "弹片", type: "select", options: ["0.12", "0.15", "0.2"], required: true },
+        groups: [
+            section("2101", "PA66塑料"),
+            group("2111", "底座", "base", "2101", [
+                ["3101", "二脚底座（无挡脚）"],
+                ["3102", "三脚底座（有挡脚）"],
+            ]),
+            group("2112", "盖子", "cover", "2101", [["3103", "盖子"]]),
+            group("2113", "按钮", "button", "2101", [
+                ["3104", "7.6mm（常用装跌倒）"],
+                ["3105", "8.0mm"],
+                ["3106", "8.1mm"],
+                ["3107", "8.2mm圆弧"],
+                ["3108", "8.3mm"],
+                ["3109", "8.5mm"],
+                ["3110", "8.8mm"],
+                ["3111", "9.1mm"],
+            ]),
+            section("2102", "五金件"),
+            group("2114", "支架", "bracket", "2102", [
+                ["3112", "6.3支架：铜镀银"],
+                ["3113", "6.3支架：铜镀镍"],
+                ["3114", "6.3支架：复合铜镀镍"],
+                ["3115", "4.8支架：铜镀镍"],
+                ["3116", "4.8支架：复合铜镀镍"],
+            ]),
+            group("2115", "静片", "static-plate", "2102", [
+                ["3117", "6.3静片：铜镀银"],
+                ["3118", "6.3静片：铜镀镍"],
+                ["3119", "6.3静片：复合铜镀镍"],
+                ["3120", "4.8静片：铜镀镍"],
+                ["3121", "4.8静片：复合铜镀镍"],
+            ]),
+            group("2116", "动片", "moving-plate", "2102", [
+                ["3122", "铜镀银"],
+                ["3123", "镀锡"],
+            ]),
+            group("2117", "摆片", "swing-plate", "2102", [
+                ["3124", "铜镀银摆片"],
+                ["3125", "铁镀镍摆片"],
+                ["3126", "复合铜镀镍摆片"],
+            ]),
+            group("2118", "弹片", "spring-plate", "2102", [
+                ["3127", "0.12"],
+                ["3128", "0.15"],
+                ["3129", "0.2"],
+            ]),
+            section("2103", "触点"),
+            group("2119", "触点大小", "contact-size", "2103", [
+                ["3131", "0.3"],
+                ["3132", "0.35"],
+            ]),
+            group("2120", "触点厚度", "contact-thickness", "2103", [
+                ["3133", "0.15"],
+                ["3134", "0.2"],
+                ["3135", "0.3"],
+            ]),
+            group("2121", "触点类别", "contact-kind", "2103", [
+                ["3136", "铜"],
+                ["3137", "银"],
+            ]),
         ],
     },
     {
         key: "old-micro-switch",
         name: "老微动",
         codePrefix: "KW16",
-        fields: [
-            { key: "底座", label: "底座", type: "select", options: ["带CB", "不带CB"], required: true },
-            {
-                key: "按钮",
-                label: "按钮",
-                type: "select",
-                options: ["8.5mm（常用装跌倒）", "8.9mm", "9.6mm"],
-                required: true,
-            },
-            { key: "弹簧", label: "弹簧", type: "select", options: ["0.25", "0.27"], initial: "0.25" },
-            { key: "支架", label: "支架", type: "text", defaultValue: "6.3镀银" },
-            { key: "静片", label: "静片", type: "text", defaultValue: "6.3镀银" },
-            { key: "弹片", label: "弹片", type: "text", defaultValue: "0.12" },
+        groups: [
+            section("2201", "PA66塑料"),
+            group("2211", "底座", "base", "2201", [
+                ["3201", "带CB"],
+                ["3202", "不带CB"],
+            ]),
+            group("2212", "盖子", "cover", "2201", [["3203", "盖子"]]),
+            group("2213", "按钮", "button", "2201", [
+                ["3204", "8.5mm（常用装跌倒）"],
+                ["3205", "8.9mm"],
+                ["3206", "9.6mm"],
+            ]),
+            section("2202", "五金件"),
+            group("2214", "支架", "bracket", "2202", [["3207", "6.3镀银支架"]]),
+            group("2215", "静片", "static-plate", "2202", [["3208", "6.3镀银静片"]]),
+            group("2216", "弹片", "spring-plate", "2202", [["3209", "0.12"]]),
+            group("2217", "弹簧", "spring", "2202", [
+                ["3210", "0.25"],
+                ["3211", "0.27"],
+            ]),
+            group("2218", "挡脚", "stop-foot", "2202", [["3212", "挡脚"]]),
+            section("2203", "触点"),
+            group("2219", "触点大小", "contact-size", "2203", [
+                ["3141", "0.3"],
+                ["3142", "0.35"],
+            ]),
+            group("2220", "触点厚度", "contact-thickness", "2203", [
+                ["3143", "0.15"],
+                ["3144", "0.2"],
+                ["3145", "0.3"],
+            ]),
+            group("2221", "触点类别", "contact-kind", "2203", [
+                ["3146", "铜"],
+                ["3147", "银"],
+            ]),
         ],
     },
     {
-        key: "piano-key-switch",
-        name: "琴键开关",
-        codePrefix: "KQ",
-        fields: [
-            {
-                key: "类型",
-                label: "类型",
-                type: "select",
-                options: [
-                    "四键焊线",
-                    "四键插线",
-                    "小太阳四键三档（摇头）",
-                    "小太阳四键二档（不摇头）",
-                    "冷风扇琴键（茶色）",
-                    "冷风扇琴键（透明大功率带触点）",
-                ],
-                required: true,
-            },
-            {
-                key: "卡板",
-                label: "卡板",
-                type: "select",
-                options: ["大卡板18mm+小卡板18mm+短卡板16mm", "小卡板18mm+短卡板16mm", "小卡板18mm+大卡板18mm"],
-            },
-            { key: "弹簧", label: "弹簧", type: "select", options: ["0.3", "0.35"] },
-            { key: "触点", label: "触点", type: "select", options: ["带点", "不带点"] },
-            {
-                key: "五金件明细",
-                label: "五金件明细",
-                type: "text",
-                placeholder: "如 扣板×2+连锁片+带点静片+带点动片（数量 1 省略不写）",
-            },
+        key: "safety-switch",
+        name: "安全开关",
+        codePrefix: "AQ",
+        groups: [
+            group("2501", "PC塑料（外壳类）", "pc-shell", null, [
+                ["3501", "安全开关KD-2 (30mm/31mm) 外壳 / 茶色"],
+                ["3502", "安全开关KW16 (31mm) 外壳 / 茶色"],
+                ["3503", "安全开关KW16 (31mm) 外壳 / 透明"],
+                ["3504", "安全开关KD-2 (40mm/43mm) 外壳 / 茶色"],
+                ["3505", "安全开关KW16 (43mm) 外壳 / 茶色"],
+            ]),
+            section("2502", "PA66塑料"),
+            group("2511", "盖板", "cover", "2502", [["3506", "盖板"]]),
+            section("2503", "五金件"),
+            multiGroup("2512", "短款/31mm系列配件", "short-31-parts", "2503", [
+                ["3507", "动片"],
+                ["3508", "静片"],
+                ["3509", "短杆子"],
+                ["3510", "短帽子"],
+                ["3511", "短弹簧"],
+            ]),
+            multiGroup("2513", "长款/43mm系列配件", "long-43-parts", "2503", [
+                ["3512", "动片"],
+                ["3513", "静片"],
+                ["3514", "长杆子"],
+                ["3515", "长帽子"],
+                ["3516", "长弹簧"],
+            ]),
+            section("2504", "触点"),
+            group("2514", "触点大小", "contact-size", "2504", [
+                ["3517", "0.3"],
+                ["3518", "0.35"],
+            ]),
+            group("2515", "触点厚度", "contact-thickness", "2504", [
+                ["3519", "0.15"],
+                ["3520", "0.2"],
+                ["3521", "0.3"],
+            ]),
+            group("2516", "触点类别", "contact-kind", "2504", [
+                ["3522", "铜"],
+                ["3523", "银"],
+            ]),
+        ],
+    },
+    {
+        key: "tipover-switch",
+        name: "跌倒开关",
+        codePrefix: "KD",
+        childCategories: ["new-micro-switch", "old-micro-switch"],
+        groups: [
+            group("2601", "跌倒盖", "tipover-cover", null, [
+                ["3601", "跌倒盖KW16 / 有CB字"],
+                ["3602", "跌倒盖KW16 / 无CB字"],
+                ["3603", "跌倒盖KB-1"],
+            ]),
+            group("2602", "跌倒底", "tipover-base", null, [["3604", "跌倒底"]]),
+            group("2603", "钢球", "steel-ball", null, [["3605", "18mm钢球"]]),
+            group("2604", "翘板", "rocker", null, [["3606", "翘板"]]),
         ],
     },
 ];
 
 export const categoryOf = (name: string) => BOM_CATEGORIES.find(category => category.name === name);
 
-/* 品类常量（defaultValue 字段），新建/种子数据并入 specs */
-export const defaultsOf = (category: CategoryDef) =>
-    Object.fromEntries(
-        category.fields
-            .filter(field => field.defaultValue !== undefined)
-            .map(field => [field.key, field.defaultValue!]),
+/** 目录顺序（分区→组→物料的种子序）拍平的物料行：已选集合的稳定展示序与建档快照序 */
+export interface CatalogItemRow {
+    id: string;
+    groupKey: string;
+    groupName: string;
+    name: string;
+}
+
+export const catalogRowsOf = (category: { groups: BomCatalogNode[] }): CatalogItemRow[] =>
+    category.groups.flatMap(node =>
+        node.kind === "group"
+            ? node.items.map(item => ({ id: item.id, groupKey: node.key!, groupName: node.name, name: item.name }))
+            : [],
     );
 
-/* 模板推荐值（defaultValue + initial）；不限制新建 BOM 的自由规格 */
-export const initialValuesOf = (category: CategoryDef) =>
-    Object.fromEntries(
-        category.fields
-            .filter(field => field.defaultValue !== undefined || field.initial !== undefined)
-            .map(field => [field.key, (field.initial ?? field.defaultValue)!]),
-    );
+/** 摘要工具（与后端 bom-display 同构）：“组名：物料名”以 “ · ” 连接 */
+export const bomSpecOfItems = (items: Array<{ groupName: string; name: string }>): string =>
+    items.map(item => `${item.groupName}：${item.name}`).join(" · ");
 
 /* 生成下一个 BOM 编码：ZM + 品类码 + 序号（按品类过滤后在品类内自增，宽度取 seqWidth）。
  * 品类由调用方传入（页面用接口下发的 bomCategories），本文件不再回查种子常量。 */
