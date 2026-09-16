@@ -525,4 +525,111 @@ describe('BOM/成品档案 (e2e)', () => {
         expect(after.statusCode).toBe(200);
         expect(after.json().data[code]).toBe(120);
     });
+
+    it('删除未被引用的 BOM：非超管 403、被订单引用 409、成功后档案消失留 op_log 快照、重放幂等', async () => {
+        const [direction, spring] = await Promise.all([
+            itemIdOf('rotary-switch', '方向', '正面'),
+            itemIdOf('rotary-switch', '弹簧', '0.6'),
+        ]);
+        const created = await createBom(
+            { name: '旋转XK2', materialItemIds: [direction, spring] },
+            `e2e-bom-${RUN}-del-create`,
+        );
+        expect(created.statusCode).toBe(200);
+        const code = created.json().data.code as string;
+
+        // 受保护权限 bom:delete 仅超级管理员：admin 即使有 bom:create 也 403
+        const adminToken = await createUser(accountOf('admin01'), 'admin');
+        const denied = await app.inject({
+            method: 'POST',
+            url: `/api/boms/${code}/delete`,
+            headers: { ...authHeaders(adminToken), 'idempotency-key': `e2e-bom-${RUN}-del-admin` },
+        });
+        expect(denied.statusCode).toBe(403);
+        expect(denied.json().message).toContain('超级管理员');
+
+        // 建档即引用（无需发货）：含已取消订单在内的任何订单引用都拒绝删除
+        await createUser(accountOf('sales01'), 'sales');
+        const customerRes = await app.inject({
+            method: 'POST',
+            url: '/api/customers',
+            headers: { ...authHeaders(superToken), 'idempotency-key': `e2e-bom-${RUN}-del-cust` },
+            payload: {
+                name: `深圳市联调电子_${RUN}`,
+                contact: '王经理',
+                phone: '13800002222',
+                province: '广东省',
+                city: '深圳市',
+                district: '南山区',
+                town: '粤海街道',
+                address: `科技园 ${RUN.slice(-3)} 号`,
+                ownerAccount: accountOf('sales01'),
+                payTerms: '月结 30 天',
+            },
+        });
+        expect(customerRes.statusCode).toBe(200);
+        const orderRes = await app.inject({
+            method: 'POST',
+            url: '/api/orders',
+            headers: { ...authHeaders(superToken), 'idempotency-key': `e2e-bom-${RUN}-del-order` },
+            payload: {
+                customerCode: customerRes.json().data.code,
+                bomCode: code,
+                qty: 10,
+                deliverDate: '2026-12-31',
+                orderDate: '2026-09-16',
+                remark: 'BOM 删除 e2e 引用',
+            },
+        });
+        expect(orderRes.statusCode).toBe(200);
+
+        const referenced = await app.inject({
+            method: 'POST',
+            url: `/api/boms/${code}/delete`,
+            headers: { ...authHeaders(superToken), 'idempotency-key': `e2e-bom-${RUN}-del-ref` },
+        });
+        expect(referenced.statusCode).toBe(409);
+        expect(referenced.json().message).toBe('BOM 已被销售订单引用，不可删除');
+
+        // 引用订单删除后（完全未发货）BOM 恢复可删；成功响应与幂等重放均归一为 null
+        const order = orderRes.json().data as { orderNo: string; version: number };
+        const removeOrder = await app.inject({
+            method: 'POST',
+            url: `/api/orders/${order.orderNo}/delete`,
+            headers: { ...authHeaders(superToken), 'idempotency-key': `e2e-bom-${RUN}-del-order-rm` },
+            payload: { expectedVersion: order.version },
+        });
+        expect(removeOrder.statusCode).toBe(200);
+
+        const key = `e2e-bom-${RUN}-del-ok`;
+        const removed = await app.inject({
+            method: 'POST',
+            url: `/api/boms/${code}/delete`,
+            headers: { ...authHeaders(superToken), 'idempotency-key': key },
+        });
+        expect(removed.statusCode).toBe(200);
+        expect(removed.json()).toEqual({ code: 0, data: null, message: 'ok' });
+
+        const replay = await app.inject({
+            method: 'POST',
+            url: `/api/boms/${code}/delete`,
+            headers: { ...authHeaders(superToken), 'idempotency-key': key },
+        });
+        expect(replay.statusCode).toBe(200);
+        expect(replay.json().data).toBeNull();
+
+        const gone = await app.inject({
+            method: 'POST',
+            url: `/api/boms/${code}/delete`,
+            headers: { ...authHeaders(superToken), 'idempotency-key': `e2e-bom-${RUN}-del-gone` },
+        });
+        expect(gone.statusCode).toBe(404);
+
+        const list = await app.inject({ method: 'GET', url: '/api/boms', headers: authHeaders(superToken) });
+        expect(list.json().data.some((bom: { code: string }) => bom.code === code)).toBe(false);
+
+        // op_log 留完整档案快照（编码/品类/规格），长期审计可独立还原删除前形态
+        const opLog = await prisma.opLog.findFirst({ where: { action: 'delete_bom', targetCode: code } });
+        expect(opLog?.detailJson).toMatchObject({ code, name: '旋转XK2' });
+    });
 });
