@@ -37,10 +37,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         }
 
         const isSuper = user.roleCode === SUPER_ROLE_CODE;
+        // 受保护权限只允许 super：授权写入接口会拒绝，这里再按 sys_permission.protected
+        // 过滤一次——库内出现脏授权行（迁移脚本错、直改库）也不会进入普通用户的权限集
         const grants = isSuper
             ? []
             : await this.prisma.sysGrant.findMany({
-                  where: { roleCode: user.roleCode },
+                  where: { roleCode: user.roleCode, permission: { isProtected: false } },
                   select: { permissionCode: true },
               });
 
