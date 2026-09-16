@@ -120,9 +120,18 @@ const createStore = (store: Store) => {
                     : ([...store.users.values()].find(u => u.id === where.id) ?? null),
             ),
             findMany: vi.fn(
-                async ({ where, select }: { where: { roleCode: string; status: boolean }; select?: unknown }) =>
+                async ({
+                    where,
+                    select,
+                }: {
+                    where: { roleCode: string | { in: string[] }; status: boolean };
+                    select?: unknown;
+                }) =>
                     [...store.users.values()]
-                        .filter(u => u.roleCode === where.roleCode && u.status === where.status)
+                        .filter(u => {
+                            const roles = typeof where.roleCode === 'string' ? [where.roleCode] : where.roleCode.in;
+                            return roles.includes(u.roleCode) && u.status === where.status;
+                        })
                         .map(u => (select ? { name: u.name, account: u.account } : u)),
             ),
         },
@@ -288,12 +297,13 @@ describe('CustomersService.listCustomers', () => {
 });
 
 describe('CustomersService.listOwnerOptions', () => {
-    it('仅返回启用中的销售展示字段', async () => {
+    it('仅返回启用中销售与超级管理员的展示字段', async () => {
         const store: Store = {
             users: new Map([
                 ['sales01', mkUser({ id: 200n, account: 'sales01', name: '销售一', roleCode: 'sales' })],
                 ['sales02', mkUser({ id: 201n, account: 'sales02', name: '停售', roleCode: 'sales', status: false })],
                 ['admin01', mkUser({ id: 202n, account: 'admin01', name: '管理员', roleCode: 'admin' })],
+                ['super01', mkUser({ id: 203n, account: 'super01', name: '超级管理员', roleCode: 'super' })],
             ]),
             customers: [],
             orders: [],
@@ -302,7 +312,10 @@ describe('CustomersService.listOwnerOptions', () => {
         };
         const { service } = mkService(store);
         const options = await service.listOwnerOptions();
-        expect(options).toEqual([{ name: '销售一', account: 'sales01' }]);
+        expect(options).toEqual([
+            { name: '销售一', account: 'sales01' },
+            { name: '超级管理员', account: 'super01' },
+        ]);
     });
 });
 
@@ -338,7 +351,17 @@ describe('CustomersService.createCustomer', () => {
         );
     });
 
-    it('负责人不存在返回 404；非销售或停用销售返回 400', async () => {
+    it('省市地址留空可建档：空串规范化为 NULL，响应回空串', async () => {
+        const created = await ctx.service.createCustomer(
+            { ...createInput, province: '', city: '', district: '', town: '', address: '' },
+            actor,
+            ID_KEY,
+        );
+        expect(store.customers[0]).toMatchObject({ province: null, city: null, address: null });
+        expect(created).toMatchObject({ province: '', city: '', address: '' });
+    });
+
+    it('负责人不存在返回 404；非销售/超级管理员或停用账号返回 400', async () => {
         await expect(ctx.service.createCustomer(createInput, actor, ID_KEY)).resolves.toBeDefined();
         await expect(
             ctx.service.createCustomer({ ...createInput, ownerAccount: 'nobody' }, actor, ID_KEY),
@@ -346,7 +369,7 @@ describe('CustomersService.createCustomer', () => {
         store.users.set('clerk', mkUser({ id: 100n, account: 'clerk', roleCode: 'staff' }));
         await expect(
             ctx.service.createCustomer({ ...createInput, ownerAccount: 'clerk' }, actor, ID_KEY),
-        ).rejects.toThrow(new BadRequestException('客户负责人必须是启用中的销售账号'));
+        ).rejects.toThrow(new BadRequestException('客户负责人必须是启用中的销售或超级管理员账号'));
     });
 
     it('幂等键非法返回 400 不触碰数据库；重放直接返回首次响应', async () => {

@@ -23,15 +23,18 @@ export class UpdateCustomerDto {
     @Matches(/^(|1[0-9]{10})$/, { message: '手机号须为 11 位数字或空串（空串表示不修改）' })
     phone!: string;
 
+    /** 省市可空；空串规范化为 NULL（db-scheme.md §1.1 无值统一 NULL） */
     @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+    @IsOptional()
     @IsString()
-    @Length(1, 64, { message: '省份不能为空' })
-    province!: string;
+    @MaxLength(64, { message: '省份最长 64 个字符' })
+    province?: string;
 
     @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+    @IsOptional()
     @IsString()
-    @Length(1, 64, { message: '城市不能为空' })
-    city!: string;
+    @MaxLength(64, { message: '城市最长 64 个字符' })
+    city?: string;
 
     @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
     @IsOptional()
@@ -45,10 +48,12 @@ export class UpdateCustomerDto {
     @MaxLength(96, { message: '乡镇最长 96 个字符' })
     town?: string;
 
+    /** 地址可空；空串规范化为 NULL（db-scheme.md §1.1 无值统一 NULL） */
     @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+    @IsOptional()
     @IsString()
-    @Length(1, 300, { message: '详细地址为 1–300 个字符' })
-    address!: string;
+    @MaxLength(300, { message: '详细地址最长 300 个字符' })
+    address?: string;
 
     @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
     @IsString()

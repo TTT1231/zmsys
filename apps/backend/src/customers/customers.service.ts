@@ -58,10 +58,10 @@ export class CustomersService {
         return rows.map(row => this.toCustomer(row, cooperatingIds.has(row.id)));
     }
 
-    /** 启用中的销售即合法负责人候选（db-scheme.md §4.1）；只回展示字段 */
+    /** 启用中的销售与超级管理员即合法负责人候选（db-scheme.md §4.1）；只回展示字段 */
     async listOwnerOptions(): Promise<CustomerOwnerOption[]> {
         return this.prisma.sysUser.findMany({
-            where: { roleCode: 'sales', status: true },
+            where: { roleCode: { in: ['sales', 'super'] }, status: true },
             orderBy: { account: 'asc' },
             select: { name: true, account: true },
         });
@@ -69,7 +69,7 @@ export class CustomersService {
 
     /**
      * 新建客户档案：客户编码全局事务取号（CUS-0001 起）；负责人锁定并确认为
-     * 启用中的销售；创建写 op_log 与业务行同事务（db-scheme.md §8）。
+     * 启用中的销售或超级管理员；创建写 op_log 与业务行同事务（db-scheme.md §8）。
      */
     async createCustomer(
         dto: CreateCustomerDto,
@@ -104,11 +104,12 @@ export class CustomersService {
                     name: dto.name,
                     contactPerson: dto.contact,
                     contactPhone: dto.phone,
-                    province: dto.province,
-                    city: dto.city,
+                    // 省市/地址可空：空串规范化为 NULL（db-scheme.md §1.1 无值统一 NULL）
+                    province: dto.province || null,
+                    city: dto.city || null,
                     district: dto.district || null,
                     town: dto.town || null,
-                    address: dto.address,
+                    address: dto.address || null,
                     ownerId: owner.id,
                     payTerms: dto.payTerms,
                     requestKey: this.idempotency.requestKey(BigInt(actor.id), CREATE_OPERATION_KEY, key),
@@ -162,11 +163,12 @@ export class CustomersService {
                     contactPerson: dto.contact,
                     // 空串 = 保留原号码（响应只见掩码，改号须提交完整 11 位）
                     contactPhone: dto.phone ? dto.phone : current.contactPhone,
-                    province: dto.province,
-                    city: dto.city,
+                    // 省市/地址可空：空串规范化为 NULL（db-scheme.md §1.1 无值统一 NULL）
+                    province: dto.province || null,
+                    city: dto.city || null,
                     district: dto.district || null,
                     town: dto.town || null,
-                    address: dto.address,
+                    address: dto.address || null,
                     ownerId,
                     payTerms: dto.payTerms,
                     updatedBy: BigInt(actor.id),
@@ -219,15 +221,15 @@ export class CustomersService {
         return new Set(rows.map(row => row.customerId));
     }
 
-    /** 锁定并确认负责人为启用中的销售（db-scheme.md §4.1：资格校验在事务内完成） */
+    /** 锁定并确认负责人为启用中的销售或超级管理员（db-scheme.md §4.1：资格校验在事务内完成） */
     private async lockOwnerByAccount(tx: Tx, account: string): Promise<Pick<SysUser, 'id' | 'name' | 'account'>> {
         await tx.$queryRaw`SELECT id FROM sys_user WHERE account = ${account} FOR UPDATE`;
         const owner = await tx.sysUser.findUnique({ where: { account } });
         if (!owner) {
             throw new NotFoundException('负责人账号不存在');
         }
-        if (owner.roleCode !== 'sales' || !owner.status) {
-            throw new BadRequestException('客户负责人必须是启用中的销售账号');
+        if (!['sales', 'super'].includes(owner.roleCode) || !owner.status) {
+            throw new BadRequestException('客户负责人必须是启用中的销售或超级管理员账号');
         }
         return owner;
     }
@@ -253,11 +255,11 @@ export class CustomersService {
             name: row.name,
             contact: row.contactPerson,
             phone: maskPhone(row.contactPhone),
-            province: row.province,
-            city: row.city,
+            province: row.province ?? '',
+            city: row.city ?? '',
             district: row.district ?? '',
             town: row.town ?? '',
-            address: row.address,
+            address: row.address ?? '',
             cooperation: cooperating ? '合作中' : '待跟进',
             owner: row.owner.name,
             ownerAccount: row.owner.account,
