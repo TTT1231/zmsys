@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
+import { copyText } from "@/lib/clipboard";
 import { useApp } from "@/context/AppContext";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Button, TableLink } from "@/components/ui/Badge";
@@ -41,13 +42,28 @@ export function BomDetailModal({
     onClose: () => void;
     categories?: BomCategory[];
 }) {
+    const toast = useToast();
     if (!bom) return null;
+    const copyCode = async () => {
+        if (await copyText(bom.code)) toast(`已复制 ${bom.code}`);
+    };
     return (
         <Modal
             open={!!bom}
             onClose={onClose}
             label="BOM 详情"
             title={bom.code}
+            titleExtra={
+                <button
+                    type="button"
+                    onClick={copyCode}
+                    aria-label="复制 BOM 编号"
+                    title="复制 BOM 编号"
+                    className="flex min-h-7 min-w-7 items-center justify-center rounded-md text-muted transition hover:bg-primary-soft hover:text-primary"
+                >
+                    <Icon name="copy" size={14} />
+                </button>
+            }
             width={560}
             footer={
                 <button

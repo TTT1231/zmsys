@@ -18,6 +18,8 @@ interface ModalProps {
     open: boolean;
     onClose: () => void;
     title: string;
+    /** 标题旁的附加内容（如复制按钮）；不影响 aria-label，仍取 title */
+    titleExtra?: ReactNode;
     subtitle?: string;
     label?: string;
     width?: number;
@@ -30,6 +32,7 @@ export function Modal({
     open,
     onClose,
     title,
+    titleExtra,
     subtitle,
     label = "",
     width = 560,
@@ -132,7 +135,10 @@ export function Modal({
                         <div className="text-11 font-semibold tracking-[0.08em] text-primary" hidden={!label}>
                             {label}
                         </div>
-                        <h2 className="mt-0.5 text-17 font-semibold text-ink">{title}</h2>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                            <h2 className="text-17 font-semibold text-ink">{title}</h2>
+                            {titleExtra}
+                        </div>
                         {subtitle && <p className="mt-0.5 text-12.5 text-muted">{subtitle}</p>}
                     </div>
                     <button

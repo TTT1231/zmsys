@@ -3,7 +3,7 @@
    删除入口仅对持 bom:delete、订单引用与库存已成功加载、未被引用且无余量的档案显示；
    点击后需二次确认，确认才发起删除请求、取消不发起。 */
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, expect, it, vi } from "vitest";
 import { BomPage } from "@/pages/bom/BomPage";
@@ -13,6 +13,8 @@ import { detailBom } from "../../fixtures/recordDetails";
 const authRef = vi.hoisted(() => ({ current: { can: (perm: string): boolean => perm === "never" } }));
 vi.mock("@/context/AppContext", () => ({ useApp: () => ({ role: "staff", can: authRef.current.can }) }));
 vi.mock("@/components/ui/Toast", () => ({ useToast: () => vi.fn() }));
+const copyText = vi.hoisted(() => vi.fn().mockResolvedValue(true));
+vi.mock("@/lib/clipboard", () => ({ copyText }));
 
 /* 用例间替换库存余量/订单引用返回值：工厂被提升到模块顶部，须经 ref 惰性读取 */
 const stocksRef = vi.hoisted(() => ({ current: undefined as Record<string, number> | undefined }));
@@ -40,6 +42,7 @@ afterEach(() => {
     ordersRef.current = undefined;
     authRef.current = { can: () => false };
     deleteMutate.mockClear();
+    copyText.mockClear();
 });
 
 it("表格渲染 BOM 行，编码入口可打开详情", () => {
@@ -125,4 +128,14 @@ it("订单引用或库存余量未加载（含首次请求失败）时，不能�
     stocksRef.current = undefined;
     renderPage();
     expect(screen.queryAllByRole("button", { name: "删除" })).toHaveLength(0);
+});
+
+it("详情弹窗 BOM 编号旁的复制按钮把编码写入剪贴板", async () => {
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "查看物料" }));
+    // Modal 的 aria-label 取 title（BOM 编码）
+    expect(screen.getByRole("dialog", { name: detailBom.code })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "复制 BOM 编号" }));
+    await waitFor(() => expect(copyText).toHaveBeenCalledWith(detailBom.code));
 });
