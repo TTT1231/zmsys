@@ -367,6 +367,7 @@ export class OrdersService {
                     customer: current.customerNameSnapshot,
                     customerCode: current.customer.customerCode,
                     bomCode: current.bom.bomCode,
+                    cancelledBy: current.canceller?.name ?? null,
                 } as unknown as Prisma.InputJsonValue,
                 now,
             });
@@ -431,7 +432,9 @@ export class OrdersService {
         return order;
     }
 
-    /** 变更日志快照：行内业务字段（before/after 同构，便于审计比对） */
+    /** 变更日志快照：行内业务字段（before/after 同构，便于审计比对）。
+        含取消时间/原因与 BOM 冻结快照：订单删除后 changeLog 与 BOM 行均可能不复存在，
+        删除事件的 op_log 是唯一留存，须能独立还原取消语境与建档时的成品形态 */
     private orderSnapshot(order: SalesOrderTable): Prisma.InputJsonValue {
         return {
             orderNo: order.orderNo,
@@ -440,6 +443,11 @@ export class OrdersService {
             deliverDate: formatDateColumn(order.deliverDate),
             remark: order.remark,
             lifecycleStatus: order.lifecycleStatus,
+            cancelledAt: order.cancelledAt ? order.cancelledAt.toISOString() : null,
+            cancelReason: order.cancelReason,
+            bomName: order.bomNameSnapshot,
+            bomModel: order.bomModelSnapshot,
+            bomSpec: order.bomSpecSnapshot,
             rowVersion: Number(order.rowVersion),
         };
     }

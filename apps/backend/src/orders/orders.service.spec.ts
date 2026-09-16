@@ -578,4 +578,26 @@ describe('OrdersService.deleteOrder', () => {
         expect(replay).toBeNull();
         expect(local.idempotency.complete).not.toHaveBeenCalled();
     });
+
+    it('取消后删除的订单：快照保留取消审计与 BOM 冻结字段，长期审计可独立还原', async () => {
+        const cancelledAt = new Date('2026-09-13T10:00:00Z');
+        store.orders[0] = mkOrder({
+            lifecycleStatus: 'CANCELLED',
+            cancelledAt,
+            cancelReason: '客户撤单',
+            canceller: { name: '陈洁' },
+        });
+        await ctx.service.deleteOrder('ZM260912001', { expectedVersion: 1 }, actor, ID_KEY);
+        expect(store.opLogs.at(-1)).toMatchObject({
+            action: 'delete_order',
+            detailJson: {
+                lifecycleStatus: 'CANCELLED',
+                cancelledAt: cancelledAt.toISOString(),
+                cancelledBy: '陈洁',
+                cancelReason: '客户撤单',
+                bomName: '新微动',
+                bomCode: 'ZMKW0001',
+            },
+        });
+    });
 });
