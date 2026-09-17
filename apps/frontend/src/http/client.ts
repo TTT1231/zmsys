@@ -8,11 +8,13 @@ export const requestClient = new RequestClient({
     baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
 });
 
-/* 请求拦截：注入 accessToken */
+/* 请求拦截：注入 accessToken；GET 要求向源站再验证，
+ * 后端响应缺少 Cache-Control 时不会被浏览器启发式缓存喂旧数据 */
 requestClient.addRequestInterceptor({
     fulfilled: config => {
         const token = getToken();
         if (token) config.headers.Authorization = `Bearer ${token}`;
+        if (config.method?.toUpperCase() === "GET") config.headers.set("Cache-Control", "no-cache");
         return config;
     },
 });

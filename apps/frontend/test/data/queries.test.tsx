@@ -6,7 +6,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { detailBom, detailInbound } from "../fixtures/recordDetails";
-import { useBoms, useBomStocks, useCreateBom, useCreateInbound } from "@/data/queries";
+import { useBomStocks, useBoms, useCreateBom, useCreateInbound, useWbRefresh } from "@/data/queries";
 
 const api = vi.hoisted(() => ({
     fetchBoms: vi.fn(),
@@ -81,4 +81,17 @@ it("台账写操作（登记入库）成功后库存余量失效，重新挂载�
         expect(api.fetchBomStocks).toHaveBeenCalledTimes(2);
         expect(refreshed.result.current.data).toEqual({ [detailBom.code]: 200 });
     });
+});
+
+it("全局刷新失效挂载中的业务查询并立即重新请求，长 staleTime 缓存也不例外", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const list = mount(() => useBoms(), client);
+    await waitFor(() => expect(list.result.current.data).toEqual([detailBom]));
+    expect(api.fetchBoms).toHaveBeenCalledTimes(1);
+
+    const refresh = mount(() => useWbRefresh(), client);
+    expect(refresh.result.current.refreshing).toBe(false);
+    act(() => refresh.result.current.refresh());
+    // useBoms 仍在挂载中：invalidate 立刻触发重新请求，而不是等 staleTime 过期
+    await waitFor(() => expect(api.fetchBoms).toHaveBeenCalledTimes(2));
 });

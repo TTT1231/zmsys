@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsFetching, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { GrantMap, RoleId } from "./permissions";
 import type { Snapshot, UpdateCustomerInput, UpdateUserInput } from "@/api";
 import { useApp } from "@/context/AppContext";
@@ -146,11 +146,13 @@ export function useWbSnapshot() {
     });
 }
 
-/** 刷新快照:refetch 同一 query(全站共享,一处刷新全局生效)。
- *  保留页面本地筛选/页码——与「重置」(清筛选)职责分离 */
+/** 刷新数据：失效全部业务查询（聚合快照、BOM 域独立缓存、订单列表等），
+ *  挂载中的查询立即重新请求，未挂载的下次进入页面时取最新。
+ *  保留页面本地筛选/页码——与「重置」(清筛选)职责分离。
+ *  refreshing 用全局 isFetching：任何查询在途图标都转动，按钮不再"毫无反应" */
 export function useWbRefresh() {
-    const { refetch, isFetching } = useWbSnapshot();
-    return { refresh: () => void refetch(), refreshing: isFetching };
+    const queryClient = useQueryClient();
+    return { refresh: () => void queryClient.invalidateQueries(), refreshing: useIsFetching() > 0 };
 }
 
 function useWbMutation<TInput, TOutput>(mutationFn: (input: TInput) => Promise<TOutput>) {
