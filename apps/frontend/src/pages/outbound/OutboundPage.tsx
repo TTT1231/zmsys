@@ -9,9 +9,10 @@ import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
 import { useApp } from "@/context/AppContext";
 import { PageHeading } from "@/components/ui/PageHeading";
-import { Badge, Button } from "@/components/ui/Badge";
+import { Badge, Button, ProgressTrack, StatusBadge } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
+import { SearchSelect } from "@/components/ui/SearchSelect";
 import { CustomerCell, QtyCell } from "@/components/ui/cells";
 import { SortTh } from "@/components/ui/SortTh";
 import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
@@ -27,7 +28,7 @@ import {
 } from "@/data/queries";
 import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
-import { EMPTY_SNAPSHOT, bomByCode, maxShipOf, remainingOf } from "@/data/views";
+import { EMPTY_SNAPSHOT, bomByCode, maxShipOf, orderStatusOf, remainingOf } from "@/data/views";
 import { todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/Toast";
 import type { OutboundPrintDocument, OutboundRow, Snapshot } from "@/api";
@@ -64,7 +65,7 @@ function renderOutboundDocument(document: OutboundPrintDocument, win: Window) {
         ["客户", escapeHtml(`${document.customer}（${document.customerCode}）`)],
         ["BOM 编码", escapeHtml(document.bomCode)],
         ["规格", escapeHtml(document.bomSpec || "—")],
-        ["发货数量", escapeHtml(`${num(document.qty)} 件`)],
+        ["发货数量", escapeHtml(`${num(document.qty)} 个`)],
         ["出库日期", escapeHtml(document.date)],
         ["打印次数", escapeHtml(`第 ${document.printVersion} 次`)],
         ["登记人", escapeHtml(document.operator)],
@@ -321,36 +322,48 @@ export function OutboundModal({
     const snap = data ?? EMPTY_SNAPSHOT;
     const createOutbound = useCreateOutbound();
     const toast = useToast();
-    const [orderKeyword, setOrderKeyword] = useState("");
+    // 操作人 = 当前登录用户（服务端落账，不经请求体）
+
+    const stock = snap.stock;
+    const orders = snap.orders;
+    // 候选 = 还有待交数量的订单（已取消/已发完的不算，可发量可能为 0，等入库后可发）；
+    // 客户选项也从这里派生，不走客户档案（仓管无客户档案权限，订单上的客户信息全员可见）
+    const candidateOrders = orders.filter(order => remainingOf(order) > 0);
+    const [customerCode, setCustomerCode] = useState(() => {
+        const initial = orders.find(order => order.orderNo === initialOrderNo);
+        return initial?.customerCode ?? "";
+    });
     const [orderNo, setOrderNo] = useState(initialOrderNo);
     const [qty, setQty] = useState("");
     const [date, setDate] = useState(todayIso);
     const [remark, setRemark] = useState("");
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    // 操作人 = 当前登录用户（服务端落账，不经请求体）
-
-    const stock = snap.stock;
-    const orders = snap.orders;
-    const orderOptions = orders
-        .filter(order => maxShipOf(snap, order.orderNo) > 0)
-        .filter(
-            order =>
-                !orderKeyword.trim() ||
-                `${order.orderNo} ${order.customer}`.toLowerCase().includes(orderKeyword.trim().toLowerCase()),
-        )
-        .slice(0, 8);
+    const customerOrders = candidateOrders.filter(order => order.customerCode === customerCode);
+    const customerOptions = candidateOrders
+        .filter((order, index, list) => list.findIndex(item => item.customerCode === order.customerCode) === index)
+        .map(order => ({ value: order.customerCode, label: `${order.customer}（${order.customerCode}）` }));
+    const orderOptions = customerOrders.map(order => ({
+        value: order.orderNo,
+        label: `${order.orderNo} · ${order.bomCode} · 交期 ${order.deliverDate}`,
+    }));
 
     const selectedOrder = orders.find(order => order.orderNo === orderNo);
+    const selectedBom = selectedOrder ? bomByCode(snap, selectedOrder.bomCode) : undefined;
+    const status = selectedOrder ? orderStatusOf(snap, selectedOrder) : undefined;
     const remaining = selectedOrder ? remainingOf(selectedOrder) : 0;
     const shipped = selectedOrder?.outbound ?? 0;
     const shareStock = selectedOrder ? stock[selectedOrder.bomCode] || 0 : 0;
     const maxShip = selectedOrder ? maxShipOf(snap, selectedOrder.orderNo) : 0;
     const inputQty = Number(qty) || 0;
     const over = selectedOrder ? inputQty > maxShip : false;
+    const overdue = !!selectedOrder && remaining > 0 && selectedOrder.deliverDate < todayIso();
+
+    /* 用户改动某字段即清除该字段的报错，避免补填后验证词残留 */
+    const clearError = (key: string) => setErrors(current => ({ ...current, [key]: "" }));
 
     const reset = () => {
-        setOrderKeyword("");
+        setCustomerCode("");
         setOrderNo("");
         setQty("");
         setDate(todayIso());
@@ -362,8 +375,10 @@ export function OutboundModal({
         const nextErrors: Record<string, string> = {};
         if (createOutbound.isPending) return;
         if (!date) nextErrors.date = "请选择出库日期";
+        if (!customerCode) nextErrors.customerCode = "请选择客户";
         if (!selectedOrder) nextErrors.orderNo = "请选择订单";
-        if (!qty || Number(qty) <= 0) nextErrors.qty = "请填写发货数量";
+        if (!qty) nextErrors.qty = "请填写发货数量";
+        else if (Number(qty) <= 0) nextErrors.qty = "发货数量必须大于 0";
         if (over) nextErrors.qty = "超过可发库存，已被拦截";
         setErrors(nextErrors);
         if (Object.keys(nextErrors).length)
@@ -394,7 +409,7 @@ export function OutboundModal({
             open={open}
             onClose={onClose}
             title="成品出库 · 发货"
-            subtitle="按订单登记发货，超出可发库存会被拦截"
+            subtitle="先选客户再选订单，超出可发库存会被拦截"
             width={600}
             footer={
                 <>
@@ -416,117 +431,157 @@ export function OutboundModal({
                 </>
             }
         >
-            <div className="grid gap-3 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                    <span className="mb-1 block text-12.5 font-medium text-td">
-                        选择订单<span className="ml-0.5 text-danger">*</span>
-                    </span>
-                    {!initialOrderNo && (
-                        <>
-                            <input
-                                aria-label="搜索待发货订单"
-                                value={orderKeyword}
-                                onChange={event => setOrderKeyword(event.target.value)}
-                                placeholder="输入订单号或客户名过滤"
-                                className="w-full rounded-input border border-line-strong px-3 py-2 text-13 outline-none focus:border-primary"
+            <div className="flex flex-col gap-5">
+                <fieldset className="rounded-panel border border-line p-4">
+                    <legend className="px-1.5 text-12.5 font-semibold text-primary">① 客户与订单</legend>
+                    <div className="flex flex-col gap-3">
+                        <SearchSelect
+                            label="客户"
+                            required
+                            error={errors.customerCode}
+                            value={customerCode}
+                            onChange={code => {
+                                setCustomerCode(code);
+                                // 换客户后原订单多半不属于新客户，清掉避免带着旧单发货
+                                setOrderNo("");
+                                setErrors(current => ({ ...current, customerCode: "", orderNo: "" }));
+                            }}
+                            options={customerOptions}
+                        />
+                        {customerCode && (
+                            <SearchSelect
+                                label="销售订单"
+                                required
+                                error={errors.orderNo}
+                                value={orderNo}
+                                onChange={code => {
+                                    setOrderNo(code);
+                                    setErrors(current => ({ ...current, orderNo: "" }));
+                                }}
+                                options={orderOptions}
                             />
-                            <div className="mt-1.5 max-h-37.5 overflow-y-auto rounded-btn border border-line">
-                                {orderOptions.length === 0 && (
-                                    <p className="px-3 py-3 text-12.5 text-subtle">没有可发货的订单</p>
-                                )}
-                                {orderOptions.map(order => {
-                                    const shipMax = maxShipOf(snap, order.orderNo);
-                                    return (
-                                        <button
-                                            key={order.orderNo}
-                                            type="button"
-                                            onClick={() => setOrderNo(order.orderNo)}
-                                            className={`flex w-full items-center justify-between gap-3 border-b border-line/60 px-3 py-2 text-left text-12.5 transition last:border-b-0 hover:bg-primary-soft/50 ${orderNo === order.orderNo ? "bg-primary-soft" : ""}`}
-                                        >
-                                            <span className="tnum font-medium text-ink">{order.orderNo}</span>
-                                            <span className="min-w-0 flex-1 truncate text-muted">{order.customer}</span>
-                                            <span
-                                                className={`tnum font-medium ${shipMax > 0 ? "text-success" : "text-subtle"}`}
-                                            >
-                                                可发 {num(shipMax)} 件
-                                            </span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </>
-                    )}
-                    {initialOrderNo && selectedOrder && (
-                        <div className="rounded-btn bg-primary-soft p-3">
-                            <strong className="block text-16">{selectedOrder.customer}</strong>
-                            <span className="text-13">
-                                {selectedOrder.orderNo} · {selectedOrder.bomCode}
-                            </span>
-                            <p className="mt-1 text-13 text-muted">{bomByCode(snap, selectedOrder.bomCode)?.spec}</p>
-                        </div>
-                    )}
-                    {errors.orderNo && <span className="mt-1 block text-12 text-danger">{errors.orderNo}</span>}
-                </div>
-
-                {selectedOrder && (
-                    <div className="rounded-xl border border-line bg-panel px-3.5 py-3 text-12.5 sm:col-span-2">
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4">
-                            {[
-                                ["剩余待发", `${num(remaining)} 件`],
-                                ["累计已发", `${num(shipped)} 件`],
-                                ["账面库存", `${num(shareStock)} 件`],
-                                ["本次最多可发", `${num(maxShip)} 件`],
-                            ].map(([label, value], index) => (
-                                <div key={label}>
-                                    <span className="text-muted">{label}</span>
-                                    <span
-                                        className={`tnum ml-1.5 font-semibold ${index === 3 && maxShip === 0 ? "text-danger" : "text-ink"}`}
-                                    >
-                                        {value}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                        {over && <p className="mt-1.5 font-medium text-danger">发货后超过可发数量，请调整发货数量。</p>}
+                        )}
                     </div>
-                )}
+                </fieldset>
 
-                <p className="text-12 text-muted sm:col-span-2">
-                    可发数量按交期分配库存；本次发货不会占用更早订单的预留数量。
-                </p>
-                {selectedOrder && maxShip > 0 && (
-                    <button
-                        type="button"
-                        className="text-left text-primary sm:col-span-2"
-                        onClick={() => setQty(String(maxShip))}
-                    >
-                        填入全部可发数量（{num(maxShip)} 件）
-                    </button>
-                )}
-                <TextField
-                    label="发货数量（件）"
-                    required
-                    inputMode="numeric"
-                    placeholder="如 560"
-                    error={errors.qty}
-                    value={qty}
-                    onChange={event => setQty(event.target.value.replace(/\D/g, ""))}
-                />
-                <DateField
-                    label="出库日期"
-                    required
-                    error={errors.date}
-                    value={date}
-                    onChange={event => setDate(event.target.value)}
-                />
-                <div className="sm:col-span-2">
-                    <TextArea
-                        label="备注"
-                        placeholder="选填"
-                        value={remark}
-                        onChange={event => setRemark(event.target.value)}
-                    />
-                </div>
+                <fieldset className="rounded-panel border border-line p-4">
+                    <legend className="px-1.5 text-12.5 font-semibold text-primary">② 订单信息</legend>
+                    {selectedOrder && status ? (
+                        <div className="flex flex-col gap-3 rounded-xl border border-primary-border bg-primary-soft/40 px-3.5 py-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="tnum text-14 font-semibold text-primary-strong">
+                                    {selectedOrder.orderNo}
+                                </span>
+                                <StatusBadge status={status.key} label={status.label} />
+                            </div>
+                            <div>
+                                <p className="text-12.5 text-td">
+                                    <span className="tnum font-medium">{selectedOrder.bomCode}</span>
+                                    {selectedBom ? ` · ${selectedBom.name}` : ""}
+                                </p>
+                                {selectedBom?.spec && (
+                                    <p className="mt-0.5 break-words text-11.5 text-muted">{selectedBom.spec}</p>
+                                )}
+                            </div>
+                            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+                                <div className="min-w-0">
+                                    <dt className="text-11.5 text-muted">订单数量</dt>
+                                    <dd className="tnum mt-0.5 text-13 font-semibold text-ink">
+                                        {num(selectedOrder.qty)} 个
+                                    </dd>
+                                </div>
+                                <div className="min-w-0">
+                                    <dt className="text-11.5 text-muted">交货日期</dt>
+                                    <dd className="tnum mt-0.5 text-13 font-semibold text-ink">
+                                        {selectedOrder.deliverDate}
+                                        {overdue && <span className="ml-1 font-normal text-warning">已逾期</span>}
+                                    </dd>
+                                </div>
+                                <div className="min-w-0">
+                                    <dt className="text-11.5 text-muted">交付情况</dt>
+                                    <dd className="tnum mt-0.5 text-13 font-semibold text-ink">
+                                        已发 {num(shipped)} / {num(selectedOrder.qty)}
+                                    </dd>
+                                </div>
+                                <div className="min-w-0">
+                                    <dt className="text-11.5 text-muted">账面库存</dt>
+                                    <dd className="tnum mt-0.5 text-13 font-semibold text-ink">{num(shareStock)} 个</dd>
+                                </div>
+                            </dl>
+                            <div>
+                                <ProgressTrack
+                                    value={selectedOrder.qty === 0 ? 0 : selectedOrder.outbound / selectedOrder.qty}
+                                    done={remaining === 0}
+                                />
+                                <p className="mt-1.5 text-12.5 text-muted">
+                                    待交 <span className="tnum font-semibold text-ink">{num(remaining)}</span> 个 ·
+                                    本次最多可发{" "}
+                                    <span
+                                        className={`tnum font-semibold ${maxShip > 0 ? "text-success" : "text-danger"}`}
+                                    >
+                                        {num(maxShip)}
+                                    </span>{" "}
+                                    个（可发数量按交期分配库存，不占用更早订单的预留）
+                                </p>
+                                {over && (
+                                    <p className="mt-1 font-medium text-danger">发货后超过可发数量，请调整发货数量。</p>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <p className="text-12.5 text-subtle">
+                            选择订单后，这里会带出成品档案、订单数量、交货日期与交付情况。
+                        </p>
+                    )}
+                </fieldset>
+
+                <fieldset className="rounded-panel border border-line p-4">
+                    <legend className="px-1.5 text-12.5 font-semibold text-primary">③ 发货明细</legend>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        {selectedOrder && maxShip > 0 && (
+                            <button
+                                type="button"
+                                className="text-left text-13 text-primary sm:col-span-2"
+                                onClick={() => {
+                                    setQty(String(maxShip));
+                                    clearError("qty");
+                                }}
+                            >
+                                填入全部可发数量（{num(maxShip)} 个）
+                            </button>
+                        )}
+                        <TextField
+                            label="发货数量（个）"
+                            required
+                            inputMode="numeric"
+                            placeholder="如 560"
+                            error={errors.qty}
+                            value={qty}
+                            onChange={event => {
+                                setQty(event.target.value.replace(/\D/g, ""));
+                                clearError("qty");
+                            }}
+                        />
+                        <DateField
+                            label="出库日期"
+                            required
+                            error={errors.date}
+                            value={date}
+                            onChange={event => {
+                                setDate(event.target.value);
+                                clearError("date");
+                            }}
+                        />
+                        <div className="sm:col-span-2">
+                            <TextArea
+                                label="备注"
+                                placeholder="选填"
+                                value={remark}
+                                onChange={event => setRemark(event.target.value)}
+                            />
+                        </div>
+                    </div>
+                </fieldset>
             </div>
         </Modal>
     );
@@ -804,7 +859,7 @@ export function OutboundPage() {
                                     row.state === "voided" ? (
                                         <Badge tone="danger">已作废</Badge>
                                     ) : (
-                                        <strong className="text-primary">{num(row.qty)} 件</strong>
+                                        <strong className="text-primary">{num(row.qty)} 个</strong>
                                     )
                                 }
                                 actions={
@@ -868,7 +923,7 @@ export function OutboundPage() {
                                     <th className="px-3 py-2.5 font-semibold">订单 / 客户</th>
                                     <th className="px-3 py-2.5 font-semibold">BOM 编码</th>
                                     <SortTh
-                                        label="发货数量（件）"
+                                        label="发货数量（个）"
                                         align="right"
                                         active={sort.key === "qty"}
                                         dir={sort.dir}

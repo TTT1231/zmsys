@@ -57,13 +57,13 @@ it("库存余量已加载时移动卡片显示数量，未加载时降级为占�
     stocksRef.current = { [detailBom.code]: 200 };
     const { unmount } = renderPage();
     expect(screen.getByText("当前库存")).toBeInTheDocument();
-    expect(screen.getByText("200 件")).toBeInTheDocument();
+    expect(screen.getByText("200 个")).toBeInTheDocument();
     unmount();
 
     stocksRef.current = undefined;
     renderPage();
     expect(screen.getByText("—")).toBeInTheDocument();
-    expect(screen.queryByText("200 件")).not.toBeInTheDocument();
+    expect(screen.queryByText("200 个")).not.toBeInTheDocument();
 });
 
 it("删除入口仅超级管理员且未被订单引用时显示；确认后才发起请求，取消不发起", () => {

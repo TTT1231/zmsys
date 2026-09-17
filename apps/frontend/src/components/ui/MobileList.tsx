@@ -115,19 +115,19 @@ export function OrderTaskCard({
             <BomCell categories={snap.bomCategories} bom={bom} bomCode={order.bomCode} />
             <div className="mt-3 flex flex-col gap-1.5 border-t border-line pt-3">
                 <CardField label="交货日期" value={order.deliverDate} />
-                <CardField label="已发 / 订单" value={`${num(order.outbound)} / ${num(order.qty)} 件`} />
+                <CardField label="已发 / 订单" value={`${num(order.outbound)} / ${num(order.qty)} 个`} />
                 <div className="flex flex-wrap justify-between gap-2">
                     {cancelled ? (
                         <span className="text-muted">已停止交付</span>
                     ) : (
                         <span>
-                            待交 <strong className="tnum text-ink">{num(remaining)}</strong> 件
+                            待交 <strong className="tnum text-ink">{num(remaining)}</strong> 个
                         </span>
                     )}
                     {!cancelled &&
                         (remaining > 0 ? (
                             <span className={maxShip > 0 ? "text-success" : "text-warning"}>
-                                {maxShip > 0 ? `本次可发 ${num(maxShip)} 件` : "等待备货"}
+                                {maxShip > 0 ? `本次可发 ${num(maxShip)} 个` : "等待备货"}
                             </span>
                         ) : (
                             <span className="text-success">已全部交付</span>

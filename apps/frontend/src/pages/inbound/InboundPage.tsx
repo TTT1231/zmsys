@@ -111,6 +111,9 @@ export function InboundModal({
     const currentStock = stock[bomCode] || 0;
     const previewQty = Number(qty) || 0;
 
+    /* 用户改动某字段即清除该字段的报错，避免补填后验证词残留 */
+    const clearError = (key: string) => setErrors(current => ({ ...current, [key]: "" }));
+
     const reset = () => {
         setBomCode("");
         setQty("");
@@ -122,7 +125,8 @@ export function InboundModal({
         if (createInbound.isPending) return;
         const nextErrors: Record<string, string> = {};
         if (!bomCode) nextErrors.bomCode = "请选择成品";
-        if (!qty || Number(qty) <= 0) nextErrors.qty = "请填写入库数量";
+        if (!qty) nextErrors.qty = "请填写入库数量";
+        else if (Number(qty) <= 0) nextErrors.qty = "入库数量必须大于 0";
         setErrors(nextErrors);
         if (Object.keys(nextErrors).length)
             requestAnimationFrame(() =>
@@ -171,15 +175,26 @@ export function InboundModal({
             }
         >
             <div className="grid gap-4 sm:grid-cols-2">
-                <InboundBomPicker boms={boms} value={bomCode} onChange={setBomCode} error={errors.bomCode} />
+                <InboundBomPicker
+                    boms={boms}
+                    value={bomCode}
+                    onChange={code => {
+                        setBomCode(code);
+                        clearError("bomCode");
+                    }}
+                    error={errors.bomCode}
+                />
                 <TextField
-                    label="入库数量（件）"
+                    label="入库数量（个）"
                     required
                     inputMode="numeric"
                     placeholder="如 1600"
                     error={errors.qty}
                     value={qty}
-                    onChange={event => setQty(event.target.value.replace(/\D/g, ""))}
+                    onChange={event => {
+                        setQty(event.target.value.replace(/\D/g, ""));
+                        clearError("qty");
+                    }}
                 />
                 <div className="[&_input]:cursor-default [&_input]:bg-soft">
                     <TextField label="入库日期（固定为今天）" value={todayIso()} readOnly tabIndex={-1} />
@@ -197,7 +212,7 @@ export function InboundModal({
                         <div className="font-semibold text-ink">{selectedBom.code}</div>
                         <div className="mt-1 text-muted">{selectedBom.spec}</div>
                         <div className="tnum mt-1.5 font-medium text-primary-strong">
-                            当前库存 {num(currentStock)} 件 · 入库后 {num(currentStock + previewQty)} 件
+                            当前库存 {num(currentStock)} 个 · 入库后 {num(currentStock + previewQty)} 个
                         </div>
                     </div>
                 )}
@@ -262,14 +277,22 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
     const [reason, setReason] = useState("");
     const [errors, setErrors] = useState<Record<string, string>>({});
 
+    /* 用户改动某字段即清除该字段的报错，避免补填后验证词残留 */
+    const clearError = (key: string) => setErrors(current => ({ ...current, [key]: "" }));
+
     const submit = () => {
         if (updateInbound.isPending) return;
         const nextErrors: Record<string, string> = {};
         if (!bomCode) nextErrors.bomCode = "请选择成品";
-        if (!qty || Number(qty) <= 0) nextErrors.qty = "请填写入库数量";
+        if (!qty) nextErrors.qty = "请填写入库数量";
+        else if (Number(qty) <= 0) nextErrors.qty = "入库数量必须大于 0";
         if (reason.trim().length < 2) nextErrors.reason = "请填写修正原因（至少 2 个字）";
         setErrors(nextErrors);
-        if (Object.keys(nextErrors).length) return;
+        if (Object.keys(nextErrors).length)
+            requestAnimationFrame(() =>
+                document.querySelector<HTMLElement>('[role="dialog"] [aria-invalid="true"]')?.focus(),
+            );
+        if (Object.keys(nextErrors).length > 0) return;
         updateInbound.mutate(
             {
                 no: row.no,
@@ -320,15 +343,26 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
             }
         >
             <div className="grid gap-4 sm:grid-cols-2">
-                <InboundBomPicker boms={snap.boms} value={bomCode} onChange={setBomCode} error={errors.bomCode} />
+                <InboundBomPicker
+                    boms={snap.boms}
+                    value={bomCode}
+                    onChange={code => {
+                        setBomCode(code);
+                        clearError("bomCode");
+                    }}
+                    error={errors.bomCode}
+                />
                 <TextField
-                    label="入库数量（件）"
+                    label="入库数量（个）"
                     required
                     inputMode="numeric"
                     placeholder="如 1600"
                     error={errors.qty}
                     value={qty}
-                    onChange={event => setQty(event.target.value.replace(/\D/g, ""))}
+                    onChange={event => {
+                        setQty(event.target.value.replace(/\D/g, ""));
+                        clearError("qty");
+                    }}
                 />
                 <div className="rounded-btn border border-line bg-panel px-3.5 py-2.5">
                     <p className="text-11.5 text-muted">入库日期（固定为今天）</p>
@@ -343,10 +377,13 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
                 <TextArea
                     label="修正原因"
                     required
-                    placeholder="例如：实际入库数量少记了 200 件"
+                    placeholder="例如：实际入库数量少记了 200 个"
                     error={errors.reason}
                     value={reason}
-                    onChange={event => setReason(event.target.value)}
+                    onChange={event => {
+                        setReason(event.target.value);
+                        clearError("reason");
+                    }}
                 />
                 <p className="text-12 text-muted sm:col-span-2">
                     今天登记的记录可以直接修改；发现还有错可以再改，也可以作废。
@@ -576,7 +613,7 @@ export function InboundPage() {
                                 key={row.no}
                                 title={row.bomCode}
                                 subtitle={row.no}
-                                badge={<strong className="text-success">+{num(row.qty)} 件</strong>}
+                                badge={<strong className="text-success">+{num(row.qty)} 个</strong>}
                                 actions={
                                     <div className="flex flex-wrap gap-2">
                                         <Button variant="secondary" onClick={() => setVoucher(row)}>
@@ -627,7 +664,7 @@ export function InboundPage() {
                                     <th className="px-5 py-2.5 font-semibold">入库单号</th>
                                     <th className="px-3 py-2.5 font-semibold">BOM 编码</th>
                                     <SortTh
-                                        label="入库数量（件）"
+                                        label="入库数量（个）"
                                         align="right"
                                         active={sort.key === "qty"}
                                         dir={sort.dir}

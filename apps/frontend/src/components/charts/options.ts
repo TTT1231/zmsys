@@ -22,7 +22,7 @@ export function buildDailyTrendOption(rows: TrendRow[]): EChartsOption {
             itemHeight: 8,
             itemGap: 14,
             textStyle: { color: AXIS_LABEL, fontSize: 12 },
-            formatter: (name: string) => `${name}（件）`,
+            formatter: (name: string) => `${name}（个）`,
         },
         grid: { top: 34, left: 6, right: 10, bottom: 4, containLabel: true },
         xAxis: {
@@ -57,8 +57,8 @@ export function buildDailyTrendOption(rows: TrendRow[]): EChartsOption {
                 if (!row) return "";
                 return [
                     `<strong>${row.date}</strong>`,
-                    `<div>下单数量：<b>${fmt(row.orderedQty)}</b> 件</div>`,
-                    `<div>出库数量：<b>${fmt(row.outboundQty)}</b> 件</div>`,
+                    `<div>下单数量：<b>${fmt(row.orderedQty)}</b> 个</div>`,
+                    `<div>出库数量：<b>${fmt(row.outboundQty)}</b> 个</div>`,
                 ].join("");
             },
         },

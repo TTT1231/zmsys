@@ -10,7 +10,7 @@ it("数量与状态先于规格，作废说明不隐藏原始数量和备注", (
     render(<VoucherModal row={{ ...detailInbound, status: "voided" }} snap={detailSnapshot} onClose={vi.fn()} />);
     const summary = screen.getByRole("region", { name: "数量与状态" });
     expect(summary).toHaveTextContent("已作废");
-    expect(summary).toHaveTextContent("200件");
+    expect(summary).toHaveTextContent("200个");
     expect(
         summary.compareDocumentPosition(screen.getByRole("region", { name: "物料组成" })) &
             Node.DOCUMENT_POSITION_FOLLOWING,

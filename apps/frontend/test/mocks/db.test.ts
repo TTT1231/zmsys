@@ -176,7 +176,7 @@ describe("mock db business write rules", () => {
     });
 
     it("rejects qty below shipped and validates delivery window", () => {
-        // 自建已发订单：发 3 件后数量下限即 3
+        // 自建已发订单：发 3 个后数量下限即 3
         db.createOutbound({ orderNo: stockedOrder.orderNo, date: ANCHOR, remark: "", qty: 3 }, actor);
         const shipped = db.orders.find(order => order.orderNo === stockedOrder.orderNo)!;
         expect(() =>

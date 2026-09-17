@@ -171,7 +171,7 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
                             options={customerOptions}
                         />
                         <TextField
-                            label="订单数量（件）"
+                            label="订单数量（个）"
                             required
                             inputMode="numeric"
                             placeholder="如 2400"
@@ -283,7 +283,7 @@ function EditOrderModal({
         if (!order) return;
         const nextErrors: Record<string, string> = {};
         if (!qty || Number(qty) <= 0) nextErrors.qty = "请填写订单数量";
-        if (Number(qty) < order.outbound) nextErrors.qty = `新数量不能低于累计已发 ${order.outbound} 件`;
+        if (Number(qty) < order.outbound) nextErrors.qty = `新数量不能低于累计已发 ${order.outbound} 个`;
         if (!deliverDate) nextErrors.deliverDate = "请选择交货日期";
         setErrors(nextErrors);
         if (Object.keys(nextErrors).length)
@@ -363,7 +363,7 @@ function EditOrderModal({
             {order && (
                 <div className="grid gap-3 sm:grid-cols-2">
                     <TextField
-                        label="订单数量（件）"
+                        label="订单数量（个）"
                         required
                         inputMode="numeric"
                         value={qty}
@@ -382,7 +382,7 @@ function EditOrderModal({
                     </div>
                     {order.outbound > 0 && (
                         <p className="text-12 text-subtle sm:col-span-2">
-                            该订单累计已发 {order.outbound} 件，新数量不能低于此值。
+                            该订单累计已发 {order.outbound} 个，新数量不能低于此值。
                         </p>
                     )}
                     {canDelete && (
@@ -424,7 +424,7 @@ function EditOrderModal({
                         <Icon name="alert" size={20} className="mt-0.5 shrink-0 text-danger" />
                         <div className="text-13 leading-6 text-td">
                             即将删除订单 <span className="tnum font-semibold text-ink">{order.orderNo}</span>（
-                            {order.customer} · {num(order.qty)} 件）。该订单累计已发 0 件。
+                            {order.customer} · {num(order.qty)} 个）。该订单累计已发 0 个。
                             <p className="mt-1 font-medium text-danger">
                                 删除后该订单将从系统永久移除，不可恢复。请确认它是手误创建的订单。
                             </p>
@@ -522,7 +522,7 @@ export function OrderDetailModal({
                                 className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 rounded-input bg-soft p-3 text-13"
                             >
                                 <span className="tnum text-ink wrap-anywhere">{row.no}</span>
-                                <QtyCell value={row.qty} unit="件" />
+                                <QtyCell value={row.qty} unit="个" />
                                 <span className="text-12 leading-5 text-muted wrap-anywhere">
                                     {row.date} · {row.operator}
                                 </span>

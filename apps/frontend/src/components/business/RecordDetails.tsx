@@ -17,7 +17,7 @@ export function RecordSummary({
     return (
         <section aria-label="数量与状态" className="rounded-card bg-soft p-3.5">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-12 text-muted">{single ? metrics[0].label : "数量（件）"}</span>
+                <span className="text-12 text-muted">{single ? metrics[0].label : "数量（个）"}</span>
                 {status}
             </div>
             <dl className="grid gap-3" style={{ gridTemplateColumns: `repeat(${metrics.length}, minmax(0, 1fr))` }}>
@@ -26,7 +26,7 @@ export function RecordSummary({
                         <dt className={single ? "sr-only" : "text-12 text-muted"}>{metric.label}</dt>
                         <dd className="tnum mt-1 text-22 font-semibold leading-tight text-ink wrap-anywhere">
                             {num(metric.value)}
-                            {single && <span className="ml-1.5 text-13 font-normal text-muted">件</span>}
+                            {single && <span className="ml-1.5 text-13 font-normal text-muted">个</span>}
                         </dd>
                     </div>
                 ))}

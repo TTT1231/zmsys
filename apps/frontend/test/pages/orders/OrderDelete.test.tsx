@@ -73,7 +73,7 @@ it("超级管理员编辑一件未发的订单：警告二次确认后按乐观�
 it("已有发货的订单即使超级管理员也不显示删除入口，只提示数量下限", async () => {
     const dialog = await openEdit(detailOrder.orderNo);
     expect(within(dialog).queryByRole("button", { name: "删除订单" })).not.toBeInTheDocument();
-    expect(within(dialog).getByText(/累计已发 200 件/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/累计已发 200 个/)).toBeInTheDocument();
 });
 
 it("曾发货又作废的订单（累计已发回到 0 但台账留流水）与后端口径一致，不显示删除入口", async () => {

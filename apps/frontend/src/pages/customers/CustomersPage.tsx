@@ -301,7 +301,7 @@ export function CustomerDetailModal({
                             ["详细地址", cleanAddressPart(customer.address) || "未填写"],
                             ["付款方式", customer.payTerms || "—"],
                             ["客户负责人", customer.owner],
-                            ["待交付数量", `${pendingQty.toLocaleString("zh-CN")} 件`],
+                            ["待交付数量", `${pendingQty.toLocaleString("zh-CN")} 个`],
                         ].map(([label, value]) => (
                             <div
                                 key={label}
@@ -340,7 +340,7 @@ export function CustomerDetailModal({
                                                     {order.orderNo}
                                                 </span>
                                                 <span className="text-12.5 text-muted">
-                                                    · {order.qty.toLocaleString("zh-CN")} 件
+                                                    · {order.qty.toLocaleString("zh-CN")} 个
                                                 </span>
                                                 <StatusBadge status={status.key} />
                                             </span>
@@ -531,7 +531,7 @@ export function CustomersPage() {
                                             "客户电话",
                                             "地区",
                                             "累计订单",
-                                            "待交件数",
+                                            "待交数量",
                                             "合作状态",
                                         ],
                                         pageRows.map(row => [
@@ -576,7 +576,7 @@ export function CustomersPage() {
                                 </p>
                                 <div className="mt-2 flex flex-col gap-1.5">
                                     <CardField label="累计订单" value={`${orderCount} 单`} />
-                                    <CardField label="待交" value={`${num(pendingQty)} 件`} strong />
+                                    <CardField label="待交" value={`${num(pendingQty)} 个`} strong />
                                 </div>
                             </RecordCard>
                         ))}

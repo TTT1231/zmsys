@@ -30,6 +30,6 @@ it("零数量、状态和换行备注完整显示", () => {
             <RecordFields title="登记信息" items={[{ label: "备注", value: "第一行\n第二行", fullWidth: true }]} />
         </>,
     );
-    expect(screen.getByRole("region", { name: "数量与状态" })).toHaveTextContent("0件");
+    expect(screen.getByRole("region", { name: "数量与状态" })).toHaveTextContent("0个");
     expect(screen.getByRole("region", { name: "登记信息" })).toHaveTextContent("第一行 第二行");
 });

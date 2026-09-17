@@ -816,7 +816,7 @@ export function BomPage() {
                                 <div className="mt-2">
                                     <CardField
                                         label="当前库存"
-                                        value={stocksQuery.data ? `${num(stocksQuery.data[bom.code] ?? 0)} 件` : "—"}
+                                        value={stocksQuery.data ? `${num(stocksQuery.data[bom.code] ?? 0)} 个` : "—"}
                                     />
                                 </div>
                             </RecordCard>

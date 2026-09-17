@@ -6,13 +6,13 @@ import { afterEach, expect, it, vi } from "vitest";
 import { CardField, OrderTaskCard } from "@/components/ui/MobileList";
 import { detailOrder, detailSnapshot } from "../../fixtures/recordDetails";
 afterEach(cleanup);
-it.each([0, 200])("已发 %i 件后取消均显示停止交付，保留实际已发数量", outbound => {
+it.each([0, 200])("已发 %i 个后取消均显示停止交付，保留实际已发数量", outbound => {
     const order = { ...detailOrder, outbound, lifecycleStatus: "cancelled" as const, deliverDate: "2020-01-01" };
     render(<OrderTaskCard order={order} snap={{ ...detailSnapshot, orders: [order] }} onDetail={vi.fn()} />);
     expect(screen.getByText("已停止交付")).toBeInTheDocument();
     expect(screen.queryByText("已全部交付")).not.toBeInTheDocument();
     expect(screen.queryByText(/逾期/)).not.toBeInTheDocument();
-    expect(screen.getByText(`${outbound} / 300 件`)).toBeInTheDocument();
+    expect(screen.getByText(`${outbound} / 300 个`)).toBeInTheDocument();
     expect(screen.getByText(outbound > 0 ? "部分发货后取消" : "已取消")).toBeInTheDocument();
 });
 it("正常完成订单仍显示全部交付，完整规格入口可操作", () => {
@@ -29,9 +29,9 @@ it("正常完成订单仍显示全部交付，完整规格入口可操作", () =
     expect(onDetail).toHaveBeenCalledOnce();
 });
 it("CardField 标签与值分行渲染，值右对齐等宽数字", () => {
-    render(<CardField label="待交" value="1,000 件" strong />);
+    render(<CardField label="待交" value="1,000 个" strong />);
     expect(screen.getByText("待交")).toBeInTheDocument();
-    const value = screen.getByText("1,000 件");
+    const value = screen.getByText("1,000 个");
     expect(value.className).toContain("text-right");
     expect(value.className).toContain("tnum");
 });
