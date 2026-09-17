@@ -95,10 +95,11 @@ describe('BOM/成品档案 (e2e)', () => {
             'safety-switch',
             'tipover-switch',
         ]);
-        // seqWidth 为默认 3 时省略；新微动 4 位宽度下发
+        // seqWidth 为默认 3 时省略（新微动统一 3 位宽度后同样省略）
         expect(categories[0]).toMatchObject({ name: '旋转XK2', codePrefix: 'XK2' });
         expect(categories[0]).not.toHaveProperty('seqWidth');
-        expect(categories[2]).toMatchObject({ codePrefix: 'KW', seqWidth: 4 });
+        expect(categories[2]).toMatchObject({ codePrefix: 'KW' });
+        expect(categories[2]).not.toHaveProperty('seqWidth');
         expect(categories[1]).toMatchObject({ name: '旋转XK3', codePrefix: 'XK3' });
         expect(categories[4]).toMatchObject({ name: '安全开关', codePrefix: 'AQ' });
         expect(categories[5]).toMatchObject({
@@ -108,7 +109,7 @@ describe('BOM/成品档案 (e2e)', () => {
         });
         expect(categories[0]).not.toHaveProperty('childCategories');
 
-        // 旋转XK2：无分区，9 个单选组（型号全集 + 规格 + 方向）
+        // 旋转XK2：7 个根单选组 + 尾部触点分区（触点大小/厚度/类别 单选）
         const rotary = categories[0].groups as Array<{ kind: string; name: string; multi: boolean | null }>;
         expect(rotary.map(group => [group.kind, group.name, group.multi])).toEqual([
             ['group', '型号', false],
@@ -118,6 +119,10 @@ describe('BOM/成品档案 (e2e)', () => {
             ['group', 'A面', false],
             ['group', 'B面', false],
             ['group', '弹簧', false],
+            ['section', '触点', null],
+            ['group', '触点大小', false],
+            ['group', '触点厚度', false],
+            ['group', '触点类别', false],
         ]);
 
         // 新微动：PA66塑料 / 五金件 两分区，组挂分区下且为单选
@@ -146,10 +151,10 @@ describe('BOM/成品档案 (e2e)', () => {
             ['group', '触点类别', micro[10]!.id],
         ]);
         expect(micro.find(group => group.name === '支架')).toMatchObject({ key: 'bracket', multi: false });
-        // 旋转XK3：根分组与分区按 sort_order 混排（外壳/底座/杆子 → 五金件 → 触点）
+        // 旋转XK3：根分组与分区按 sort_order 混排（外壳/底座/杆子 → 五金件）；无触点分区
         const xk3 = categories[1].groups as Array<{ kind: string; name: string; multi: boolean | null }>;
         expect(xk3.slice(0, 3).map(group => group.name)).toEqual(['PC塑料外壳', 'PC塑料底座', 'PA66塑料杆子']);
-        expect(xk3.filter(group => group.kind === 'section').map(group => group.name)).toEqual(['五金件', '触点']);
+        expect(xk3.filter(group => group.kind === 'section').map(group => group.name)).toEqual(['五金件']);
         // 安全开关：短款/长款系列配件为多选组
         const safety = categories[4].groups as Array<{ kind: string; name: string; multi: boolean | null }>;
         expect(safety.find(group => group.name === '短款/31mm系列配件')).toMatchObject({
@@ -171,7 +176,7 @@ describe('BOM/成品档案 (e2e)', () => {
         const before = await app.inject({ method: 'GET', url: '/api/boms', headers: authHeaders(superToken) });
         expect(before.statusCode).toBe(200);
         const rotaryBefore = (before.json().data as Array<{ code: string }>).filter(bom =>
-            bom.code.startsWith('ZMXK2'),
+            bom.code.startsWith('XK2'),
         ).length;
 
         const [model, direction, faceA, spring] = await Promise.all([
@@ -187,7 +192,7 @@ describe('BOM/成品档案 (e2e)', () => {
         );
         expect(res.statusCode).toBe(200);
         const created = res.json().data;
-        expect(created.code).toBe(`ZMXK2${String(rotaryBefore + 1).padStart(3, '0')}`);
+        expect(created.code).toBe(`XK2${String(rotaryBefore + 1).padStart(3, '0')}`);
         expect(created).toMatchObject({ name: '旋转XK2', modelCode: '1-1', unit: '个' });
         expect(created.created).toMatch(/^\d{4}-\d{2}-\d{2}$/);
         expect(created.items.map((item: { name: string }) => item.name)).toEqual(['1-1', '正面', '三脚银点', '0.5']);
@@ -320,10 +325,10 @@ describe('BOM/成品档案 (e2e)', () => {
         expect(keyConflict.json().message).toBe('幂等键已被其他请求使用');
     });
 
-    it('品类序列首插从存量编码 MAX 续接（ZMKW 与 ZMKW16 相近前缀不互读）', async () => {
+    it('品类序列首插从存量编码 MAX 续接（KW 与 KWO 相近前缀不互读）', async () => {
         // 种子两行真实形态的存量编码，清空品类序列行迫使 bootstrap 走 MAX 续接
         await prisma.$executeRaw`DELETE FROM biz_sequence WHERE sequence_key LIKE 'bom:%'`;
-        await prisma.bomTable.deleteMany({ where: { bomCode: { in: ['ZMKW3744', 'ZMKW16012'] } } });
+        await prisma.bomTable.deleteMany({ where: { bomCode: { in: ['KW3744', 'KWO012'] } } });
         const micro = await prisma.bomCategory.findUniqueOrThrow({ where: { categoryKey: 'new-micro-switch' } });
         const old = await prisma.bomCategory.findUniqueOrThrow({ where: { categoryKey: 'old-micro-switch' } });
         const superUser = await prisma.sysUser.findFirstOrThrow({ where: { roleCode: 'super' } });
@@ -332,7 +337,7 @@ describe('BOM/成品档案 (e2e)', () => {
             data: [
                 {
                     id: 9000000000000001n,
-                    bomCode: 'ZMKW3744',
+                    bomCode: 'KW3744',
                     categoryId: micro.id,
                     specHash: Buffer.from('a'.repeat(64), 'hex'),
                     requestKey: 'e2e-legacy-kw',
@@ -342,10 +347,10 @@ describe('BOM/成品档案 (e2e)', () => {
                 },
                 {
                     id: 9000000000000002n,
-                    bomCode: 'ZMKW16012',
+                    bomCode: 'KWO012',
                     categoryId: old.id,
                     specHash: Buffer.from('b'.repeat(64), 'hex'),
-                    requestKey: 'e2e-legacy-kw16',
+                    requestKey: 'e2e-legacy-kwo',
                     createdBy: superUser.id,
                     updatedBy: superUser.id,
                     createdAt: now,
@@ -353,8 +358,8 @@ describe('BOM/成品档案 (e2e)', () => {
             ],
         });
 
-        // 新微动续接品类内 MAX(3744) → ZMKW3745；若 JOIN 品类过滤丢失，
-        // ZMKW16012 会被 KW 前缀误读为 16012 → 取 ZMKW16013 撞老微动序列
+        // 新微动续接品类内 MAX(3744) → KW3745；若 JOIN 品类过滤丢失，
+        // 老微动 KWO012 会混入新微动 MAX 计算误续接
         const [microBase, microBracket] = await Promise.all([
             itemIdOf('new-micro-switch', '底座', '三脚底座（有挡脚）'),
             itemIdOf('new-micro-switch', '支架', '6.3支架：铜镀银'),
@@ -364,7 +369,7 @@ describe('BOM/成品档案 (e2e)', () => {
             `e2e-bom-${RUN}-boot-micro`,
         );
         expect(microNext.statusCode).toBe(200);
-        expect(microNext.json().data.code).toBe('ZMKW3745');
+        expect(microNext.json().data.code).toBe('KW3745');
 
         const [oldBase, oldButton] = await Promise.all([
             itemIdOf('old-micro-switch', '底座', '带CB'),
@@ -375,7 +380,7 @@ describe('BOM/成品档案 (e2e)', () => {
             `e2e-bom-${RUN}-boot-old`,
         );
         expect(oldNext.statusCode).toBe(200);
-        expect(oldNext.json().data.code).toBe('ZMKW16013');
+        expect(oldNext.json().data.code).toBe('KWO013');
     });
 
     it('目录排序调整后，已建 BOM 摘要与明细不变（展示只读建档快照）', async () => {
@@ -440,7 +445,7 @@ describe('BOM/成品档案 (e2e)', () => {
             `e2e-bom-${RUN}-tipover-ok`,
         );
         expect(created.statusCode).toBe(200);
-        expect(created.json().data.code).toMatch(/^ZMKD\d{3,}$/);
+        expect(created.json().data.code).toMatch(/^KD\d{3,}$/);
         expect(created.json().data.items).toHaveLength(9);
         expect(created.json().data.spec).toContain('跌倒盖：跌倒盖KW16 / 有CB字');
         expect(created.json().data.spec).toContain('底座：二脚底座（无挡脚）');

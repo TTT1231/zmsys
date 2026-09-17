@@ -130,7 +130,7 @@ describe('客户档案 (e2e)', () => {
         await createUser(accountOf('staff02'), 'staff');
         const notSales = await createCustomer(accountOf('staff02'), `e2e-cust-${RUN}-staff`);
         expect(notSales.statusCode).toBe(400);
-        expect(notSales.json().message).toBe('客户负责人必须是启用中的销售账号');
+        expect(notSales.json().message).toBe('客户负责人必须是启用中的销售或超级管理员账号');
     });
 
     it('幂等重放返回首次响应；同键不同请求体 409', async () => {

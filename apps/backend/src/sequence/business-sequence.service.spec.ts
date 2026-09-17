@@ -87,33 +87,36 @@ describe('BusinessSequenceService.nextRaw（行锁取号）', () => {
 });
 
 describe('BusinessSequenceService.nextBomCode（BOM 品类序列）', () => {
-    it('格式化：ZM + 品类前缀 + 至少 seqWidth 位序号，超宽自然增长', async () => {
+    it('格式化：品类前缀 + 至少 seqWidth 位序号，超宽自然增长', async () => {
         const { service, queryRaw, tx } = createService();
         queryRaw.mockResolvedValue([{ next_value: 5n }]);
         await expect(
             service.nextBomCode(tx, { categoryKey: 'rotary-switch', codePrefix: 'XK2', seqWidth: 3 }),
-        ).resolves.toBe('ZMXK2005');
+        ).resolves.toBe('XK2005');
         await expect(
-            service.nextBomCode(tx, { categoryKey: 'new-micro-switch', codePrefix: 'KW', seqWidth: 4 }),
-        ).resolves.toBe('ZMKW0005');
+            service.nextBomCode(tx, { categoryKey: 'new-micro-switch', codePrefix: 'KW', seqWidth: 3 }),
+        ).resolves.toBe('KW005');
+        await expect(
+            service.nextBomCode(tx, { categoryKey: 'old-micro-switch', codePrefix: 'KWO', seqWidth: 3 }),
+        ).resolves.toBe('KWO005');
         queryRaw.mockResolvedValue([{ next_value: 10000n }]);
         await expect(
-            service.nextBomCode(tx, { categoryKey: 'new-micro-switch', codePrefix: 'KW', seqWidth: 4 }),
-        ).resolves.toBe('ZMKW10000');
+            service.nextBomCode(tx, { categoryKey: 'new-micro-switch', codePrefix: 'KW', seqWidth: 3 }),
+        ).resolves.toBe('KW10000');
     });
 
-    it('品类序列首插从存量编码 MAX 续接：序号起点为 ZM+前缀 之后（SUBSTRING 1 基）', async () => {
+    it('品类序列首插从存量编码 MAX 续接：序号起点为前缀 之后（SUBSTRING 1 基）', async () => {
         const { service, executeRaw, tx } = createService();
         await service.nextBomCode(tx, { categoryKey: 'rotary-switch', codePrefix: 'XK2', seqWidth: 3 });
         // bootstrap INSERT 参数序：sequenceKey、digitsStart、categoryKey
-        expect(executeRaw).toHaveBeenNthCalledWith(1, expect.anything(), 'bom:rotary-switch', 6, 'rotary-switch');
-        await service.nextBomCode(tx, { categoryKey: 'old-micro-switch', codePrefix: 'KW16', seqWidth: 3 });
-        expect(executeRaw).toHaveBeenNthCalledWith(3, expect.anything(), 'bom:old-micro-switch', 7, 'old-micro-switch');
+        expect(executeRaw).toHaveBeenNthCalledWith(1, expect.anything(), 'bom:rotary-switch', 4, 'rotary-switch');
+        await service.nextBomCode(tx, { categoryKey: 'old-micro-switch', codePrefix: 'KWO', seqWidth: 3 });
+        expect(executeRaw).toHaveBeenNthCalledWith(3, expect.anything(), 'bom:old-micro-switch', 4, 'old-micro-switch');
     });
 
-    it('bootstrap 必须 JOIN 品类过滤（ZMKW 与 ZMKW16 前缀相近，仅按前缀 LIKE 会跨品类互读）', async () => {
+    it('bootstrap 必须 JOIN 品类过滤（KW 与 KWO 前缀相近，仅按前缀 LIKE 会跨品类互读）', async () => {
         const { service, executeRaw, tx } = createService();
-        await service.nextBomCode(tx, { categoryKey: 'new-micro-switch', codePrefix: 'KW', seqWidth: 4 });
+        await service.nextBomCode(tx, { categoryKey: 'new-micro-switch', codePrefix: 'KW', seqWidth: 3 });
         const sql = String((executeRaw.mock.calls[0] as unknown[])[0]);
         expect(sql).toContain('JOIN bom_category');
         expect(sql).toContain('bc.category_key');

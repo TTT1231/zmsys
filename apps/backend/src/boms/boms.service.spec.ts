@@ -239,7 +239,7 @@ interface Store {
 const mkBom = (overrides: Partial<BomTable> = {}): BomTable =>
     ({
         id: 5000n,
-        bomCode: 'ZMXK2010',
+        bomCode: 'XK2010',
         categoryId: 1001n,
         specHash: Buffer.from(materialSetHash(['3003', '3008'])),
         unit: '个',
@@ -431,7 +431,7 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>, nextB
         complete: vi.fn(),
     } as unknown as IdempotencyService & Record<string, ReturnType<typeof vi.fn>>;
     const sequence = {
-        nextBomCode: nextBomCode ?? vi.fn(async () => 'ZMXK2011'),
+        nextBomCode: nextBomCode ?? vi.fn(async () => 'XK2011'),
     } as unknown as BusinessSequenceService & Record<string, ReturnType<typeof vi.fn>>;
     return {
         service: new BomsService(prisma, snowflake, new TransactionRunner(prisma), idempotency, sequence),
@@ -502,7 +502,7 @@ describe('BomsService', () => {
             const boms = await service.listBoms();
             expect(boms).toHaveLength(1);
             expect(boms[0]).toEqual({
-                code: 'ZMXK2010',
+                code: 'XK2010',
                 name: '旋转XK2',
                 modelCode: '1-1',
                 items: [
@@ -538,10 +538,10 @@ describe('BomsService', () => {
         it('映射 v_bom_stock 行为 bomCode → 余量，BigInt 数量转为 number', async () => {
             const { service, tx } = mkService(store);
             tx.$queryRaw.mockResolvedValue([
-                { bom_code: 'ZMXK2010', stock_qty: 200n },
-                { bom_code: 'ZMKW0001', stock_qty: 0 },
+                { bom_code: 'XK2010', stock_qty: 200n },
+                { bom_code: 'KW001', stock_qty: 0 },
             ]);
-            await expect(service.listStocks()).resolves.toEqual({ ZMXK2010: 200, ZMKW0001: 0 });
+            await expect(service.listStocks()).resolves.toEqual({ XK2010: 200, KW001: 0 });
         });
     });
 
@@ -588,7 +588,7 @@ describe('BomsService', () => {
             // 输入顺序与目录顺序相反，验证 position 仍按目录序冻结
             const bom = await service.createBom(dtoOf({ materialItemIds: ['3008', '3003'] }), actor, ID_KEY);
             expect(bom).toMatchObject({
-                code: 'ZMXK2011',
+                code: 'XK2011',
                 name: '旋转XK2',
                 modelCode: '',
                 spec: '银丝厚度：0.2 · 弹簧：0.5',
@@ -598,7 +598,7 @@ describe('BomsService', () => {
                 { materialId: '3003', groupKey: 'silver-wire-thickness', groupName: '银丝厚度', name: '0.2' },
                 { materialId: '3008', groupKey: 'spring', groupName: '弹簧', name: '0.5' },
             ]);
-            expect(written.createdBoms[0]).toMatchObject({ bomCode: 'ZMXK2011', unit: '个', categoryId: 1001n });
+            expect(written.createdBoms[0]).toMatchObject({ bomCode: 'XK2011', unit: '个', categoryId: 1001n });
             expect(
                 Buffer.compare(
                     written.createdBoms[0]!.specHash as Buffer,
@@ -630,17 +630,17 @@ describe('BomsService', () => {
             const { service } = mkService(store);
             await expect(
                 service.createBom(dtoOf({ materialItemIds: ['3008', '3003', '3003'] }), actor, ID_KEY),
-            ).rejects.toThrow(new ConflictException('BOM 已存在：ZMXK2010'));
+            ).rejects.toThrow(new ConflictException('BOM 已存在：XK2010'));
         });
 
         it('取号参数携带品类元数据；建档前锁定品类行；幂等重放直接返回原响应', async () => {
-            const replayBody = { code: 'ZMXK2099', name: '旋转XK2' };
+            const replayBody = { code: 'XK2099', name: '旋转XK2' };
             const beginOrReplay = vi.fn(async () => ({ replay: { body: replayBody }, placeholderId: null }));
             const { service, store: written } = mkService(store, beginOrReplay);
             await expect(service.createBom(dtoOf(), actor, ID_KEY)).resolves.toBe(replayBody);
             expect(written.createdBoms).toHaveLength(0);
 
-            const nextBomCode = vi.fn(async () => 'ZMXK2012');
+            const nextBomCode = vi.fn(async () => 'XK2012');
             const fresh = mkService(store, undefined, nextBomCode);
             await fresh.service.createBom(dtoOf({ materialItemIds: ['3001'] }), actor, ID_KEY);
             expect(nextBomCode).toHaveBeenCalledWith(expect.anything(), {
@@ -658,18 +658,18 @@ describe('BomsService', () => {
     describe('deleteBom', () => {
         it('BOM 不存在 404；幂等键缺失 400', async () => {
             const { service } = mkService(store);
-            await expect(service.deleteBom('ZMXK2999', actor, ID_KEY)).rejects.toThrow(
+            await expect(service.deleteBom('XK2999', actor, ID_KEY)).rejects.toThrow(
                 new NotFoundException('BOM 不存在'),
             );
             store.boms = [mkBom()];
-            await expect(service.deleteBom('ZMXK2010', actor, undefined)).rejects.toThrow(BadRequestException);
+            await expect(service.deleteBom('XK2010', actor, undefined)).rejects.toThrow(BadRequestException);
         });
 
         it('被销售订单引用（含已取消订单）一律 409，不触碰任何行', async () => {
             store.boms = [mkBom()];
             store.orderRefs = [5000n];
             const { service, store: written } = mkService(store);
-            await expect(service.deleteBom('ZMXK2010', actor, ID_KEY)).rejects.toThrow(
+            await expect(service.deleteBom('XK2010', actor, ID_KEY)).rejects.toThrow(
                 new ConflictException('BOM 已被销售订单引用，不可删除'),
             );
             expect(written.boms).toHaveLength(1);
@@ -680,13 +680,13 @@ describe('BomsService', () => {
             store.boms = [mkBom()];
             store.inboundRefs = [5000n];
             const { service } = mkService(store);
-            await expect(service.deleteBom('ZMXK2010', actor, ID_KEY)).rejects.toThrow(
+            await expect(service.deleteBom('XK2010', actor, ID_KEY)).rejects.toThrow(
                 new ConflictException('BOM 已有入库或库存调整流水，不可删除'),
             );
             store.inboundRefs = [];
             store.adjustmentRefs = [5000n];
             const again = mkService(store);
-            await expect(again.service.deleteBom('ZMXK2010', actor, ID_KEY)).rejects.toThrow(
+            await expect(again.service.deleteBom('XK2010', actor, ID_KEY)).rejects.toThrow(
                 new ConflictException('BOM 已有入库或库存调整流水，不可删除'),
             );
         });
@@ -704,7 +704,7 @@ describe('BomsService', () => {
                 },
             ];
             const { service, tx, idempotency, store: written } = mkService(store);
-            await expect(service.deleteBom('ZMXK2010', actor, ID_KEY)).resolves.toBeNull();
+            await expect(service.deleteBom('XK2010', actor, ID_KEY)).resolves.toBeNull();
             expect(written.boms).toHaveLength(0);
             expect(written.bomItems).toHaveLength(0);
             // BOM 行锁在引用校验之前（订单新建/入库登记竞争同一行锁，§2 锁序）
@@ -715,23 +715,23 @@ describe('BomsService', () => {
                 action: 'delete_bom',
                 targetType: 'bom',
                 targetId: 5000n,
-                targetCode: 'ZMXK2010',
+                targetCode: 'XK2010',
             });
-            expect(written.opLogs[0]!.detailJson).toMatchObject({ code: 'ZMXK2010', name: '旋转XK2' });
+            expect(written.opLogs[0]!.detailJson).toMatchObject({ code: 'XK2010', name: '旋转XK2' });
             expect(idempotency.complete).toHaveBeenCalledWith(
                 expect.anything(),
-                expect.objectContaining({ httpStatus: 200, resource: { type: 'bom', code: 'ZMXK2010' } }),
+                expect.objectContaining({ httpStatus: 200, resource: { type: 'bom', code: 'XK2010' } }),
             );
         });
 
         it('幂等重放直接返回 null，不再执行删除', async () => {
             store.boms = [mkBom()];
             const beginOrReplay = vi.fn(async () => ({
-                replay: { httpStatus: 200, body: { deleted: true, code: 'ZMXK2010' } },
+                replay: { httpStatus: 200, body: { deleted: true, code: 'XK2010' } },
                 placeholderId: null,
             }));
             const { service, store: written } = mkService(store, beginOrReplay);
-            await expect(service.deleteBom('ZMXK2010', actor, ID_KEY)).resolves.toBeNull();
+            await expect(service.deleteBom('XK2010', actor, ID_KEY)).resolves.toBeNull();
             expect(written.boms).toHaveLength(1);
             expect(written.opLogs).toHaveLength(0);
         });

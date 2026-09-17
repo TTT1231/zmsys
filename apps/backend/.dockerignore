@@ -9,3 +9,4 @@ test
 coverage
 *.log
 tsconfig.build.tsbuildinfo
+.pnpm-store
