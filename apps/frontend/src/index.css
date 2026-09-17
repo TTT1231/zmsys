@@ -644,6 +644,11 @@ button:active:not(:disabled) {
 .managed-table td[data-pinned="end"] > .flex {
     flex-wrap: wrap;
 }
+/* 滚动条槽位常驻：行数在临界高度附近增减时不再出现
+   「出滚动条 → clientWidth 变窄 → 列宽重算 → 滚动条消失」的布局循环 */
+.managed-table-body {
+    scrollbar-gutter: stable;
+}
 .managed-table-body::-webkit-scrollbar-button {
     display: none;
     width: 0;

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /* 共用表格：列宽与排序互不干扰，列显隐/空态对齐、密度和账号隔离持久化。 */
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DataTable } from "@/components/ui/DataTable";
@@ -142,4 +142,62 @@ it("只有表体滚动，横向滚动同步到独立表头", () => {
     expect(body.querySelector("thead")).toBeNull();
     fireEvent.scroll(body, { target: { scrollLeft: 123 } });
     expect(header.scrollLeft).toBe(123);
+});
+
+it("ResizeObserver 回调的宽度与槽位不变时不重渲染，阻断滚动条临界抖动", () => {
+    const callbacks: Array<() => void> = [];
+    class FakeObserver {
+        constructor(callback: () => void) {
+            callbacks.push(callback);
+        }
+        observe() {}
+        disconnect() {}
+        unobserve() {}
+    }
+    vi.stubGlobal("ResizeObserver", FakeObserver);
+    const counter = { renders: 0 };
+    const countRender = () => {
+        counter.renders += 1;
+    };
+    const Probe = () => {
+        countRender();
+        return <th>探针</th>;
+    };
+    const { container } = render(
+        <DataTable tableId="resize" defaultWidths={[180, 160, 240, 120]}>
+            <thead>
+                <tr>
+                    <Probe />
+                    <th>备注</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>001</td>
+                    <td>按期交付</td>
+                    <td>
+                        <button>详情</button>
+                    </td>
+                </tr>
+            </tbody>
+        </DataTable>,
+    );
+    const body = container.querySelector(".managed-table-body")!;
+    const setSize = (clientWidth: number, offsetWidth: number) => {
+        Object.defineProperty(body, "clientWidth", { configurable: true, get: () => clientWidth });
+        Object.defineProperty(body, "offsetWidth", { configurable: true, get: () => offsetWidth });
+    };
+    // 挂载时 clientWidth 为 0，与初始视口一致，不应产生额外渲染
+    expect(counter.renders).toBe(1);
+    setSize(800, 817);
+    act(() => callbacks.at(-1)!());
+    act(() => callbacks.at(-1)!());
+    act(() => callbacks.at(-1)!());
+    // 宽度只变化一次：重复回调不再渲染，滚动条出现/消失不再来回拉扯列宽
+    expect(counter.renders).toBe(2);
+    setSize(760, 760);
+    act(() => callbacks.at(-1)!());
+    expect(counter.renders).toBe(3);
+    vi.unstubAllGlobals();
 });

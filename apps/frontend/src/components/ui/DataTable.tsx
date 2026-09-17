@@ -127,8 +127,13 @@ function TableView({
     useLayoutEffect(() => {
         const element = bodyRef.current;
         if (!element) return;
+        /* 滚动条出现/消失会让 clientWidth 抖动，值不变时返回原状态，
+         * 切断「滚动条宽度 → 列宽重算 → 表格高度变化 → 滚动条」的渲染循环 */
         const measure = () =>
-            setViewport({ width: element.clientWidth, gutter: element.offsetWidth - element.clientWidth });
+            setViewport(current => {
+                const next = { width: element.clientWidth, gutter: element.offsetWidth - element.clientWidth };
+                return current.width === next.width && current.gutter === next.gutter ? current : next;
+            });
         measure();
         const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
         observer?.observe(element);
