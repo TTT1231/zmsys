@@ -63,7 +63,7 @@ export interface BomItemView {
 }
 
 export interface Bom {
-    code: string; // 编码，如 ZMXK2001 / ZMKW0001 / ZMKW16001 / ZMDD001
+    code: string; // 编码（品类前缀 + 序号），如 XK2001 / KW001 / KWO001 / KD001
     name: string; // 品类：旋转XK2 / 旋转XK3 / 新微动 / 老微动 / 安全开关 / 跌倒开关
     modelCode: string; // model 组选中项名称（品类无 model 组时为空串）
     items: BomItemView[]; // 选中物料集合（无数量，跌倒开关含微动物料）

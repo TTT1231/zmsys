@@ -1,7 +1,7 @@
 /* 开发期 BOM 物料目录种子：真实后端以 material_group/material_item 表 +
  * GET /bom-categories 为权威来源。mock 用本文件播种接口；前端不得把这里的值
  * 当成绕过服务端校验的依据。
- * - 编码规则：ZM + 品类码 + 序号（宽度见 seqWidth，默认 3 位），如 ZMXK2001（旋转）、ZMKW0001（新微动，4 位）、ZMKW16001（老微动）。
+ * - 编码规则：品类前缀 + 序号（宽度见 seqWidth，默认 3 位），如 XK2001（旋转XK2）、KWO001（老微动）、KW001（新微动）。
  * - 目录为“分区 → 分组 → 物料”树：分区纯展示；分组带 key 与单选/多选语义；
  *   所有组皆可不选（客户决定要不要 A 面这类项），整份 BOM 至少选 1 项。
  * - 系统共 6 品类：旋转XK2 / 旋转XK3 / 新微动 / 老微动 / 安全开关 / 跌倒开关。
@@ -202,20 +202,6 @@ export const BOM_CATEGORIES: CategoryDef[] = [
                 ["3422", "0.45长弹簧"],
                 ["3423", "0.45短弹簧"],
             ]),
-            section("2405", "触点"),
-            group("2418", "触点大小", "contact-size", "2405", [
-                ["3424", "0.3"],
-                ["3425", "0.35"],
-            ]),
-            group("2419", "触点厚度", "contact-thickness", "2405", [
-                ["3426", "0.15"],
-                ["3427", "0.2"],
-                ["3428", "0.3"],
-            ]),
-            group("2420", "触点类别", "contact-kind", "2405", [
-                ["3429", "铜"],
-                ["3430", "银"],
-            ]),
         ],
     },
 
@@ -223,7 +209,6 @@ export const BOM_CATEGORIES: CategoryDef[] = [
         key: "new-micro-switch",
         name: "新微动",
         codePrefix: "KW",
-        seqWidth: 4,
         groups: [
             section("2101", "PA66塑料"),
             group("2111", "底座", "base", "2101", [
@@ -289,7 +274,7 @@ export const BOM_CATEGORIES: CategoryDef[] = [
     {
         key: "old-micro-switch",
         name: "老微动",
-        codePrefix: "KW16",
+        codePrefix: "KWO",
         groups: [
             section("2201", "PA66塑料"),
             group("2211", "底座", "base", "2201", [
@@ -425,11 +410,11 @@ export const catalogRowsOf = (category: { groups: BomCatalogNode[] }): CatalogIt
 export const bomSpecOfItems = (items: Array<{ groupName: string; name: string }>): string =>
     items.map(item => `${item.groupName}：${item.name}`).join(" · ");
 
-/* 生成下一个 BOM 编码：ZM + 品类码 + 序号（按品类过滤后在品类内自增，宽度取 seqWidth）。
+/* 生成下一个 BOM 编码：品类前缀 + 序号（按品类过滤后在品类内自增，宽度取 seqWidth）。
  * 品类由调用方传入（页面用接口下发的 bomCategories），本文件不再回查种子常量。 */
 export function nextBomCode(category: CategoryDef, existing: Array<{ code: string; name: string }>) {
-    const prefix = `ZM${category.codePrefix}`;
-    // 先按品类过滤再解析 3 位以上序号：跨品类前缀相近（ZMKW/ZMKW16）与跨 999 边界（ZMKW1000+）都不会误读
+    const prefix = category.codePrefix;
+    // 先按品类过滤再解析 3 位以上序号：跨品类前缀相近（KW/KWO）与跨 999 边界（KW1000+）都不会误读
     const pattern = new RegExp(`^${prefix}(\\d{3,})$`);
     const maxSeq = existing.reduce((max, item) => {
         if (item.name !== category.name) return max;

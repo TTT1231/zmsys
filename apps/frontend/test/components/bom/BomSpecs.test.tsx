@@ -10,7 +10,7 @@ import type { Bom } from "@/api";
 afterEach(cleanup);
 
 const rotaryBom: Bom = {
-    code: "ZMXK2001",
+    code: "XK2001",
     name: "旋转XK2",
     modelCode: "1-1",
     spec: "型号：1-1 · 银丝厚度：0.2 · A面：A面银点",
@@ -24,7 +24,7 @@ const rotaryBom: Bom = {
 };
 
 const microBom: Bom = {
-    code: "ZMKW0042",
+    code: "KW042",
     name: "新微动",
     modelCode: "",
     spec: "底座：二脚底座（无挡脚） · 盖子：盖子 · 按钮：8.5mm",

@@ -57,7 +57,7 @@ const newShippableOrder = () => {
 
 describe("mock db material catalog rules", () => {
     it("archives BOM from selected materials: frozen items, derived modelCode and summary", () => {
-        expect(rotaryBom).toMatchObject({ code: "ZMXK2001", name: "旋转XK2", modelCode: "1-1" });
+        expect(rotaryBom).toMatchObject({ code: "XK2001", name: "旋转XK2", modelCode: "1-1" });
         expect(rotaryBom.items.map(item => item.name)).toEqual(["1-1", "正面", "0.5"]);
         expect(rotaryBom.spec).toBe("型号：1-1 · 方向：正面 · 弹簧：0.5");
         expect(microBom.modelCode).toBe("");

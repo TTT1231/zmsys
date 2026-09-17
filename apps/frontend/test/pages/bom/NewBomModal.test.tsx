@@ -184,7 +184,7 @@ it("多选组折叠后显示已选数量", async () => {
     expect(screen.getByText("已选 2")).toBeInTheDocument();
 });
 
-it("目录块顺序：根分组在外壳侧在前、触点分区始终排最后（旋转XK3 / 安全开关）", async () => {
+it("目录块顺序：根分组在外壳侧在前、触点分区始终排最后；旋转XK3 无触点分区", async () => {
     const user = userEvent.setup();
     const follows = (a: HTMLElement, b: HTMLElement) =>
         (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
@@ -192,9 +192,9 @@ it("目录块顺序：根分组在外壳侧在前、触点分区始终排最后�
     await pickCategory(user, "旋转XK3");
     const shell = screen.getByRole("button", { name: "PC塑料外壳" });
     const hardware = screen.getByRole("button", { name: "五金件" });
-    const contact = screen.getByRole("button", { name: "触点" });
     expect(follows(shell, hardware)).toBe(true);
-    expect(follows(hardware, contact)).toBe(true);
+    // 旋转XK3 无触点（电流不大），目录不含触点分区
+    expect(screen.queryByRole("button", { name: "触点" })).not.toBeInTheDocument();
 
     rerender(<NewBomModal open onClose={vi.fn()} />);
     await pickCategory(user, "安全开关");

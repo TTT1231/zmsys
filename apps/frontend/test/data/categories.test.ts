@@ -45,7 +45,7 @@ describe("categoryOf", () => {
             ["group", "触点类别", false],
         ]);
         const micro = cat("新微动");
-        expect(micro.seqWidth).toBe(4);
+        expect(micro.seqWidth).toBeUndefined();
         for (const microName of ["新微动", "老微动"]) {
             const target = cat(microName);
             expect(target.groups.filter(node => node.kind === "section").map(node => node.name)).toEqual([
@@ -159,14 +159,14 @@ describe("catalogRowsOf", () => {
 });
 
 describe("旋转XK3 / 安全开关目录", () => {
-    it("旋转XK3：三个根分组 + 五金件/触点分区，小静片等按 不电镀/镀锡 拆选项", () => {
+    it("旋转XK3：三个根分组 + 五金件分区（无触点，电流不大不带触点），小静片等按 不电镀/镀锡 拆选项", () => {
         const xk3 = categoryOf("旋转XK3")!;
         expect(xk3.groups.slice(0, 3).map(node => [node.kind, node.name])).toEqual([
             ["group", "PC塑料外壳"],
             ["group", "PC塑料底座"],
             ["group", "PA66塑料杆子"],
         ]);
-        expect(xk3.groups.filter(node => node.kind === "section").map(node => node.name)).toEqual(["五金件", "触点"]);
+        expect(xk3.groups.filter(node => node.kind === "section").map(node => node.name)).toEqual(["五金件"]);
         const itemsOf = (groupName: string) =>
             xk3.groups.find(node => node.name === groupName)!.items.map(item => item.name);
         expect(itemsOf("PC塑料外壳")).toHaveLength(5);
@@ -230,31 +230,31 @@ describe("bomSpecOfItems", () => {
 
 describe("nextBomCode", () => {
     it("starts from 001 when category has no codes", () => {
-        expect(nextBomCode(cat("旋转XK2"), [])).toBe("ZMXK2001");
-        expect(nextBomCode(cat("老微动"), [])).toBe("ZMKW16001");
-        expect(nextBomCode(cat("新微动"), [])).toBe("ZMKW0001");
+        expect(nextBomCode(cat("旋转XK2"), [])).toBe("XK2001");
+        expect(nextBomCode(cat("老微动"), [])).toBe("KWO001");
+        expect(nextBomCode(cat("新微动"), [])).toBe("KW001");
     });
 
     it("increments max sequence within the same category only", () => {
-        expect(nextBomCode(cat("旋转XK2"), of("旋转XK2", "ZMXK2001", "ZMXK2003"))).toBe("ZMXK2004");
-        expect(nextBomCode(cat("新微动"), of("旋转XK2", "ZMXK2002"))).toBe("ZMKW0001");
+        expect(nextBomCode(cat("旋转XK2"), of("旋转XK2", "XK2001", "XK2003"))).toBe("XK2004");
+        expect(nextBomCode(cat("新微动"), of("旋转XK2", "XK2002"))).toBe("KW001");
     });
 
     it("ignores other categories even with similar prefixes", () => {
-        // 老微动 ZMKW16xxx 不污染新微动 ZMKWxxxxxx
-        expect(
-            nextBomCode(cat("新微动"), [...of("新微动", "ZMKW0001"), ...of("老微动", "ZMKW16001", "ZMKW16012")]),
-        ).toBe("ZMKW0002");
-        expect(
-            nextBomCode(cat("老微动"), [...of("老微动", "ZMKW16001", "ZMKW16012"), ...of("新微动", "ZMKW3744")]),
-        ).toBe("ZMKW16013");
+        // 老微动 KWOxxx 不污染新微动 KWxxx
+        expect(nextBomCode(cat("新微动"), [...of("新微动", "KW001"), ...of("老微动", "KWO001", "KWO012")])).toBe(
+            "KW002",
+        );
+        expect(nextBomCode(cat("老微动"), [...of("老微动", "KWO001", "KWO012"), ...of("新微动", "KW744")])).toBe(
+            "KWO013",
+        );
     });
 
     it("counts sequences beyond 999 within the same category", () => {
-        expect(nextBomCode(cat("新微动"), of("新微动", "ZMKW0999", "ZMKW1000", "ZMKW3744"))).toBe("ZMKW3745");
+        expect(nextBomCode(cat("新微动"), of("新微动", "KW999", "KW1000", "KW3744"))).toBe("KW3745");
     });
 
     it("ignores non-numeric suffixes", () => {
-        expect(nextBomCode(cat("旋转XK2"), of("旋转XK2", "ZMXK2001", "ZMXK-XX"))).toBe("ZMXK2002");
+        expect(nextBomCode(cat("旋转XK2"), of("旋转XK2", "XK2001", "XK2-XX"))).toBe("XK2002");
     });
 });

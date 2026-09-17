@@ -54,8 +54,8 @@ it("输入 BOM 编码即回显成品档案，容错大小写与首尾空格，�
     render(<NewOrderModal open onClose={vi.fn()} />);
     expect(screen.queryByText("已匹配")).not.toBeInTheDocument();
 
-    await user.type(screen.getByLabelText(/BOM 编码/), " zmkw0042 ");
-    expect(screen.getByText("ZMKW0042")).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/BOM 编码/), " kw042 ");
+    expect(screen.getByText("KW042")).toBeInTheDocument();
     expect(screen.getByText("已匹配")).toBeInTheDocument();
     expect(screen.getByText(/新微动/)).toBeInTheDocument();
     expect(screen.getByText(/6.3静片：铜镀银/)).toBeInTheDocument();
@@ -79,8 +79,8 @@ it("输入 BOM 编码即回显成品档案，容错大小写与首尾空格，�
 it("编码失配：输入即出现中性核对提示，提交被拦截且不发起请求", async () => {
     const user = userEvent.setup();
     render(<NewOrderModal open onClose={vi.fn()} />);
-    await user.type(screen.getByLabelText(/BOM 编码/), "ZMKW9999");
-    expect(screen.getByText(/未找到编码「ZMKW9999」/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/BOM 编码/), "KW9999");
+    expect(screen.getByText(/未找到编码「KW9999」/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "提交订单" }));
     expect(screen.getByText("未找到该 BOM 编码，请核对")).toBeInTheDocument();
@@ -94,9 +94,9 @@ it("未输入编码提交提示必填，修正输入后错误即时清除", asyn
     expect(screen.getByText("请输入 BOM 编码")).toBeInTheDocument();
     expect(mutate).not.toHaveBeenCalled();
 
-    await user.type(screen.getByLabelText(/BOM 编码/), "zmkw0042");
+    await user.type(screen.getByLabelText(/BOM 编码/), "kw042");
     expect(screen.queryByText("请输入 BOM 编码")).not.toBeInTheDocument();
-    expect(screen.getByText("ZMKW0042")).toBeInTheDocument();
+    expect(screen.getByText("KW042")).toBeInTheDocument();
 });
 
 it("提交报错后补填某字段，只消除该字段验证词，其余保留", async () => {

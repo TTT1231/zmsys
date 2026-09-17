@@ -211,7 +211,7 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
                         <TextField
                             label="BOM 编码"
                             required
-                            placeholder="如 ZMKW0042"
+                            placeholder="如 KW042"
                             error={errors.bom}
                             value={bomCode}
                             onChange={event => inputBomCode(event.target.value)}

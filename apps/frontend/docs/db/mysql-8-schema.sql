@@ -302,8 +302,8 @@ CREATE TABLE bom_category (
 INSERT INTO bom_category (id, category_key, name, code_prefix, seq_width, child_categories) VALUES
     (1001, 'rotary-switch', '旋转XK2', 'XK2', 3),
     (1002, 'rotary-xk3', '旋转XK3', 'XK3', 3),
-    (1003, 'new-micro-switch', '新微动', 'KW', 4),
-    (1004, 'old-micro-switch', '老微动', 'KW16', 3),
+    (1003, 'new-micro-switch', '新微动', 'KW', 3),
+    (1004, 'old-micro-switch', '老微动', 'KWO', 3),
     (1005, 'safety-switch', '安全开关', 'AQ', 3),
     (1006, 'tipover-switch', '跌倒开关', 'KD', 3, '["new-micro-switch", "old-micro-switch"]');
 
@@ -608,7 +608,8 @@ INSERT INTO material_item (id, group_id, name, sort_order) VALUES
     (3147, 2221, '银', 2);
 
 -- 旋转XK3（1002 / XK3 / 3）：PC塑料外壳、PC塑料底座、PA66塑料杆子三个根分组
--- + 五金件分区（小静片/半圆静片/动片 各 不电镀·镀锡、带圈动片、钢球、卡线片、弹簧）+ 触点分区。
+-- + 五金件分区（小静片/半圆静片/动片 各 不电镀·镀锡、带圈动片、钢球、卡线片、弹簧）；
+-- 无触点分区（XK3 类开关不带触点，电流不大）。
 INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, multi, sort_order) VALUES
     (2401, 1002, NULL, 'GROUP', 'PC塑料外壳', 'pc-shell', 0, 1),
     (2402, 1002, NULL, 'GROUP', 'PC塑料底座', 'pc-base', 0, 2),
@@ -620,11 +621,7 @@ INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, m
     (2414, 1002, 2404, 'GROUP', '带圈动片', 'ring-moving-plate', 0, 4),
     (2415, 1002, 2404, 'GROUP', '钢球', 'steel-ball', 0, 5),
     (2416, 1002, 2404, 'GROUP', '卡线片', 'wire-clip', 0, 6),
-    (2417, 1002, 2404, 'GROUP', '弹簧', 'spring', 0, 7),
-    (2405, 1002, NULL, 'SECTION', '触点', NULL, NULL, 5),
-    (2418, 1002, 2405, 'GROUP', '触点大小', 'contact-size', 0, 1),
-    (2419, 1002, 2405, 'GROUP', '触点厚度', 'contact-thickness', 0, 2),
-    (2420, 1002, 2405, 'GROUP', '触点类别', 'contact-kind', 0, 3);
+    (2417, 1002, 2404, 'GROUP', '弹簧', 'spring', 0, 7);
 
 INSERT INTO material_item (id, group_id, name, sort_order) VALUES
     (3401, 2401, '圆孔长外壳（茶色）', 1),
@@ -649,14 +646,7 @@ INSERT INTO material_item (id, group_id, name, sort_order) VALUES
     (3420, 2416, '0.15', 1),
     (3421, 2416, '0.2', 2),
     (3422, 2417, '0.45长弹簧', 1),
-    (3423, 2417, '0.45短弹簧', 2),
-    (3424, 2418, '0.3', 1),
-    (3425, 2418, '0.35', 2),
-    (3426, 2419, '0.15', 1),
-    (3427, 2419, '0.2', 2),
-    (3428, 2419, '0.3', 3),
-    (3429, 2420, '铜', 1),
-    (3430, 2420, '银', 2);
+    (3423, 2417, '0.45短弹簧', 2);
 
 -- 安全开关（1005 / AQ / 3）：PC塑料（外壳类）根分组 + PA66塑料分区（盖板）
 -- + 五金件分区（短款/30mm→31mm、长款/41mm→43mm 四个多选组，id 连续按展示序）+ 触点分区。
