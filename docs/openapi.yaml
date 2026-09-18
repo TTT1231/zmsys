@@ -287,7 +287,7 @@ paths:
             tags: [boms]
             operationId: listBomCategories
             summary: 后端权威 BOM 品类与物料目录
-            description: 权限 `bom:view`。返回 6 品类及分区/分组/可选物料树；跌倒开关品类额外下发 childCategories 标记（须从列表品类中选一个已建 BOM 作为子件）；前端不得自行决定有效品类、目录结构或编码前缀。
+            description: 权限 `bom:view`。返回 7 品类及分区/分组/可选物料树；跌倒开关品类额外下发 childCategories 标记（须从列表品类中选一个已建 BOM 作为子件）；前端不得自行决定有效品类、目录结构或编码前缀。
             responses:
                 "200":
                     description: 成功
@@ -1084,7 +1084,7 @@ components:
 
         BomCatalogNode:
             type: object
-            required: [id, parentId, kind, name, key, multi, items]
+            required: [id, parentId, kind, name, key, multi, qty, items]
             description: 目录树节点；分区（section）为纯展示节点（不挂物料、不提供全选），分组（group）挂可选物料
             properties:
                 id: { type: string }
@@ -1093,6 +1093,7 @@ components:
                 name: { type: string }
                 key: { type: [string, "null"], description: 分组稳定标识（model 用于型号派生）；分区为 null }
                 multi: { type: [boolean, "null"], description: 分组选择语义（false 单选 / true 多选）；分区为 null }
+                qty: { type: [boolean, "null"], description: 分组数量语义（true 时选中项可携带 1-99 数量，如琴键开关的扣板/连锁片/静片/动片）；分区为 null }
                 items:
                     type: array
                     description: 分区恒为空数组
@@ -1114,13 +1115,14 @@ components:
 
         BomItemView:
             type: object
-            required: [materialId, groupKey, groupName, name]
-            description: 建档冻结明细（无数量），按 position 排序返回
+            required: [materialId, groupKey, groupName, name, quantity]
+            description: 建档冻结明细，按 position 排序返回
             properties:
                 materialId: { type: string }
                 groupKey: { type: string }
                 groupName: { type: string }
                 name: { type: string }
+                quantity: { type: integer, minimum: 1, maximum: 99, description: 冻结数量（qty 分组 1-99，其余恒 1） }
 
         Bom:
             type: object
@@ -1130,7 +1132,7 @@ components:
                 name: { type: string }
                 modelCode: { type: string, description: model 组选中项名称（品类无 model 组时为空串） }
                 items: { type: array, items: { $ref: "#/components/schemas/BomItemView" } }
-                spec: { type: string, description: "摘要（“组名：物料名”以 “ · ” 连接）" }
+                spec: { type: string, description: "摘要（“组名：物料名 ×N”以 “ · ” 连接，数量 1 省略 ×N）" }
                 created: { type: string, format: date }
                 unit: { type: string }
 
@@ -1144,8 +1146,12 @@ components:
                     type: array
                     minItems: 1
                     maxItems: 200
-                    description: 选中物料 id（正十进制 BIGINT 数字串）；服务端去重后按集合判重
+                    description: 选中物料 id（正十进制 BIGINT 数字串）；服务端去重后按“物料 id + 数量”集合判重
                     items: { type: string, pattern: "^[0-9]+$" }
+                quantities:
+                    type: object
+                    description: 数量分组（qty=true）选中项的数量表（物料 id → 1-99 整数）；缺省按 1；非数量分组携带非 1 数量将被拒绝
+                    additionalProperties: { type: integer, minimum: 1, maximum: 99 }
                 childCategory:
                     type: string
                     maxLength: 40

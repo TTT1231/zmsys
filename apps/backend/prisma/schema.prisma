@@ -294,7 +294,8 @@ model BomCategory {
 }
 
 /// 物料目录节点：分区（SECTION，仅展示与折叠）或分组（GROUP，挂可选物料）；
-/// 分组 key 为稳定标识（如 model），目录修改只走迁移（db-scheme.md §5）
+/// 分组 key 为稳定标识（如 model），qty=1 的分组勾选后可选数量（如扣板/静片），
+/// 目录修改只走迁移（db-scheme.md §5）
 model MaterialGroup {
   id        BigInt           @id
   categoryId BigInt          @map("category_id")
@@ -303,6 +304,7 @@ model MaterialGroup {
   name      String           @db.VarChar(64)
   groupKey  String?          @map("group_key") @db.VarChar(40)
   multi     Boolean?
+  qty       Boolean?
   sortOrder Int              @default(0) @map("sort_order") @db.UnsignedSmallInt
   status    Boolean          @default(true)
   createdAt DateTime         @map("created_at") @db.DateTime(3)
@@ -365,8 +367,8 @@ model BomTable {
   @@map("bom_table")
 }
 
-/// BOM 明细行（无数量）：建档时冻结 groupKey/groupName/name/position，
-/// 展示与摘要（“组名：物料名”按 position 排序）完全不依赖当前目录
+/// BOM 明细行：建档时冻结 groupKey/groupName/name/position 与数量（qty 分组
+/// 1-99，其余恒 1），展示与摘要（“组名：物料名 ×N”按 position 排序）完全不依赖当前目录
 model BomItem {
   id         BigInt   @id
   bomId      BigInt   @map("bom_id")
@@ -375,6 +377,7 @@ model BomItem {
   groupName  String   @map("group_name") @db.VarChar(64)
   name       String   @db.VarChar(64)
   position   Int      @db.UnsignedInt
+  quantity   Int      @default(1) @db.UnsignedInt
   createdAt  DateTime @map("created_at") @db.DateTime(3)
   bom        BomTable     @relation(fields: [bomId], references: [id])
   material   MaterialItem @relation(fields: [materialId], references: [id])

@@ -298,17 +298,19 @@ CREATE TABLE bom_category (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 1–9999 为内置参考数据保留 id；业务 Snowflake id 不得使用该区间。
--- 物料目录模式：5 品类。
+-- 物料目录模式：7 品类。
 INSERT INTO bom_category (id, category_key, name, code_prefix, seq_width, child_categories) VALUES
     (1001, 'rotary-switch', '旋转XK2', 'XK2', 3),
     (1002, 'rotary-xk3', '旋转XK3', 'XK3', 3),
     (1003, 'new-micro-switch', '新微动', 'KW', 3),
     (1004, 'old-micro-switch', '老微动', 'KWO', 3),
     (1005, 'safety-switch', '安全开关', 'AQ', 3),
-    (1006, 'tipover-switch', '跌倒开关', 'KD', 3, '["new-micro-switch", "old-micro-switch"]');
+    (1006, 'tipover-switch', '跌倒开关', 'KD', 3, '["new-micro-switch", "old-micro-switch"]'),
+    (1007, 'piano-key-switch', '琴键开关', 'KQ', 3);
 
 -- 物料目录节点：分区（SECTION，仅展示与折叠、不挂物料）或分组（GROUP，挂可选物料）。
--- 分组 key 为稳定标识（model 用于型号派生）；目录修改只走迁移（不可变边界见 db-scheme.md §5）。
+-- 分组 key 为稳定标识（model 用于型号派生）；qty=1 的分组选中项可携带 1-99 数量
+-- （如琴键开关的扣板/连锁片/静片/动片），其余分组数量恒 1；目录修改只走迁移（不可变边界见 db-scheme.md §5）。
 CREATE TABLE material_group (
     id BIGINT NOT NULL,
     category_id BIGINT NOT NULL,
@@ -317,6 +319,7 @@ CREATE TABLE material_group (
     name VARCHAR(64) NOT NULL,
     group_key VARCHAR(40) CHARACTER SET ascii COLLATE ascii_bin NULL,
     multi TINYINT UNSIGNED NULL,
+    qty TINYINT UNSIGNED NULL,
     sort_order SMALLINT UNSIGNED NOT NULL DEFAULT 0,
     status TINYINT UNSIGNED NOT NULL DEFAULT 1,
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -330,8 +333,8 @@ CREATE TABLE material_group (
     CONSTRAINT fk_material_group_parent FOREIGN KEY (parent_id) REFERENCES material_group (id)
         ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT ck_material_group_kind CHECK (
-        (kind = 'SECTION' AND parent_id IS NULL AND group_key IS NULL AND multi IS NULL)
-        OR (kind = 'GROUP' AND group_key IS NOT NULL AND multi IN (0, 1))
+        (kind = 'SECTION' AND parent_id IS NULL AND group_key IS NULL AND multi IS NULL AND qty IS NULL)
+        OR (kind = 'GROUP' AND group_key IS NOT NULL AND multi IN (0, 1) AND qty IN (0, 1))
     ),
     CONSTRAINT ck_material_group_name CHECK (CHAR_LENGTH(TRIM(name)) BETWEEN 1 AND 64),
     CONSTRAINT ck_material_group_status CHECK (status IN (0, 1))
@@ -356,8 +359,9 @@ CREATE TABLE material_item (
     CONSTRAINT ck_material_item_status CHECK (status IN (0, 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- BOM 档案 = 品类 + 选中物料集合（无数量）；(category_id, spec_hash) 业务去重，
--- spec_hash 为规范化物料 id 集合（BigInt 十进制、去重、数值升序 JSON 数组）的 SHA-256。
+-- BOM 档案 = 品类 + 选中物料集合；(category_id, spec_hash) 业务去重，
+-- spec_hash 为规范化「物料 id + 数量」对（BigInt 十进制、去重、按 id 数值升序的
+-- [[id, quantity], ...] JSON 数组）的 SHA-256；同集合不同数量视为不同 BOM。
 CREATE TABLE bom_table (
     id BIGINT NOT NULL,
     bom_code VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -387,8 +391,8 @@ CREATE TABLE bom_table (
     CONSTRAINT ck_bom_request CHECK (CHAR_LENGTH(request_key) BETWEEN 8 AND 128)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- BOM 明细行（无数量）：建档冻结 group_key/group_name/name/position，
--- 展示与摘要（“组名：物料名”按 position 排序）不依赖当前目录。
+-- BOM 明细行：建档冻结 group_key/group_name/name/position 与数量（qty 分组 1-99，
+-- 其余恒 1），展示与摘要（“组名：物料名 ×N”按 position 排序，数量 1 省略 ×N）不依赖当前目录。
 CREATE TABLE bom_item (
     id BIGINT NOT NULL,
     bom_id BIGINT NOT NULL,
@@ -397,6 +401,7 @@ CREATE TABLE bom_item (
     group_name VARCHAR(64) NOT NULL,
     name VARCHAR(64) NOT NULL,
     position INT UNSIGNED NOT NULL,
+    quantity INT UNSIGNED NOT NULL DEFAULT 1,
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
     UNIQUE KEY uk_bom_item_once (bom_id, material_id),
@@ -408,7 +413,8 @@ CREATE TABLE bom_item (
     CONSTRAINT ck_bom_item_names CHECK (
         CHAR_LENGTH(TRIM(group_name)) BETWEEN 1 AND 64 AND CHAR_LENGTH(TRIM(name)) BETWEEN 1 AND 64
     ),
-    CONSTRAINT ck_bom_item_position CHECK (position >= 1)
+    CONSTRAINT ck_bom_item_position CHECK (position >= 1),
+    CONSTRAINT ck_bom_item_quantity CHECK (quantity BETWEEN 1 AND 99)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 目录种子（id 段 2001+ 分区/组、3001+ 物料）。
@@ -555,6 +561,7 @@ INSERT INTO material_item (id, group_id, name, sort_order) VALUES
     (3121, 2115, '4.8静片：复合铜镀镍', 5),
     (3122, 2116, '铜镀银', 1),
     (3123, 2116, '镀锡', 2),
+    (3138, 2116, '铜镀锡', 3),
     (3124, 2117, '铜镀银摆片', 1),
     (3125, 2117, '铁镀镍摆片', 2),
     (3126, 2117, '复合铜镀镍摆片', 3),
@@ -713,6 +720,69 @@ INSERT INTO material_item (id, group_id, name, sort_order) VALUES
     (3604, 2602, '跌倒底', 1),
     (3605, 2603, '18mm钢球', 1),
     (3606, 2604, '翘板', 1);
+
+-- 琴键开关（1007 / KQ / 3）：8 个单选根组；扣板/连锁片/静片/动片四组 qty=1
+-- （选中项可携带 1-99 数量），其余分组不带数量。
+INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, multi, qty, sort_order) VALUES
+    (2701, 1007, NULL, 'GROUP', '琴键底', 'piano-base', 0, 0, 1),
+    (2702, 1007, NULL, 'GROUP', '琴键盖', 'piano-cover', 0, 0, 2),
+    (2703, 1007, NULL, 'GROUP', '卡板', 'clamp-plate', 0, 0, 3),
+    (2704, 1007, NULL, 'GROUP', '扣板', 'buckle-plate', 0, 1, 4),
+    (2705, 1007, NULL, 'GROUP', '连锁片', 'interlock-tab', 0, 1, 5),
+    (2706, 1007, NULL, 'GROUP', '静片', 'static-plate', 0, 1, 6),
+    (2707, 1007, NULL, 'GROUP', '动片', 'moving-plate', 0, 1, 7),
+    (2708, 1007, NULL, 'GROUP', '弹簧规格', 'spring-spec', 0, 0, 8);
+
+INSERT INTO material_item (id, group_id, name, sort_order) VALUES
+    (3701, 2701, '四键焊线底', 1),
+    (3702, 2701, '四键插线底', 2),
+    (3703, 2701, '五键焊线底', 3),
+    (3704, 2701, '五键插线底', 4),
+    (3705, 2701, '小太阳四键三档底（摇头）茶色', 5),
+    (3706, 2701, '小太阳四键三档底（摇头）灰色', 6),
+    (3707, 2701, '小太阳四键二档底（摇头）茶色', 7),
+    (3708, 2701, '小太阳四键二档底（摇头）灰色', 8),
+    (3709, 2701, '冷风扇琴键底（茶色）', 9),
+    (3710, 2701, '冷风扇琴键底（透明）大功率带触点', 10),
+    (3711, 2702, '四键焊线盖', 1),
+    (3712, 2702, '四键插线盖', 2),
+    (3713, 2702, '五键焊线盖', 3),
+    (3714, 2702, '五键插线盖', 4),
+    (3715, 2702, '小太阳四键三档盖（摇头）茶色', 5),
+    (3716, 2702, '小太阳四键三档盖（摇头）灰色', 6),
+    (3717, 2702, '小太阳四键二档盖（摇头）茶色', 7),
+    (3718, 2702, '小太阳四键二档盖（摇头）灰色', 8),
+    (3719, 2702, '冷风扇琴键盖（茶色）', 9),
+    (3720, 2703, '大卡板18mm', 1),
+    (3721, 2703, '小卡板18mm', 2),
+    (3722, 2703, '短卡板16mm', 3),
+    (3723, 2703, '小太阳小卡板18mm', 4),
+    (3724, 2703, '小太阳短卡板16mm', 5),
+    (3725, 2703, '冷风扇小卡板18mm', 6),
+    (3726, 2703, '冷风扇大卡板18mm', 7),
+    (3727, 2704, '扣板', 1),
+    (3728, 2704, '四键扣板', 2),
+    (3729, 2704, '五键扣板', 3),
+    (3730, 2705, '连锁片', 1),
+    (3731, 2705, '四键连锁片', 2),
+    (3732, 2705, '五键连锁片', 3),
+    (3733, 2706, '带点静片', 1),
+    (3734, 2706, '不带点静片', 2),
+    (3735, 2706, '四键焊线静片', 3),
+    (3736, 2706, '四键插线静片', 4),
+    (3737, 2706, '五键焊线静片', 5),
+    (3738, 2706, '五键插线静片', 6),
+    (3739, 2707, '带点动片', 1),
+    (3740, 2707, '不带点动片', 2),
+    (3741, 2707, '辅助动片', 3),
+    (3742, 2707, '四键插线动片', 4),
+    (3743, 2707, '五键焊线动片', 5),
+    (3744, 2707, '五键插线动片', 6),
+    (3745, 2708, '0.3', 1),
+    (3746, 2708, '0.35', 2);
+
+-- 存量分组（上述 8 列种子未携带 qty）统一置 0：不带数量
+UPDATE material_group SET qty = 0 WHERE kind = 'GROUP' AND qty IS NULL;
 
 CREATE TABLE custom_table (
     id BIGINT NOT NULL,
