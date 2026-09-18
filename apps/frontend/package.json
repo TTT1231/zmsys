@@ -7,9 +7,7 @@
         "dev": "vite",
         "build": "tsc -b && vite build",
         "typecheck": "tsc -b --force",
-        "test": "vitest run",
-        "test:coverage": "vitest run --coverage",
-        "preview": "vite preview"
+        "test": "vitest run"
     },
     "dependencies": {
         "@radix-ui/react-dropdown-menu": "^2.1.24",
