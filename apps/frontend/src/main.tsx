@@ -13,10 +13,12 @@ const queryClient = new QueryClient({
     },
 });
 
-/* Mock 开关：仅开发模式启用（VITE_ENABLE_MSW=false 可强制关闭以联调真实后端）。
- * 动态 import 保证 msw 不进生产包。 */
+/* Mock 开关：默认直连真实后端；仅开发模式显式 VITE_ENABLE_MSW=true 才启用 MSW
+ * （后端未就绪时离线开发用）。生产构建无论配置如何一律禁止 mock——
+ * import.meta.env.PROD 在构建期被静态替换，动态 import 分支不可达，msw 不会进产物。 */
 async function enableMocking() {
-    if (!import.meta.env.DEV || import.meta.env.VITE_ENABLE_MSW === "false") return;
+    if (import.meta.env.PROD) return;
+    if (import.meta.env.VITE_ENABLE_MSW !== "true") return;
     const { worker } = await import("../mocks/browser");
     await worker.start({ onUnhandledRequest: "bypass" });
 }
