@@ -25,6 +25,7 @@ import { EMPTY_SNAPSHOT, bomByCode } from "@/data/views";
 import { todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/Toast";
 
+import { BomCell } from "@/components/bom/BomCell";
 import { BomPicker } from "@/components/bom/BomPicker";
 import type { InboundRow, Snapshot } from "@/api";
 
@@ -640,7 +641,12 @@ export function InboundPage() {
                                     </div>
                                 }
                             >
-                                <p>{bomByCode(snap, row.bomCode)?.spec}</p>
+                                <BomCell
+                                    categories={snap.bomCategories}
+                                    bom={bomByCode(snap, row.bomCode)}
+                                    bomCode={row.bomCode}
+                                    showIdentity={false}
+                                />
                                 <div className="mt-2 flex flex-col gap-1.5">
                                     <CardField label="入库日期" value={row.date} />
                                     <CardField label="登记人" value={row.inspector} />
@@ -655,7 +661,7 @@ export function InboundPage() {
                     ) : (
                         <DataTable
                             tableId="inbound"
-                            defaultWidths={[185, 170, 155, 155, 150, 245]}
+                            defaultWidths={[185, 230, 155, 155, 150, 245]}
                             identityColumn={0}
                             scrollRef={tableScrollRef}
                         >
@@ -695,8 +701,12 @@ export function InboundPage() {
                                         <td className="px-5 py-3 tnum text-13 font-semibold text-td-strong">
                                             {row.no}
                                         </td>
-                                        <td className="px-3 py-3 tnum text-12.5 font-medium text-primary-strong">
-                                            {row.bomCode}
+                                        <td className="px-3 py-4">
+                                            <BomCell
+                                                categories={snap.bomCategories}
+                                                bom={bomByCode(snap, row.bomCode)}
+                                                bomCode={row.bomCode}
+                                            />
                                         </td>
                                         <td className="px-3 py-3 text-right">
                                             <QtyCell value={row.qty} />

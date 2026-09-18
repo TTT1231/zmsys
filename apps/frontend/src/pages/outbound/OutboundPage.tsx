@@ -3,6 +3,7 @@ import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { RecordFields, RecordProduct, RecordSummary } from "@/components/business/RecordDetails";
+import { BomCell } from "@/components/bom/BomCell";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
@@ -891,7 +892,11 @@ export function OutboundPage() {
                                     </div>
                                 }
                             >
-                                <p className="tnum">{row.bomCode}</p>
+                                <BomCell
+                                    categories={snap.bomCategories}
+                                    bom={bomByCode(snap, row.bomCode)}
+                                    bomCode={row.bomCode}
+                                />
                                 <p className="mt-0.5 tnum text-13 text-muted">
                                     {row.state === "voided" ? (
                                         <span className="line-through decoration-danger/50">{row.no}</span>
@@ -913,7 +918,7 @@ export function OutboundPage() {
                     ) : (
                         <DataTable
                             tableId="outbound"
-                            defaultWidths={[160, 185, 140, 125, 140, 95, 120, 224]}
+                            defaultWidths={[160, 185, 140, 230, 140, 95, 120, 224]}
                             identityColumn={0}
                             scrollRef={tableScrollRef}
                         >
@@ -972,8 +977,12 @@ export function OutboundPage() {
                                                 sub={`${row.orderNo} · ${row.customerCode}`}
                                             />
                                         </td>
-                                        <td className="px-3 py-3 tnum text-12.5 font-medium text-primary-strong">
-                                            {row.bomCode}
+                                        <td className="px-3 py-4">
+                                            <BomCell
+                                                categories={snap.bomCategories}
+                                                bom={bomByCode(snap, row.bomCode)}
+                                                bomCode={row.bomCode}
+                                            />
                                         </td>
                                         <td className="px-3 py-3 text-right">
                                             <QtyCell value={row.qty} />
