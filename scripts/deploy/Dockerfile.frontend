@@ -2,6 +2,10 @@
 # 纯静态装配，无依赖安装步骤，服务器上构建秒级
 FROM nginx:stable-alpine
 
+# 移除 IPv6 预检脚本：其内部 `apk manifest nginx` 在服务器 apk 索引状态下会挂起，
+# 导致 entrypoint 卡住、nginx 不启动（脚本非必需——仅需 IPv4 监听）
+RUN rm -f /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
+
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY apps/frontend/dist /usr/share/nginx/html
 
