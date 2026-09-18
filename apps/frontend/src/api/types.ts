@@ -3,7 +3,7 @@ import type { RoleGrant, RoleId } from "@/data/permissions";
 
 /* ---------- 业务实体（对应 db-scheme.md 各表，业务码为唯一 API key） ---------- */
 
-export type StatusKey = "done" | "progress" | "ready" | "pending" | "cancelled";
+export type StatusKey = "done" | "progress" | "ready" | "partReady" | "pending" | "cancelled";
 export type OrderLifecycleStatus = "active" | "cancelled";
 
 export interface OrderStatus {

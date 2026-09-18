@@ -28,7 +28,7 @@ const customer: Customer = {
     created: "2026-08-01",
 };
 
-/* 4 笔订单覆盖倒序取 3、已取消弱化与多种状态徽章；detailSnapshot 的 stock=200 支撑可发货判定 */
+/* 4 笔订单覆盖倒序取 3、已取消弱化与多种状态徽章；stock=200 分配后可发 100 盖住 ZM260915002 待交 */
 const orders: Order[] = [
     {
         ...detailOrder,
@@ -39,7 +39,7 @@ const orders: Order[] = [
         lifecycleStatus: "cancelled",
         cancelReason: "客户调整需求",
     },
-    { ...detailOrder, orderNo: "ZM260915002", qty: 2400, outbound: 0, orderDate: "2026-09-15" },
+    { ...detailOrder, orderNo: "ZM260915002", qty: 100, outbound: 0, orderDate: "2026-09-15" },
     { ...detailOrder, orderNo: "ZM260914001", qty: 500, outbound: 500, orderDate: "2026-09-14" },
     { ...detailOrder },
 ];
@@ -66,7 +66,7 @@ it("时间线按下单日期倒序只取最近 3 笔，带状态徽章并提供�
     expect(screen.getByRole("button", { name: "查看订单 ZM260915002 详情" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "查看订单 ZM260914001 详情" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "查看订单 ZM260913001 详情" })).not.toBeInTheDocument();
-    // 状态徽章：已取消 / 可发货（库存 200 充足）/ 已完成
+    // 状态徽章：已取消 / 可发货（分配后可发 100 盖住待交 100）/ 已完成
     expect(screen.getByText("已取消")).toBeInTheDocument();
     expect(screen.getByText("可发货")).toBeInTheDocument();
     expect(screen.getByText("已完成")).toBeInTheDocument();

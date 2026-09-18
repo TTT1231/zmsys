@@ -32,13 +32,20 @@ export function remainingOf(order: Order): number {
     return Math.max(0, order.qty - order.outbound);
 }
 
-export function orderStatusOf(snap: Pick<Snapshot, "stock">, order: Order): OrderStatus {
+/* 状态判定核心：可发量（按交期分配，同"本次最多可发"口径）对比剩余待交。
+ * 可发量盖不住整单剩余 → 部分可发货；已发过货且剩余可整单覆盖（或暂无可发）→ 部分发货。 */
+function statusOf(order: Order, maxShip: number): OrderStatus {
     if (order.lifecycleStatus === "cancelled")
         return { label: order.outbound > 0 ? "部分发货后取消" : "已取消", key: "cancelled" };
     if (order.outbound >= order.qty) return { label: "已完成", key: "done" };
+    if (maxShip > 0 && maxShip < remainingOf(order)) return { label: "部分可发货", key: "partReady" };
     if (order.outbound > 0) return { label: "部分发货", key: "progress" };
-    if (stockOf(snap, order.bomCode) > 0) return { label: "可发货", key: "ready" };
+    if (maxShip > 0) return { label: "可发货", key: "ready" };
     return { label: "待备货", key: "pending" };
+}
+
+export function orderStatusOf(snap: Snapshot, order: Order): OrderStatus {
+    return statusOf(order, maxShipOf(snap, order.orderNo));
 }
 
 /* 待发货明细：按交期顺序在共享库存池上做可发量分配（同一 BOM 库存不重复承诺） */
@@ -63,7 +70,7 @@ export function readyToShip(snap: Snapshot): ReadyToShipRow[] {
                 remaining,
                 stock: stockOf(snap, order.bomCode),
                 maxShip,
-                status: orderStatusOf(snap, order),
+                status: statusOf(order, maxShip),
                 overdue: order.deliverDate < today,
             };
         });

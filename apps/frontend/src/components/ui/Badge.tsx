@@ -6,6 +6,7 @@ import type { StatusKey } from "@/api";
 const STATUS_STYLES: Record<string, string> = {
     done: "bg-accent-soft text-sky-700 border-sky-200",
     ready: "bg-accent-soft text-sky-700 border-sky-200",
+    partReady: "bg-[#fff6e7] text-[#a15c07] border-[#fedf89]",
     progress: "bg-[#f2f4f7] text-td-strong border-line",
     pending: "bg-[#fff6e7] text-[#a15c07] border-[#fedf89]",
     cancelled: "bg-danger-soft text-danger border-[#fecdca]",
@@ -17,6 +18,7 @@ const STATUS_LABELS: Record<StatusKey, string> = {
     done: "已完成",
     progress: "部分发货",
     ready: "可发货",
+    partReady: "部分可发货",
     pending: "待备货",
     cancelled: "已取消",
 };

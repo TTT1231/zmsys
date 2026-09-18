@@ -1,4 +1,4 @@
-/* views 派生视图纯函数：固定系统时间后断言四态、共享库存分配、缺口聚合与趋势分桶 */
+/* views 派生视图纯函数：固定系统时间后断言订单各状态、共享库存分配、缺口聚合与趋势分桶 */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Bom, Order, Snapshot } from "@/api";
@@ -87,19 +87,58 @@ describe("orderStatusOf", () => {
         expect(orderStatusOf(snap(), order({ outbound: 12 }))).toEqual({ label: "已完成", key: "done" });
     });
 
-    it("returns progress for partial shipment regardless of stock", () => {
-        expect(orderStatusOf(snap({ stock: { ZMXK001: 5 } }), order({ outbound: 3 }))).toEqual({
+    it("returns partReady when shippable stock cannot cover remaining", () => {
+        // 未发货：库存 5 盖不住待交 10
+        const unshipped = order();
+        expect(orderStatusOf(snap({ stock: { ZMXK001: 5 }, orders: [unshipped] }), unshipped)).toEqual({
+            label: "部分可发货",
+            key: "partReady",
+        });
+        // 已发 3、可发 5、待交 7：仍盖不住整单剩余
+        const shipped = order({ outbound: 3 });
+        expect(orderStatusOf(snap({ stock: { ZMXK001: 5 }, orders: [shipped] }), shipped)).toEqual({
+            label: "部分可发货",
+            key: "partReady",
+        });
+    });
+
+    it("returns progress for partial shipment when remaining covered or no stock", () => {
+        // 已发 3、库存 7 正好盖住待交 7
+        const covered = order({ outbound: 3 });
+        expect(orderStatusOf(snap({ stock: { ZMXK001: 7 }, orders: [covered] }), covered)).toEqual({
+            label: "部分发货",
+            key: "progress",
+        });
+        // 已发 3、无库存
+        const dry = order({ outbound: 3 });
+        expect(orderStatusOf(snap({ orders: [dry] }), dry)).toEqual({
             label: "部分发货",
             key: "progress",
         });
     });
 
-    it("returns ready when stock exists and nothing shipped", () => {
-        expect(orderStatusOf(snap({ stock: { ZMXK001: 5 } }), order())).toEqual({ label: "可发货", key: "ready" });
+    it("returns ready when allocated stock covers remaining", () => {
+        const fixture = order();
+        expect(orderStatusOf(snap({ stock: { ZMXK001: 10 }, orders: [fixture] }), fixture)).toEqual({
+            label: "可发货",
+            key: "ready",
+        });
     });
 
-    it("returns pending when no stock and nothing shipped", () => {
+    it("returns pending when nothing shipped and no stock to allocate", () => {
         expect(orderStatusOf(snap(), order())).toEqual({ label: "待备货", key: "pending" });
+    });
+
+    it("only sees stock left after earlier deliver dates' reservation", () => {
+        // 库存 10 全部被更早交期的 ZM-A 预留：ZM-B 账面有货但可发 0
+        const fixture = snap({
+            stock: { ZMXK001: 10 },
+            orders: [
+                order({ orderNo: "ZM-A", qty: 10, deliverDate: "2026-03-18" }),
+                order({ orderNo: "ZM-B", qty: 5, deliverDate: "2026-03-19" }),
+            ],
+        });
+        expect(orderStatusOf(fixture, fixture.orders[1])).toEqual({ label: "待备货", key: "pending" });
     });
 });
 

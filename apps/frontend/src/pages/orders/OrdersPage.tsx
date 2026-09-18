@@ -28,7 +28,7 @@ import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import type { Order, Snapshot } from "@/api";
 
-const STATUS_OPTIONS = ["全部状态", "待备货", "可发货", "部分发货", "已完成", "已取消", "部分发货后取消"];
+const STATUS_OPTIONS = ["全部状态", "待备货", "可发货", "部分可发货", "部分发货", "已完成", "已取消", "部分发货后取消"];
 const EMPTY_BOMS: Snapshot["boms"] = [];
 const EMPTY_CUSTOMERS: Snapshot["customers"] = [];
 
