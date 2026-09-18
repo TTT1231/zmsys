@@ -3,9 +3,21 @@ packages:
     - "internal/*"
     - "packages/*"
 
+overrides:
+    # 对齐 admin-manage 原 lockfile 的已验证版本（React 19.3/jsdom 30.1 会让 Radix portal 测试超时）
+    "react": 19.2.8
+    "react-dom": 19.2.8
+    "jsdom": 30.0.1
+    "@testing-library/dom": 10.4.1
+
 allowBuilds:
+    "@prisma/engines": true
     esbuild: true
     lefthook: true
+    msw: true
+    msgpackr-extract: true
+    prisma: true
+    workerd: true
 
 catalog:
     "oxfmt": ^0.68.0

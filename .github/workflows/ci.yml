@@ -15,7 +15,8 @@ jobs:
             - uses: pnpm/action-setup@v4
             - uses: actions/setup-node@v4
               with:
-                  node-version: 22
+                  # backend 要求 node >= 24（engines）
+                  node-version: 24
                   cache: pnpm
             - run: pnpm install --frozen-lockfile
             - run: pnpm lint

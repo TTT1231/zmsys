@@ -1,6 +1,14 @@
 {
     "folders": [
         {
+            "name": "frontend (admin-manage)",
+            "path": "apps/frontend",
+        },
+        {
+            "name": "backend (zmsys-backend)",
+            "path": "apps/backend",
+        },
+        {
             "name": "@zmsys/request",
             "path": "packages/request",
         },

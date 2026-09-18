@@ -29,6 +29,7 @@ package-lock.json
 .VSCodeCounter
 .pnpm-store
 # local env files
+.env
 .env.local
 .env.*.local
 .eslintcache
@@ -62,6 +63,7 @@ vite.config.ts.*
 .agents
 .claude
 .codex
+.zcode
 skills-lock.json
 .atomcode
 datalog

@@ -11,11 +11,23 @@
     "overrides": [
         //web react
         {
-            "files": ["apps/web/**/*.{ts,tsx}"],
+            "files": ["apps/frontend/**/*.{ts,tsx}"],
             "plugins": ["typescript", "react"],
             "rules": {
                 "react/rules-of-hooks": "error",
                 "react/only-export-components": ["warn", { "allowConstantExport": true }]
+            }
+        },
+        //backend nest（沿用 zmsys-backend 原 oxlint 规则）
+        {
+            "files": ["apps/backend/**/*.ts"],
+            "plugins": ["typescript"],
+            "env": {
+                "node": true
+            },
+            "rules": {
+                "@typescript-eslint/no-explicit-any": "off",
+                "@typescript-eslint/no-floating-promises": "warn"
             }
         }
     ]

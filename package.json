@@ -9,9 +9,12 @@
     "type": "module",
     "scripts": {
         "postinstall": "pnpm -r run --if-present stub",
+        "dev": "pnpm --parallel --filter ./apps/frontend --filter ./apps/backend run dev",
+        "dev:frontend": "pnpm --filter ./apps/frontend dev",
+        "dev:backend": "pnpm --filter ./apps/backend dev",
         "typecheck": "tsx scripts/run-typecheck.ts",
         "lint": "tsx scripts/run-oxlint.ts",
-        "test": "vitest run"
+        "test": "pnpm -r --if-present run test"
     },
     "devDependencies": {
         "@types/node": "catalog:",
@@ -24,6 +27,9 @@
         "tsx": "catalog:",
         "typescript": "catalog:",
         "vitest": "catalog:"
+    },
+    "engines": {
+        "node": ">=24"
     },
     "packageManager": "pnpm@12.4.2"
 }
