@@ -44,6 +44,7 @@ pnpm test                     # test（递归各包）
 pnpm test:db:reset            # 重置 e2e 测试库（DROP/CREATE + 迁移 + seed，仅 *_test 库）
 pnpm test:e2e                 # 重置测试库 + 后端 e2e
 pnpm smoke                    # 后端冒烟（前置：build backend + 测试库已 reset）
+pnpm backup-database          # 备份生产库并校验（dump 拉回本地 + 还原比对对象/行数）
 ```
 
 ## 业务参考

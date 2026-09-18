@@ -58,6 +58,9 @@ vite.config.ts.*
 .history
 .cursor
 
+# 生产库备份产物（scripts/backup-database.ts）
+scripts/backups
+
 # generate prisma
 apps/backend/src/generated
 
