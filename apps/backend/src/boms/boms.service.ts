@@ -390,7 +390,10 @@ export class BomsService {
             key: isGroup ? row.groupKey : null,
             multi: isGroup ? row.multi : null,
             qty: isGroup ? (row.qty ?? false) : null,
-            items: isGroup ? row.items.map(item => ({ id: item.id.toString(), name: item.name })) : [],
+            // 组内物料与建档 position 同序（sortOrder 优先，id 兜底），保证展示序与冻结快照序一致
+            items: isGroup
+                ? [...row.items].sort(bySiblingOrder).map(item => ({ id: item.id.toString(), name: item.name }))
+                : [],
         };
     }
 

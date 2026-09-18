@@ -86,7 +86,7 @@ describe("BOM/成品档案 (e2e)", () => {
         const list = await app.inject({ method: "GET", url: "/api/bom-categories", headers: authHeaders(superToken) });
         expect(list.statusCode).toBe(200);
         const categories = list.json().data;
-        expect(categories).toHaveLength(6);
+        expect(categories).toHaveLength(7);
         expect(categories.map((category: { key: string }) => category.key)).toEqual([
             "rotary-switch",
             "rotary-xk3",
@@ -94,6 +94,7 @@ describe("BOM/成品档案 (e2e)", () => {
             "old-micro-switch",
             "safety-switch",
             "tipover-switch",
+            "piano-key-switch",
         ]);
         // seqWidth 为默认 3 时省略（新微动统一 3 位宽度后同样省略）
         expect(categories[0]).toMatchObject({ name: "旋转XK2", codePrefix: "XK2" });
@@ -152,9 +153,21 @@ describe("BOM/成品档案 (e2e)", () => {
         ]);
         expect(micro.find(group => group.name === "支架")).toMatchObject({ key: "bracket", multi: false });
         // 旋转XK3：根分组与分区按 sort_order 混排（外壳/底座/杆子 → 五金件）；无触点分区
-        const xk3 = categories[1].groups as Array<{ kind: string; name: string; multi: boolean | null }>;
+        const xk3 = categories[1].groups as Array<{
+            kind: string;
+            name: string;
+            multi: boolean | null;
+            items: Array<{ name: string }>;
+        }>;
         expect(xk3.slice(0, 3).map(group => group.name)).toEqual(["PC塑料外壳", "PC塑料底座", "PA66塑料杆子"]);
         expect(xk3.filter(group => group.kind === "section").map(group => group.name)).toEqual(["五金件"]);
+        // 弹簧多选（0.45长/短可同选）；卡线片为底/盖组合选项
+        expect(xk3.find(group => group.name === "弹簧")).toMatchObject({ kind: "group", multi: true });
+        expect(xk3.find(group => group.name === "卡线片")!.items.map(item => item.name)).toEqual([
+            "底0.15 盖0.2",
+            "底盖0.15",
+            "底盖0.2",
+        ]);
         // 安全开关：短款/长款系列配件为多选组
         const safety = categories[4].groups as Array<{ kind: string; name: string; multi: boolean | null }>;
         expect(safety.find(group => group.name === "短款/31mm系列配件")).toMatchObject({

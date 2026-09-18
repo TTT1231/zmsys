@@ -154,7 +154,7 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 - `material_item`：可选物料项（如“6.3支架：铜镀银”“二脚底座（无挡脚）”），完整物料名逐项可选，不再组合。
 - `bom_item`：BOM 明细行，建档时冻结 `group_key/group_name/name/position/quantity` 快照（数量分组 1-99，其余恒 1）。
 
-**目录不可变边界**：已被 `bom_item` 引用的物料不得改名、移组或复用 id；规格变化 = 新增物料项 + 旧项停用；停用只影响新建选择，已建 BOM 依靠快照完整显示。订单 `bom_spec_snapshot` 冻结 `{items: [{materialId, groupKey, groupName, name, position, quantity}], modelCode, spec}`（JSON 对象，quantity 于 2026-09 加入，旧快照缺省按 1），出库打印的 `bomSpec` 直接取该冻结值，不读当前目录。
+**目录不可变边界**：已被 `bom_item` 引用的物料不得改名、移组或复用 id；规格变化 = 新增物料项 + 旧项停用；停用只影响新建选择，已建 BOM 依靠快照完整显示。唯一例外是**名称规范化**——同一规格仅修正显示名（如触点大小 0.3 → 3.0mm、卡线片 0.15 → 底盖0.15，见迁移 20260923000000）：原地改名保留 id，且同一迁移内必须同步改写 `bom_item` 冻结名与订单 `bom_spec_snapshot`，保证新旧档案显示一致；`sales_order_change_log` 与 `outbound_print_log` 为历史凭证不回改。订单 `bom_spec_snapshot` 冻结 `{items: [{materialId, groupKey, groupName, name, position, quantity}], modelCode, spec}`（JSON 对象，quantity 于 2026-09 加入，旧快照缺省按 1），出库打印的 `bomSpec` 直接取该冻结值，不读当前目录。
 
 ### 5.2 `bom_table`
 

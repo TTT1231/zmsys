@@ -62,7 +62,7 @@ describe("categoryOf", () => {
                     )
                     .find(node => node.name === groupName)!
                     .items.map(item => item.name);
-            expect(contactItems("触点大小")).toEqual(["0.3", "0.35"]);
+            expect(contactItems("触点大小")).toEqual(["3.0mm", "3.5mm"]);
             expect(contactItems("触点厚度")).toEqual(["0.15", "0.2", "0.3"]);
             expect(contactItems("触点类别")).toEqual(["铜", "银"]);
         }
@@ -161,7 +161,7 @@ describe("catalogRowsOf", () => {
 });
 
 describe("旋转XK3 / 安全开关目录", () => {
-    it("旋转XK3：三个根分组 + 五金件分区（无触点，电流不大不带触点），小静片等按 不电镀/镀锡 拆选项", () => {
+    it("旋转XK3：三个根分组 + 五金件分区（无触点，电流不大不带触点），小静片等按 不电镀/镀锡 拆选项，弹簧为多选组", () => {
         const xk3 = categoryOf("旋转XK3")!;
         expect(xk3.groups.slice(0, 3).map(node => [node.kind, node.name])).toEqual([
             ["group", "PC塑料外壳"],
@@ -173,7 +173,9 @@ describe("旋转XK3 / 安全开关目录", () => {
             xk3.groups.find(node => node.name === groupName)!.items.map(item => item.name);
         expect(itemsOf("PC塑料外壳")).toHaveLength(5);
         expect(itemsOf("小静片")).toEqual(["不电镀", "镀锡"]);
-        expect(itemsOf("卡线片")).toEqual(["0.15", "0.2"]);
+        expect(itemsOf("卡线片")).toEqual(["底0.15 盖0.2", "底盖0.15", "底盖0.2"]);
+        // 弹簧多选：0.45长/短弹簧可同时勾选
+        expect(xk3.groups.find(node => node.name === "弹簧")).toMatchObject({ kind: "group", multi: true });
         expect(itemsOf("弹簧")).toEqual(["0.45长弹簧", "0.45短弹簧"]);
     });
 
