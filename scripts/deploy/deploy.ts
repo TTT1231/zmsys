@@ -1,9 +1,11 @@
 /**
  * 生产部署（docker 部署文件统一在 scripts/deploy/ 管理）。
  *
+ * 只管部署，不含数据库备份：需要先留底时单独跑 pnpm backup-database
+ * （备份依赖 DEPLOY_DB_CONTAINER 指向在线容器，栈切换中途会失败，不得阻塞部署）。
+ *
  * 服务器规格有限，构建全部在本地完成后上传，远端只做「装配式」构建
  * （依赖层命中 docker 缓存时秒级）。流程：
- *   0.（默认，--no-backup 跳过）先跑 pnpm backup-database：全量备份 + 校验，先备份后部署
  *   1. 本地构建 frontend（vite）与 backend（nest，prebuild 自动 prisma generate）产物
  *   2. 组装 staging：workspace 骨架（manifest+lockfile）+ backend 运行件（dist/prisma）
  *      + frontend dist + scripts/deploy 配置（compose/Dockerfile/nginx）
@@ -13,7 +15,7 @@
  *      admin-manage_mysql-data 数据 cp -a 到 zmsys-mysql-data，旧卷保留可回滚）→
  *      docker compose build && up -d → 健康检查（/api/health/live）
  *
- * ssh 连接频率受限：全程仅 3 次连接（备份/上传/执行各 1 次），间隔 20s；
+ * ssh 连接频率受限：全程仅 2 次连接（上传/执行各 1 次），间隔 20s；
  * 各步骤幂等，撞限流报错后稍等重跑 pnpm deploy 即可续跑。
  *
  * 数据安全：MySQL 数据在 zmsys-mysql-data 卷，重建容器/镜像不影响；
@@ -22,7 +24,7 @@
  * 前置：仓库根 .env 配好 DEPLOY_SSH_HOST（真实地址不入库）；
  * --stage-only 只做本地构建+组装（不连服务器，调试用）。
  *
- * 用法：pnpm deploy [--no-backup|--stage-only]
+ * 用法：pnpm deploy [--stage-only]
  */
 import { config } from "dotenv";
 import { execSync, spawnSync } from "node:child_process";
@@ -46,7 +48,6 @@ const DB_NAME = process.env.DEPLOY_DB_NAME ?? "zmdb";
 // CORS 白名单缺省由服务器地址派生（同域反代场景即 http://<服务器IP>）
 const CORS_ORIGINS = process.env.DEPLOY_CORS_ORIGINS ?? `http://${SSH_HOST.split("@")[1] ?? ""}`;
 const STAGE_ONLY = process.argv.includes("--stage-only");
-const SKIP_BACKUP = process.argv.includes("--no-backup");
 
 // 远端命令里的标识符仅允许白名单字符，杜绝注入面
 for (const [label, value, pattern] of [
@@ -111,13 +112,6 @@ const localMigrations = (): string[] =>
 const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
 const main = async (): Promise<void> => {
-    if (!SKIP_BACKUP && !STAGE_ONLY) {
-        console.log("[0/4] 备份生产库（pnpm backup-database，--no-backup 可跳过）");
-        run("pnpm backup-database", repoRoot);
-        console.log("      等待 20s（规避 ssh 连接频率限制）...");
-        await sleep(20000);
-    }
-
     console.log("[1/4] 本地构建 frontend + backend 产物");
     run("pnpm --filter ./apps/frontend run build", repoRoot);
     run("pnpm --filter ./apps/backend run build", repoRoot);

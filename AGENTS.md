@@ -47,8 +47,15 @@ pnpm test:db:reset            # 重置 e2e 测试库（DROP/CREATE + 迁移 + se
 pnpm test:e2e                 # 重置测试库 + 后端 e2e
 pnpm smoke                    # 后端冒烟（前置：build backend + 测试库已 reset）
 pnpm backup-database          # 备份生产库并校验（dump 拉回本地 + 还原比对对象/行数）
-pnpm deploy:prod              # 部署生产（先备份→本地构建→上传→远端装配起栈；--no-backup/--stage-only 可选）
+pnpm deploy:prod              # 部署生产（本地构建→上传→远端装配起栈；--stage-only 可选；不含备份，需留底先跑 pnpm backup-database）
 ```
+
+## 部署注意
+
+- `pnpm deploy:prod` 不内嵌备份，是否先备份按本次改动内容判断：
+  - **涉及数据库变更时必须先备份**：新增/修改了 prisma 迁移（表结构、约束、目录 seed 数据），或本次改动会直接写生产库数据；先跑 `pnpm backup-database` 再部署。
+  - **仅改前后端业务代码**（迁移文件无变化、不碰生产数据）时无需备份，直接部署。
+- 备份依赖 `.env` 的 `DEPLOY_DB_CONTAINER` 指向当前在线 db 容器；栈从 admin-manage 切到 zmsys 后应保持为 `zmsys-db-1`。
 
 ## 业务参考
 
