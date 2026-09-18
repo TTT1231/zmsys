@@ -1,6 +1,6 @@
 # 数据库表结构与一致性约束
 
-> 目标数据库：MySQL 8.0.16+ / InnoDB。可执行建表基线见 [`docs/db/mysql-8-schema.sql`](db/mysql-8-schema.sql)。本文件定义业务语义、数据库约束边界与事务规则；实现不得只参考页面或 mock。
+> 目标数据库：MySQL 8.0.16+ / InnoDB。可执行建表基线见 [`docs/mysql-8-schema.sql`](mysql-8-schema.sql)。本文件定义业务语义、数据库约束边界与事务规则；实现不得只参考页面或 mock。
 
 ## 0. 已确认的设计决策
 

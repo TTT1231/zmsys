@@ -11,7 +11,7 @@
 zmsys/
 ├── docs/
 │   ├── business/             # 业务文档
-│   ├── db-scheme.md          # 数据库设计文档
+│   ├── db-scheme.md          # 决策数据设计文档
 │   ├── mysql-8-schema.sql    # 数据库约束文档
 │   ├── openapi.yaml          # api 文档
 │   └── ai-rules/             # AI 规则

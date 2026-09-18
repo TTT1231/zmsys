@@ -1,4 +1,4 @@
-// 数据库约束的权威来源是 docs/db/mysql-8-schema.sql（基线建表脚本）。
+// 数据库约束的权威来源是 docs/mysql-8-schema.sql（基线建表脚本）。
 // Prisma 模型只负责客户端类型映射；迁移 SQL 手写，保留基线的
 // CHECK 约束、ascii_bin 字符集与 ON UPDATE 等数据库层约束。
 //
