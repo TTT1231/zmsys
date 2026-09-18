@@ -22,8 +22,8 @@ const bom = (over: Partial<Bom> = {}): Bom => ({
     name: "旋转XK2",
     modelCode: "M-100",
     items: [
-        { materialId: "3001", groupKey: "model", groupName: "型号", name: "M-100" },
-        { materialId: "3003", groupKey: "silver-wire-thickness", groupName: "银丝厚度", name: "0.2" },
+        { materialId: "3001", groupKey: "model", groupName: "型号", name: "M-100", quantity: 1 },
+        { materialId: "3003", groupKey: "silver-wire-thickness", groupName: "银丝厚度", name: "0.2", quantity: 1 },
     ],
     spec: "型号：M-100 · 银丝厚度：0.2",
     created: "2026-01-01",

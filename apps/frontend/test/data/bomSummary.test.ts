@@ -14,7 +14,13 @@ it("跌倒开关优先显示有无 CB 字的差异", () => {
             spec: "",
             items: [
                 ...detailBom.items,
-                { materialId: "tip", groupKey: "tipover-cover", groupName: "跌倒盖", name: "KW16 / 无CB字" },
+                {
+                    materialId: "tip",
+                    groupKey: "tipover-cover",
+                    groupName: "跌倒盖",
+                    name: "KW16 / 无CB字",
+                    quantity: 1,
+                },
             ],
         }),
     ).toMatch(/^跌倒盖：KW16 \/ 无CB字/);
@@ -25,8 +31,8 @@ it("同组多选不丢失，未知品类和空清单安全降级", () => {
             name: "未来品类",
             spec: "",
             items: [
-                { materialId: "a", groupKey: "a", groupName: "触点", name: "银点" },
-                { materialId: "b", groupKey: "a", groupName: "触点", name: "铜点" },
+                { materialId: "a", groupKey: "a", groupName: "触点", name: "银点", quantity: 1 },
+                { materialId: "b", groupKey: "a", groupName: "触点", name: "铜点", quantity: 1 },
             ],
         }),
     ).toBe("触点：银点、铜点");

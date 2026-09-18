@@ -16,21 +16,25 @@ interface BomSpecsGroup {
     names: string[];
 }
 
-/** 明细按建档 position 排序，相邻同名分组聚合为一行（多选组可多项）。 */
+/** 明细按建档 position 排序，相邻同名分组聚合为一行（多选组可多项）；
+ * 数量 >1 的物料名后追加 “ ×N”（与后端摘要同口径）。 */
+const displayNameOf = (item: Bom["items"][number]): string =>
+    `${item.name}${(item.quantity ?? 1) > 1 ? ` ×${item.quantity}` : ""}`;
+
 const groupItems = (items: Bom["items"]): BomSpecsGroup[] => {
     const groups: BomSpecsGroup[] = [];
     for (const item of items) {
         const last = groups.at(-1);
         if (last && last.groupKey === item.groupKey && last.groupName === item.groupName) {
-            last.names.push(item.name);
+            last.names.push(displayNameOf(item));
         } else {
-            groups.push({ groupKey: item.groupKey, groupName: item.groupName, names: [item.name] });
+            groups.push({ groupKey: item.groupKey, groupName: item.groupName, names: [displayNameOf(item)] });
         }
     }
     return groups;
 };
 
-/** 统一呈现建档冻结的物料集合：分组名 + 物料名，目录后续变更不影响此处。 */
+/** 统一呈现建档冻结的物料集合：分组名 + 物料名（含 ×N 数量），目录后续变更不影响此处。 */
 export function BomSpecs({ bom, layout = "detail", showIdentity = true, categories }: BomSpecsProps) {
     const compact = layout === "list";
     const record = layout === "record";

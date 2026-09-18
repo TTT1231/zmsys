@@ -1,4 +1,4 @@
-/* 物料目录种子与派生：3 品类树、目录序物料行、摘要拼接、编码自增 */
+/* 物料目录种子与派生：7 品类树、目录序物料行、摘要拼接、编码自增 */
 import { describe, expect, it } from "vitest";
 
 import { bomSpecOfItems, BOM_CATEGORIES, catalogRowsOf, categoryOf, nextBomCode } from "@/data/categories";
@@ -9,7 +9,7 @@ const of = (name: string, ...codes: string[]) => codes.map(code => ({ code, name
 const cat = (name: string) => categoryOf(name)!;
 
 describe("categoryOf", () => {
-    it("系统共 6 个品类：旋转XK2 / 旋转XK3 / 新微动 / 老微动 / 安全开关 / 跌倒开关", () => {
+    it("系统共 7 个品类：旋转XK2 / 旋转XK3 / 新微动 / 老微动 / 安全开关 / 跌倒开关 / 琴键开关", () => {
         expect(BOM_CATEGORIES.map(category => category.key)).toEqual([
             "rotary-switch",
             "rotary-xk3",
@@ -17,9 +17,10 @@ describe("categoryOf", () => {
             "old-micro-switch",
             "safety-switch",
             "tipover-switch",
+            "piano-key-switch",
         ]);
         expect(cat("旋转XK2").codePrefix).toBe("XK2");
-        expect(categoryOf("琴键开关")).toBeUndefined();
+        expect(categoryOf("琴键开关")!.codePrefix).toBe("KQ");
         expect(categoryOf("旋转XK3")!.codePrefix).toBe("XK3");
         expect(categoryOf("安全开关")!.codePrefix).toBe("AQ");
         expect(categoryOf("跌倒开关")!.codePrefix).toBe("KD");
@@ -103,6 +104,7 @@ describe("catalogRowsOf", () => {
             "静片",
             "静片",
             "静片",
+            "动片",
             "动片",
             "动片",
             "摆片",
@@ -213,6 +215,46 @@ describe("旋转XK3 / 安全开关目录", () => {
             "2613",
             "2614",
         ]);
+    });
+});
+
+describe("琴键开关目录", () => {
+    it("8 个单选根组按序排列；扣板/连锁片/静片/动片为数量分组（qty=true）", () => {
+        const piano = cat("琴键开关");
+        expect(piano.groups.map(node => [node.name, node.multi, node.qty])).toEqual([
+            ["琴键底", false, false],
+            ["琴键盖", false, false],
+            ["卡板", false, false],
+            ["扣板", false, true],
+            ["连锁片", false, true],
+            ["静片", false, true],
+            ["动片", false, true],
+            ["弹簧规格", false, false],
+        ]);
+        expect(piano.groups.flatMap(node => node.items)).toHaveLength(46);
+        const itemsOf = (groupName: string) =>
+            piano.groups.find(node => node.name === groupName)!.items.map(item => item.name);
+        expect(itemsOf("琴键底")).toEqual([
+            "四键焊线底",
+            "四键插线底",
+            "五键焊线底",
+            "五键插线底",
+            "小太阳四键三档底（摇头）茶色",
+            "小太阳四键三档底（摇头）灰色",
+            "小太阳四键二档底（摇头）茶色",
+            "小太阳四键二档底（摇头）灰色",
+            "冷风扇琴键底（茶色）",
+            "冷风扇琴键底（透明）大功率带触点",
+        ]);
+        expect(itemsOf("静片")).toEqual([
+            "带点静片",
+            "不带点静片",
+            "四键焊线静片",
+            "四键插线静片",
+            "五键焊线静片",
+            "五键插线静片",
+        ]);
+        expect(itemsOf("弹簧规格")).toEqual(["0.3", "0.35"]);
     });
 });
 

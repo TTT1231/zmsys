@@ -38,6 +38,8 @@ export interface BomCatalogNode {
     key: string | null;
     /** 分组选择语义：false 单选（0/1 项，换选替换）/ true 多选；分区为 null */
     multi: boolean | null;
+    /** 分组数量语义：true 时选中项可携带 1-99 数量（如扣板/静片）；分区为 null */
+    qty: boolean | null;
     /** 分区恒为空数组 */
     items: Array<{ id: string; name: string }>;
 }
@@ -60,6 +62,8 @@ export interface BomItemView {
     groupKey: string;
     groupName: string;
     name: string;
+    /** 冻结数量：qty 分组 1-99，其余恒 1 */
+    quantity: number;
 }
 
 export interface Bom {
@@ -304,6 +308,8 @@ export interface UpdateCustomerInput {
 export interface CreateBomInput {
     name: string;
     materialItemIds: string[];
+    /** 数量分组（qty=true）选中项的数量表：物料 id → 1-99 整数；缺省按 1 */
+    quantities?: Record<string, number>;
     /** 品类子选（category key）：品类标记 childCategories 时必填（跌倒开关的微动开关类型） */
     childCategory?: string;
 }

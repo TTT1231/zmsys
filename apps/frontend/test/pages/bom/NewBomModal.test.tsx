@@ -74,7 +74,16 @@ it("多选组：组头全选/清空并呈半选态；分区只折叠不提供全
             name: "演示品类",
             codePrefix: "DM",
             groups: [
-                { id: "s1", parentId: null, kind: "section", name: "五金件", key: null, multi: null, items: [] },
+                {
+                    id: "s1",
+                    parentId: null,
+                    kind: "section",
+                    name: "五金件",
+                    key: null,
+                    multi: null,
+                    qty: null,
+                    items: [],
+                },
                 {
                     id: "g1",
                     parentId: "s1",
@@ -82,6 +91,7 @@ it("多选组：组头全选/清空并呈半选态；分区只折叠不提供全
                     name: "卡板",
                     key: "cards",
                     multi: true,
+                    qty: false,
                     items: [
                         { id: "i1", name: "大卡板18mm" },
                         { id: "i2", name: "小卡板18mm" },
@@ -166,6 +176,7 @@ it("多选组折叠后显示已选数量", async () => {
                     name: "卡板",
                     key: "cards",
                     multi: true,
+                    qty: false,
                     items: [
                         { id: "i1", name: "大卡板18mm" },
                         { id: "i2", name: "小卡板18mm" },
@@ -205,6 +216,71 @@ it("目录块顺序：根分组在外壳侧在前、触点分区始终排最后�
     expect(follows(shell2, pa66)).toBe(true);
     expect(follows(pa66, hardware2)).toBe(true);
     expect(follows(hardware2, contact2)).toBe(true);
+});
+
+it("数量分组：勾选后出现步进器，右框显示 ×N，提交携带 quantities；取消勾选清数量", async () => {
+    catalogRef.current = [
+        {
+            key: "piano",
+            name: "琴键开关",
+            codePrefix: "KQ",
+            groups: [
+                {
+                    id: "2701",
+                    parentId: null,
+                    kind: "group",
+                    name: "琴键底",
+                    key: "piano-base",
+                    multi: false,
+                    qty: false,
+                    items: [{ id: "3701", name: "四键焊线底" }],
+                },
+                {
+                    id: "2706",
+                    parentId: null,
+                    kind: "group",
+                    name: "静片",
+                    key: "static-plate",
+                    multi: false,
+                    qty: true,
+                    items: [{ id: "3733", name: "带点静片" }],
+                },
+            ],
+        },
+    ];
+    const user = userEvent.setup();
+    render(<NewBomModal open onClose={vi.fn()} />);
+    await pickCategory(user, "琴键开关");
+
+    // 普通组无步进器；数量分组未勾选也不显示
+    expect(screen.queryByLabelText(/数量/)).not.toBeInTheDocument();
+    await user.click(itemCheckbox("四键焊线底"));
+    expect(screen.queryByLabelText(/数量/)).not.toBeInTheDocument();
+
+    // 勾选数量分组：步进器出现，右框显示 ×1
+    await user.click(itemCheckbox("带点静片"));
+    const right = screen.getByRole("group", { name: /已选物料（2）/ });
+    expect(within(right).getByText("×1")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "带点静片 数量加一" }));
+    await user.click(screen.getByRole("button", { name: "带点静片 数量加一" }));
+    await user.click(screen.getByRole("button", { name: "带点静片 数量减一" }));
+    const right2 = screen.getByRole("group", { name: /已选物料（2）/ });
+    expect(within(right2).getByText("×2")).toBeInTheDocument();
+
+    // 提交：仅数量分组携带 quantities
+    await user.click(screen.getByRole("button", { name: "保存 BOM" }));
+    expect(mutate).toHaveBeenCalledWith(
+        { name: "琴键开关", materialItemIds: ["3701", "3733"], quantities: { "3733": 2 } },
+        expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+
+    // 折叠后组头显示 已选 · ×N；取消勾选清掉数量
+    await user.click(screen.getByRole("button", { name: "折叠静片" }));
+    expect(screen.getByText("已选 · ×2")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "展开静片" }));
+    await user.click(itemCheckbox("带点静片"));
+    const right3 = screen.getByRole("group", { name: /已选物料（1）/ });
+    expect(within(right3).queryByText(/×\d/)).not.toBeInTheDocument();
 });
 
 it("空集合提交被拦截；选中后提交携带物料 id 集合", async () => {

@@ -17,9 +17,9 @@ const rotaryBom: Bom = {
     created: "2026-09-13",
     unit: "个",
     items: [
-        { materialId: "3001", groupKey: "model", groupName: "型号", name: "1-1" },
-        { materialId: "3003", groupKey: "silver-wire-thickness", groupName: "银丝厚度", name: "0.2" },
-        { materialId: "3006", groupKey: "face-a", groupName: "A面", name: "A面银点" },
+        { materialId: "3001", groupKey: "model", groupName: "型号", name: "1-1", quantity: 1 },
+        { materialId: "3003", groupKey: "silver-wire-thickness", groupName: "银丝厚度", name: "0.2", quantity: 1 },
+        { materialId: "3006", groupKey: "face-a", groupName: "A面", name: "A面银点", quantity: 1 },
     ],
 };
 
@@ -31,9 +31,9 @@ const microBom: Bom = {
     created: "2026-09-13",
     unit: "个",
     items: [
-        { materialId: "3101", groupKey: "base", groupName: "底座", name: "二脚底座（无挡脚）" },
-        { materialId: "3103", groupKey: "cover", groupName: "盖子", name: "盖子" },
-        { materialId: "3109", groupKey: "button", groupName: "按钮", name: "8.5mm" },
+        { materialId: "3101", groupKey: "base", groupName: "底座", name: "二脚底座（无挡脚）", quantity: 1 },
+        { materialId: "3103", groupKey: "cover", groupName: "盖子", name: "盖子", quantity: 1 },
+        { materialId: "3109", groupKey: "button", groupName: "按钮", name: "8.5mm", quantity: 1 },
     ],
 };
 
@@ -70,8 +70,8 @@ it("多选组同名分组的物料以顿号连接", () => {
     const multi: Bom = {
         ...microBom,
         items: [
-            { materialId: "1", groupKey: "cards", groupName: "卡板", name: "大卡板18mm" },
-            { materialId: "2", groupKey: "cards", groupName: "卡板", name: "短卡板16mm" },
+            { materialId: "1", groupKey: "cards", groupName: "卡板", name: "大卡板18mm", quantity: 1 },
+            { materialId: "2", groupKey: "cards", groupName: "卡板", name: "短卡板16mm", quantity: 1 },
         ],
     };
     const { container } = render(<BomSpecs bom={multi} />);
@@ -90,8 +90,14 @@ it("跌倒开关按新建目录分为本体和老微动，详情和行内展开�
         ...microBom,
         name: "跌倒开关",
         items: [
-            { materialId: "3601", groupKey: "tipover-cover", groupName: "跌倒盖", name: "跌倒盖KW16 / 有CB字" },
-            { materialId: "3201", groupKey: "base", groupName: "底座", name: "带CB" },
+            {
+                materialId: "3601",
+                groupKey: "tipover-cover",
+                groupName: "跌倒盖",
+                name: "跌倒盖KW16 / 有CB字",
+                quantity: 1,
+            },
+            { materialId: "3201", groupKey: "base", groupName: "底座", name: "带CB", quantity: 1 },
         ],
     };
     const { rerender } = render(<BomSpecs bom={bom} categories={BOM_CATEGORIES} />);

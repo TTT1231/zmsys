@@ -8,6 +8,7 @@ const SUMMARY_GROUPS: Record<string, string[]> = {
     老微动: ["base", "button", "contact-kind"],
     安全开关: ["pc-shell", "contact-kind", "contact-size"],
     跌倒开关: ["tipover-cover", "base", "button"],
+    琴键开关: ["piano-base", "piano-cover", "clamp-plate"],
 };
 
 export function bomSummary(bom: Pick<Bom, "name" | "items" | "spec">): string {
@@ -18,7 +19,9 @@ export function bomSummary(bom: Pick<Bom, "name" | "items" | "spec">): string {
     const summary = keys
         .map(key => {
             const group = items.filter(item => item.groupKey === key);
-            return `${group[0].groupName}：${group.map(item => item.name).join("、")}`;
+            const nameOf = (item: (typeof items)[number]) =>
+                `${item.name}${(item.quantity ?? 1) > 1 ? ` ×${item.quantity}` : ""}`;
+            return `${group[0].groupName}：${group.map(nameOf).join("、")}`;
         })
         .join(" · ");
     return summary || bom.spec?.trim() || "暂无物料信息";

@@ -10,11 +10,11 @@ export const detailBom: Bom = {
     unit: "个",
     created: "2026-09-13",
     items: [
-        { materialId: "3101", groupKey: "base", groupName: "底座", name: "二脚底座（无挡脚）" },
-        { materialId: "3103", groupKey: "cover", groupName: "盖子", name: "盖子" },
-        { materialId: "3109", groupKey: "button", groupName: "按钮", name: "8.5mm" },
-        { materialId: "3112", groupKey: "bracket", groupName: "支架", name: "6.3支架：铜镀银" },
-        { materialId: "3117", groupKey: "static-plate", groupName: "静片", name: "6.3静片：铜镀银" },
+        { materialId: "3101", groupKey: "base", groupName: "底座", name: "二脚底座（无挡脚）", quantity: 1 },
+        { materialId: "3103", groupKey: "cover", groupName: "盖子", name: "盖子", quantity: 1 },
+        { materialId: "3109", groupKey: "button", groupName: "按钮", name: "8.5mm", quantity: 1 },
+        { materialId: "3112", groupKey: "bracket", groupName: "支架", name: "6.3支架：铜镀银", quantity: 1 },
+        { materialId: "3117", groupKey: "static-plate", groupName: "静片", name: "6.3静片：铜镀银", quantity: 1 },
     ],
 };
 export const detailOrder: Order = {

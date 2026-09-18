@@ -1,10 +1,11 @@
 /* 开发期 BOM 物料目录种子：真实后端以 material_group/material_item 表 +
  * GET /bom-categories 为权威来源。mock 用本文件播种接口；前端不得把这里的值
  * 当成绕过服务端校验的依据。
- * - 编码规则：品类前缀 + 序号（宽度见 seqWidth，默认 3 位），如 XK2001（旋转XK2）、KWO001（老微动）、KW001（新微动）。
+ * - 编码规则：品类前缀 + 序号（宽度见 seqWidth，默认 3 位），如 XK2001（旋转XK2）、KWO001（老微动）、KW001（新微动）、KQ001（琴键开关）。
  * - 目录为“分区 → 分组 → 物料”树：分区纯展示；分组带 key 与单选/多选语义；
+ *   qty 分组（如琴键开关的扣板/连锁片/静片/动片）选中项可携带 1-99 数量；
  *   所有组皆可不选（客户决定要不要 A 面这类项），整份 BOM 至少选 1 项。
- * - 系统共 6 品类：旋转XK2 / 旋转XK3 / 新微动 / 老微动 / 安全开关 / 跌倒开关。
+ * - 系统共 7 品类：旋转XK2 / 旋转XK3 / 新微动 / 老微动 / 安全开关 / 跌倒开关 / 琴键开关。
  * - 跌倒开关为嵌套档：建档必须额外选择一个新微动/老微动 BOM 作为子件（childCategories 标记）。 */
 import type { BomCatalogNode, BomCategory } from "@/api";
 
@@ -24,6 +25,7 @@ const group = (
     name,
     key,
     multi: false,
+    qty: false,
     items: items.map(([itemId, itemName]) => ({ id: itemId, name: itemName })),
 });
 
@@ -34,6 +36,7 @@ const section = (id: string, name: string): BomCatalogNode => ({
     name,
     key: null,
     multi: null,
+    qty: null,
     items: [],
 });
 
@@ -46,6 +49,18 @@ const multiGroup = (
 ): BomCatalogNode => ({
     ...group(id, name, key, parentId, items),
     multi: true,
+});
+
+/* 数量分组：单选 + 勾选后可选数量（1-99 步进器） */
+const qtyGroup = (
+    id: string,
+    name: string,
+    key: string,
+    parentId: string | null,
+    items: Array<[string, string]>,
+): BomCatalogNode => ({
+    ...group(id, name, key, parentId, items),
+    qty: true,
 });
 
 export const BOM_CATEGORIES: CategoryDef[] = [
@@ -244,6 +259,7 @@ export const BOM_CATEGORIES: CategoryDef[] = [
             group("2116", "动片", "moving-plate", "2102", [
                 ["3122", "铜镀银"],
                 ["3123", "镀锡"],
+                ["3138", "铜镀锡"],
             ]),
             group("2117", "摆片", "swing-plate", "2102", [
                 ["3124", "铜镀银摆片"],
@@ -385,6 +401,76 @@ export const BOM_CATEGORIES: CategoryDef[] = [
             group("2602", "跌倒底", "tipover-base", null, [["3604", "跌倒底"]]),
             group("2603", "钢球", "steel-ball", null, [["3605", "18mm钢球"]]),
             group("2604", "翘板", "rocker", null, [["3606", "翘板"]]),
+        ],
+    },
+
+    {
+        key: "piano-key-switch",
+        name: "琴键开关",
+        codePrefix: "KQ",
+        groups: [
+            group("2701", "琴键底", "piano-base", null, [
+                ["3701", "四键焊线底"],
+                ["3702", "四键插线底"],
+                ["3703", "五键焊线底"],
+                ["3704", "五键插线底"],
+                ["3705", "小太阳四键三档底（摇头）茶色"],
+                ["3706", "小太阳四键三档底（摇头）灰色"],
+                ["3707", "小太阳四键二档底（摇头）茶色"],
+                ["3708", "小太阳四键二档底（摇头）灰色"],
+                ["3709", "冷风扇琴键底（茶色）"],
+                ["3710", "冷风扇琴键底（透明）大功率带触点"],
+            ]),
+            group("2702", "琴键盖", "piano-cover", null, [
+                ["3711", "四键焊线盖"],
+                ["3712", "四键插线盖"],
+                ["3713", "五键焊线盖"],
+                ["3714", "五键插线盖"],
+                ["3715", "小太阳四键三档盖（摇头）茶色"],
+                ["3716", "小太阳四键三档盖（摇头）灰色"],
+                ["3717", "小太阳四键二档盖（摇头）茶色"],
+                ["3718", "小太阳四键二档盖（摇头）灰色"],
+                ["3719", "冷风扇琴键盖（茶色）"],
+            ]),
+            group("2703", "卡板", "clamp-plate", null, [
+                ["3720", "大卡板18mm"],
+                ["3721", "小卡板18mm"],
+                ["3722", "短卡板16mm"],
+                ["3723", "小太阳小卡板18mm"],
+                ["3724", "小太阳短卡板16mm"],
+                ["3725", "冷风扇小卡板18mm"],
+                ["3726", "冷风扇大卡板18mm"],
+            ]),
+            qtyGroup("2704", "扣板", "buckle-plate", null, [
+                ["3727", "扣板"],
+                ["3728", "四键扣板"],
+                ["3729", "五键扣板"],
+            ]),
+            qtyGroup("2705", "连锁片", "interlock-tab", null, [
+                ["3730", "连锁片"],
+                ["3731", "四键连锁片"],
+                ["3732", "五键连锁片"],
+            ]),
+            qtyGroup("2706", "静片", "static-plate", null, [
+                ["3733", "带点静片"],
+                ["3734", "不带点静片"],
+                ["3735", "四键焊线静片"],
+                ["3736", "四键插线静片"],
+                ["3737", "五键焊线静片"],
+                ["3738", "五键插线静片"],
+            ]),
+            qtyGroup("2707", "动片", "moving-plate", null, [
+                ["3739", "带点动片"],
+                ["3740", "不带点动片"],
+                ["3741", "辅助动片"],
+                ["3742", "四键插线动片"],
+                ["3743", "五键焊线动片"],
+                ["3744", "五键插线动片"],
+            ]),
+            group("2708", "弹簧规格", "spring-spec", null, [
+                ["3745", "0.3"],
+                ["3746", "0.35"],
+            ]),
         ],
     },
 ];

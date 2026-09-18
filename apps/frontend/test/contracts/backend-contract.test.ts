@@ -39,9 +39,8 @@ describe("mysql backend baseline", () => {
                 node.items.forEach(item => expect(sql).toContain(`(${item.id}, ${node.id}, '${item.name}'`));
             });
         });
-        // 预生成组合模式已移除：XK3 / 琴键开关 与 spec_schema 不再落库
+        // 预生成组合模式已移除：XK3 与 spec_schema 不再落库
         expect(sql).not.toContain("'xk3'");
-        expect(sql).not.toContain("'piano-key-switch'");
         expect(sql).not.toContain("spec_schema");
     });
 

@@ -2,8 +2,8 @@
 import { expect, it } from "vitest";
 import { bomComposition } from "@/data/bomComposition";
 import { BOM_CATEGORIES } from "@/data/categories";
-const body = { materialId: "3601", groupKey: "tipover-cover", groupName: "跌倒盖", name: "KW16 / 有CB字" };
-const oldMicro = { materialId: "3201", groupKey: "base", groupName: "底座", name: "历史名称保持原样" };
+const body = { materialId: "3601", groupKey: "tipover-cover", groupName: "跌倒盖", name: "KW16 / 有CB字", quantity: 1 };
+const oldMicro = { materialId: "3201", groupKey: "base", groupName: "底座", name: "历史名称保持原样", quantity: 1 };
 it("跌倒本体与老微动分组，与新建时选择的目录一致", () => {
     const result = bomComposition({ name: "跌倒开关", items: [body, oldMicro] }, BOM_CATEGORIES);
     expect(result.series).toBe("老微动");

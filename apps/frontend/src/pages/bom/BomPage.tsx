@@ -166,6 +166,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
     const toast = useToast();
     const [name, setName] = useState("");
     const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+    const [quantities, setQuantities] = useState<Record<string, number>>({});
     const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
     const [childCategoryKey, setChildCategoryKey] = useState("");
     const [pendingChange, setPendingChange] = useState<{ kind: "category" | "child"; value: string } | null>(null);
@@ -184,6 +185,18 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
         return rows;
     }, [category, childCategory]);
     const selectedRows = useMemo(() => catalogRows.filter(row => selectedIds.has(row.id)), [catalogRows, selectedIds]);
+    /* 数量分组（qty=true）的物料 id 集：这些行在建档时携带 1-99 数量 */
+    const qtyItemIds = useMemo(() => {
+        const ids = new Set<string>();
+        for (const catalog of [category, childCategory]) {
+            for (const node of catalog?.groups ?? []) {
+                if (node.kind === "group" && node.qty) {
+                    node.items.forEach(item => ids.add(item.id));
+                }
+            }
+        }
+        return ids;
+    }, [category, childCategory]);
     /* 右框按组分节：组名只出现一次，行内纯物料名（同名物料跨组时的消歧靠小节标题） */
     const selectedSections = useMemo(() => {
         const sections: Array<{ groupName: string; rows: typeof selectedRows }> = [];
@@ -201,6 +214,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
     const pickCategory = (next: string) => {
         setName(next);
         setSelectedIds(new Set());
+        setQuantities({});
         setCollapsed(new Set());
         setChildCategoryKey("");
         setErrors({});
@@ -209,11 +223,13 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
     const pickChildCategory = (key: string) => {
         setChildCategoryKey(key);
         setSelectedIds(new Set());
+        setQuantities({});
         setCollapsed(new Set());
         setErrors({});
     };
 
-    /* 单选组：换选替换旧项、可再点取消；多选组：自由勾选 */
+    /* 单选组：换选替换旧项、可再点取消；多选组：自由勾选；
+     * 数量分组勾选时初始化数量为 1，取消时清掉数量 */
     const toggleItem = (node: BomCatalogNode, itemId: string) => {
         setSelectedIds(current => {
             const wasSelected = current.has(itemId);
@@ -228,7 +244,37 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
             next.add(itemId);
             return next;
         });
+        setQuantities(current => {
+            const next = { ...current };
+            if (node.qty && !(itemId in next)) {
+                next[itemId] = 1;
+            } else {
+                delete next[itemId];
+            }
+            return next;
+        });
         setErrors(current => ({ ...current, materials: "" }));
+    };
+
+    /* 数量分组步进器：1-99 与后端校验同口径 */
+    const changeQty = (itemId: string, delta: number) => {
+        setQuantities(current => ({
+            ...current,
+            [itemId]: Math.min(99, Math.max(1, (current[itemId] ?? 1) + delta)),
+        }));
+    };
+
+    const removeSelected = (itemId: string) => {
+        setSelectedIds(current => {
+            const next = new Set(current);
+            next.delete(itemId);
+            return next;
+        });
+        setQuantities(current => {
+            const next = { ...current };
+            delete next[itemId];
+            return next;
+        });
     };
 
     /* 仅多选组提供全选/清空（半选态由选中数量推断渲染） */
@@ -269,10 +315,18 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
         if (selectedIds.size === 0) nextErrors.materials = "请至少选择一项物料";
         setErrors(nextErrors);
         if (Object.keys(nextErrors).length > 0) return;
+        /* 仅数量分组的选中项携带数量；普通分组恒 1（后端同口径） */
+        const quantitiesPayload: Record<string, number> = {};
+        for (const id of selectedIds) {
+            if (qtyItemIds.has(id)) {
+                quantitiesPayload[id] = quantities[id] ?? 1;
+            }
+        }
         createBom.mutate(
             {
                 name,
                 materialItemIds: [...selectedIds],
+                ...(Object.keys(quantitiesPayload).length > 0 ? { quantities: quantitiesPayload } : {}),
                 ...(childCategory ? { childCategory: childCategory.key } : {}),
             },
             {
@@ -290,6 +344,8 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
         const selectedCount = node.items.filter(item => selectedIds.has(item.id)).length;
         const allSelected = node.items.length > 0 && selectedCount === node.items.length;
         const nodeCollapsed = collapsed.has(node.id);
+        const selectedQtyItem = node.qty ? node.items.find(item => selectedIds.has(item.id)) : undefined;
+        const selectedQty = selectedQtyItem ? (quantities[selectedQtyItem.id] ?? 1) : 1;
         return (
             <div key={node.id} className="rounded-btn border border-line bg-panel/60">
                 <div className="flex min-h-9 items-center gap-1.5 px-2.5 py-1.5">
@@ -311,7 +367,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                     </button>
                     {nodeCollapsed && selectedCount > 0 && (
                         <span className="tnum shrink-0 rounded-full bg-primary-soft px-1.5 py-0.5 text-10.5 font-medium text-primary-strong">
-                            {node.multi ? `已选 ${selectedCount}` : "已选"}
+                            {node.multi ? `已选 ${selectedCount}` : node.qty ? `已选 · ×${selectedQty}` : "已选"}
                         </span>
                     )}
                     {node.multi && node.items.length > 0 && (
@@ -326,7 +382,14 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                             onChange={() => toggleGroupAll(node)}
                         />
                     )}
-                    {!node.multi && <span className="shrink-0 text-11 text-subtle">单选</span>}
+                    {!node.multi &&
+                        (node.qty ? (
+                            <span className="shrink-0 rounded-full border border-[#fed7aa] bg-[#fff7ed] px-1.5 py-0.5 text-10.5 font-medium text-[#9a3412]">
+                                单选
+                            </span>
+                        ) : (
+                            <span className="shrink-0 text-11 text-subtle">单选</span>
+                        ))}
                 </div>
                 {!nodeCollapsed &&
                     (node.items.length === 0 ? (
@@ -335,15 +398,40 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                         <ul className="border-t border-line">
                             {node.items.map(item => (
                                 <li key={item.id}>
-                                    <label className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 transition hover:bg-row-hover">
-                                        <input
-                                            type="checkbox"
-                                            className="accent-primary"
-                                            checked={selectedIds.has(item.id)}
-                                            onChange={() => toggleItem(node, item.id)}
-                                        />
-                                        <span className="text-13 text-td wrap-anywhere">{item.name}</span>
-                                    </label>
+                                    <div className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 transition hover:bg-row-hover">
+                                        <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5">
+                                            <input
+                                                type="checkbox"
+                                                className="accent-primary"
+                                                checked={selectedIds.has(item.id)}
+                                                onChange={() => toggleItem(node, item.id)}
+                                            />
+                                            <span className="text-13 text-td wrap-anywhere">{item.name}</span>
+                                        </label>
+                                        {node.qty && selectedIds.has(item.id) && (
+                                            <div className="flex shrink-0 items-center gap-0.5">
+                                                <button
+                                                    type="button"
+                                                    aria-label={`${item.name} 数量减一`}
+                                                    onClick={() => changeQty(item.id, -1)}
+                                                    className="grid size-5 place-items-center rounded-md border border-line-strong bg-white text-13 leading-none text-td transition hover:border-primary-border hover:bg-primary-soft hover:text-primary"
+                                                >
+                                                    −
+                                                </button>
+                                                <span className="tnum min-w-6 text-center text-12.5 font-semibold text-td">
+                                                    ×{quantities[item.id] ?? 1}
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    aria-label={`${item.name} 数量加一`}
+                                                    onClick={() => changeQty(item.id, 1)}
+                                                    className="grid size-5 place-items-center rounded-md border border-line-strong bg-white text-13 leading-none text-td transition hover:border-primary-border hover:bg-primary-soft hover:text-primary"
+                                                >
+                                                    +
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </li>
                             ))}
                         </ul>
@@ -568,16 +656,15 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                                                 <span className="min-w-0 flex-1 text-13 text-td wrap-anywhere">
                                                                     {row.name}
                                                                 </span>
+                                                                {qtyItemIds.has(row.id) && (
+                                                                    <span className="tnum shrink-0 rounded-md bg-primary-soft px-2 py-0.5 text-12 font-semibold text-primary-strong">
+                                                                        ×{quantities[row.id] ?? 1}
+                                                                    </span>
+                                                                )}
                                                                 <button
                                                                     type="button"
                                                                     aria-label={`移除 ${row.name}`}
-                                                                    onClick={() => {
-                                                                        setSelectedIds(current => {
-                                                                            const next = new Set(current);
-                                                                            next.delete(row.id);
-                                                                            return next;
-                                                                        });
-                                                                    }}
+                                                                    onClick={() => removeSelected(row.id)}
                                                                     className="grid size-6 shrink-0 place-items-center rounded-md text-16 font-medium text-subtle transition hover:bg-danger/10 hover:text-danger"
                                                                 >
                                                                     ×
