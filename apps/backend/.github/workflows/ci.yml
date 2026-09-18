@@ -1,0 +1,68 @@
+name: ci
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+
+jobs:
+    verify:
+        runs-on: ubuntu-latest
+
+        services:
+            mysql:
+                image: mysql:8.0
+                env:
+                    MYSQL_ROOT_PASSWORD: root
+                    MYSQL_DATABASE: zmdb_test
+                ports:
+                    - '3306:3306'
+                options: >-
+                    --health-cmd "mysqladmin ping -h 127.0.0.1 -proot"
+                    --health-interval 5s
+                    --health-timeout 5s
+                    --health-retries 20
+
+        env:
+            NODE_ENV: test
+            DB_HOST: 127.0.0.1
+            DB_PORT: '3306'
+            DB_USERNAME: root
+            DB_PASSWORD: root
+            DB_DATABASE: zmdb_test
+            JWT_SECRET: ci-only-secret-0123456789abcdef0123456789abcdef
+            SNOWFLAKE_WORKER_ID: '1'
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: pnpm/action-setup@v4
+              with:
+                  version: 11.4.0
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+                  cache: pnpm
+
+            - name: Install（postinstall 自动生成 Prisma Client）
+              run: pnpm install --frozen-lockfile
+
+            - name: Lint
+              run: pnpm lint
+
+            - name: Typecheck
+              run: pnpm typecheck
+
+            - name: Unit tests
+              run: pnpm test
+
+            - name: Build
+              run: pnpm build
+
+            # e2e 内含测试库重置：空库全量迁移 + seed（兼作“全新 clone 可构建/迁移可重放”证明）
+            - name: E2E（真实 MySQL 8 测试库）
+              run: pnpm test:e2e
+
+            - name: Smoke（真实进程 + 优雅停机）
+              run: pnpm smoke
