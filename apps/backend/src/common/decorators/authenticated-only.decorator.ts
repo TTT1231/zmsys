@@ -1,5 +1,5 @@
-import { SetMetadata } from '@nestjs/common';
-import { AUTH_ONLY_KEY } from '../../constants';
+import { SetMetadata } from "@nestjs/common";
+import { AUTH_ONLY_KEY } from "../../constants";
 
 /**
  * 声明“仅需登录、不校验权限码”。每个端点必须显式三选一：

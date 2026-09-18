@@ -1,6 +1,6 @@
-import { ConflictException } from '@nestjs/common';
-import { Prisma } from '../generated/prisma/client';
-import type { Tx } from '../prisma/transaction.runner';
+import { ConflictException } from "@nestjs/common";
+import { Prisma } from "../generated/prisma/client";
+import type { Tx } from "../prisma/transaction.runner";
 
 /**
  * 行锁与乐观锁助手（db-scheme.md §2）：所有多行锁流程按固定顺序取锁，
@@ -9,13 +9,13 @@ import type { Tx } from '../prisma/transaction.runner';
 
 /** 允许按 id 行锁的业务表（raw SQL 表名无法参数化，封闭白名单防注入） */
 const LOCKABLE_TABLES = [
-    'sys_user',
-    'custom_table',
-    'bom_table',
-    'sales_order_table',
-    'inbound_ledger',
-    'outbound_shipment',
-    'stock_adjustment',
+    "sys_user",
+    "custom_table",
+    "bom_table",
+    "sales_order_table",
+    "inbound_ledger",
+    "outbound_shipment",
+    "stock_adjustment",
 ] as const;
 
 export type LockableTable = (typeof LOCKABLE_TABLES)[number];
@@ -37,7 +37,7 @@ export async function lockRowsById(tx: Tx, table: LockableTable, ids: readonly b
  * 乐观锁结果检查：`WHERE id=? AND row_version=?` 的 updateMany 受影响 0 行
  * 说明版本已被并发修改（或行不存在），一律 409 让客户端刷新后重试。
  */
-export function ensureUpdated(count: number, message = '数据已被他人修改，请刷新后重试'): void {
+export function ensureUpdated(count: number, message = "数据已被他人修改，请刷新后重试"): void {
     if (count === 0) {
         throw new ConflictException(message);
     }

@@ -1,15 +1,15 @@
-import { Controller, Get } from '@nestjs/common';
-import { BomsService } from './boms.service';
-import { Permissions } from '../common/decorators/permissions.decorator';
-import { PERMISSIONS } from '../constants';
+import { Controller, Get } from "@nestjs/common";
+import { BomsService } from "./boms.service";
+import { Permissions } from "../common/decorators/permissions.decorator";
+import { PERMISSIONS } from "../constants";
 
 /** BOM 库存余量聚合（openapi boms tag）：bomCode → 当前余量，口径同 v_bom_stock */
-@Controller('bom-stocks')
+@Controller("bom-stocks")
 export class BomStocksController {
     constructor(private readonly bomsService: BomsService) {}
 
     @Get()
-    @Permissions([PERMISSIONS.BOM_VIEW], '无权查看 BOM 库存')
+    @Permissions([PERMISSIONS.BOM_VIEW], "无权查看 BOM 库存")
     async listStocks(): Promise<Record<string, number>> {
         return this.bomsService.listStocks();
     }

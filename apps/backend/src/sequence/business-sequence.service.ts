@@ -1,18 +1,18 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import type { Tx } from '../prisma/transaction.runner';
+import { Injectable } from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service";
+import type { Tx } from "../prisma/transaction.runner";
 
 /**
  * 契约编码格式（db-scheme.md §1.3）：“至少 N 位”表示序号超过显示宽度后
  * 继续增长，不截断、不回绕。
  */
-export type SequenceType = 'order' | 'inbound' | 'outbound' | 'adjust' | 'customer';
+export type SequenceType = "order" | "inbound" | "outbound" | "adjust" | "customer";
 
 interface SequenceFormat {
     /** 单号前缀 */
     prefix: string;
     /** 日期段格式；null 表示全局计数 */
-    datePattern: 'yyMMdd' | 'yyyyMMdd' | null;
+    datePattern: "yyMMdd" | "yyyyMMdd" | null;
     /** 序号显示宽度下限 */
     minWidth: number;
     /** 日期段与序号之间的连接符（库存调整单 TZ-yyyyMMdd-0001，其余为空） */
@@ -20,11 +20,11 @@ interface SequenceFormat {
 }
 
 const FORMATS: Record<SequenceType, SequenceFormat> = {
-    order: { prefix: 'ZM', datePattern: 'yyMMdd', minWidth: 3 },
-    inbound: { prefix: 'RK', datePattern: 'yyMMdd', minWidth: 2 },
-    outbound: { prefix: 'CK', datePattern: 'yyMMdd', minWidth: 2 },
-    adjust: { prefix: 'TZ-', datePattern: 'yyyyMMdd', minWidth: 4, dateJoiner: '-' },
-    customer: { prefix: 'CUS-', datePattern: null, minWidth: 4 },
+    order: { prefix: "ZM", datePattern: "yyMMdd", minWidth: 3 },
+    inbound: { prefix: "RK", datePattern: "yyMMdd", minWidth: 2 },
+    outbound: { prefix: "CK", datePattern: "yyMMdd", minWidth: 2 },
+    adjust: { prefix: "TZ-", datePattern: "yyyyMMdd", minWidth: 4, dateJoiner: "-" },
+    customer: { prefix: "CUS-", datePattern: null, minWidth: 4 },
 };
 
 /** BOM 编码取号所需的品类元数据（db-scheme.md §1.3：品类前缀 + 至少 seqWidth 位序号） */
@@ -35,13 +35,13 @@ export interface BomSequenceCategory {
 }
 
 /** 业务日期（yyyy-MM-dd）→ 日期段字符串 */
-const datePartOf = (pattern: 'yyMMdd' | 'yyyyMMdd', businessDate: string): string => {
+const datePartOf = (pattern: "yyMMdd" | "yyyyMMdd", businessDate: string): string => {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(businessDate);
     if (!match) {
         throw new Error(`业务日期格式须为 yyyy-MM-dd，当前为 ${businessDate}`);
     }
     const [, year, month, day] = match;
-    return pattern === 'yyMMdd' ? `${year.slice(2)}${month}${day}` : `${year}${month}${day}`;
+    return pattern === "yyMMdd" ? `${year.slice(2)}${month}${day}` : `${year}${month}${day}`;
 };
 
 /**
@@ -62,11 +62,11 @@ export class BusinessSequenceService {
     async nextCode(tx: Tx, type: SequenceType, businessDate: string): Promise<string> {
         const format = FORMATS[type];
         const datePart = format.datePattern ? datePartOf(format.datePattern, businessDate) : null;
-        const sequenceKey = `${type}:${datePart ?? 'global'}`;
+        const sequenceKey = `${type}:${datePart ?? "global"}`;
         const seq = await this.nextRaw(tx, sequenceKey);
-        return `${format.prefix}${datePart ?? ''}${datePart ? (format.dateJoiner ?? '') : ''}${seq
+        return `${format.prefix}${datePart ?? ""}${datePart ? (format.dateJoiner ?? "") : ""}${seq
             .toString()
-            .padStart(format.minWidth, '0')}`;
+            .padStart(format.minWidth, "0")}`;
     }
 
     /**
@@ -87,7 +87,7 @@ export class BusinessSequenceService {
             WHERE bc.category_key = ${category.categoryKey}
         `;
         const seq = await this.nextRaw(tx, sequenceKey);
-        return `${category.codePrefix}${seq.toString().padStart(category.seqWidth, '0')}`;
+        return `${category.codePrefix}${seq.toString().padStart(category.seqWidth, "0")}`;
     }
 
     /**

@@ -1,5 +1,5 @@
-import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
-import { map, Observable } from 'rxjs';
+import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from "@nestjs/common";
+import { map, Observable } from "rxjs";
 
 export interface ResponseEnvelope<T> {
     code: number;
@@ -16,14 +16,14 @@ const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
 const MIN_SAFE = -MAX_SAFE;
 
 const normalize = (value: unknown): unknown => {
-    if (typeof value === 'bigint') {
+    if (typeof value === "bigint") {
         return value >= MIN_SAFE && value <= MAX_SAFE ? Number(value) : value.toString();
     }
     if (Array.isArray(value)) {
         return value.map(normalize);
     }
     // Date 交由序列化层输出 ISO（契约 date-time）；TypedArray/Buffer（Bytes 列）不进响应，原样放行
-    if (value !== null && typeof value === 'object' && !(value instanceof Date) && !ArrayBuffer.isView(value)) {
+    if (value !== null && typeof value === "object" && !(value instanceof Date) && !ArrayBuffer.isView(value)) {
         return Object.fromEntries(
             Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, normalize(item)]),
         );
@@ -35,6 +35,6 @@ const normalize = (value: unknown): unknown => {
 @Injectable()
 export class TransformInterceptor<T> implements NestInterceptor<T, ResponseEnvelope<T>> {
     intercept(_context: ExecutionContext, next: CallHandler<T>): Observable<ResponseEnvelope<T>> {
-        return next.handle().pipe(map(data => ({ code: 0, data: normalize(data ?? null) as T, message: 'ok' })));
+        return next.handle().pipe(map(data => ({ code: 0, data: normalize(data ?? null) as T, message: "ok" })));
     }
 }

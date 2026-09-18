@@ -1,7 +1,7 @@
-import type { RoleCode } from '../constants';
+import type { RoleCode } from "../constants";
 
 /** RoleGrant / WbUser 为 auth 与 roles 共用的契约类型，已迁至 access-control 共享层 */
-export type { RoleGrant, WbUser } from '../access-control/types';
+export type { RoleGrant, WbUser } from "../access-control/types";
 
 /** GET /roles 条目 */
 export interface RoleDef {
@@ -10,7 +10,7 @@ export interface RoleDef {
     locked?: boolean;
 }
 
-export type GrantMap = Record<RoleCode, import('../access-control/types').RoleGrant>;
+export type GrantMap = Record<RoleCode, import("../access-control/types").RoleGrant>;
 
 /** GET /roles/grants/log 条目 */
 export interface GrantLogEntry {

@@ -1,5 +1,5 @@
-import { Transform, Type } from 'class-transformer';
-import { IsArray, IsInt, IsObject, IsOptional, IsString, Length, Min, ValidateNested } from 'class-validator';
+import { Transform, Type } from "class-transformer";
+import { IsArray, IsInt, IsObject, IsOptional, IsString, Length, Min, ValidateNested } from "class-validator";
 
 /** 与 openapi RoleGrant 对应；version 字段仅回显用途，保存以 expectedVersion 为准 */
 export class RoleGrantDto {
@@ -25,7 +25,7 @@ export class SaveRoleGrantDto {
     @Min(1)
     expectedVersion!: number;
 
-    @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+    @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
     @IsOptional()
     @IsString()
     @Length(0, 500)

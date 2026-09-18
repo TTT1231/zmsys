@@ -1,25 +1,25 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '../generated/prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
-import { TransactionRunner } from '../prisma/transaction.runner';
-import type { Tx } from '../prisma/transaction.runner';
-import { SnowflakeGenerator } from '../common/snowflake';
-import { IdempotencyService } from '../idempotency/idempotency.service';
-import { formatDateColumn, formatBeijingStamp, toDateColumn } from '../common/datetime';
-import { beijingDayWindow } from '../common/beijing-day';
-import { lockRowsById } from '../domain/concurrency';
-import { getStockQty } from '../domain/inventory';
-import { BusinessSequenceService } from '../sequence/business-sequence.service';
-import type { AuthUser } from '../common/types/auth-user';
-import type { InboundLedger, StockAdjustment } from '../generated/prisma/client';
-import type { InboundRow, StockAdjustmentRow } from './types';
-import type { CreateInboundDto } from './dto/create-inbound.dto';
-import type { UpdateInboundDto } from './dto/update-inbound.dto';
-import type { CreateStockAdjustmentDto } from './dto/create-stock-adjustment.dto';
+import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma } from "../generated/prisma/client";
+import { PrismaService } from "../prisma/prisma.service";
+import { TransactionRunner } from "../prisma/transaction.runner";
+import type { Tx } from "../prisma/transaction.runner";
+import { SnowflakeGenerator } from "../common/snowflake";
+import { IdempotencyService } from "../idempotency/idempotency.service";
+import { formatDateColumn, formatBeijingStamp, toDateColumn } from "../common/datetime";
+import { beijingDayWindow } from "../common/beijing-day";
+import { lockRowsById } from "../domain/concurrency";
+import { getStockQty } from "../domain/inventory";
+import { BusinessSequenceService } from "../sequence/business-sequence.service";
+import type { AuthUser } from "../common/types/auth-user";
+import type { InboundLedger, StockAdjustment } from "../generated/prisma/client";
+import type { InboundRow, StockAdjustmentRow } from "./types";
+import type { CreateInboundDto } from "./dto/create-inbound.dto";
+import type { UpdateInboundDto } from "./dto/update-inbound.dto";
+import type { CreateStockAdjustmentDto } from "./dto/create-stock-adjustment.dto";
 
 /** api_idempotency 的 operation_key，与前端 mock 同粒度 */
-const CREATE_OPERATION_KEY = 'inbound:create';
-const ADJUST_OPERATION_KEY = 'stock-adjustments:create';
+const CREATE_OPERATION_KEY = "inbound:create";
+const ADJUST_OPERATION_KEY = "stock-adjustments:create";
 const voidOperationKeyOf = (no: string): string => `inbound:void:${no}`;
 
 /** 入库行 + 响应映射必需的关联 */
@@ -49,7 +49,7 @@ export class InboundService {
     /** 入库台账（契约 inbound:view）：含 active/voided 便于审计，新记录在前 */
     async listInbound(): Promise<InboundRow[]> {
         const rows = await this.prisma.inboundLedger.findMany({
-            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
             include: {
                 bom: { select: { bomCode: true } },
                 operator: { select: { name: true } },
@@ -70,7 +70,7 @@ export class InboundService {
         idempotencyKey: string | undefined,
     ): Promise<InboundRow> {
         const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: 'POST', body: dto });
+        const requestHash = this.idempotency.digest({ method: "POST", body: dto });
 
         return this.txRunner.run(async (tx: Tx) => {
             const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
@@ -83,12 +83,12 @@ export class InboundService {
                 return replay.body as unknown as InboundRow;
             }
             if (placeholderId === null) {
-                throw new Error('幂等占位缺失');
+                throw new Error("幂等占位缺失");
             }
 
             const bom = await this.lockBomByCode(tx, dto.bomCode);
             const now = new Date();
-            const entryNo = await this.sequence.nextCode(tx, 'inbound', dto.date);
+            const entryNo = await this.sequence.nextCode(tx, "inbound", dto.date);
             const created = await tx.inboundLedger.create({
                 data: {
                     id: this.snowflake.next(),
@@ -98,7 +98,7 @@ export class InboundService {
                     businessDate: toDateColumn(dto.date),
                     operatorId: BigInt(actor.id),
                     remark: dto.remark,
-                    status: 'ACTIVE',
+                    status: "ACTIVE",
                     requestKey: this.idempotency.requestKey(BigInt(actor.id), CREATE_OPERATION_KEY, key),
                     updatedBy: BigInt(actor.id),
                     createdAt: now,
@@ -116,7 +116,7 @@ export class InboundService {
                 id: placeholderId,
                 httpStatus: 200,
                 responseBody: row as unknown as Prisma.InputJsonValue,
-                resource: { type: 'inbound', code: entryNo },
+                resource: { type: "inbound", code: entryNo },
             });
             return row;
         });
@@ -132,9 +132,9 @@ export class InboundService {
         return this.txRunner.run(async (tx: Tx) => {
             const now = new Date();
             const current = await this.lockEntryForWrite(tx, entryNo, dto.bomCode);
-            this.assertEditableToday(current, '修正');
+            this.assertEditableToday(current, "修正");
             if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException('入库记录已被其他人修改，请刷新后重试');
+                throw new ConflictException("入库记录已被其他人修改，请刷新后重试");
             }
 
             const nextBomId = await this.resolveBomIdByCode(tx, dto.bomCode);
@@ -142,12 +142,12 @@ export class InboundService {
                 // 换 BOM：旧 BOM 失去本条贡献后、新 BOM 并入后都必须保持非负
                 const oldStock = await getStockQty(tx, current.bomId);
                 if (oldStock - current.qty < 0) {
-                    throw new ConflictException('修正后库存将小于 0，请先核对相关出库记录');
+                    throw new ConflictException("修正后库存将小于 0，请先核对相关出库记录");
                 }
             } else if (dto.qty !== current.qty) {
                 const stock = await getStockQty(tx, current.bomId);
                 if (stock - current.qty + dto.qty < 0) {
-                    throw new ConflictException('修正后库存将小于 0，请先核对相关出库记录');
+                    throw new ConflictException("修正后库存将小于 0，请先核对相关出库记录");
                 }
             }
 
@@ -173,7 +173,7 @@ export class InboundService {
                     id: this.snowflake.next(),
                     inboundId: current.id,
                     operatorId: BigInt(actor.id),
-                    eventType: 'UPDATE',
+                    eventType: "UPDATE",
                     beforeVersion: current.rowVersion,
                     afterVersion: updated.rowVersion,
                     reason: dto.reason,
@@ -199,7 +199,7 @@ export class InboundService {
     ): Promise<InboundRow> {
         const operationKey = voidOperationKeyOf(entryNo);
         const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: 'POST', pathParams: { entryNo }, body: dto });
+        const requestHash = this.idempotency.digest({ method: "POST", pathParams: { entryNo }, body: dto });
 
         return this.txRunner.run(async (tx: Tx) => {
             const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
@@ -212,24 +212,24 @@ export class InboundService {
                 return replay.body as unknown as InboundRow;
             }
             if (placeholderId === null) {
-                throw new Error('幂等占位缺失');
+                throw new Error("幂等占位缺失");
             }
 
             const now = new Date();
             const current = await this.lockEntryForWrite(tx, entryNo);
-            this.assertEditableToday(current, '作废');
+            this.assertEditableToday(current, "作废");
             if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException('入库记录已被其他人修改，请刷新后重试');
+                throw new ConflictException("入库记录已被其他人修改，请刷新后重试");
             }
             const stock = await getStockQty(tx, current.bomId);
             if (stock - current.qty < 0) {
-                throw new ConflictException('作废后库存将小于 0，请先核对相关出库记录');
+                throw new ConflictException("作废后库存将小于 0，请先核对相关出库记录");
             }
 
             const updated = await tx.inboundLedger.update({
                 where: { id: current.id },
                 data: {
-                    status: 'VOIDED',
+                    status: "VOIDED",
                     updatedBy: BigInt(actor.id),
                     updatedAt: now,
                     rowVersion: { increment: 1 },
@@ -245,7 +245,7 @@ export class InboundService {
                     id: this.snowflake.next(),
                     inboundId: current.id,
                     operatorId: BigInt(actor.id),
-                    eventType: 'VOID',
+                    eventType: "VOID",
                     beforeVersion: current.rowVersion,
                     afterVersion: updated.rowVersion,
                     reason: dto.reason,
@@ -261,7 +261,7 @@ export class InboundService {
                 id: placeholderId,
                 httpStatus: 200,
                 responseBody: row as unknown as Prisma.InputJsonValue,
-                resource: { type: 'inbound', code: entryNo },
+                resource: { type: "inbound", code: entryNo },
             });
             return row;
         });
@@ -270,7 +270,7 @@ export class InboundService {
     /** 不可变库存调整列表（契约 inbound:view） */
     async listStockAdjustments(): Promise<StockAdjustmentRow[]> {
         const rows = await this.prisma.stockAdjustment.findMany({
-            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
             include: {
                 bom: { select: { bomCode: true } },
                 operator: { select: { name: true } },
@@ -291,7 +291,7 @@ export class InboundService {
         idempotencyKey: string | undefined,
     ): Promise<StockAdjustmentRow> {
         const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: 'POST', body: dto });
+        const requestHash = this.idempotency.digest({ method: "POST", body: dto });
 
         return this.txRunner.run(async (tx: Tx) => {
             const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
@@ -304,7 +304,7 @@ export class InboundService {
                 return replay.body as unknown as StockAdjustmentRow;
             }
             if (placeholderId === null) {
-                throw new Error('幂等占位缺失');
+                throw new Error("幂等占位缺失");
             }
 
             const bom = await this.lockBomByCode(tx, dto.bomCode);
@@ -315,20 +315,20 @@ export class InboundService {
                     select: { id: true, bomId: true },
                 });
                 if (!related) {
-                    throw new NotFoundException('关联入库单不存在');
+                    throw new NotFoundException("关联入库单不存在");
                 }
                 if (related.bomId !== bom.id) {
-                    throw new ConflictException('库存调整与关联入库单的 BOM 必须一致');
+                    throw new ConflictException("库存调整与关联入库单的 BOM 必须一致");
                 }
                 relatedInboundId = related.id;
             }
             const stock = await getStockQty(tx, bom.id);
             if (stock + dto.qtyDelta < 0) {
-                throw new ConflictException('调整后库存不能小于 0');
+                throw new ConflictException("调整后库存不能小于 0");
             }
 
             const now = new Date();
-            const adjustmentNo = await this.sequence.nextCode(tx, 'adjust', dto.date);
+            const adjustmentNo = await this.sequence.nextCode(tx, "adjust", dto.date);
             const created = await tx.stockAdjustment.create({
                 data: {
                     id: this.snowflake.next(),
@@ -354,7 +354,7 @@ export class InboundService {
                 id: placeholderId,
                 httpStatus: 200,
                 responseBody: row as unknown as Prisma.InputJsonValue,
-                resource: { type: 'stock-adjustment', code: adjustmentNo },
+                resource: { type: "stock-adjustment", code: adjustmentNo },
             });
             return row;
         });
@@ -364,9 +364,9 @@ export class InboundService {
     private async lockBomByCode(tx: Tx, bomCode: string): Promise<{ id: bigint }> {
         const located = await tx.bomTable.findUnique({ where: { bomCode }, select: { id: true } });
         if (!located) {
-            throw new NotFoundException('成品不存在');
+            throw new NotFoundException("成品不存在");
         }
-        await lockRowsById(tx, 'bom_table', [located.id]);
+        await lockRowsById(tx, "bom_table", [located.id]);
         return located;
     }
 
@@ -374,7 +374,7 @@ export class InboundService {
     private async resolveBomIdByCode(tx: Tx, bomCode: string): Promise<bigint> {
         const bom = await tx.bomTable.findUnique({ where: { bomCode }, select: { id: true } });
         if (!bom) {
-            throw new NotFoundException('成品不存在');
+            throw new NotFoundException("成品不存在");
         }
         return bom.id;
     }
@@ -390,11 +390,11 @@ export class InboundService {
             select: { id: true, bomId: true },
         });
         if (!located) {
-            throw new NotFoundException('入库记录不存在');
+            throw new NotFoundException("入库记录不存在");
         }
         const nextBomId = nextBomCode ? await this.resolveBomIdByCode(tx, nextBomCode) : located.bomId;
         const bomIds = [...new Set([located.bomId, nextBomId])].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-        await lockRowsById(tx, 'bom_table', bomIds);
+        await lockRowsById(tx, "bom_table", bomIds);
         await tx.$queryRaw`SELECT id FROM inbound_ledger WHERE entry_no = ${entryNo} FOR UPDATE`;
         const row = await tx.inboundLedger.findUnique({
             where: { entryNo },
@@ -405,7 +405,7 @@ export class InboundService {
             },
         });
         if (!row) {
-            throw new NotFoundException('入库记录不存在');
+            throw new NotFoundException("入库记录不存在");
         }
         return row;
     }
@@ -416,8 +416,8 @@ export class InboundService {
         if (row.createdAt < start || row.createdAt >= nextStart) {
             throw new ConflictException(`只能${action}北京时间当天录入的入库记录`);
         }
-        if (row.status === 'VOIDED') {
-            throw new ConflictException('已作废入库记录不可再次修改');
+        if (row.status === "VOIDED") {
+            throw new ConflictException("已作废入库记录不可再次修改");
         }
     }
 
@@ -445,7 +445,7 @@ export class InboundService {
             time: formatBeijingStamp(row.createdAt),
             inspector: row.operator.name,
             remark: row.remark,
-            status: row.status === 'VOIDED' ? 'voided' : 'active',
+            status: row.status === "VOIDED" ? "voided" : "active",
             version: Number(row.rowVersion),
             createdAt: row.createdAt.toISOString(),
             ...(modified ? { updatedBy: row.updater.name, updatedAt: row.updatedAt.toISOString() } : {}),

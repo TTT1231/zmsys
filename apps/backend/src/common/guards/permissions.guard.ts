@@ -1,8 +1,8 @@
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { AUTH_ONLY_KEY, IS_PUBLIC_KEY, PERMISSIONS_KEY } from '../../constants';
-import type { PermissionsMetadata } from '../decorators/permissions.decorator';
-import type { AuthUser } from '../types/auth-user';
+import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { AUTH_ONLY_KEY, IS_PUBLIC_KEY, PERMISSIONS_KEY } from "../../constants";
+import type { PermissionsMetadata } from "../decorators/permissions.decorator";
+import type { AuthUser } from "../types/auth-user";
 
 /**
  * 在 JwtAuthGuard 之后执行。默认拒绝（default-deny）：
@@ -43,6 +43,6 @@ export class PermissionsGuard implements CanActivate {
             return true;
         }
 
-        throw new ForbiddenException('端点未声明访问策略，默认拒绝');
+        throw new ForbiddenException("端点未声明访问策略，默认拒绝");
     }
 }

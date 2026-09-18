@@ -9,7 +9,7 @@
 export interface BomCatalogNode {
     id: string;
     parentId: string | null;
-    kind: 'section' | 'group';
+    kind: "section" | "group";
     name: string;
     /** 分组稳定标识（如 model）；分区为 null */
     key: string | null;
@@ -51,11 +51,11 @@ export function bomItemsSnapshotOf(items: readonly BomItemSnapshotInput[]): BomI
     const sorted = [...items]
         .sort((a, b) => a.position - b.position)
         .map(item => ({ ...item, materialId: item.materialId.toString() }));
-    const model = sorted.find(item => item.groupKey === 'model');
+    const model = sorted.find(item => item.groupKey === "model");
     return {
         items: sorted,
-        modelCode: model?.name ?? '',
-        spec: sorted.map(summaryPartOf).join(' · '),
+        modelCode: model?.name ?? "",
+        spec: sorted.map(summaryPartOf).join(" · "),
     };
 }
 
@@ -75,12 +75,12 @@ export function bomItemViewsOf(items: readonly BomItemSnapshotInput[]): BomItemV
  */
 export function bomSpecOf(snapshot: unknown): string {
     const shape = snapshot as { spec?: unknown; items?: unknown } | null;
-    if (typeof shape?.spec === 'string' && shape.spec.trim()) {
+    if (typeof shape?.spec === "string" && shape.spec.trim()) {
         return shape.spec;
     }
     const items = Array.isArray(shape?.items) ? (shape!.items as Array<{ groupName?: unknown; name?: unknown }>) : [];
     return items
-        .filter(item => typeof item?.groupName === 'string' && typeof item?.name === 'string')
+        .filter(item => typeof item?.groupName === "string" && typeof item?.name === "string")
         .map(item => summaryPartOf(item as { groupName: string; name: string }))
-        .join(' · ');
+        .join(" · ");
 }

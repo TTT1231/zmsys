@@ -1,24 +1,24 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { createHash } from 'node:crypto';
-import { Prisma } from '../generated/prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
-import { TransactionRunner } from '../prisma/transaction.runner';
-import type { Tx } from '../prisma/transaction.runner';
-import { SnowflakeGenerator } from '../common/snowflake';
-import { IdempotencyService } from '../idempotency/idempotency.service';
-import { formatDateColumn, formatBeijingStamp, toDateColumn } from '../common/datetime';
-import { bomSpecOf } from '../common/bom-display';
-import { lockRowsById } from '../domain/concurrency';
-import { computeShippableQty } from '../domain/inventory';
-import { recordOpLog } from '../domain/op-log';
-import { BusinessSequenceService } from '../sequence/business-sequence.service';
-import type { AuthUser } from '../common/types/auth-user';
-import type { OutboundShipment } from '../generated/prisma/client';
-import type { OutboundPrintDocument, OutboundPrintResult, OutboundRow } from './types';
-import type { CreateOutboundDto } from './dto/create-outbound.dto';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { createHash } from "node:crypto";
+import { Prisma } from "../generated/prisma/client";
+import { PrismaService } from "../prisma/prisma.service";
+import { TransactionRunner } from "../prisma/transaction.runner";
+import type { Tx } from "../prisma/transaction.runner";
+import { SnowflakeGenerator } from "../common/snowflake";
+import { IdempotencyService } from "../idempotency/idempotency.service";
+import { formatDateColumn, formatBeijingStamp, toDateColumn } from "../common/datetime";
+import { bomSpecOf } from "../common/bom-display";
+import { lockRowsById } from "../domain/concurrency";
+import { computeShippableQty } from "../domain/inventory";
+import { recordOpLog } from "../domain/op-log";
+import { BusinessSequenceService } from "../sequence/business-sequence.service";
+import type { AuthUser } from "../common/types/auth-user";
+import type { OutboundShipment } from "../generated/prisma/client";
+import type { OutboundPrintDocument, OutboundPrintResult, OutboundRow } from "./types";
+import type { CreateOutboundDto } from "./dto/create-outbound.dto";
 
 /** api_idempotency 的 operation_key，与前端 mock 同粒度 */
-const CREATE_OPERATION_KEY = 'outbound:create';
+const CREATE_OPERATION_KEY = "outbound:create";
 const voidOperationKeyOf = (no: string): string => `outbound:void:${no}`;
 const printOperationKeyOf = (no: string): string => `outbound:print:${no}`;
 const emergencyVoidOperationKeyOf = (no: string): string => `outbound:emergency-void:${no}`;
@@ -67,7 +67,7 @@ export class OutboundService {
     /** 出库单列表（契约 outbound:view）：返回 registered/printed/voided 单头，新单在前 */
     async listOutbound(): Promise<OutboundRow[]> {
         const rows = await this.prisma.outboundShipment.findMany({
-            orderBy: [{ registeredAt: 'desc' }, { id: 'desc' }],
+            orderBy: [{ registeredAt: "desc" }, { id: "desc" }],
             include: SHIPMENT_INCLUDE,
         });
         return rows.map(row => this.toOutboundRow(row));
@@ -84,7 +84,7 @@ export class OutboundService {
         idempotencyKey: string | undefined,
     ): Promise<OutboundRow> {
         const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: 'POST', body: dto });
+        const requestHash = this.idempotency.digest({ method: "POST", body: dto });
 
         return this.txRunner.run(async (tx: Tx) => {
             const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
@@ -97,7 +97,7 @@ export class OutboundService {
                 return replay.body as unknown as OutboundRow;
             }
             if (placeholderId === null) {
-                throw new Error('幂等占位缺失');
+                throw new Error("幂等占位缺失");
             }
 
             const located = await tx.salesOrderTable.findUnique({
@@ -105,17 +105,17 @@ export class OutboundService {
                 select: { id: true, bomId: true },
             });
             if (!located) {
-                throw new NotFoundException('订单不存在');
+                throw new NotFoundException("订单不存在");
             }
             // 锁序（db-scheme.md §2）：BOM → 订单；订单 BOM 引用不可变，定位读与锁定间无竞争
-            await lockRowsById(tx, 'bom_table', [located.bomId]);
+            await lockRowsById(tx, "bom_table", [located.bomId]);
             await tx.$queryRaw`SELECT id FROM sales_order_table WHERE order_no = ${dto.orderNo} FOR UPDATE`;
             const order = await tx.salesOrderTable.findUnique({ where: { orderNo: dto.orderNo } });
             if (!order) {
-                throw new NotFoundException('订单不存在');
+                throw new NotFoundException("订单不存在");
             }
-            if (order.lifecycleStatus === 'CANCELLED') {
-                throw new ConflictException('订单已取消，不能登记发货');
+            if (order.lifecycleStatus === "CANCELLED") {
+                throw new ConflictException("订单已取消，不能登记发货");
             }
 
             // 可发量在 BOM+订单锁内重算，不信任任何前端传入的库存/已发数据
@@ -128,7 +128,7 @@ export class OutboundService {
             const now = new Date();
             const businessDate = toDateColumn(dto.date);
             const shipmentId = this.snowflake.next();
-            const shipmentNo = await this.sequence.nextCode(tx, 'outbound', dto.date);
+            const shipmentNo = await this.sequence.nextCode(tx, "outbound", dto.date);
             await tx.outboundShipment.create({
                 data: {
                     id: shipmentId,
@@ -136,7 +136,7 @@ export class OutboundService {
                     orderId: order.id,
                     originalQty: dto.qty,
                     businessDate,
-                    state: 'REGISTERED',
+                    state: "REGISTERED",
                     requestKey: this.idempotency.requestKey(BigInt(actor.id), CREATE_OPERATION_KEY, key),
                     registeredBy: BigInt(actor.id),
                     registeredAt: now,
@@ -148,7 +148,7 @@ export class OutboundService {
                     id: this.snowflake.next(),
                     eventNo: `${shipmentNo}-E1`,
                     shipmentId,
-                    entryType: 'NORMAL',
+                    entryType: "NORMAL",
                     qtyDelta: dto.qty,
                     businessDate,
                     operatorId: BigInt(actor.id),
@@ -162,20 +162,20 @@ export class OutboundService {
                     id: this.snowflake.next(),
                     shipmentId,
                     operatorId: BigInt(actor.id),
-                    eventType: 'REGISTER',
+                    eventType: "REGISTER",
                     beforeState: null,
-                    afterState: 'REGISTERED',
+                    afterState: "REGISTERED",
                     beforeVersion: null,
                     afterVersion: 1n,
-                    reason: '',
+                    reason: "",
                     requestKey: this.idempotency.requestKey(BigInt(actor.id), `${CREATE_OPERATION_KEY}:state`, key),
                     detailJson: { qty: dto.qty, orderNo: order.orderNo },
                     createdAt: now,
                 },
             });
             await recordOpLog(tx, this.snowflake, actor, {
-                action: 'ship',
-                targetType: 'outbound',
+                action: "ship",
+                targetType: "outbound",
                 targetId: shipmentId,
                 targetCode: shipmentNo,
                 detail: { orderNo: order.orderNo, qty: dto.qty },
@@ -188,7 +188,7 @@ export class OutboundService {
                 id: placeholderId,
                 httpStatus: 200,
                 responseBody: outbound as unknown as Prisma.InputJsonValue,
-                resource: { type: 'outbound', code: shipmentNo },
+                resource: { type: "outbound", code: shipmentNo },
             });
             return outbound;
         });
@@ -207,7 +207,7 @@ export class OutboundService {
     ): Promise<OutboundRow> {
         const operationKey = voidOperationKeyOf(shipmentNo);
         const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: 'POST', pathParams: { shipmentNo }, body: dto });
+        const requestHash = this.idempotency.digest({ method: "POST", pathParams: { shipmentNo }, body: dto });
 
         return this.txRunner.run(async (tx: Tx) => {
             const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
@@ -220,31 +220,31 @@ export class OutboundService {
                 return replay.body as unknown as OutboundRow;
             }
             if (placeholderId === null) {
-                throw new Error('幂等占位缺失');
+                throw new Error("幂等占位缺失");
             }
 
             const now = new Date();
             const current = await this.lockShipmentForWrite(tx, shipmentNo);
             if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException('出库单已被其他人处理，请刷新后重试');
+                throw new ConflictException("出库单已被其他人处理，请刷新后重试");
             }
-            if (current.state !== 'REGISTERED') {
-                throw new ConflictException('只有未打印的出库单可以由仓管作废');
+            if (current.state !== "REGISTERED") {
+                throw new ConflictException("只有未打印的出库单可以由仓管作废");
             }
             await this.appendCorrection(tx, current, dto.reason, actor, now);
 
             const updated = await tx.outboundShipment.update({
                 where: { id: current.id },
                 data: {
-                    state: 'VOIDED',
-                    voidMode: 'PRE_PRINT',
+                    state: "VOIDED",
+                    voidMode: "PRE_PRINT",
                     voidedBy: BigInt(actor.id),
                     voidReason: dto.reason,
                     voidedAt: now,
                     rowVersion: { increment: 1 },
                 },
             });
-            await this.writeStateLog(tx, current, 'VOID_PRE_PRINT', 'REGISTERED', 'VOIDED', updated.rowVersion, {
+            await this.writeStateLog(tx, current, "VOID_PRE_PRINT", "REGISTERED", "VOIDED", updated.rowVersion, {
                 reason: dto.reason,
                 actor,
                 now,
@@ -258,7 +258,7 @@ export class OutboundService {
                 id: placeholderId,
                 httpStatus: 200,
                 responseBody: outbound as unknown as Prisma.InputJsonValue,
-                resource: { type: 'outbound', code: shipmentNo },
+                resource: { type: "outbound", code: shipmentNo },
             });
             return outbound;
         });
@@ -278,7 +278,7 @@ export class OutboundService {
     ): Promise<OutboundPrintResult> {
         const operationKey = printOperationKeyOf(shipmentNo);
         const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: 'POST', pathParams: { shipmentNo }, body: dto });
+        const requestHash = this.idempotency.digest({ method: "POST", pathParams: { shipmentNo }, body: dto });
 
         return this.txRunner.run(async (tx: Tx) => {
             const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
@@ -291,23 +291,23 @@ export class OutboundService {
                 return replay.body as unknown as OutboundPrintResult;
             }
             if (placeholderId === null) {
-                throw new Error('幂等占位缺失');
+                throw new Error("幂等占位缺失");
             }
 
             const now = new Date();
             const current = await this.lockShipmentForWrite(tx, shipmentNo);
             if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException('出库单已被其他人处理，请刷新后重试');
+                throw new ConflictException("出库单已被其他人处理，请刷新后重试");
             }
-            if (current.state === 'VOIDED') {
-                throw new ConflictException('已作废出库单不能打印');
+            if (current.state === "VOIDED") {
+                throw new ConflictException("已作废出库单不能打印");
             }
-            if (current.state === 'REGISTERED' && current.order.lifecycleStatus === 'CANCELLED') {
-                throw new ConflictException('订单已取消，不能首次打印出库单');
+            if (current.state === "REGISTERED" && current.order.lifecycleStatus === "CANCELLED") {
+                throw new ConflictException("订单已取消，不能首次打印出库单");
             }
-            const reprint = current.state === 'PRINTED';
+            const reprint = current.state === "PRINTED";
             if (reprint && !dto.reason) {
-                throw new BadRequestException('重打必须填写原因');
+                throw new BadRequestException("重打必须填写原因");
             }
 
             const printVersion = this.printVersionOf(current) + 1;
@@ -327,7 +327,7 @@ export class OutboundService {
                 printedBy: actor.name,
                 printedAt: now.toISOString(),
             };
-            const documentHash = createHash('sha256').update(JSON.stringify(document), 'utf8').digest();
+            const documentHash = createHash("sha256").update(JSON.stringify(document), "utf8").digest();
 
             await tx.outboundPrintLog.create({
                 data: {
@@ -335,7 +335,7 @@ export class OutboundService {
                     shipmentId: current.id,
                     printSeq: printVersion,
                     printedBy: BigInt(actor.id),
-                    reason: dto.reason ?? '',
+                    reason: dto.reason ?? "",
                     documentSnapshot: document as unknown as Prisma.InputJsonValue,
                     documentHash,
                     requestKey: this.idempotency.requestKey(BigInt(actor.id), operationKey, key),
@@ -344,17 +344,17 @@ export class OutboundService {
             });
             const updated = await tx.outboundShipment.update({
                 where: { id: current.id },
-                data: { state: 'PRINTED', rowVersion: { increment: 1 } },
+                data: { state: "PRINTED", rowVersion: { increment: 1 } },
             });
             await this.writeStateLog(
                 tx,
                 current,
-                reprint ? 'REPRINT' : 'PRINT',
+                reprint ? "REPRINT" : "PRINT",
                 current.state,
-                'PRINTED',
+                "PRINTED",
                 updated.rowVersion,
                 {
-                    reason: dto.reason ?? '',
+                    reason: dto.reason ?? "",
                     actor,
                     now,
                     operationKey,
@@ -373,7 +373,7 @@ export class OutboundService {
                 id: placeholderId,
                 httpStatus: 200,
                 responseBody: result as unknown as Prisma.InputJsonValue,
-                resource: { type: 'outbound', code: shipmentNo },
+                resource: { type: "outbound", code: shipmentNo },
             });
             return result;
         });
@@ -392,7 +392,7 @@ export class OutboundService {
     ): Promise<OutboundRow> {
         const operationKey = emergencyVoidOperationKeyOf(shipmentNo);
         const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: 'POST', pathParams: { shipmentNo }, body: dto });
+        const requestHash = this.idempotency.digest({ method: "POST", pathParams: { shipmentNo }, body: dto });
 
         return this.txRunner.run(async (tx: Tx) => {
             const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
@@ -405,27 +405,27 @@ export class OutboundService {
                 return replay.body as unknown as OutboundRow;
             }
             if (placeholderId === null) {
-                throw new Error('幂等占位缺失');
+                throw new Error("幂等占位缺失");
             }
 
             const now = new Date();
             const current = await this.lockShipmentForWrite(tx, shipmentNo);
             if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException('出库单已被其他人处理，请刷新后重试');
+                throw new ConflictException("出库单已被其他人处理，请刷新后重试");
             }
-            if (current.state !== 'PRINTED') {
-                throw new ConflictException('只有已打印出库单需要紧急撤销');
+            if (current.state !== "PRINTED") {
+                throw new ConflictException("只有已打印出库单需要紧急撤销");
             }
             if (!dto.goodsNotDeparted || !dto.paperInvalidated) {
-                throw new ConflictException('必须确认货物尚未离开且纸质单已作废');
+                throw new ConflictException("必须确认货物尚未离开且纸质单已作废");
             }
             await this.appendCorrection(tx, current, dto.reason, actor, now);
 
             const updated = await tx.outboundShipment.update({
                 where: { id: current.id },
                 data: {
-                    state: 'VOIDED',
-                    voidMode: 'EMERGENCY',
+                    state: "VOIDED",
+                    voidMode: "EMERGENCY",
                     voidedBy: BigInt(actor.id),
                     voidReason: dto.reason,
                     goodsNotDeparted: true,
@@ -434,7 +434,7 @@ export class OutboundService {
                     rowVersion: { increment: 1 },
                 },
             });
-            await this.writeStateLog(tx, current, 'VOID_EMERGENCY', 'PRINTED', 'VOIDED', updated.rowVersion, {
+            await this.writeStateLog(tx, current, "VOID_EMERGENCY", "PRINTED", "VOIDED", updated.rowVersion, {
                 reason: dto.reason,
                 actor,
                 now,
@@ -449,7 +449,7 @@ export class OutboundService {
                 id: placeholderId,
                 httpStatus: 200,
                 responseBody: outbound as unknown as Prisma.InputJsonValue,
-                resource: { type: 'outbound', code: shipmentNo },
+                resource: { type: "outbound", code: shipmentNo },
             });
             return outbound;
         });
@@ -464,8 +464,8 @@ export class OutboundService {
         now: Date,
     ): Promise<void> {
         const normal = await tx.outboundLedger.findFirst({
-            where: { shipmentId: shipment.id, entryType: 'NORMAL' },
-            orderBy: { id: 'asc' },
+            where: { shipmentId: shipment.id, entryType: "NORMAL" },
+            orderBy: { id: "asc" },
         });
         if (!normal) {
             throw new Error(`出库单 ${shipment.shipmentNo} 缺少正向数量事件`);
@@ -475,7 +475,7 @@ export class OutboundService {
                 id: this.snowflake.next(),
                 eventNo: `${shipment.shipmentNo}-E2`,
                 shipmentId: shipment.id,
-                entryType: 'CORRECTION',
+                entryType: "CORRECTION",
                 correctionOfId: normal.id,
                 qtyDelta: -shipment.originalQty,
                 businessDate: shipment.businessDate,
@@ -501,18 +501,18 @@ export class OutboundService {
             select: { orderId: true },
         });
         if (!located) {
-            throw new NotFoundException('出库单不存在');
+            throw new NotFoundException("出库单不存在");
         }
         const order = await tx.salesOrderTable.findUnique({
             where: { id: located.orderId },
             select: { bomId: true },
         });
-        await lockRowsById(tx, 'bom_table', [order!.bomId]);
+        await lockRowsById(tx, "bom_table", [order!.bomId]);
         await tx.$queryRaw`SELECT id FROM sales_order_table WHERE id = ${located.orderId} FOR UPDATE`;
         await tx.$queryRaw`SELECT id FROM outbound_shipment WHERE shipment_no = ${shipmentNo} FOR UPDATE`;
         const row = await tx.outboundShipment.findUnique({ where: { shipmentNo }, include: SHIPMENT_INCLUDE });
         if (!row) {
-            throw new NotFoundException('出库单不存在');
+            throw new NotFoundException("出库单不存在");
         }
         return row;
     }
@@ -521,9 +521,9 @@ export class OutboundService {
     private async writeStateLog(
         tx: Tx,
         current: ShipmentRow,
-        eventType: 'VOID_PRE_PRINT' | 'PRINT' | 'REPRINT' | 'VOID_EMERGENCY',
+        eventType: "VOID_PRE_PRINT" | "PRINT" | "REPRINT" | "VOID_EMERGENCY",
         beforeState: string,
-        afterState: 'REGISTERED' | 'PRINTED' | 'VOIDED',
+        afterState: "REGISTERED" | "PRINTED" | "VOIDED",
         afterVersion: bigint,
         params: {
             reason: string;
@@ -540,7 +540,7 @@ export class OutboundService {
                 shipmentId: current.id,
                 operatorId: BigInt(params.actor.id),
                 eventType,
-                beforeState: beforeState as ShipmentRow['state'],
+                beforeState: beforeState as ShipmentRow["state"],
                 afterState,
                 beforeVersion: current.rowVersion,
                 afterVersion,
@@ -559,12 +559,12 @@ export class OutboundService {
 
     /** 单头备注取正向数量事件的备注（数量事件不可变，随单头展示） */
     private normalRemarkOf(row: ShipmentRow): string {
-        return row.ledgers.find(event => event.entryType === 'NORMAL')?.remark ?? '';
+        return row.ledgers.find(event => event.entryType === "NORMAL")?.remark ?? "";
     }
 
     /** 契约 OutboundRow 映射：customer 为下单时快照；state/printVersion/voidReason 按单头与日志派生 */
     private toOutboundRow(row: ShipmentRow): OutboundRow {
-        const voided = row.state === 'VOIDED';
+        const voided = row.state === "VOIDED";
         return {
             no: row.shipmentNo,
             orderNo: row.order.orderNo,
@@ -576,10 +576,10 @@ export class OutboundService {
             time: formatBeijingStamp(row.registeredAt),
             operator: row.registrar.name,
             remark: this.normalRemarkOf(row),
-            state: row.state === 'REGISTERED' ? 'registered' : row.state === 'PRINTED' ? 'printed' : 'voided',
+            state: row.state === "REGISTERED" ? "registered" : row.state === "PRINTED" ? "printed" : "voided",
             version: Number(row.rowVersion),
             printVersion: this.printVersionOf(row),
-            ...(voided ? { voidReason: row.voidReason ?? '' } : {}),
+            ...(voided ? { voidReason: row.voidReason ?? "" } : {}),
         };
     }
 }

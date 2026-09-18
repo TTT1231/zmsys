@@ -7,7 +7,7 @@ export interface InboundRow {
     time: string;
     inspector: string;
     remark: string;
-    status: 'active' | 'voided';
+    status: "active" | "voided";
     version: number;
     createdAt: string;
     updatedBy?: string;

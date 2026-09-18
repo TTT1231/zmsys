@@ -1,6 +1,6 @@
-import type { Prisma, SysUser } from '../generated/prisma/client';
-import { formatBeijingStamp } from '../common/datetime';
-import type { WbUser } from './types';
+import type { Prisma, SysUser } from "../generated/prisma/client";
+import { formatBeijingStamp } from "../common/datetime";
+import type { WbUser } from "./types";
 
 /** 日志与响应快照统一形态：绝不包含密码哈希（数据库 CHECK 兜底） */
 export function userSnapshot(user: SysUser): Prisma.InputJsonValue {
@@ -18,7 +18,7 @@ export function toWbUser(user: SysUser, lastLoginAt: Date | null = user.lastLogi
         version: Number(user.rowVersion),
         name: user.name,
         account: user.account,
-        role: user.roleCode as WbUser['role'],
+        role: user.roleCode as WbUser["role"],
         active: user.status,
         last: formatBeijingStamp(lastLoginAt),
         createdAt: user.createdAt.toISOString(),

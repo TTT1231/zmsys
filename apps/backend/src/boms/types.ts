@@ -1,5 +1,5 @@
 /** 契约目录节点与明细类型（openapi boms tag）由 common/bom-display 统一定义 */
-import type { BomCatalogNode, BomItemView } from '../common/bom-display';
+import type { BomCatalogNode, BomItemView } from "../common/bom-display";
 
 export type { BomCatalogNode, BomItemView };
 

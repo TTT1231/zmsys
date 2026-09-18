@@ -10,7 +10,7 @@ export interface Customer {
     district: string;
     town: string;
     address: string;
-    cooperation: '合作中' | '待跟进';
+    cooperation: "合作中" | "待跟进";
     owner: string;
     ownerAccount: string;
     payTerms: string;

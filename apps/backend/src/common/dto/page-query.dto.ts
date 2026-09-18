@@ -1,5 +1,5 @@
-import { Type } from 'class-transformer';
-import { IsInt, Max, Min } from 'class-validator';
+import { Type } from "class-transformer";
+import { IsInt, Max, Min } from "class-validator";
 
 /** 列表查询通用分页参数；契约暂无分页定义，首个业务列表端点接入时回写 openapi.yaml */
 export class PageQueryDto {

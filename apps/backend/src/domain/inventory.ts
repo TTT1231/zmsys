@@ -1,5 +1,5 @@
-import { ConflictException } from '@nestjs/common';
-import type { Tx } from '../prisma/transaction.runner';
+import { ConflictException } from "@nestjs/common";
+import type { Tx } from "../prisma/transaction.runner";
 
 /**
  * 库存与可发量（db-scheme.md §6.2）：同一 BOM 的库存由全部活动订单共享，
@@ -37,7 +37,7 @@ export async function computeShippableQty(
     },
 ): Promise<number> {
     if (params.requestedQty <= 0) {
-        throw new ConflictException('发货数量必须大于 0');
+        throw new ConflictException("发货数量必须大于 0");
     }
     const orders = await tx.$queryRaw<ActiveOrderRow[]>`
         SELECT o.id, o.qty, COALESCE(v.outbound_qty, 0) AS outbound_qty
@@ -52,11 +52,11 @@ export async function computeShippableQty(
         if (order.id === params.targetOrderId) {
             const allowance = Math.min(pool, remaining);
             if (params.requestedQty > allowance) {
-                throw new ConflictException('库存可发量不足，请刷新后重试');
+                throw new ConflictException("库存可发量不足，请刷新后重试");
             }
             return allowance;
         }
         pool -= remaining;
     }
-    throw new ConflictException('目标订单不存在或已取消');
+    throw new ConflictException("目标订单不存在或已取消");
 }

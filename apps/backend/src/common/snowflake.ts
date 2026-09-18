@@ -21,7 +21,7 @@ export class SnowflakeGenerator {
     next(): bigint {
         let timestamp = BigInt(Date.now());
         if (timestamp < this.lastTimestamp) {
-            throw new Error('系统时钟回拨，拒绝生成 id');
+            throw new Error("系统时钟回拨，拒绝生成 id");
         }
         if (timestamp === this.lastTimestamp) {
             this.sequence = (this.sequence + 1n) & MAX_SEQUENCE;

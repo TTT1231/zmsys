@@ -1,4 +1,4 @@
-import { CanActivate, ExecutionContext, HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { CanActivate, ExecutionContext, HttpException, HttpStatus, Injectable } from "@nestjs/common";
 
 /**
  * 登录暴力破解限流：按 IP + 账号内存计数，窗口内超阈值返回 429。
@@ -18,7 +18,7 @@ export class LoginThrottleGuard implements CanActivate {
             ip?: string;
             body?: { account?: string };
         }>();
-        const key = `${request.ip ?? 'unknown'}:${request.body?.account ?? ''}`;
+        const key = `${request.ip ?? "unknown"}:${request.body?.account ?? ""}`;
         const now = Date.now();
         const entry = this.attempts.get(key);
         if (!entry || now > entry.resetAt) {
@@ -27,7 +27,7 @@ export class LoginThrottleGuard implements CanActivate {
         }
         entry.count += 1;
         if (entry.count > LoginThrottleGuard.maxAttempts) {
-            throw new HttpException('登录尝试过于频繁，请稍后再试', HttpStatus.TOO_MANY_REQUESTS);
+            throw new HttpException("登录尝试过于频繁，请稍后再试", HttpStatus.TOO_MANY_REQUESTS);
         }
         return true;
     }

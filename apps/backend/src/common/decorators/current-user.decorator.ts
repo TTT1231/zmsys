@@ -1,5 +1,5 @@
-import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import type { AuthUser } from '../types/auth-user';
+import { createParamDecorator, ExecutionContext } from "@nestjs/common";
+import type { AuthUser } from "../types/auth-user";
 
 /** 取 JwtAuthGuard 挂载的会话用户 */
 export const CurrentUser = createParamDecorator(

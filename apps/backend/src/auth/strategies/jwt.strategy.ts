@@ -1,12 +1,12 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy } from 'passport-jwt';
-import { PrismaService } from '../../prisma/prisma.service';
-import { SUPER_ROLE_CODE, isRoleCode, type RoleCode } from '../../constants';
-import type { AppConfig } from '../../configuration';
-import type { AuthUser } from '../../common/types/auth-user';
-import type { JwtPayload } from '../types';
+import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { PassportStrategy } from "@nestjs/passport";
+import { ExtractJwt, Strategy } from "passport-jwt";
+import { PrismaService } from "../../prisma/prisma.service";
+import { SUPER_ROLE_CODE, isRoleCode, type RoleCode } from "../../constants";
+import type { AppConfig } from "../../configuration";
+import type { AuthUser } from "../../common/types/auth-user";
+import type { JwtPayload } from "../types";
 
 /**
  * JWT 只证明会话身份：签名、有效期、签发者与受众通过后，
@@ -21,9 +21,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         super({
             jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
             ignoreExpiration: false,
-            secretOrKey: configService.getOrThrow('jwt.secret', { infer: true }),
-            issuer: configService.getOrThrow('jwt.issuer', { infer: true }),
-            audience: configService.getOrThrow('jwt.audience', { infer: true }),
+            secretOrKey: configService.getOrThrow("jwt.secret", { infer: true }),
+            issuer: configService.getOrThrow("jwt.issuer", { infer: true }),
+            audience: configService.getOrThrow("jwt.audience", { infer: true }),
         });
     }
 
@@ -33,7 +33,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         });
         // 停用或 token_version 落后的旧 JWT 立即拒绝
         if (!user || !user.status || user.tokenVersion !== BigInt(payload.ver)) {
-            throw new UnauthorizedException('登录已过期，请重新登录');
+            throw new UnauthorizedException("登录已过期，请重新登录");
         }
 
         const isSuper = user.roleCode === SUPER_ROLE_CODE;
@@ -46,7 +46,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
                   select: { permissionCode: true },
               });
 
-        const role: RoleCode = isRoleCode(user.roleCode) ? user.roleCode : 'staff';
+        const role: RoleCode = isRoleCode(user.roleCode) ? user.roleCode : "staff";
         return {
             id: user.id.toString(),
             account: user.account,

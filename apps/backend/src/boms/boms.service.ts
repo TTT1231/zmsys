@@ -1,24 +1,24 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '../generated/prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
-import { TransactionRunner } from '../prisma/transaction.runner';
-import type { Tx } from '../prisma/transaction.runner';
-import { SnowflakeGenerator } from '../common/snowflake';
-import { materialSetHash } from '../common/bom-spec';
-import { bomItemViewsOf, bomItemsSnapshotOf } from '../common/bom-display';
-import { beijingDayKey } from '../common/beijing-day';
-import { IdempotencyService } from '../idempotency/idempotency.service';
-import { BusinessSequenceService } from '../sequence/business-sequence.service';
-import { recordOpLog } from '../domain/op-log';
-import type { Bom, BomCategory, BomCatalogNode } from './types';
-import { resolveMaterialSelection, type CatalogEntry } from './bom-rules';
-import type { CreateBomDto } from './dto/create-bom.dto';
-import type { AuthUser } from '../common/types/auth-user';
-import type { BomCategory as BomCategoryRow, BomTable, MaterialGroup } from '../generated/prisma/client';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma } from "../generated/prisma/client";
+import { PrismaService } from "../prisma/prisma.service";
+import { TransactionRunner } from "../prisma/transaction.runner";
+import type { Tx } from "../prisma/transaction.runner";
+import { SnowflakeGenerator } from "../common/snowflake";
+import { materialSetHash } from "../common/bom-spec";
+import { bomItemViewsOf, bomItemsSnapshotOf } from "../common/bom-display";
+import { beijingDayKey } from "../common/beijing-day";
+import { IdempotencyService } from "../idempotency/idempotency.service";
+import { BusinessSequenceService } from "../sequence/business-sequence.service";
+import { recordOpLog } from "../domain/op-log";
+import type { Bom, BomCategory, BomCatalogNode } from "./types";
+import { resolveMaterialSelection, type CatalogEntry } from "./bom-rules";
+import type { CreateBomDto } from "./dto/create-bom.dto";
+import type { AuthUser } from "../common/types/auth-user";
+import type { BomCategory as BomCategoryRow, BomTable, MaterialGroup } from "../generated/prisma/client";
 
 /** api_idempotency 的 operation_key，与前端 mock 同粒度 */
-const CREATE_OPERATION_KEY = 'boms:create';
-const DELETE_OPERATION_KEY = 'boms:delete';
+const CREATE_OPERATION_KEY = "boms:create";
+const DELETE_OPERATION_KEY = "boms:delete";
 
 type CategoryRowWithGroups = BomCategoryRow & { groups: CatalogNodeRow[] };
 
@@ -40,7 +40,7 @@ const childCategoriesOf = (value: unknown): string[] => {
     if (!Array.isArray(value)) {
         return [];
     }
-    return value.filter((item): item is string => typeof item === 'string');
+    return value.filter((item): item is string => typeof item === "string");
 };
 
 /** 同级节点排序：sortOrder 优先，id 兜底（迁移种子保证稳定）；节点与物料行通用 */
@@ -60,14 +60,14 @@ function orderedCatalog(groups: CatalogNodeRow[]): Array<{ isSection: boolean; n
     const nodes: Array<{ isSection: boolean; node: CatalogNodeRow }> = [];
     const topLevel = groups.filter(group => group.parentId === null && group.status).sort(bySiblingOrder);
     for (const node of topLevel) {
-        if (node.kind !== 'SECTION') {
+        if (node.kind !== "SECTION") {
             nodes.push({ isSection: false, node });
             continue;
         }
         nodes.push({ isSection: true, node });
         nodes.push(
             ...groups
-                .filter(group => group.kind === 'GROUP' && group.status && group.parentId === node.id)
+                .filter(group => group.kind === "GROUP" && group.status && group.parentId === node.id)
                 .sort(bySiblingOrder)
                 .map(child => ({ isSection: false, node: child })),
         );
@@ -89,7 +89,7 @@ export class BomsService {
     async listCategories(): Promise<BomCategory[]> {
         const rows = await this.prisma.bomCategory.findMany({
             where: { status: true },
-            orderBy: { id: 'asc' },
+            orderBy: { id: "asc" },
             include: { groups: { include: { items: { where: { status: true } } } } },
         });
         return rows.map(row => this.toCategory(row));
@@ -101,7 +101,7 @@ export class BomsService {
      */
     async listBoms(): Promise<Bom[]> {
         const rows = await this.prisma.bomTable.findMany({
-            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
             include: { category: { select: { name: true } }, items: true },
         });
         return rows.map(row => this.toBom(row));
@@ -132,7 +132,7 @@ export class BomsService {
      */
     async createBom(dto: CreateBomDto, actor: AuthUser, idempotencyKey: string | undefined): Promise<Bom> {
         const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: 'POST', body: dto });
+        const requestHash = this.idempotency.digest({ method: "POST", body: dto });
 
         return this.txRunner.run(async (tx: Tx) => {
             const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
@@ -145,7 +145,7 @@ export class BomsService {
                 return replay.body as unknown as Bom;
             }
             if (placeholderId === null) {
-                throw new Error('幂等占位缺失');
+                throw new Error("幂等占位缺失");
             }
 
             const category = await this.lockCategoryByName(tx, dto.name);
@@ -153,14 +153,14 @@ export class BomsService {
             let childCategoryRow: BomCategoryRow | null = null;
             if (childCategories.length > 0) {
                 if (!dto.childCategory) {
-                    throw new BadRequestException('请选择微动开关类型');
+                    throw new BadRequestException("请选择微动开关类型");
                 }
                 if (!childCategories.includes(dto.childCategory)) {
-                    throw new BadRequestException('微动开关类型不在本品类允许范围内');
+                    throw new BadRequestException("微动开关类型不在本品类允许范围内");
                 }
                 childCategoryRow = await tx.bomCategory.findUnique({ where: { categoryKey: dto.childCategory } });
                 if (!childCategoryRow || !childCategoryRow.status) {
-                    throw new BadRequestException('微动开关类型不存在或已停用');
+                    throw new BadRequestException("微动开关类型不存在或已停用");
                 }
             }
 
@@ -192,7 +192,7 @@ export class BomsService {
                     bomCode,
                     categoryId: category.id,
                     specHash: hash,
-                    unit: '个',
+                    unit: "个",
                     requestKey: this.idempotency.requestKey(BigInt(actor.id), CREATE_OPERATION_KEY, key),
                     createdBy: BigInt(actor.id),
                     updatedBy: BigInt(actor.id),
@@ -226,13 +226,13 @@ export class BomsService {
                 })),
                 spec: snapshot.spec,
                 created: beijingDayKey(now),
-                unit: '个',
+                unit: "个",
             };
             await this.idempotency.complete(tx, {
                 id: placeholderId,
                 httpStatus: 200,
                 responseBody: bom as unknown as Prisma.InputJsonValue,
-                resource: { type: 'bom', code: bomCode },
+                resource: { type: "bom", code: bomCode },
             });
             return bom;
         });
@@ -249,7 +249,7 @@ export class BomsService {
      */
     async deleteBom(code: string, actor: AuthUser, idempotencyKey: string | undefined): Promise<null> {
         const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: 'POST', pathParams: { code } });
+        const requestHash = this.idempotency.digest({ method: "POST", pathParams: { code } });
 
         return this.txRunner.run(async (tx: Tx) => {
             const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
@@ -263,24 +263,24 @@ export class BomsService {
                 return null;
             }
             if (placeholderId === null) {
-                throw new Error('幂等占位缺失');
+                throw new Error("幂等占位缺失");
             }
 
             const bom = await tx.bomTable.findUnique({ where: { bomCode: code } });
             if (!bom) {
-                throw new NotFoundException('BOM 不存在');
+                throw new NotFoundException("BOM 不存在");
             }
             await tx.$queryRaw`SELECT id FROM bom_table WHERE id = ${bom.id} FOR UPDATE`;
 
             const orderRefs = await tx.salesOrderTable.count({ where: { bomId: bom.id } });
             if (orderRefs > 0) {
-                throw new ConflictException('BOM 已被销售订单引用，不可删除');
+                throw new ConflictException("BOM 已被销售订单引用，不可删除");
             }
             const ledgerRefs =
                 (await tx.inboundLedger.count({ where: { bomId: bom.id } })) +
                 (await tx.stockAdjustment.count({ where: { bomId: bom.id } }));
             if (ledgerRefs > 0) {
-                throw new ConflictException('BOM 已有入库或库存调整流水，不可删除');
+                throw new ConflictException("BOM 已有入库或库存调整流水，不可删除");
             }
 
             const [category, items] = await Promise.all([
@@ -289,7 +289,7 @@ export class BomsService {
             ]);
             const snapshot = this.toBom({
                 ...bom,
-                category: { name: category?.name ?? '' },
+                category: { name: category?.name ?? "" },
                 items,
             });
 
@@ -297,8 +297,8 @@ export class BomsService {
             await tx.bomTable.delete({ where: { id: bom.id } });
             const now = new Date();
             await recordOpLog(tx, this.snowflake, actor, {
-                action: 'delete_bom',
-                targetType: 'bom',
+                action: "delete_bom",
+                targetType: "bom",
                 targetId: bom.id,
                 targetCode: bom.bomCode,
                 detail: snapshot as unknown as Prisma.InputJsonValue,
@@ -309,7 +309,7 @@ export class BomsService {
                 httpStatus: 200,
                 // JSON 列不接受 null 占位；重放路径已归一为 null，此快照仅审计兜底
                 responseBody: { deleted: true, code: bom.bomCode },
-                resource: { type: 'bom', code: bom.bomCode },
+                resource: { type: "bom", code: bom.bomCode },
             });
             return null;
         });
@@ -321,7 +321,7 @@ export class BomsService {
     ): Promise<BomCategoryRow> {
         const located = await tx.bomCategory.findUnique({ where: { name } });
         if (!located || !located.status) {
-            throw new NotFoundException('品类不存在');
+            throw new NotFoundException("品类不存在");
         }
         await tx.$queryRaw`SELECT id FROM bom_category WHERE id = ${located.id} FOR UPDATE`;
         return located;
@@ -372,11 +372,11 @@ export class BomsService {
     }
 
     private toNode(row: CatalogNodeRow): BomCatalogNode {
-        const isGroup = row.kind === 'GROUP';
+        const isGroup = row.kind === "GROUP";
         return {
             id: row.id.toString(),
             parentId: row.parentId?.toString() ?? null,
-            kind: isGroup ? 'group' : 'section',
+            kind: isGroup ? "group" : "section",
             name: row.name,
             key: isGroup ? row.groupKey : null,
             multi: isGroup ? row.multi : null,

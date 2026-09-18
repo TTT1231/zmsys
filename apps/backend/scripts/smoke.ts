@@ -5,31 +5,31 @@
  * Windows 不支持向子进程投递真实信号，停止阶段降级为仅断言进程退出；
  * Linux（CI）下完整验证 SIGINT 优雅停机。
  */
-import 'dotenv/config';
-import '../src/process-tz';
-import { spawn, spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import "dotenv/config";
+import "../src/process-tz";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
-const ENTRY = join(__dirname, '..', 'dist', 'main.js');
+const ENTRY = join(__dirname, "..", "dist", "main.js");
 const PORT = Number(process.env.PORT ?? 5000);
 const base = `http://127.0.0.1:${PORT}/api`;
 
 // 测试库护栏：强制 *_test，绝不连开发库
-const baseDatabase = process.env.DB_DATABASE ?? 'zmdb';
-if (baseDatabase.endsWith('_test')) {
+const baseDatabase = process.env.DB_DATABASE ?? "zmdb";
+if (baseDatabase.endsWith("_test")) {
     // 已显式指定测试库
 } else {
     process.env.DB_DATABASE = `${baseDatabase}_test`;
 }
-process.env.NODE_ENV = 'test';
+process.env.NODE_ENV = "test";
 
 const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
 const httpJson = async (path: string, init?: RequestInit): Promise<{ status: number; body: unknown }> => {
     const res = await fetch(`${base}${path}`, {
         ...init,
-        headers: { 'content-type': 'application/json', ...init?.headers },
+        headers: { "content-type": "application/json", ...init?.headers },
     });
     return { status: res.status, body: await res.json().catch(() => null) };
 };
@@ -47,24 +47,24 @@ const waitFor = async (label: string, check: () => Promise<boolean>, timeoutMs: 
 
 const main = async (): Promise<void> => {
     if (!existsSync(ENTRY)) {
-        throw new Error('缺少编译产物 dist/main.js，请先执行 pnpm build');
+        throw new Error("缺少编译产物 dist/main.js，请先执行 pnpm build");
     }
 
     const output: string[] = [];
     const child = spawn(process.execPath, [ENTRY], {
-        env: { ...process.env, TZ: 'UTC' },
-        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, TZ: "UTC" },
+        stdio: ["ignore", "pipe", "pipe"],
     });
-    child.stdout.on('data', (chunk: Buffer) => output.push(chunk.toString()));
-    child.stderr.on('data', (chunk: Buffer) => output.push(chunk.toString()));
+    child.stdout.on("data", (chunk: Buffer) => output.push(chunk.toString()));
+    child.stderr.on("data", (chunk: Buffer) => output.push(chunk.toString()));
 
     const exited = new Promise<number | null>(resolve => {
-        child.on('exit', code => resolve(code));
+        child.on("exit", code => resolve(code));
     });
 
     try {
         await waitFor(
-            'health/live 就绪',
+            "health/live 就绪",
             async () => {
                 try {
                     const res = await fetch(`${base}/health/live`);
@@ -76,41 +76,41 @@ const main = async (): Promise<void> => {
             20000,
         );
 
-        const login = await httpJson('/auth/login', {
-            method: 'POST',
-            body: JSON.stringify({ account: 'guojun', password: '123456' }),
+        const login = await httpJson("/auth/login", {
+            method: "POST",
+            body: JSON.stringify({ account: "guojun", password: "123456" }),
         });
         if (login.status !== 200) {
             throw new Error(`登录失败：${JSON.stringify(login.body)}`);
         }
         const token = (login.body as { data: { accessToken: string } }).data.accessToken;
 
-        const profile = await httpJson('/auth/profile', { headers: { authorization: `Bearer ${token}` } });
+        const profile = await httpJson("/auth/profile", { headers: { authorization: `Bearer ${token}` } });
         if (profile.status !== 200) {
             throw new Error(`profile 失败：${JSON.stringify(profile.body)}`);
         }
-        const ready = await httpJson('/health/ready');
+        const ready = await httpJson("/health/ready");
         if (ready.status !== 200) {
             throw new Error(`health/ready 失败：${JSON.stringify(ready.body)}`);
         }
 
         // 停止：Linux 用 SIGINT 触发 enableShutdownHooks 优雅链；
         // Windows 上 child.kill() 无法投递信号（Node 在 win32 直接 TerminateProcess 但偶发不生效），改用 taskkill
-        const isWindows = process.platform === 'win32';
+        const isWindows = process.platform === "win32";
         if (isWindows) {
             // pid 为本脚本 spawn 的数字 PID，无注入面；参数数组形式不经 shell
-            spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+            spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
         } else {
-            child.kill('SIGINT');
+            child.kill("SIGINT");
         }
         const timeout = sleep(15000).then(() => null);
         const code = await Promise.race([exited, timeout]);
         if (code === null) {
-            child.kill('SIGKILL');
-            throw new Error('进程未在 15s 内退出');
+            child.kill("SIGKILL");
+            throw new Error("进程未在 15s 内退出");
         }
 
-        const logs = output.join('');
+        const logs = output.join("");
         if (!isWindows) {
             // 优雅停机的证据：Nest 处理完 onModuleDestroy（Prisma disconnect）后退出码 0
             if (code !== 0) {
@@ -122,7 +122,7 @@ const main = async (): Promise<void> => {
         );
     } finally {
         if (child.exitCode === null && !child.killed) {
-            child.kill('SIGKILL');
+            child.kill("SIGKILL");
         }
     }
 };

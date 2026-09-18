@@ -1,10 +1,10 @@
-import { createHash } from 'node:crypto';
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
-import { Prisma } from '../generated/prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
-import type { Tx } from '../prisma/transaction.runner';
-import { SnowflakeGenerator } from '../common/snowflake';
-import { markTransactionRetryable } from '../common/errors/transaction-retry-exhausted.error';
+import { createHash } from "node:crypto";
+import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
+import { Prisma } from "../generated/prisma/client";
+import { PrismaService } from "../prisma/prisma.service";
+import type { Tx } from "../prisma/transaction.runner";
+import { SnowflakeGenerator } from "../common/snowflake";
+import { markTransactionRetryable } from "../common/errors/transaction-retry-exhausted.error";
 
 /** 契约：Idempotency-Key 为 8–128 个可见 ASCII 字符（db-scheme.md §1.3，^[!-~]+$） */
 const KEY_PATTERN = /^[!-~]{8,128}$/;
@@ -43,18 +43,18 @@ const canonicalize = (value: unknown): unknown => {
         return { $null: 1 };
     }
     switch (typeof value) {
-        case 'undefined':
+        case "undefined":
             return { $undefined: 1 };
-        case 'string':
+        case "string":
             return { $string: value };
-        case 'number':
+        case "number":
             // String(number) 往返精确；NaN/Infinity 不像 JSON.stringify 那样退化成 null
             return { $number: String(value) };
-        case 'bigint':
+        case "bigint":
             return { $bigint: value.toString() };
-        case 'boolean':
+        case "boolean":
             return { $boolean: value };
-        case 'object':
+        case "object":
             if (value instanceof Date) {
                 return { $date: value.toISOString() };
             }
@@ -91,9 +91,9 @@ export class IdempotencyService {
 
     /** 校验并返回 Idempotency-Key；缺失/含控制字符/超长一律 400 */
     requireKey(header: string | undefined): string {
-        const key = header?.trim() ?? '';
+        const key = header?.trim() ?? "";
         if (!KEY_PATTERN.test(key)) {
-            throw new BadRequestException('Idempotency-Key 必须为 8–128 个可见 ASCII 字符');
+            throw new BadRequestException("Idempotency-Key 必须为 8–128 个可见 ASCII 字符");
         }
         return key;
     }
@@ -106,7 +106,7 @@ export class IdempotencyService {
             q: input.query ?? {},
             b: input.body ?? null,
         });
-        return new Uint8Array(createHash('sha256').update(JSON.stringify(payload)).digest());
+        return new Uint8Array(createHash("sha256").update(JSON.stringify(payload)).digest());
     }
 
     /**
@@ -117,7 +117,7 @@ export class IdempotencyService {
      * 同一唯一域，且恒在长度约束内。三元组各字段均不含 \n（可见 ASCII），无拼接歧义。
      */
     requestKey(actorId: bigint, operationKey: string, idempotencyKey: string): string {
-        return createHash('sha256').update(`${actorId}\n${operationKey}\n${idempotencyKey}`).digest('hex');
+        return createHash("sha256").update(`${actorId}\n${operationKey}\n${idempotencyKey}`).digest("hex");
     }
 
     /**
@@ -146,9 +146,9 @@ export class IdempotencyService {
         const existing = await tx.apiIdempotency.findUnique({ where });
         if (existing) {
             if (!bytesEqual(existing.requestHash, params.requestHash)) {
-                throw new ConflictException('幂等键已被其他请求使用');
+                throw new ConflictException("幂等键已被其他请求使用");
             }
-            if (existing.state === 'SUCCEEDED') {
+            if (existing.state === "SUCCEEDED") {
                 return {
                     replay: {
                         httpStatus: existing.httpStatus ?? 200,
@@ -158,7 +158,7 @@ export class IdempotencyService {
                 };
             }
             // PROCESSING 只存在于未提交事务中；已提交数据出现该状态说明异常残留
-            throw new ConflictException('重复请求正在处理中，请稍后重试');
+            throw new ConflictException("重复请求正在处理中，请稍后重试");
         }
         const placeholderId = this.snowflake.next();
         const now = new Date();
@@ -170,13 +170,13 @@ export class IdempotencyService {
                     operationKey: params.operationKey,
                     idempotencyKey: params.key,
                     requestHash: params.requestHash,
-                    state: 'PROCESSING',
+                    state: "PROCESSING",
                     createdAt: now,
                     expiresAt: new Date(now.getTime() + RETENTION_MS),
                 },
             });
         } catch (error) {
-            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
                 // 并发同 key：占位唯一键竞争，交由 TransactionRunner 重试整个事务后收敛到重放/409
                 throw markTransactionRetryable(error);
             }
@@ -198,7 +198,7 @@ export class IdempotencyService {
         await tx.apiIdempotency.update({
             where: { id: params.id },
             data: {
-                state: 'SUCCEEDED',
+                state: "SUCCEEDED",
                 httpStatus: params.httpStatus,
                 responseJson: params.responseBody,
                 resourceType: params.resource?.type,

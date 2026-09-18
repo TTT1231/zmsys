@@ -1,18 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import type { SysPermission } from '../generated/prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
-import { SUPER_ROLE_CODE, type RoleCode } from '../constants';
-import type { RoleGrant } from './types';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import type { SysPermission } from "../generated/prisma/client";
+import { PrismaService } from "../prisma/prisma.service";
+import { SUPER_ROLE_CODE, type RoleCode } from "../constants";
+import type { RoleGrant } from "./types";
 
 /** 由权限码行构造契约的 RoleGrant 形态（menus + 按 menuKey 分组的 actions） */
 export const buildRoleGrant = (version: bigint, permissions: SysPermission[]): RoleGrant => {
     const menus: string[] = [];
     const actions: Record<string, string[]> = {};
     for (const permission of permissions) {
-        if (permission.kind === 'MENU') {
+        if (permission.kind === "MENU") {
             menus.push(permission.menuKey);
         } else {
-            (actions[permission.menuKey] ??= []).push(permission.actionId ?? '');
+            (actions[permission.menuKey] ??= []).push(permission.actionId ?? "");
         }
     }
     return { version: Number(version), menus, actions };
@@ -33,7 +33,7 @@ export class AccessControlService {
             where: { code: roleCode },
         });
         if (!role) {
-            throw new NotFoundException('角色不存在');
+            throw new NotFoundException("角色不存在");
         }
         const permissions = await this.loadPermissionRows(roleCode);
         return buildRoleGrant(role.grantVersion, permissions);

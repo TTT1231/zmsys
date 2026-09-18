@@ -1,21 +1,21 @@
-import { randomUUID } from 'node:crypto';
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import bcrypt from 'bcryptjs';
-import { PrismaService } from '../prisma/prisma.service';
-import { TransactionRunner } from '../prisma/transaction.runner';
-import type { Tx } from '../prisma/transaction.runner';
-import { SnowflakeGenerator } from '../common/snowflake';
-import { AccessControlService } from '../access-control/access-control.service';
-import { toWbUser, userSnapshot } from '../access-control/wb-user';
-import type { RoleGrant, WbUser } from '../access-control/types';
-import type { AuthUser } from '../common/types/auth-user';
-import type { JwtPayload } from './types';
-import type { LoginDto } from './dto/login.dto';
-import type { ChangePasswordDto } from './dto/change-password.dto';
+import { randomUUID } from "node:crypto";
+import { BadRequestException, Injectable, UnauthorizedException } from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
+import bcrypt from "bcryptjs";
+import { PrismaService } from "../prisma/prisma.service";
+import { TransactionRunner } from "../prisma/transaction.runner";
+import type { Tx } from "../prisma/transaction.runner";
+import { SnowflakeGenerator } from "../common/snowflake";
+import { AccessControlService } from "../access-control/access-control.service";
+import { toWbUser, userSnapshot } from "../access-control/wb-user";
+import type { RoleGrant, WbUser } from "../access-control/types";
+import type { AuthUser } from "../common/types/auth-user";
+import type { JwtPayload } from "./types";
+import type { LoginDto } from "./dto/login.dto";
+import type { ChangePasswordDto } from "./dto/change-password.dto";
 
 /** 账号不存在时也执行一次同代价比较，避免响应时间泄露账号是否存在 */
-const DUMMY_HASH = bcrypt.hashSync('timing-attack-dummy-password', 10);
+const DUMMY_HASH = bcrypt.hashSync("timing-attack-dummy-password", 10);
 
 @Injectable()
 export class AuthService {
@@ -34,7 +34,7 @@ export class AuthService {
         const passwordOk = await bcrypt.compare(dto.password, user?.passwordHash ?? DUMMY_HASH);
         // 凭据错误与账号停用统一文案，不泄露账号存在性
         if (!user || !passwordOk || !user.status) {
-            throw new BadRequestException('账号或密码错误');
+            throw new BadRequestException("账号或密码错误");
         }
 
         const now = new Date();
@@ -45,7 +45,7 @@ export class AuthService {
             data: { lastLoginAt: now, updatedAt: user.updatedAt },
         });
 
-        const payload: Pick<JwtPayload, 'sub' | 'ver'> = {
+        const payload: Pick<JwtPayload, "sub" | "ver"> = {
             sub: user.id.toString(),
             ver: Number(user.tokenVersion),
         };
@@ -61,9 +61,9 @@ export class AuthService {
             where: { id: BigInt(user.id) },
         });
         if (!current || !current.status) {
-            throw new UnauthorizedException('登录已过期，请重新登录');
+            throw new UnauthorizedException("登录已过期，请重新登录");
         }
-        const grant = await this.accessControl.getGrant(current.roleCode as WbUser['role']);
+        const grant = await this.accessControl.getGrant(current.roleCode as WbUser["role"]);
         return { user: toWbUser(current), grant };
     }
 
@@ -80,11 +80,11 @@ export class AuthService {
             await tx.$queryRaw`SELECT id FROM sys_user WHERE id = ${userId} FOR UPDATE`;
             const current = await tx.sysUser.findUnique({ where: { id: userId } });
             if (!current) {
-                throw new BadRequestException('账号不存在或已停用');
+                throw new BadRequestException("账号不存在或已停用");
             }
             const oldOk = await bcrypt.compare(dto.oldPassword, current.passwordHash);
             if (!oldOk) {
-                throw new BadRequestException('旧密码不正确');
+                throw new BadRequestException("旧密码不正确");
             }
             const updated = await tx.sysUser.update({
                 where: { id: userId },
@@ -101,11 +101,11 @@ export class AuthService {
                     id: this.snowflake.next(),
                     userId,
                     operatorId: userId,
-                    eventType: 'PASSWORD_CHANGE',
+                    eventType: "PASSWORD_CHANGE",
                     createdAt: now,
                     beforeVersion: current.rowVersion,
                     afterVersion: updated.rowVersion,
-                    reason: '自助修改密码',
+                    reason: "自助修改密码",
                     beforeJson: userSnapshot(current),
                     afterJson: userSnapshot(updated),
                 },

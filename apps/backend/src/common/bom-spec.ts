@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash } from "node:crypto";
 
 /**
  * BOM 物料集合判重（db-scheme.md §5 bom_table）：materialItemIds 先校验为
@@ -15,7 +15,7 @@ const DIGITS_PATTERN = /^[0-9]+$/;
 
 /** 物料 id 规范化：非法或越界返回 null（错误消息由调用方按契约文案抛出） */
 export function normalizeMaterialId(id: string): string | null {
-    if (typeof id !== 'string' || !DIGITS_PATTERN.test(id)) {
+    if (typeof id !== "string" || !DIGITS_PATTERN.test(id)) {
         return null;
     }
     const value = BigInt(id);
@@ -50,8 +50,8 @@ export function canonicalMaterialIds(ids: string[]): string[] {
 /** spec_hash = SHA-256(规范化 id 数组的 JSON 字符串 UTF-8 字节)，32 字节（对应 BINARY(32)） */
 export function materialSetHash(ids: string[]): Uint8Array<ArrayBuffer> {
     return new Uint8Array(
-        createHash('sha256')
-            .update(JSON.stringify(canonicalMaterialIds(ids)), 'utf8')
+        createHash("sha256")
+            .update(JSON.stringify(canonicalMaterialIds(ids)), "utf8")
             .digest(),
     );
 }

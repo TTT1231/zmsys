@@ -1,4 +1,4 @@
-import mariadb from 'mariadb';
+import mariadb from "mariadb";
 
 export interface MariadbPoolConfig {
     host: string;
@@ -31,7 +31,7 @@ export const createMariadbPool = (config: MariadbPoolConfig): mariadb.Pool =>
         password: config.password,
         database: config.name,
         connectionLimit: config.connectionLimit,
-        timezone: 'Z',
-        sessionVariables: { time_zone: '+00:00' },
+        timezone: "Z",
+        sessionVariables: { time_zone: "+00:00" },
         initSql: "SET SESSION transaction_isolation = 'READ-COMMITTED'",
     });

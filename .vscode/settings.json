@@ -1,6 +1,8 @@
 {
     "files.exclude": {
-        "*.tsbuildinfo": true
+        "*.tsbuildinfo": true,
+        ".zcode": true,
+        "apps/backend/tsconfig.build.tsbuildinfo": true
     },
     "explorer.fileNesting.enabled": true, // 启用文件嵌套功能
     "explorer.fileNesting.expand": false, // 默认折叠嵌套文件（不展开）

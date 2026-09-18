@@ -1,25 +1,25 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '../generated/prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
-import { TransactionRunner } from '../prisma/transaction.runner';
-import type { Tx } from '../prisma/transaction.runner';
-import { SnowflakeGenerator } from '../common/snowflake';
-import { IdempotencyService } from '../idempotency/idempotency.service';
-import { formatDateColumn, toDateColumn } from '../common/datetime';
-import { bomItemsSnapshotOf } from '../common/bom-display';
-import { lockRowsById } from '../domain/concurrency';
-import { recordOpLog } from '../domain/op-log';
-import { BusinessSequenceService } from '../sequence/business-sequence.service';
-import type { AuthUser } from '../common/types/auth-user';
-import type { BomTable, SalesOrderTable } from '../generated/prisma/client';
-import type { Order } from './types';
-import type { CreateOrderDto } from './dto/create-order.dto';
-import type { UpdateOrderDto } from './dto/update-order.dto';
-import type { CancelOrderDto } from './dto/cancel-order.dto';
-import type { DeleteOrderDto } from './dto/delete-order.dto';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma } from "../generated/prisma/client";
+import { PrismaService } from "../prisma/prisma.service";
+import { TransactionRunner } from "../prisma/transaction.runner";
+import type { Tx } from "../prisma/transaction.runner";
+import { SnowflakeGenerator } from "../common/snowflake";
+import { IdempotencyService } from "../idempotency/idempotency.service";
+import { formatDateColumn, toDateColumn } from "../common/datetime";
+import { bomItemsSnapshotOf } from "../common/bom-display";
+import { lockRowsById } from "../domain/concurrency";
+import { recordOpLog } from "../domain/op-log";
+import { BusinessSequenceService } from "../sequence/business-sequence.service";
+import type { AuthUser } from "../common/types/auth-user";
+import type { BomTable, SalesOrderTable } from "../generated/prisma/client";
+import type { Order } from "./types";
+import type { CreateOrderDto } from "./dto/create-order.dto";
+import type { UpdateOrderDto } from "./dto/update-order.dto";
+import type { CancelOrderDto } from "./dto/cancel-order.dto";
+import type { DeleteOrderDto } from "./dto/delete-order.dto";
 
 /** api_idempotency 的 operation_key；取消/删除按订单号独立域，与前端 mock 同粒度 */
-const CREATE_OPERATION_KEY = 'orders:create';
+const CREATE_OPERATION_KEY = "orders:create";
 const cancelOperationKeyOf = (orderNo: string): string => `orders:cancel:${orderNo}`;
 const deleteOperationKeyOf = (orderNo: string): string => `orders:delete:${orderNo}`;
 
@@ -47,7 +47,7 @@ export class OrdersService {
      */
     async listOrders(): Promise<Order[]> {
         const rows = await this.prisma.salesOrderTable.findMany({
-            orderBy: { orderNo: 'asc' },
+            orderBy: { orderNo: "asc" },
             include: {
                 customer: { select: { customerCode: true } },
                 bom: { select: { bomCode: true } },
@@ -68,7 +68,7 @@ export class OrdersService {
      */
     async createOrder(dto: CreateOrderDto, actor: AuthUser, idempotencyKey: string | undefined): Promise<Order> {
         const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: 'POST', body: dto });
+        const requestHash = this.idempotency.digest({ method: "POST", body: dto });
 
         return this.txRunner.run(async (tx: Tx) => {
             const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
@@ -81,23 +81,23 @@ export class OrdersService {
                 return replay.body as unknown as Order;
             }
             if (placeholderId === null) {
-                throw new Error('幂等占位缺失');
+                throw new Error("幂等占位缺失");
             }
 
             const bom = await this.lockBomByCode(tx, dto.bomCode);
             const customer = await tx.customTable.findUnique({ where: { customerCode: dto.customerCode } });
             if (!customer) {
-                throw new NotFoundException('客户不存在');
+                throw new NotFoundException("客户不存在");
             }
             // BOM 快照冻结（db-scheme.md §6.1）：明细取建档冻结行（position 排序），
             // modelCode/spec 由其派生；下单后目录变更不影响本订单与打印
             const bomSnapshot = bomItemsSnapshotOf(
-                await tx.bomItem.findMany({ where: { bomId: bom.id }, orderBy: { position: 'asc' } }),
+                await tx.bomItem.findMany({ where: { bomId: bom.id }, orderBy: { position: "asc" } }),
             );
 
             const now = new Date();
             const id = this.snowflake.next();
-            const orderNo = await this.sequence.nextCode(tx, 'order', dto.orderDate);
+            const orderNo = await this.sequence.nextCode(tx, "order", dto.orderDate);
             const created = await tx.salesOrderTable.create({
                 data: {
                     id,
@@ -123,7 +123,7 @@ export class OrdersService {
                     id: this.snowflake.next(),
                     orderId: id,
                     operatorId: BigInt(actor.id),
-                    eventType: 'CREATE',
+                    eventType: "CREATE",
                     afterVersion: created.rowVersion,
                     createdAt: now,
                     requestKey: this.idempotency.requestKey(BigInt(actor.id), CREATE_OPERATION_KEY, key),
@@ -131,8 +131,8 @@ export class OrdersService {
                 },
             });
             await recordOpLog(tx, this.snowflake, actor, {
-                action: 'create_order',
-                targetType: 'order',
+                action: "create_order",
+                targetType: "order",
                 targetId: id,
                 targetCode: orderNo,
                 detail: { customerCode: dto.customerCode, bomCode: dto.bomCode, qty: dto.qty },
@@ -152,7 +152,7 @@ export class OrdersService {
                 id: placeholderId,
                 httpStatus: 200,
                 responseBody: order as unknown as Prisma.InputJsonValue,
-                resource: { type: 'order', code: orderNo },
+                resource: { type: "order", code: orderNo },
             });
             return order;
         });
@@ -164,16 +164,16 @@ export class OrdersService {
      */
     async updateOrder(orderNo: string, dto: UpdateOrderDto, actor: AuthUser): Promise<Order> {
         if (dto.qty === undefined && dto.deliverDate === undefined && dto.remark === undefined) {
-            throw new BadRequestException('至少修改数量、交货日期或备注之一');
+            throw new BadRequestException("至少修改数量、交货日期或备注之一");
         }
         return this.txRunner.run(async (tx: Tx) => {
             const now = new Date();
             const current = await this.lockOrderForWrite(tx, orderNo);
             if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException('订单已被其他人修改，请刷新后重试');
+                throw new ConflictException("订单已被其他人修改，请刷新后重试");
             }
-            if (current.lifecycleStatus === 'CANCELLED') {
-                throw new ConflictException('订单已取消，不可修改');
+            if (current.lifecycleStatus === "CANCELLED") {
+                throw new ConflictException("订单已取消，不可修改");
             }
 
             const outbound = await this.outboundNetOf(tx, current.id);
@@ -201,11 +201,11 @@ export class OrdersService {
                     id: this.snowflake.next(),
                     orderId: current.id,
                     operatorId: BigInt(actor.id),
-                    eventType: 'UPDATE',
+                    eventType: "UPDATE",
                     beforeVersion: current.rowVersion,
                     afterVersion: updated.rowVersion,
                     createdAt: now,
-                    reason: '修改销售订单',
+                    reason: "修改销售订单",
                     beforeJson: this.orderSnapshot(current),
                     afterJson: this.orderSnapshot(updated),
                 },
@@ -226,7 +226,7 @@ export class OrdersService {
     ): Promise<Order> {
         const operationKey = cancelOperationKeyOf(orderNo);
         const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: 'POST', pathParams: { orderNo }, body: dto });
+        const requestHash = this.idempotency.digest({ method: "POST", pathParams: { orderNo }, body: dto });
 
         return this.txRunner.run(async (tx: Tx) => {
             const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
@@ -239,33 +239,33 @@ export class OrdersService {
                 return replay.body as unknown as Order;
             }
             if (placeholderId === null) {
-                throw new Error('幂等占位缺失');
+                throw new Error("幂等占位缺失");
             }
 
             const now = new Date();
             const current = await this.lockOrderForWrite(tx, orderNo);
             if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException('订单已被其他人修改，请刷新后重试');
+                throw new ConflictException("订单已被其他人修改，请刷新后重试");
             }
-            if (current.lifecycleStatus === 'CANCELLED') {
-                throw new ConflictException('订单已取消');
+            if (current.lifecycleStatus === "CANCELLED") {
+                throw new ConflictException("订单已取消");
             }
             const registered = await tx.outboundShipment.findFirst({
-                where: { orderId: current.id, state: 'REGISTERED' },
+                where: { orderId: current.id, state: "REGISTERED" },
                 select: { id: true },
             });
             if (registered) {
-                throw new ConflictException('存在已登记未打印的出库单，请先作废后再取消订单');
+                throw new ConflictException("存在已登记未打印的出库单，请先作废后再取消订单");
             }
             const outbound = await this.outboundNetOf(tx, current.id);
             if (outbound >= current.qty) {
-                throw new ConflictException('订单已全部发货，没有剩余量可取消');
+                throw new ConflictException("订单已全部发货，没有剩余量可取消");
             }
 
             const updated = await tx.salesOrderTable.update({
                 where: { id: current.id },
                 data: {
-                    lifecycleStatus: 'CANCELLED',
+                    lifecycleStatus: "CANCELLED",
                     cancelledAt: now,
                     cancelledBy: BigInt(actor.id),
                     cancelReason: dto.reason,
@@ -283,7 +283,7 @@ export class OrdersService {
                     id: this.snowflake.next(),
                     orderId: current.id,
                     operatorId: BigInt(actor.id),
-                    eventType: 'CANCEL',
+                    eventType: "CANCEL",
                     beforeVersion: current.rowVersion,
                     afterVersion: updated.rowVersion,
                     createdAt: now,
@@ -299,7 +299,7 @@ export class OrdersService {
                 id: placeholderId,
                 httpStatus: 200,
                 responseBody: order as unknown as Prisma.InputJsonValue,
-                resource: { type: 'order', code: orderNo },
+                resource: { type: "order", code: orderNo },
             });
             return order;
         });
@@ -322,7 +322,7 @@ export class OrdersService {
     ): Promise<null> {
         const operationKey = deleteOperationKeyOf(orderNo);
         const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: 'POST', pathParams: { orderNo }, body: dto });
+        const requestHash = this.idempotency.digest({ method: "POST", pathParams: { orderNo }, body: dto });
 
         return this.txRunner.run(async (tx: Tx) => {
             const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
@@ -336,21 +336,21 @@ export class OrdersService {
                 return null;
             }
             if (placeholderId === null) {
-                throw new Error('幂等占位缺失');
+                throw new Error("幂等占位缺失");
             }
 
             const now = new Date();
             const current = await this.lockOrderForWrite(tx, orderNo);
             if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException('订单已被其他人修改，请刷新后重试');
+                throw new ConflictException("订单已被其他人修改，请刷新后重试");
             }
             const outbound = await this.outboundNetOf(tx, current.id);
             if (outbound > 0) {
-                throw new ConflictException('订单已有发货记录，不可删除');
+                throw new ConflictException("订单已有发货记录，不可删除");
             }
             const shipmentRefs = await tx.outboundShipment.count({ where: { orderId: current.id } });
             if (shipmentRefs > 0) {
-                throw new ConflictException('订单存在出库流水（含已作废），不可删除');
+                throw new ConflictException("订单存在出库流水（含已作废），不可删除");
             }
 
             await tx.salesOrderChangeLog.deleteMany({ where: { orderId: current.id } });
@@ -358,8 +358,8 @@ export class OrdersService {
             // op_log 快照：行内字段 + 关联编码（客户/BOM），审计可独立还原删除前形态
             const snapshot = this.orderSnapshot(current) as Record<string, unknown>;
             await recordOpLog(tx, this.snowflake, actor, {
-                action: 'delete_order',
-                targetType: 'order',
+                action: "delete_order",
+                targetType: "order",
                 targetId: current.id,
                 targetCode: current.orderNo,
                 detail: {
@@ -376,7 +376,7 @@ export class OrdersService {
                 httpStatus: 200,
                 // JSON 列不接受 null 占位；重放路径已归一为 null，此快照仅审计兜底
                 responseBody: { deleted: true, orderNo: current.orderNo },
-                resource: { type: 'order', code: current.orderNo },
+                resource: { type: "order", code: current.orderNo },
             });
             return null;
         });
@@ -398,7 +398,7 @@ export class OrdersService {
             include: { category: { select: { name: true } } },
         });
         if (!bom) {
-            throw new NotFoundException('BOM 不存在');
+            throw new NotFoundException("BOM 不存在");
         }
         return bom;
     }
@@ -414,9 +414,9 @@ export class OrdersService {
             select: { id: true, bomId: true },
         });
         if (!located) {
-            throw new NotFoundException('订单不存在');
+            throw new NotFoundException("订单不存在");
         }
-        await lockRowsById(tx, 'bom_table', [located.bomId]);
+        await lockRowsById(tx, "bom_table", [located.bomId]);
         await tx.$queryRaw`SELECT id FROM sales_order_table WHERE order_no = ${orderNo} FOR UPDATE`;
         const order = await tx.salesOrderTable.findUnique({
             where: { orderNo },
@@ -427,7 +427,7 @@ export class OrdersService {
             },
         });
         if (!order) {
-            throw new NotFoundException('订单不存在');
+            throw new NotFoundException("订单不存在");
         }
         return order;
     }
@@ -454,7 +454,7 @@ export class OrdersService {
 
     /** 契约 Order 映射：version 序列化为 number；日期列 yyyy-MM-dd；取消字段仅终态返回 */
     private toOrder(row: OrderRow, outbound: number): Order {
-        const cancelled = row.lifecycleStatus === 'CANCELLED';
+        const cancelled = row.lifecycleStatus === "CANCELLED";
         return {
             version: Number(row.rowVersion),
             orderNo: row.orderNo,
@@ -466,12 +466,12 @@ export class OrdersService {
             orderDate: formatDateColumn(row.orderDate),
             deliverDate: formatDateColumn(row.deliverDate),
             remark: row.remark,
-            lifecycleStatus: cancelled ? 'cancelled' : 'active',
+            lifecycleStatus: cancelled ? "cancelled" : "active",
             ...(cancelled
                 ? {
                       cancelledAt: (row.cancelledAt ?? new Date(0)).toISOString(),
-                      cancelledBy: row.canceller?.name ?? '',
-                      cancelReason: row.cancelReason ?? '',
+                      cancelledBy: row.canceller?.name ?? "",
+                      cancelReason: row.cancelReason ?? "",
                   }
                 : {}),
         };

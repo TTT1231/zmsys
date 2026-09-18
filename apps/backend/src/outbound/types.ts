@@ -10,7 +10,7 @@ export interface OutboundRow {
     time: string;
     operator: string;
     remark: string;
-    state: 'registered' | 'printed' | 'voided';
+    state: "registered" | "printed" | "voided";
     version: number;
     printVersion: number;
     voidReason?: string;

@@ -1,7 +1,7 @@
-import { Prisma } from '../generated/prisma/client';
-import type { SnowflakeGenerator } from '../common/snowflake';
-import type { AuthUser } from '../common/types/auth-user';
-import type { Tx } from '../prisma/transaction.runner';
+import { Prisma } from "../generated/prisma/client";
+import type { SnowflakeGenerator } from "../common/snowflake";
+import type { AuthUser } from "../common/types/auth-user";
+import type { Tx } from "../prisma/transaction.runner";
 
 /**
  * op_log 同事务审计（db-scheme.md §7）：至少覆盖登记发货、新建客户、新建订单，
@@ -9,7 +9,7 @@ import type { Tx } from '../prisma/transaction.runner';
  * uk(action, target_id) 保证一个目标每个动作只记一次——重放/重试路径撞唯一键静默跳过。
  */
 
-export type OpLogAction = 'ship' | 'create_customer' | 'create_order' | 'delete_bom' | 'delete_order';
+export type OpLogAction = "ship" | "create_customer" | "create_order" | "delete_bom" | "delete_order";
 
 export interface RecordOpLogParams {
     action: OpLogAction;
@@ -24,7 +24,7 @@ export interface RecordOpLogParams {
 export async function recordOpLog(
     tx: Tx,
     snowflake: SnowflakeGenerator,
-    operator: Pick<AuthUser, 'id' | 'name' | 'role'>,
+    operator: Pick<AuthUser, "id" | "name" | "role">,
     params: RecordOpLogParams,
 ): Promise<void> {
     try {
@@ -44,7 +44,7 @@ export async function recordOpLog(
         });
     } catch (error) {
         // uk(action, target_id)：该目标该动作已记录（重试/幂等重放路径），静默跳过
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
             return;
         }
         throw error;

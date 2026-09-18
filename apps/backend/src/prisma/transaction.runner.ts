@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
-import type { Prisma } from '../generated/prisma/client';
-import { TransactionRetryExhaustedError, isMarkedRetryable } from '../common/errors/transaction-retry-exhausted.error';
-import { PrismaService } from './prisma.service';
+import { Injectable } from "@nestjs/common";
+import type { Prisma } from "../generated/prisma/client";
+import { TransactionRetryExhaustedError, isMarkedRetryable } from "../common/errors/transaction-retry-exhausted.error";
+import { PrismaService } from "./prisma.service";
 
 /** 共享事务客户端类型：业务 service 一律从此导入，不再各自维护本地别名 */
 export type Tx = Prisma.TransactionClient;
@@ -10,19 +10,19 @@ export type Tx = Prisma.TransactionClient;
  * Prisma 层可重试码：P2034 = 事务写入冲突；'1213'/'1205' 为个别路径直接透传的驱动码。
  * $queryRaw 中的死锁实际以 P2010 + meta.driverAdapterError.cause 形态出现（见下方判定）。
  */
-const RETRYABLE_PRISMA_CODES = new Set(['P2034', '1213', '1205']);
+const RETRYABLE_PRISMA_CODES = new Set(["P2034", "1213", "1205"]);
 
 /** MariaDB 驱动层可重试：死锁 ER 1213 / 锁等待超时 ER 1205 */
 const isDriverLockConflict = (error: unknown): boolean => {
-    if (typeof error !== 'object' || error === null) {
+    if (typeof error !== "object" || error === null) {
         return false;
     }
     const candidate = error as { errno?: unknown; code?: unknown };
     return (
         candidate.errno === 1213 ||
         candidate.errno === 1205 ||
-        candidate.code === 'ER_LOCK_DEADLOCK' ||
-        candidate.code === 'ER_LOCK_WAIT_TIMEOUT'
+        candidate.code === "ER_LOCK_DEADLOCK" ||
+        candidate.code === "ER_LOCK_WAIT_TIMEOUT"
     );
 };
 
@@ -32,11 +32,11 @@ const isDriverLockConflict = (error: unknown): boolean => {
  * e2e 实测教训。
  */
 const prismaErrorCode = (error: unknown): string | undefined => {
-    if (typeof error !== 'object' || error === null || !('code' in error)) {
+    if (typeof error !== "object" || error === null || !("code" in error)) {
         return undefined;
     }
     const code = (error as { code?: unknown }).code;
-    return typeof code === 'string' || typeof code === 'number' ? String(code) : undefined;
+    return typeof code === "string" || typeof code === "number" ? String(code) : undefined;
 };
 
 /**
@@ -45,28 +45,28 @@ const prismaErrorCode = (error: unknown): string | undefined => {
  * { originalCode: '1213', kind: 'TransactionWriteConflict' }（e2e 实测形态）。
  */
 const isRawQueryLockConflict = (error: unknown): boolean => {
-    if (typeof error !== 'object' || error === null) {
+    if (typeof error !== "object" || error === null) {
         return false;
     }
     const candidate = error as {
         code?: unknown;
         meta?: { driverAdapterError?: { cause?: { kind?: unknown; originalCode?: unknown } } };
     };
-    if (prismaErrorCode(error) !== 'P2010') {
+    if (prismaErrorCode(error) !== "P2010") {
         return false;
     }
     const cause = candidate.meta?.driverAdapterError?.cause;
     if (!cause) {
         return false;
     }
-    return cause.kind === 'TransactionWriteConflict' || ['1213', '1205'].includes(String(cause.originalCode));
+    return cause.kind === "TransactionWriteConflict" || ["1213", "1205"].includes(String(cause.originalCode));
 };
 
 const isRetryable = (error: unknown): boolean =>
     isMarkedRetryable(error) ||
     isDriverLockConflict(error) ||
     isRawQueryLockConflict(error) ||
-    RETRYABLE_PRISMA_CODES.has(prismaErrorCode(error) ?? '');
+    RETRYABLE_PRISMA_CODES.has(prismaErrorCode(error) ?? "");
 
 export interface TransactionRunnerOptions {
     /** 总尝试次数（1 次初始 + N-1 次重试），默认 3 */

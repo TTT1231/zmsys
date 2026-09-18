@@ -1,6 +1,6 @@
-import { Global, Module } from '@nestjs/common';
-import { PrismaService } from './prisma.service';
-import { TransactionRunner } from './transaction.runner';
+import { Global, Module } from "@nestjs/common";
+import { PrismaService } from "./prisma.service";
+import { TransactionRunner } from "./transaction.runner";
 
 @Global()
 @Module({

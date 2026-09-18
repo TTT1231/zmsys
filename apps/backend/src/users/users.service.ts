@@ -1,25 +1,25 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import bcrypt from 'bcryptjs';
-import { Prisma } from '../generated/prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
-import { TransactionRunner } from '../prisma/transaction.runner';
-import type { Tx } from '../prisma/transaction.runner';
-import { SnowflakeGenerator } from '../common/snowflake';
-import { IdempotencyService } from '../idempotency/idempotency.service';
-import { toWbUser, userSnapshot } from '../access-control/wb-user';
-import type { WbUser } from '../access-control/types';
-import { SUPER_ROLE_CODE } from '../constants';
-import type { AuthUser } from '../common/types/auth-user';
-import type { SysUser } from '../generated/prisma/client';
-import type { CreateUserDto } from './dto/create-user.dto';
-import type { UpdateUserDto } from './dto/update-user.dto';
-import type { SetUserStatusDto } from './dto/set-user-status.dto';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import bcrypt from "bcryptjs";
+import { Prisma } from "../generated/prisma/client";
+import { PrismaService } from "../prisma/prisma.service";
+import { TransactionRunner } from "../prisma/transaction.runner";
+import type { Tx } from "../prisma/transaction.runner";
+import { SnowflakeGenerator } from "../common/snowflake";
+import { IdempotencyService } from "../idempotency/idempotency.service";
+import { toWbUser, userSnapshot } from "../access-control/wb-user";
+import type { WbUser } from "../access-control/types";
+import { SUPER_ROLE_CODE } from "../constants";
+import type { AuthUser } from "../common/types/auth-user";
+import type { SysUser } from "../generated/prisma/client";
+import type { CreateUserDto } from "./dto/create-user.dto";
+import type { UpdateUserDto } from "./dto/update-user.dto";
+import type { SetUserStatusDto } from "./dto/set-user-status.dto";
 
 /** 契约初始密码：新增用户统一 123456，数据库只保存强哈希（db-scheme.md §0.6） */
-const INITIAL_PASSWORD = '123456';
+const INITIAL_PASSWORD = "123456";
 
 /** api_idempotency 的 operation_key：同用户 + 操作 + key 唯一（db-scheme.md §1.3） */
-const CREATE_OPERATION_KEY = 'users:create';
+const CREATE_OPERATION_KEY = "users:create";
 
 /** 编辑与启停共用的离岗移交可选字段 */
 interface TransferFields {
@@ -30,7 +30,7 @@ interface TransferFields {
 /** 锁定并按 id 升序返回目标销售仍负责的全部客户（READ COMMITTED 下锁定读后普通读见最新行） */
 async function lockOwnedCustomers(tx: Tx, ownerId: bigint) {
     await tx.$queryRaw`SELECT id FROM custom_table WHERE owner_id = ${ownerId} ORDER BY id FOR UPDATE`;
-    return tx.customTable.findMany({ where: { ownerId }, orderBy: { id: 'asc' } });
+    return tx.customTable.findMany({ where: { ownerId }, orderBy: { id: "asc" } });
 }
 
 @Injectable()
@@ -43,7 +43,7 @@ export class UsersService {
     ) {}
 
     async listUsers(): Promise<WbUser[]> {
-        const users = await this.prisma.sysUser.findMany({ orderBy: { account: 'asc' } });
+        const users = await this.prisma.sysUser.findMany({ orderBy: { account: "asc" } });
         return users.map(user => toWbUser(user));
     }
 
@@ -54,7 +54,7 @@ export class UsersService {
      */
     async createUser(dto: CreateUserDto, actor: AuthUser, idempotencyKey: string | undefined): Promise<WbUser> {
         const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: 'POST', body: dto });
+        const requestHash = this.idempotency.digest({ method: "POST", body: dto });
         const passwordHash = await bcrypt.hash(INITIAL_PASSWORD, 10);
 
         return this.txRunner.run(async (tx: Tx) => {
@@ -70,12 +70,12 @@ export class UsersService {
             }
             if (placeholderId === null) {
                 // BeginResult 契约：replay 为空时占位必然存在；走到这里即基础设施缺陷
-                throw new Error('幂等占位缺失');
+                throw new Error("幂等占位缺失");
             }
 
             const existing = await tx.sysUser.findUnique({ where: { account: dto.account } });
             if (existing) {
-                throw new ConflictException('账号已存在');
+                throw new ConflictException("账号已存在");
             }
             const now = new Date();
             const id = this.snowflake.next();
@@ -93,8 +93,8 @@ export class UsersService {
                 });
             } catch (error) {
                 // 并发创建同账号：预检查之外的唯一约束兜底，映射为 409
-                if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-                    throw new ConflictException('账号已存在');
+                if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+                    throw new ConflictException("账号已存在");
                 }
                 throw error;
             }
@@ -103,10 +103,10 @@ export class UsersService {
                     id: this.snowflake.next(),
                     userId: id,
                     operatorId: BigInt(actor.id),
-                    eventType: 'CREATE',
+                    eventType: "CREATE",
                     createdAt: now,
                     afterVersion: user.rowVersion,
-                    reason: '新增用户（初始密码为契约默认值）',
+                    reason: "新增用户（初始密码为契约默认值）",
                     afterJson: userSnapshot(user),
                 },
             });
@@ -116,7 +116,7 @@ export class UsersService {
                 id: placeholderId,
                 httpStatus: 200,
                 responseBody: wbUser as unknown as Prisma.InputJsonValue,
-                resource: { type: 'user', code: user.account },
+                resource: { type: "user", code: user.account },
             });
             return wbUser;
         });
@@ -131,18 +131,18 @@ export class UsersService {
             const now = new Date();
             const current = await this.lockByAccount(tx, account);
             if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException('用户信息已被其他人修改，请刷新后重试');
+                throw new ConflictException("用户信息已被其他人修改，请刷新后重试");
             }
             if (current.roleCode === SUPER_ROLE_CODE && dto.role !== SUPER_ROLE_CODE) {
-                throw new BadRequestException('内置超级管理员角色不可修改');
+                throw new BadRequestException("内置超级管理员角色不可修改");
             }
             if (current.roleCode !== SUPER_ROLE_CODE && dto.role === SUPER_ROLE_CODE) {
-                throw new BadRequestException('不得通过接口授予超级管理员角色');
+                throw new BadRequestException("不得通过接口授予超级管理员角色");
             }
 
             const roleChanged = current.roleCode !== dto.role;
             const transferred =
-                roleChanged && current.roleCode === 'sales'
+                roleChanged && current.roleCode === "sales"
                     ? await this.transferCustomersIfNeeded(tx, current, dto, actor)
                     : 0;
 
@@ -155,13 +155,13 @@ export class UsersService {
                     rowVersion: { increment: 1 },
                 },
             });
-            const transferNote = transferred > 0 ? `；离岗移交 ${transferred} 个客户` : '';
+            const transferNote = transferred > 0 ? `；离岗移交 ${transferred} 个客户` : "";
             await tx.sysUserChangeLog.create({
                 data: {
                     id: this.snowflake.next(),
                     userId: current.id,
                     operatorId: BigInt(actor.id),
-                    eventType: roleChanged ? 'ROLE_CHANGE' : 'PROFILE_UPDATE',
+                    eventType: roleChanged ? "ROLE_CHANGE" : "PROFILE_UPDATE",
                     createdAt: now,
                     beforeVersion: current.rowVersion,
                     afterVersion: updated.rowVersion,
@@ -185,17 +185,17 @@ export class UsersService {
             const now = new Date();
             const current = await this.lockByAccount(tx, account);
             if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException('用户信息已被其他人修改，请刷新后重试');
+                throw new ConflictException("用户信息已被其他人修改，请刷新后重试");
             }
             if (!dto.active && current.roleCode === SUPER_ROLE_CODE) {
-                throw new BadRequestException('内置超级管理员不可停用');
+                throw new BadRequestException("内置超级管理员不可停用");
             }
             if (current.status === dto.active) {
                 return toWbUser(current);
             }
 
             const transferred =
-                !dto.active && current.roleCode === 'sales'
+                !dto.active && current.roleCode === "sales"
                     ? await this.transferCustomersIfNeeded(tx, current, dto, actor)
                     : 0;
 
@@ -213,12 +213,12 @@ export class UsersService {
                     id: this.snowflake.next(),
                     userId: current.id,
                     operatorId: BigInt(actor.id),
-                    eventType: 'STATUS_CHANGE',
+                    eventType: "STATUS_CHANGE",
                     createdAt: now,
                     beforeVersion: current.rowVersion,
                     afterVersion: updated.rowVersion,
-                    reason: `${dto.active ? '启用' : '停用'}账号${
-                        transferred > 0 ? `；离岗移交 ${transferred} 个客户` : ''
+                    reason: `${dto.active ? "启用" : "停用"}账号${
+                        transferred > 0 ? `；离岗移交 ${transferred} 个客户` : ""
                     }`,
                     beforeJson: userSnapshot(current),
                     afterJson: userSnapshot(updated),
@@ -233,7 +233,7 @@ export class UsersService {
         await tx.$queryRaw`SELECT id FROM sys_user WHERE account = ${account} FOR UPDATE`;
         const user = await tx.sysUser.findUnique({ where: { account } });
         if (!user) {
-            throw new NotFoundException('用户不存在');
+            throw new NotFoundException("用户不存在");
         }
         return user;
     }
@@ -261,8 +261,8 @@ export class UsersService {
 
         await tx.$queryRaw`SELECT id FROM sys_user WHERE account = ${dto.replacementOwnerAccount} FOR UPDATE`;
         const replacement = await tx.sysUser.findUnique({ where: { account: dto.replacementOwnerAccount } });
-        if (!replacement || replacement.id === fromUser.id || replacement.roleCode !== 'sales' || !replacement.status) {
-            throw new BadRequestException('接任销售必须是启用中的其他销售账号');
+        if (!replacement || replacement.id === fromUser.id || replacement.roleCode !== "sales" || !replacement.status) {
+            throw new BadRequestException("接任销售必须是启用中的其他销售账号");
         }
 
         // 锁定后重读：READ COMMITTED 每条语句取新快照，防止计数与锁定之间新增归属客户被漏移交

@@ -1,5 +1,5 @@
-import { BadRequestException } from '@nestjs/common';
-import { normalizeMaterialId } from '../common/bom-spec';
+import { BadRequestException } from "@nestjs/common";
+import { normalizeMaterialId } from "../common/bom-spec";
 
 /**
  * BOM 物料选择校验（db-scheme.md §5）：品类目录（material_group/material_item）
@@ -37,12 +37,12 @@ export interface MaterialSelection {
  */
 export function resolveMaterialSelection(catalog: CatalogEntry[], ids: string[]): MaterialSelection {
     if (!Array.isArray(ids) || ids.length === 0) {
-        throw new BadRequestException('请至少选择一项物料');
+        throw new BadRequestException("请至少选择一项物料");
     }
     const normalized = ids.map(id => {
         const value = normalizeMaterialId(id);
         if (value === null) {
-            throw new BadRequestException('物料编号格式无效');
+            throw new BadRequestException("物料编号格式无效");
         }
         return value;
     });
@@ -52,7 +52,7 @@ export function resolveMaterialSelection(catalog: CatalogEntry[], ids: string[])
     const selected = uniqueIds.map(id => {
         const entry = entryById.get(id);
         if (!entry) {
-            throw new BadRequestException('物料不存在、已停用或不属于该品类');
+            throw new BadRequestException("物料不存在、已停用或不属于该品类");
         }
         return entry;
     });
@@ -74,7 +74,7 @@ export function resolveMaterialSelection(catalog: CatalogEntry[], ids: string[])
     }
 
     const selectedIdSet = new Set(uniqueIds);
-    const snapshots: MaterialSelection['snapshots'] = [];
+    const snapshots: MaterialSelection["snapshots"] = [];
     for (const entry of catalog) {
         if (!selectedIdSet.has(entry.materialId.toString())) {
             continue;

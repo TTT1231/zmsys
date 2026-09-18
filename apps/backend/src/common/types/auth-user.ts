@@ -1,4 +1,4 @@
-import type { RoleCode } from '../../constants';
+import type { RoleCode } from "../../constants";
 
 /**
  * 挂载到 request.user 的会话用户，由 JwtStrategy.validate 产出。

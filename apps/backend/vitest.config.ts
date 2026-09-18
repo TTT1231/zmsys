@@ -1,5 +1,5 @@
-import { defineConfig } from 'vitest/config';
-import tsconfigPaths from 'vite-tsconfig-paths';
+import { defineConfig } from "vitest/config";
+import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
     // Resolves the path aliases declared in tsconfig.json, including the ones
@@ -7,8 +7,8 @@ export default defineConfig({
     plugins: [tsconfigPaths()],
     test: {
         globals: true,
-        root: './',
-        include: ['**/*.spec.ts'],
-        env: { TZ: 'UTC' },
+        root: "./",
+        include: ["**/*.spec.ts"],
+        env: { TZ: "UTC" },
     },
 });

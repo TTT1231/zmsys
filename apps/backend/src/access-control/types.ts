@@ -1,4 +1,4 @@
-import type { RoleCode } from '../constants';
+import type { RoleCode } from "../constants";
 
 /** /auth/profile 与 /roles/grants 的授权结构；actions 按 menuKey 分组 actionId */
 export interface RoleGrant {
