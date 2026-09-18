@@ -35,6 +35,7 @@
         "@types/react-dom": "^19.2.7",
         "@vitejs/plugin-react": "^6.1.1",
         "@vitest/coverage-v8": "^5.0.0",
+        "@zmsys/tsconfig": "workspace:*",
         "jsdom": "^30.0.1",
         "msw": "^2.15.0",
         "tailwindcss": "^4.3.3",

@@ -210,19 +210,19 @@ interface RenderErrorBoundaryState {
 }
 
 class RenderErrorBoundaryInner extends Component<RenderErrorBoundaryProps, RenderErrorBoundaryState> {
-    state: RenderErrorBoundaryState = { error: null };
+    override state: RenderErrorBoundaryState = { error: null };
 
     static getDerivedStateFromError(error: unknown): RenderErrorBoundaryState {
         return { error };
     }
 
-    componentDidCatch(error: unknown, info: ErrorInfo) {
+    override componentDidCatch(error: unknown, info: ErrorInfo) {
         if (import.meta.env.DEV) {
             console.error("[render-error]", { pathname: this.props.pathname, error, info });
         }
     }
 
-    render() {
+    override render() {
         if (this.state.error) return <ErrorPage kind="server" />;
         return this.props.children;
     }

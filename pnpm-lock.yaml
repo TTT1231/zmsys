@@ -323,6 +323,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^4.1.2
         version: 4.1.11(vitest@4.1.11)
+      '@zmsys/tsconfig':
+        specifier: workspace:*
+        version: link:../../internal/tsconfig
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -417,6 +420,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^5.0.0
         version: 5.0.1(vitest@5.0.1)
+      '@zmsys/tsconfig':
+        specifier: workspace:*
+        version: link:../../internal/tsconfig
       jsdom:
         specifier: 30.0.1
         version: 30.0.1

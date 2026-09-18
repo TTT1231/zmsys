@@ -1,11 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { BusinessSequenceService } from "./business-sequence.service";
-import type { PrismaService } from "../prisma/prisma.service";
 import type { Tx } from "../prisma/transaction.runner";
 
 function createService() {
-    const prisma = {} as PrismaService;
-    const service = new BusinessSequenceService(prisma);
+    const service = new BusinessSequenceService();
     const executeRaw = vi.fn().mockResolvedValue(1);
     const queryRaw = vi.fn().mockResolvedValue([{ next_value: 5n }]);
     const tx = { $executeRaw: executeRaw, $queryRaw: queryRaw } as unknown as Tx;

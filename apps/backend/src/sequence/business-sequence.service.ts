@@ -1,5 +1,4 @@
 import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service";
 import type { Tx } from "../prisma/transaction.runner";
 
 /**
@@ -52,8 +51,6 @@ const datePartOf = (pattern: "yyMMdd" | "yyyyMMdd", businessDate: string): strin
  */
 @Injectable()
 export class BusinessSequenceService {
-    constructor(private readonly prisma: PrismaService) {}
-
     /**
      * 取下一个业务编码。businessDate 为业务日期（yyyy-MM-dd），
      * 订单/入库/出库/调整按该日期各自计数，客户编码全局计数（businessDate 忽略）。
