@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { BOM_CATEGORIES } from "@/data/categories";
 import { ACTION_CATALOG, DEFAULT_GRANTS, MENU_CATALOG } from "@/data/permissions";
 
-const sql = readFileSync(resolve(process.cwd(), "docs/db/mysql-8-schema.sql"), "utf8");
+const sql = readFileSync(resolve(process.cwd(), "../../docs/mysql-8-schema.sql"), "utf8");
 
 describe("mysql backend baseline", () => {
     it("seeds every grantable menu and action permission code", () => {
