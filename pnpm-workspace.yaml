@@ -15,7 +15,7 @@ allowBuilds:
     esbuild: true
     lefthook: true
     msgpackr-extract: true
-    msw: false
+    msw: set this to true or false
     prisma: true
     workerd: true
 
