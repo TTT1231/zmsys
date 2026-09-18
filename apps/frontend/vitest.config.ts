@@ -17,7 +17,7 @@ export default defineConfig({
         environment: "node",
         coverage: {
             provider: "v8",
-            include: ["src/**/*.{ts,tsx}", "mocks/**/*.ts"],
+            include: ["src/**/*.{ts,tsx}"],
         },
     },
 });

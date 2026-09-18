@@ -6,7 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { ProductProgressChart, CustomerRankingChart } from "@/pages/workbench/WorkbenchCharts";
 import { summarizeWorkbench, customerRanking } from "@/data/workbench";
-import { createWorkbenchDemo } from "../../../mocks/data/workbench";
+import { createWorkbenchDemo } from "../../fixtures/workbench";
 
 vi.mock("@/components/charts/EChart", () => ({
     EChart: ({ onClick }: { onClick: (value: { dataIndex: number }) => void }) => (

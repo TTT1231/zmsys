@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { WorkbenchTrend } from "@/pages/workbench/WorkbenchTrend";
-import { createWorkbenchDemo } from "../../../mocks/data/workbench";
+import { createWorkbenchDemo } from "../../fixtures/workbench";
 vi.mock("@/components/charts/EChart", () => ({ EChart: () => <div /> }));
 afterEach(cleanup);
 it("筛选品类后展示可访问数据表，今年趋势按月汇总", async () => {

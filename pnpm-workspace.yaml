@@ -14,8 +14,8 @@ allowBuilds:
     "@prisma/engines": true
     esbuild: true
     lefthook: true
-    msw: true
     msgpackr-extract: true
+    msw: false
     prisma: true
     workerd: true
 

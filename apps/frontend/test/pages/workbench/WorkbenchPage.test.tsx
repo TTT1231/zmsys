@@ -5,7 +5,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { WorkbenchPage } from "@/pages/workbench/WorkbenchPage";
-import { createWorkbenchDemo } from "../../../mocks/data/workbench";
+import { createWorkbenchDemo } from "../../fixtures/workbench";
 
 const auth = vi.hoisted(() => ({ role: "super" }));
 vi.mock("@/context/AppContext", () => ({ useApp: () => auth }));

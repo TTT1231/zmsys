@@ -1,6 +1,7 @@
-/* 工作台独立演示数据：按当天生成，订单、客户、出入库与结存使用同一组明细。 */
-import type { WorkbenchData, WorkbenchOrder } from "../../src/data/workbench";
-import { addDays } from "../../src/lib/date";
+/* 工作台演示数据工厂（测试夹具副本；正身在 apps/backend/src/workbench/workbench.demo.ts，
+ * 供组件测试构造确定性数据，两处需保持同构）。 */
+import type { WorkbenchData, WorkbenchOrder } from "@/data/workbench";
+import { addDays } from "@/lib/date";
 
 const customerNames = [
     "浙江正泰电器有限公司",
