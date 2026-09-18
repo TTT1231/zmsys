@@ -16,6 +16,7 @@ import { BomsModule } from "./boms/boms.module";
 import { InboundModule } from "./inbound/inbound.module";
 import { OutboundModule } from "./outbound/outbound.module";
 import { HealthModule } from "./health/health.module";
+import { WorkbenchModule } from "./workbench/workbench.module";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
 import { PermissionsGuard } from "./common/guards/permissions.guard";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
@@ -39,6 +40,7 @@ import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
         InboundModule,
         OutboundModule,
         HealthModule,
+        WorkbenchModule,
     ],
     providers: [
         // 先认证后授权：全局 JWT 守卫在前，权限码守卫在后（默认拒绝）
