@@ -23,7 +23,8 @@ import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 
 @Module({
     imports: [
-        ConfigModule.forRoot({ load: [envConfig], isGlobal: true }),
+        // env 统一在仓库根 .env（相对本包 cwd 解析）；包内 .env 兜底（容器/独立部署）
+        ConfigModule.forRoot({ load: [envConfig], isGlobal: true, envFilePath: ["../../.env", ".env"] }),
         PrismaModule,
         SnowflakeModule,
         AccessControlModule,

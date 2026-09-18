@@ -7,6 +7,8 @@ import { defineConfig } from "vite";
 // https://vite.dev/config/
 export default defineConfig({
     plugins: [react(), tailwindcss()],
+    // env 统一在仓库根 .env（仅 VITE_ 前缀变量会暴露给客户端代码）
+    envDir: "../../",
     resolve: {
         alias: {
             "@": fileURLToPath(new URL("./src", import.meta.url)),

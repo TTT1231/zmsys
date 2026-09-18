@@ -2,10 +2,13 @@
  * 重置 e2e 专用测试库：DROP → CREATE → 全量迁移 → seed。
  * 安全护栏：库名必须以 _test 结尾，且仅允许 localhost / CI service。
  */
-import "dotenv/config";
+import { config } from "dotenv";
 import "../src/process-tz";
 import { execSync } from "node:child_process";
 import mariadb from "mariadb";
+
+// env 统一在仓库根 .env（相对本包 cwd 解析）；包内 .env 兜底（容器/独立部署）
+config({ path: ["../../.env", ".env"] });
 
 // 固定命令字符串、无任何外部输入插值，execSync 无注入面；pnpm 需经 shell 解析（Windows .cmd）
 

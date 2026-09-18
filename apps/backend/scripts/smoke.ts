@@ -5,11 +5,14 @@
  * Windows 不支持向子进程投递真实信号，停止阶段降级为仅断言进程退出；
  * Linux（CI）下完整验证 SIGINT 优雅停机。
  */
-import "dotenv/config";
+import { config } from "dotenv";
 import "../src/process-tz";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+
+// env 统一在仓库根 .env（相对本包 cwd 解析）；包内 .env 兜底（容器/独立部署）
+config({ path: ["../../.env", ".env"] });
 
 const ENTRY = join(__dirname, "..", "dist", "main.js");
 const PORT = Number(process.env.PORT ?? 5000);

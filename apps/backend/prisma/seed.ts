@@ -3,11 +3,14 @@
  * 角色目录、权限目录与四个普通角色的默认授权由迁移 SQL 播种（BOOTSTRAP 来源）。
  * id 1–9999 保留给固定参考数据；正式用户管理上线后新用户改用 Snowflake 主键。
  */
-import "dotenv/config";
+import { config } from "dotenv";
 import "../src/process-tz";
 import bcrypt from "bcryptjs";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { PrismaClient } from "../src/generated/prisma/client";
+
+// env 统一在仓库根 .env（相对本包 cwd 解析）；包内 .env 兜底（容器/独立部署）
+config({ path: ["../../.env", ".env"] });
 import { createMariadbPool } from "../src/prisma/create-pool";
 
 const SEED_USERS = [

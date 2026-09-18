@@ -7,6 +7,7 @@ import { defineConfig } from "vitest/config";
 // 单元测试默认跑在 node 环境；组件测试文件顶部用 `// @vitest-environment jsdom` 注释切换。
 export default defineConfig({
     plugins: [react()],
+    envDir: "../../",
     resolve: {
         alias: {
             "@": fileURLToPath(new URL("./src", import.meta.url)),
