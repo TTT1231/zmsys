@@ -1,0 +1,37 @@
+# backend 运行镜像：装配式构建。
+# tsc/vite 编译在开发机完成（服务器规格有限），这里只 COPY dist；依赖安装
+# 独立成层——manifest/schema 不变时 docker build 直接命中缓存，日常构建秒级。
+# 用 debian slim 而非 alpine：typescript 原生二进制对 musl 的支持不稳定
+FROM node:24-slim
+
+# npm registry 构建时可注入内网镜像加速，默认官方源
+ARG NPM_REGISTRY=https://registry.npmjs.org/
+ENV NPM_CONFIG_REGISTRY=$NPM_REGISTRY
+# 与根 package.json packageManager 对齐，保证 lockfile 解析行为一致
+RUN npm install -g pnpm@12.4.2
+# 镜像内没有 .git，跳过 git 钩子类 postinstall
+ENV HUSKY=0
+
+WORKDIR /app
+
+# workspace 骨架：根三件套 + 全部子包 manifest，满足 --frozen-lockfile 的 importer 校验
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/backend/package.json apps/backend/prisma7.config.ts ./apps/backend/
+COPY apps/frontend/package.json ./apps/frontend/
+COPY packages/request/package.json ./packages/request/
+COPY packages/utils/package.json ./packages/utils/
+COPY internal/tsconfig/package.json ./internal/tsconfig/
+
+# prisma schema 单独成层（backend postinstall 的 prisma generate 依赖它）
+COPY apps/backend/prisma ./apps/backend/prisma
+
+# 全量安装（含 devDeps：migrate deploy 需要 devDependencies 里的 prisma CLI）
+RUN pnpm install --frozen-lockfile
+
+# 本地已构建产物（dist/generated 里带 prisma client，运行时无需再 generate）
+COPY apps/backend/dist ./apps/backend/dist
+
+WORKDIR /app/apps/backend
+
+# 启动即迁移（migrate deploy 幂等：已应用的迁移直接跳过），随后起服务
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node dist/main.js"]

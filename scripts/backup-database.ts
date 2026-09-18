@@ -40,7 +40,7 @@ const SSH_HOST = process.env.DEPLOY_SSH_HOST;
 if (!SSH_HOST) {
     throw new Error("缺少 DEPLOY_SSH_HOST（如 root@<服务器IP>）：请写入仓库根 .env（不入库），模板见 .env.example");
 }
-const DB_CONTAINER = process.env.DEPLOY_DB_CONTAINER ?? "admin-manage-db-1";
+const DB_CONTAINER = process.env.DEPLOY_DB_CONTAINER ?? "zmsys-db-1";
 const DB_NAME = process.env.DEPLOY_DB_NAME ?? "zmdb";
 // 校验库固定名字（下方有护栏断言），绝不指向开发库/测试库
 const VERIFY_DB = "zmdb_backup_verify";

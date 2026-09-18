@@ -19,7 +19,8 @@
         "test:db:reset": "tsx scripts/reset-test-db.ts",
         "test:e2e": "pnpm test:db:reset && pnpm --filter ./apps/backend exec vitest run --config ./vitest.config.e2e.ts",
         "smoke": "tsx scripts/smoke.ts",
-        "backup-database": "tsx scripts/backup-database.ts"
+        "backup-database": "tsx scripts/backup-database.ts",
+        "deploy:prod": "tsx scripts/deploy/deploy.ts"
     },
     "devDependencies": {
         "@types/node": "catalog:",

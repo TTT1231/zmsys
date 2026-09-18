@@ -60,6 +60,9 @@ vite.config.ts.*
 
 # 生产库备份产物（scripts/backup-database.ts）
 scripts/backups
+# 部署 staging 临时产物（scripts/deploy/deploy.ts）
+scripts/deploy/.staging
+scripts/deploy/.staging.tar.gz
 
 # generate prisma
 apps/backend/src/generated

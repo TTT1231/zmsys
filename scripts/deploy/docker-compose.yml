@@ -1,0 +1,78 @@
+# 生产栈：pnpm deploy 在本地构建产物后上传，服务器上 docker compose build 只做装配
+#（依赖层缓存命中时秒级，见 Dockerfile.backend）。构建上下文 = 部署目录（staging 布局）。
+#
+# 命名统一 zmsys：project 名锁定为 zmsys，容器 zmsys-frontend-1 / zmsys-backend-1 /
+# zmsys-db-1，数据卷显式命名 zmsys-mysql-data（与 project 名解耦，改名不牵连卷）。
+# 切换自旧 admin-manage 栈时，deploy.ts 会自动停旧栈并把 admin-manage_mysql-data
+# 的数据拷入 zmsys-mysql-data（旧卷保留可回滚）。
+#
+# 凭据（ZM_DB_ROOT_PASSWORD / ZM_DB_PASSWORD / JWT_SECRET）与 CORS 白名单
+# （DEPLOY_CORS_ORIGINS）从本目录 .env 读取，不落仓库；首次部署由 deploy.ts
+# 从旧 admin-manage 部署目录继承并补齐。
+name: zmsys
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      # 腾讯云内网 npm 镜像加速依赖安装（仅首次构建需要，之后命中层缓存）
+      args:
+        NPM_REGISTRY: https://mirrors.cloud.tencent.com/npm/
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "5000"
+      # 环境变量名对齐 prisma7.config.ts / src/configuration 实际读取的 DB_USERNAME、DB_DATABASE
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_USERNAME: zm
+      DB_PASSWORD: ${ZM_DB_PASSWORD}
+      DB_DATABASE: zmdb
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: 8h
+      JWT_ISSUER: zmsys-backend
+      JWT_AUDIENCE: zmsys-admin
+      SNOWFLAKE_WORKER_ID: "1"
+      # 同域反代下浏览器同源请求也会带 Origin 头，把站点 origin 加入白名单（deploy.ts 注入）
+      CORS_ORIGINS: ${DEPLOY_CORS_ORIGINS}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${ZM_DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: zmdb
+      MYSQL_USER: zm
+      MYSQL_PASSWORD: ${ZM_DB_PASSWORD}
+    # 库表用 utf8mb4；表结构由 backend 启动时的 prisma migrate deploy 从既有库增量应用。
+    # 数据持久化在 zmsys-mysql-data 卷：重建容器/镜像不影响数据，只有 down -v /
+    # volume rm / 改卷名才会造成"空库"（旧 admin-manage_mysql-data 卷同样保留作回滚）
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+    name: zmsys-mysql-data

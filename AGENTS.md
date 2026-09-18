@@ -22,7 +22,9 @@ zmsys/
 ├── packages/                 # 内部包，exports 直指 src 源码
 │   ├── request/              # axios 请求客户端（拦截器 / 上传下载 / SSE）
 │   └── utils/                # 通用工具函数
-├── scripts/                  # gate
+├── scripts/                  # gate / 备份 / 部署
+│   ├── backup-database.ts    # 生产库备份+校验
+│   └── deploy/               # docker 部署统一管理（compose/Dockerfile/nginx/deploy.ts）
 ```
 
 ## 环境变量
@@ -45,6 +47,7 @@ pnpm test:db:reset            # 重置 e2e 测试库（DROP/CREATE + 迁移 + se
 pnpm test:e2e                 # 重置测试库 + 后端 e2e
 pnpm smoke                    # 后端冒烟（前置：build backend + 测试库已 reset）
 pnpm backup-database          # 备份生产库并校验（dump 拉回本地 + 还原比对对象/行数）
+pnpm deploy:prod              # 部署生产（先备份→本地构建→上传→远端装配起栈；--no-backup/--stage-only 可选）
 ```
 
 ## 业务参考
