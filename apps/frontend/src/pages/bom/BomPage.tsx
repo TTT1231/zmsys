@@ -1,0 +1,928 @@
+import { BomCell } from "@/components/bom/BomCell";
+import { DataTable } from "@/components/ui/DataTable";
+import { ToolbarMore } from "@/components/ui/ToolbarMore";
+import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { BomSpecs } from "@/components/bom/BomSpecs";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
+import { Icon } from "@/lib/icons";
+import { downloadCsv, num } from "@/lib/format";
+import { copyText } from "@/lib/clipboard";
+import { useApp } from "@/context/AppContext";
+import { PageHeading } from "@/components/ui/PageHeading";
+import { Button, TableLink } from "@/components/ui/Badge";
+import { Pagination } from "@/components/ui/Pagination";
+import { Modal } from "@/components/ui/Modal";
+import { SelectField } from "@/components/ui/Field";
+import {
+    useBomCategories,
+    useBomRefresh,
+    useBomStocks,
+    useBoms,
+    useCreateBom,
+    useDeleteBom,
+    useOrders,
+} from "@/data/queries";
+import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
+import { PageLoading } from "@/components/ui/PageLoading";
+import { useToast } from "@/components/ui/Toast";
+import { catalogRowsOf } from "@/data/categories";
+import type { Bom, BomCatalogNode, BomCategory } from "@/api";
+import { cn } from "@/lib/utils";
+
+const EMPTY_BOMS: Bom[] = [];
+
+export function BomDetailModal({
+    bom,
+    onClose,
+    categories,
+}: {
+    bom: Bom | null;
+    onClose: () => void;
+    categories?: BomCategory[];
+}) {
+    const toast = useToast();
+    if (!bom) return null;
+    const copyCode = async () => {
+        if (await copyText(bom.code)) toast(`已复制 ${bom.code}`);
+    };
+    return (
+        <Modal
+            open={!!bom}
+            onClose={onClose}
+            label="BOM 详情"
+            title={bom.code}
+            titleExtra={
+                <button
+                    type="button"
+                    onClick={copyCode}
+                    aria-label="复制 BOM 编号"
+                    title="复制 BOM 编号"
+                    className="flex min-h-7 min-w-7 items-center justify-center rounded-md text-muted transition hover:bg-primary-soft hover:text-primary"
+                >
+                    <Icon name="copy" size={14} />
+                </button>
+            }
+            width={560}
+            footer={
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover"
+                >
+                    关闭
+                </button>
+            }
+        >
+            <BomSpecs bom={bom} categories={categories} />
+        </Modal>
+    );
+}
+
+/* 目录树块：按接口下发的顺序分块——顶级节点（分区与根分组）依序穿插，
+ * 分组的物料挂在前面最近的分区下；触点等后置分区自然排在末尾 */
+interface CatalogBlock {
+    section: BomCatalogNode | null;
+    groups: BomCatalogNode[];
+}
+
+const catalogBlocksOf = (category: { groups: BomCatalogNode[] }): CatalogBlock[] => {
+    const blocks: CatalogBlock[] = [];
+    for (const node of category.groups) {
+        if (node.kind === "section") {
+            blocks.push({ section: node, groups: [] });
+        } else if (node.parentId === null) {
+            blocks.push({ section: null, groups: [node] });
+        } else {
+            blocks.at(-1)?.groups.push(node);
+        }
+    }
+    return blocks;
+};
+
+/* 删除 BOM 二次确认（仅超级管理员）：只服务"手误建档后无法清理"场景，
+ * 入口仅对未被销售订单引用且无库存余量的档案显示；后端仍独立校验引用 */
+function DeleteBomModal({ bom, onClose }: { bom: Bom | null; onClose: () => void }) {
+    const deleteBom = useDeleteBom();
+    const toast = useToast();
+    if (!bom) return null;
+    const submit = () => {
+        if (deleteBom.isPending) return;
+        deleteBom.mutate(bom.code, {
+            onSuccess: () => {
+                toast(`BOM ${bom.code} 已删除`);
+                onClose();
+            },
+            onError: error => toast(error.message, true),
+        });
+    };
+    return (
+        <Modal
+            open
+            onClose={onClose}
+            label="危险操作"
+            title="删除 BOM"
+            subtitle={bom.code}
+            width={440}
+            footer={
+                <>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
+                    >
+                        取消
+                    </button>
+                    <button
+                        type="button"
+                        disabled={deleteBom.isPending}
+                        onClick={submit}
+                        className="min-h-10 rounded-btn bg-danger px-4 text-13 font-medium text-white transition hover:opacity-90 disabled:opacity-60"
+                    >
+                        {deleteBom.isPending ? "正在删除…" : "确认删除"}
+                    </button>
+                </>
+            }
+        >
+            <div className="flex items-start gap-3 rounded-panel border border-[#fecdca] bg-danger-soft/60 p-4">
+                <Icon name="alert" size={20} className="mt-0.5 shrink-0 text-danger" />
+                <div className="text-13 leading-6 text-td">
+                    即将删除 BOM <span className="tnum font-semibold text-ink">{bom.code}</span>（{bom.name}
+                    ）。该 BOM 未被任何销售订单引用。
+                    <p className="mt-1 font-medium text-danger">
+                        删除后该档案将从系统永久移除，不可恢复。请确认它是手误创建的档案。
+                    </p>
+                </div>
+            </div>
+        </Modal>
+    );
+}
+
+/* 新建 BOM：品类 →（品类子选，跌倒开关选微动类型）→ 左框树状目录勾选（无搜索）→ 右框已选 → 保存 */
+export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+    const { data: bomCategories } = useBomCategories();
+    const createBom = useCreateBom();
+    const toast = useToast();
+    const [name, setName] = useState("");
+    const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+    const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+    const [childCategoryKey, setChildCategoryKey] = useState("");
+    const [pendingChange, setPendingChange] = useState<{ kind: "category" | "child"; value: string } | null>(null);
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
+    const category = bomCategories?.find(item => item.name === name);
+    const childCategory = bomCategories?.find(item => item.key === childCategoryKey);
+    /* 合并树：本品类目录 + 子品类目录（跌倒开关 = 跌倒盖/底/钢球/翘板 + 微动开关物料嵌套在"微动开关"大类下） */
+    const tipoverBlocks = useMemo(() => (category ? catalogBlocksOf(category) : []), [category]);
+    const childBlocks = useMemo(() => (childCategory ? catalogBlocksOf(childCategory) : []), [childCategory]);
+    const catalogRows = useMemo(() => {
+        const rows = [
+            ...(category ? catalogRowsOf(category) : []),
+            ...(childCategory ? catalogRowsOf(childCategory) : []),
+        ];
+        return rows;
+    }, [category, childCategory]);
+    const selectedRows = useMemo(() => catalogRows.filter(row => selectedIds.has(row.id)), [catalogRows, selectedIds]);
+    /* 右框按组分节：组名只出现一次，行内纯物料名（同名物料跨组时的消歧靠小节标题） */
+    const selectedSections = useMemo(() => {
+        const sections: Array<{ groupName: string; rows: typeof selectedRows }> = [];
+        for (const row of selectedRows) {
+            const last = sections.at(-1);
+            if (last && last.groupName === row.groupName) {
+                last.rows.push(row);
+            } else {
+                sections.push({ groupName: row.groupName, rows: [row] });
+            }
+        }
+        return sections;
+    }, [selectedRows]);
+
+    const pickCategory = (next: string) => {
+        setName(next);
+        setSelectedIds(new Set());
+        setCollapsed(new Set());
+        setChildCategoryKey("");
+        setErrors({});
+    };
+
+    const pickChildCategory = (key: string) => {
+        setChildCategoryKey(key);
+        setSelectedIds(new Set());
+        setCollapsed(new Set());
+        setErrors({});
+    };
+
+    /* 单选组：换选替换旧项、可再点取消；多选组：自由勾选 */
+    const toggleItem = (node: BomCatalogNode, itemId: string) => {
+        setSelectedIds(current => {
+            const wasSelected = current.has(itemId);
+            if (wasSelected) {
+                const next = new Set(current);
+                next.delete(itemId);
+                return next;
+            }
+            const next = node.multi
+                ? new Set(current)
+                : new Set([...current].filter(id => !node.items.some(item => item.id === id)));
+            next.add(itemId);
+            return next;
+        });
+        setErrors(current => ({ ...current, materials: "" }));
+    };
+
+    /* 仅多选组提供全选/清空（半选态由选中数量推断渲染） */
+    const toggleGroupAll = (node: BomCatalogNode) => {
+        const ids = node.items.map(item => item.id);
+        const allSelected = ids.length > 0 && ids.every(id => selectedIds.has(id));
+        setSelectedIds(current => {
+            const next = new Set(current);
+            for (const id of ids) {
+                if (allSelected) {
+                    next.delete(id);
+                } else {
+                    next.add(id);
+                }
+            }
+            return next;
+        });
+    };
+
+    const toggleCollapse = (nodeId: string) => {
+        setCollapsed(current => {
+            const next = new Set(current);
+            if (next.has(nodeId)) {
+                next.delete(nodeId);
+            } else {
+                next.add(nodeId);
+            }
+            return next;
+        });
+    };
+
+    const submit = () => {
+        const nextErrors: Record<string, string> = {};
+        if (!category) nextErrors.name = "请选择产品品类";
+        if ((category?.childCategories?.length ?? 0) > 0 && !childCategory) {
+            nextErrors.childCategory = "请选择微动开关类型";
+        }
+        if (selectedIds.size === 0) nextErrors.materials = "请至少选择一项物料";
+        setErrors(nextErrors);
+        if (Object.keys(nextErrors).length > 0) return;
+        createBom.mutate(
+            {
+                name,
+                materialItemIds: [...selectedIds],
+                ...(childCategory ? { childCategory: childCategory.key } : {}),
+            },
+            {
+                onError: error => toast(error.message, true),
+                onSuccess: bom => {
+                    toast(`BOM ${bom.code} 已创建`);
+                    onClose();
+                    pickCategory("");
+                },
+            },
+        );
+    };
+
+    const renderGroup = (node: BomCatalogNode) => {
+        const selectedCount = node.items.filter(item => selectedIds.has(item.id)).length;
+        const allSelected = node.items.length > 0 && selectedCount === node.items.length;
+        const nodeCollapsed = collapsed.has(node.id);
+        return (
+            <div key={node.id} className="rounded-btn border border-line bg-panel/60">
+                <div className="flex min-h-9 items-center gap-1.5 px-2.5 py-1.5">
+                    <button
+                        type="button"
+                        onClick={() => toggleCollapse(node.id)}
+                        aria-expanded={!nodeCollapsed}
+                        aria-label={`${nodeCollapsed ? "展开" : "折叠"}${node.name}`}
+                        className="grid size-5 shrink-0 cursor-pointer place-items-center rounded-md text-subtle transition hover:bg-row-hover hover:text-td"
+                    >
+                        <Icon name={nodeCollapsed ? "chevron-right" : "chevron-down"} size={13} />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => toggleCollapse(node.id)}
+                        className="flex-1 cursor-pointer text-left text-12.5 font-semibold text-td"
+                    >
+                        {node.name}
+                    </button>
+                    {nodeCollapsed && selectedCount > 0 && (
+                        <span className="tnum shrink-0 rounded-full bg-primary-soft px-1.5 py-0.5 text-10.5 font-medium text-primary-strong">
+                            {node.multi ? `已选 ${selectedCount}` : "已选"}
+                        </span>
+                    )}
+                    {node.multi && node.items.length > 0 && (
+                        <input
+                            type="checkbox"
+                            aria-label={`全选${node.name}`}
+                            className="accent-primary"
+                            checked={allSelected}
+                            ref={input => {
+                                if (input) input.indeterminate = selectedCount > 0 && !allSelected;
+                            }}
+                            onChange={() => toggleGroupAll(node)}
+                        />
+                    )}
+                    {!node.multi && <span className="shrink-0 text-11 text-subtle">单选</span>}
+                </div>
+                {!nodeCollapsed &&
+                    (node.items.length === 0 ? (
+                        <p className="border-t border-line px-3 py-1.5 text-12 text-subtle">暂无物料</p>
+                    ) : (
+                        <ul className="border-t border-line">
+                            {node.items.map(item => (
+                                <li key={item.id}>
+                                    <label className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 transition hover:bg-row-hover">
+                                        <input
+                                            type="checkbox"
+                                            className="accent-primary"
+                                            checked={selectedIds.has(item.id)}
+                                            onChange={() => toggleItem(node, item.id)}
+                                        />
+                                        <span className="text-13 text-td wrap-anywhere">{item.name}</span>
+                                    </label>
+                                </li>
+                            ))}
+                        </ul>
+                    ))}
+            </div>
+        );
+    };
+
+    return (
+        <>
+            <Modal
+                open={open}
+                onClose={onClose}
+                title="新建 BOM"
+                width={1040}
+                layout="workspace"
+                footer={
+                    <>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
+                        >
+                            取消
+                        </button>
+                        <button
+                            type="button"
+                            disabled={createBom.isPending}
+                            onClick={submit}
+                            className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
+                        >
+                            {createBom.isPending ? "正在保存…" : "保存 BOM"}
+                        </button>
+                    </>
+                }
+            >
+                <div className="flex min-h-0 flex-1 flex-col gap-4">
+                    <SelectField
+                        label="产品品类"
+                        required
+                        error={errors.name}
+                        value={name}
+                        onChange={event =>
+                            selectedIds.size
+                                ? setPendingChange({ kind: "category", value: event.target.value })
+                                : pickCategory(event.target.value)
+                        }
+                    >
+                        <option value="">请选择</option>
+                        {(bomCategories ?? []).map(item => (
+                            <option key={item.key}>{item.name}</option>
+                        ))}
+                    </SelectField>
+
+                    {(category?.childCategories?.length ?? 0) > 0 && (
+                        <fieldset aria-label="微动开关类型" className="shrink-0">
+                            <legend className="mb-1 text-12.5 font-medium text-td">
+                                微动开关类型<span className="ml-1 text-danger">*</span>
+                            </legend>
+                            <div className="flex flex-wrap gap-3">
+                                {category!.childCategories!.map(key => {
+                                    const child = bomCategories?.find(item => item.key === key);
+                                    return child ? (
+                                        <label
+                                            key={key}
+                                            className={cn(
+                                                "flex min-h-11 cursor-pointer items-center gap-2 rounded-input border px-4 text-13",
+                                                childCategoryKey === key
+                                                    ? "border-primary bg-primary-soft text-primary-strong"
+                                                    : "border-line-strong bg-white",
+                                            )}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name="bom-child-category"
+                                                value={key}
+                                                checked={childCategoryKey === key}
+                                                aria-invalid={!!errors.childCategory}
+                                                aria-describedby={errors.childCategory ? "bom-child-error" : undefined}
+                                                onChange={() =>
+                                                    selectedIds.size
+                                                        ? setPendingChange({ kind: "child", value: key })
+                                                        : pickChildCategory(key)
+                                                }
+                                                className="accent-primary"
+                                            />
+                                            {child.name}
+                                        </label>
+                                    ) : null;
+                                })}
+                            </div>
+                            {errors.childCategory && (
+                                <p id="bom-child-error" role="alert" className="mt-1 text-12 text-danger">
+                                    {errors.childCategory}
+                                </p>
+                            )}
+                        </fieldset>
+                    )}
+
+                    {(!category || ((category.childCategories?.length ?? 0) > 0 && !childCategoryKey)) && (
+                        <div className="flex min-h-60 flex-1 items-center justify-center rounded-panel border border-dashed border-line-strong bg-panel p-8 text-center">
+                            <div>
+                                <p className="text-14 font-medium text-td">配置物料</p>
+                                <p className="mt-2 text-13 text-muted">
+                                    {category ? "请选择微动开关类型，随后配置物料" : "请选择产品品类，随后配置物料"}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {category && (!category.childCategories?.length || childCategoryKey) && (
+                        <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:grid-rows-[minmax(0,1fr)]">
+                            <fieldset className="flex min-h-0 flex-col lg:overflow-hidden rounded-panel border border-line bg-white">
+                                <legend className="px-1.5 text-12.5 font-semibold text-primary">可选物料</legend>
+                                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-3">
+                                    {/* 本品类物料（跌倒开关：跌倒盖/跌倒底/钢球/翘板） */}
+                                    {tipoverBlocks.map(({ section, groups }) => {
+                                        const sectionCollapsed = section ? collapsed.has(section.id) : false;
+                                        return (
+                                            <div key={section?.id ?? groups[0]?.id ?? "root"}>
+                                                {section && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggleCollapse(section.id)}
+                                                        aria-expanded={!sectionCollapsed}
+                                                        className="flex min-h-8 w-full items-center gap-1.5 rounded-md px-1.5 text-12.5 font-semibold text-muted transition hover:text-td"
+                                                    >
+                                                        <Icon
+                                                            name={sectionCollapsed ? "chevron-right" : "chevron-down"}
+                                                            size={14}
+                                                        />
+                                                        {section.name}
+                                                    </button>
+                                                )}
+                                                <div className={cn("space-y-2", section && "mt-1.5 pl-4")}>
+                                                    {!sectionCollapsed && groups.map(renderGroup)}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {/* 微动开关大类（可折叠/展开）：子品类完整物料树嵌套在此标题下 */}
+                                    {childBlocks.length > 0 && (
+                                        <div className="mt-3 border-t border-line pt-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleCollapse("child-category-wrapper")}
+                                                aria-expanded={!collapsed.has("child-category-wrapper")}
+                                                className="flex min-h-8 w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-12.5 font-semibold text-primary transition hover:text-primary-strong"
+                                            >
+                                                <Icon
+                                                    name={
+                                                        collapsed.has("child-category-wrapper")
+                                                            ? "chevron-right"
+                                                            : "chevron-down"
+                                                    }
+                                                    size={14}
+                                                />
+                                                微动开关
+                                            </button>
+                                            {!collapsed.has("child-category-wrapper") && (
+                                                <div className="mt-2 space-y-2">
+                                                    {childBlocks.map(({ section, groups }) => {
+                                                        const sectionCollapsed = section
+                                                            ? collapsed.has(section.id)
+                                                            : false;
+                                                        return (
+                                                            <div key={section?.id ?? groups[0]?.id ?? "child-root"}>
+                                                                {section && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => toggleCollapse(section.id)}
+                                                                        aria-expanded={!sectionCollapsed}
+                                                                        className="flex min-h-8 w-full items-center gap-1.5 rounded-md px-1.5 text-12.5 font-semibold text-muted transition hover:text-td"
+                                                                    >
+                                                                        <Icon
+                                                                            name={
+                                                                                sectionCollapsed
+                                                                                    ? "chevron-right"
+                                                                                    : "chevron-down"
+                                                                            }
+                                                                            size={14}
+                                                                        />
+                                                                        {section.name}
+                                                                    </button>
+                                                                )}
+                                                                <div
+                                                                    className={cn(
+                                                                        "space-y-2",
+                                                                        section && "mt-1.5 pl-4",
+                                                                    )}
+                                                                >
+                                                                    {!sectionCollapsed && groups.map(renderGroup)}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </fieldset>
+
+                            <fieldset className="flex min-h-0 flex-col lg:overflow-hidden rounded-panel border border-line bg-panel/40">
+                                <legend className="px-1.5 text-12.5 font-semibold text-primary">
+                                    已选物料（{selectedRows.length}）
+                                </legend>
+                                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
+                                    {selectedRows.length === 0 ? (
+                                        <p className="py-6 text-center text-12.5 text-subtle">从左侧勾选物料</p>
+                                    ) : (
+                                        <div className="space-y-2.5">
+                                            {selectedSections.map(section => (
+                                                <div key={section.groupName}>
+                                                    <p className="px-0.5 text-11.5 text-muted">{section.groupName}</p>
+                                                    <ul className="mt-1 space-y-1.5">
+                                                        {section.rows.map(row => (
+                                                            <li
+                                                                key={row.id}
+                                                                className="flex items-center gap-2 rounded-btn border border-line bg-white px-2.5 py-1.5"
+                                                            >
+                                                                <span className="min-w-0 flex-1 text-13 text-td wrap-anywhere">
+                                                                    {row.name}
+                                                                </span>
+                                                                <button
+                                                                    type="button"
+                                                                    aria-label={`移除 ${row.name}`}
+                                                                    onClick={() => {
+                                                                        setSelectedIds(current => {
+                                                                            const next = new Set(current);
+                                                                            next.delete(row.id);
+                                                                            return next;
+                                                                        });
+                                                                    }}
+                                                                    className="grid size-6 shrink-0 place-items-center rounded-md text-16 font-medium text-subtle transition hover:bg-danger/10 hover:text-danger"
+                                                                >
+                                                                    ×
+                                                                </button>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </fieldset>
+                        </div>
+                    )}
+
+                    {errors.materials && (
+                        <p role="alert" className="text-12 text-danger">
+                            {errors.materials}
+                        </p>
+                    )}
+                </div>
+            </Modal>
+            <Modal
+                open={!!pendingChange}
+                onClose={() => setPendingChange(null)}
+                title="切换后将清空已选物料"
+                width={440}
+                footer={
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => setPendingChange(null)}
+                            className="min-h-10 rounded-btn border border-line-strong px-4 text-13"
+                        >
+                            保留当前配置
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (pendingChange) {
+                                    if (pendingChange.kind === "category") pickCategory(pendingChange.value);
+                                    else pickChildCategory(pendingChange.value);
+                                    setPendingChange(null);
+                                }
+                            }}
+                            className="min-h-10 rounded-btn bg-primary px-4 text-13 text-white"
+                        >
+                            确认切换
+                        </button>
+                    </>
+                }
+            >
+                <p className="text-14 text-td">
+                    当前已选 {selectedIds.size} 项物料。切换品类或微动开关类型后，需要重新选择物料。
+                </p>
+            </Modal>
+        </>
+    );
+}
+
+export function BomPage() {
+    const { can } = useApp();
+    const bomsQuery = useBoms();
+    const categoriesQuery = useBomCategories();
+    const stocksQuery = useBomStocks();
+    const ordersQuery = useOrders();
+    const { refresh } = useBomRefresh();
+    const isLoading = bomsQuery.isLoading || categoriesQuery.isLoading || stocksQuery.isLoading;
+    const isFetching = bomsQuery.isFetching || categoriesQuery.isFetching || stocksQuery.isFetching;
+    // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
+    const overlay = useDelayedFlag(isFetching && !isLoading);
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [keyword, setKeyword] = useState("");
+    const [category, setCategory] = useState("全部品类");
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const [newOpen, setNewOpen] = useState(false);
+    const [detail, setDetail] = useState<Bom | null>(null);
+    const [deleting, setDeleting] = useState<Bom | null>(null);
+
+    const boms = bomsQuery.data ?? EMPTY_BOMS;
+    const categories = useMemo(() => [...new Set(boms.map(bom => bom.name))], [boms]);
+    /* 无删除权限（仅超级管理员）、被订单引用或有库存余量的档案不显示删除入口，
+     * 前端先挡一层误操作；订单引用与库存余量须已成功加载才参与判断——
+     * 未加载或加载失败按“引用未知”处理，不能把“没有数据”当成“没有引用”；
+     * 曾被出入库/调整触碰过的边界由后端权威校验兜底 */
+    const canDeleteBom = can("bom:delete");
+    const referencedCodes = useMemo(
+        () => new Set((ordersQuery.data ?? []).map(order => order.bomCode)),
+        [ordersQuery.data],
+    );
+    const referencesLoaded = ordersQuery.data !== undefined && stocksQuery.data !== undefined;
+    const deletable = (bom: Bom) =>
+        referencesLoaded && !referencedCodes.has(bom.code) && (stocksQuery.data![bom.code] ?? 0) === 0;
+
+    const filtered = useMemo(() => {
+        const kw = keyword.trim().toLowerCase();
+        return boms
+            .filter(bom => category === "全部品类" || bom.name === category)
+            .filter(
+                bom =>
+                    !kw ||
+                    `${bom.code} ${bom.name} ${bom.spec} ${bom.items
+                        .map(item => `${item.groupName} ${item.name}`)
+                        .join(" ")}`
+                        .toLowerCase()
+                        .includes(kw),
+            );
+    }, [boms, keyword, category]);
+
+    const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
+    const canCreate = can("bom:create");
+    // 翻页后行序变化，滚动区回到顶部
+    const tableScrollRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
+    }, [page]);
+
+    useEffect(() => {
+        if (searchParams.get("new") === "bom") {
+            setNewOpen(true);
+            setSearchParams({}, { replace: true });
+        }
+    }, [searchParams, setSearchParams]);
+
+    // 清空条件只作用于筛选行（搜索/品类）；快捷入口与分页由用户自行操作
+    const clearFilters = () => {
+        setKeyword("");
+        setCategory("全部品类");
+        setPage(1);
+    };
+    const filtersActive = !!keyword.trim() || category !== "全部品类";
+
+    return (
+        <div className="flex flex-col gap-5">
+            <PageHeading
+                title="物料与 BOM"
+                actions={
+                    canCreate ? (
+                        <Button icon="plus" onClick={() => setNewOpen(true)}>
+                            新建 BOM
+                        </Button>
+                    ) : undefined
+                }
+            />
+
+            <section className="relative overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
+                {overlay && <LoadingOverlay />}
+                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
+                    <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 lg:w-70">
+                        <Icon name="search" size={15} className="text-subtle" />
+                        <input
+                            value={keyword}
+                            onChange={event => {
+                                setKeyword(event.target.value);
+                                setPage(1);
+                            }}
+                            placeholder="搜索编码 / 品类 / 型号 / 物料"
+                            className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
+                        />
+                    </label>
+                    <select
+                        value={category}
+                        onChange={event => {
+                            setCategory(event.target.value);
+                            setPage(1);
+                        }}
+                        className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
+                        aria-label="按品类筛选"
+                    >
+                        <option>全部品类</option>
+                        {categories.map(item => (
+                            <option key={item}>{item}</option>
+                        ))}
+                    </select>
+                    <button
+                        type="button"
+                        onClick={clearFilters}
+                        disabled={!filtersActive}
+                        className="min-h-10 px-1 text-13 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
+                    >
+                        清空条件
+                    </button>
+                    <div className="ml-auto">
+                        <ToolbarMore>
+                            <Button variant="secondary" icon="refresh" onClick={refresh}>
+                                刷新
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                icon="download"
+                                onClick={() =>
+                                    downloadCsv(
+                                        "BOM",
+                                        ["序号", "BOM编码", "品类", "物料构成"],
+                                        pageRows.map((bom, index) => [
+                                            String((page - 1) * pageSize + index + 1),
+                                            bom.code,
+                                            bom.name,
+                                            bom.spec,
+                                        ]),
+                                    )
+                                }
+                            >
+                                导出
+                            </Button>
+                        </ToolbarMore>
+                    </div>
+                </div>
+
+                <div className="mobile-records">
+                    <ListState loading={isLoading} empty={!pageRows.length}>
+                        {pageRows.map(bom => (
+                            <RecordCard
+                                key={bom.code}
+                                title={bom.name}
+                                subtitle={bom.code}
+                                actions={
+                                    <>
+                                        {canDeleteBom && deletable(bom) && (
+                                            <Button variant="secondary" onClick={() => setDeleting(bom)}>
+                                                删除
+                                            </Button>
+                                        )}
+                                        <Button onClick={() => setDetail(bom)}>查看物料</Button>
+                                    </>
+                                }
+                            >
+                                <BomCell
+                                    categories={categoriesQuery.data}
+                                    bom={bom}
+                                    bomCode={bom.code}
+                                    showIdentity={false}
+                                />
+                                <div className="mt-2">
+                                    <CardField
+                                        label="当前库存"
+                                        value={stocksQuery.data ? `${num(stocksQuery.data[bom.code] ?? 0)} 个` : "—"}
+                                    />
+                                </div>
+                            </RecordCard>
+                        ))}
+                    </ListState>
+                </div>
+                <div className="hidden lg:block">
+                    {isLoading ? (
+                        <PageLoading className="py-16" />
+                    ) : (
+                        <DataTable
+                            tableId="bom"
+                            defaultWidths={[96, 190, 150, 430, 170]}
+                            identityColumn={1}
+                            scrollRef={tableScrollRef}
+                        >
+                            <thead>
+                                <tr className="text-left text-12 text-muted">
+                                    <th className="px-5 py-2.5 text-right font-semibold" style={{ width: "6%" }}>
+                                        序号
+                                    </th>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "16%" }}>
+                                        BOM 编码
+                                    </th>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "12%" }}>
+                                        品类
+                                    </th>
+                                    <th className="px-3 py-2.5 font-semibold">物料构成</th>
+                                    <th className="px-5 py-2.5 text-right font-semibold" style={{ width: "10%" }}>
+                                        操作
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {pageRows.length === 0 && (
+                                    <tr>
+                                        <td colSpan={5} className="px-5 py-10 text-center">
+                                            <EmptyState description="暂无 BOM" />
+                                        </td>
+                                    </tr>
+                                )}
+                                {pageRows.map((bom, index) => (
+                                    <tr
+                                        key={bom.code}
+                                        className="border-t border-line align-top transition hover:bg-row-hover"
+                                    >
+                                        <td className="px-5 py-3 tnum text-right text-13 text-muted">
+                                            {(page - 1) * pageSize + index + 1}
+                                        </td>
+                                        <td className="px-3 py-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setDetail(bom)}
+                                                className="tnum text-13 font-semibold text-primary-strong underline-offset-2 hover:underline"
+                                            >
+                                                {bom.code}
+                                            </button>
+                                        </td>
+                                        <td className="px-3 py-3 text-13 text-td">{bom.name}</td>
+                                        <td className="px-3 py-3">
+                                            <BomCell
+                                                categories={categoriesQuery.data}
+                                                bom={bom}
+                                                bomCode={bom.code}
+                                                showIdentity={false}
+                                            />
+                                        </td>
+                                        <td className="px-5 py-3 text-right">
+                                            <div className="flex items-center justify-end gap-3">
+                                                <TableLink onClick={() => setDetail(bom)}>查看详情</TableLink>
+                                                {canDeleteBom && deletable(bom) && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDeleting(bom)}
+                                                        className="text-13 font-medium text-danger underline-offset-2 transition hover:underline"
+                                                    >
+                                                        删除
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </DataTable>
+                    )}
+                </div>
+
+                <div className="border-t border-line">
+                    <Pagination
+                        page={page}
+                        pageSize={pageSize}
+                        total={filtered.length}
+                        unit="条 BOM"
+                        onPageChange={setPage}
+                        onPageSizeChange={size => {
+                            setPageSize(size);
+                            setPage(1);
+                        }}
+                    />
+                </div>
+            </section>
+
+            {canCreate && <NewBomModal open={newOpen} onClose={() => setNewOpen(false)} />}
+            <BomDetailModal categories={categoriesQuery.data} bom={detail} onClose={() => setDetail(null)} />
+            <DeleteBomModal bom={deleting} onClose={() => setDeleting(null)} />
+        </div>
+    );
+}
