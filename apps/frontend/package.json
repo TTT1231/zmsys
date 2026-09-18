@@ -6,9 +6,7 @@
     "scripts": {
         "dev": "vite",
         "build": "tsc -b && vite build",
-        "lint": "oxlint",
         "typecheck": "tsc -b --force",
-        "format": "oxfmt src mocks test *.ts *.json *.md",
         "test": "vitest run",
         "test:coverage": "vitest run --coverage",
         "preview": "vite preview"
@@ -39,8 +37,6 @@
         "@vitest/coverage-v8": "^5.0.0",
         "jsdom": "^30.0.1",
         "msw": "^2.15.0",
-        "oxfmt": "^0.66.0",
-        "oxlint": "^1.81.0",
         "tailwindcss": "^4.3.3",
         "typescript": "~7.0.2",
         "vite": "^8.2.2",

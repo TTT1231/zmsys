@@ -44,13 +44,10 @@ pre-commit:
     jobs:
         - name: lint (staged)
           glob: "*.{ts,tsx,mts,cts,mjs}"
-          exclude: ^apps/backend/
           run: node_modules/.bin/tsx scripts/run-oxlint.ts --config .oxlintrc.staged.json --fix --no-error-on-unmatched-pattern {staged_files}
           stage_fixed: true
-        # apps/backend 沿用 prettier 单引号风格，暂不参与 oxfmt，待后续统一
         - name: oxfmt
           glob: "*.{js,jsx,ts,tsx,cjs,mjs,cts,mts,json,jsonc}"
-          exclude: ^apps/backend/
           run: node_modules/.bin/oxfmt --no-error-on-unmatched-pattern {staged_files}
           stage_fixed: true
 pre-push:

@@ -14,6 +14,7 @@
         "dev:backend": "pnpm --filter ./apps/backend dev",
         "typecheck": "tsx scripts/run-typecheck.ts",
         "lint": "tsx scripts/run-oxlint.ts",
+        "format": "oxfmt .",
         "test": "pnpm -r --if-present run test"
     },
     "devDependencies": {

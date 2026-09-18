@@ -12,7 +12,7 @@
         //web react
         {
             "files": ["apps/frontend/**/*.{ts,tsx}"],
-            "plugins": ["typescript", "react"],
+            "plugins": ["typescript", "react", "oxc"],
             "rules": {
                 "react/rules-of-hooks": "error",
                 "react/only-export-components": ["warn", { "allowConstantExport": true }]
