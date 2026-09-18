@@ -1,0 +1,29 @@
+{
+    "name": "zmsys",
+    "version": "1.0.0",
+    "private": true,
+    "description": "",
+    "keywords": [],
+    "license": "ISC",
+    "author": "",
+    "type": "module",
+    "scripts": {
+        "postinstall": "pnpm -r run --if-present stub",
+        "typecheck": "tsx scripts/run-typecheck.ts",
+        "lint": "tsx scripts/run-oxlint.ts",
+        "test": "vitest run"
+    },
+    "devDependencies": {
+        "@types/node": "catalog:",
+        "@zmsys/tsconfig": "workspace:*",
+        "lefthook": "catalog:",
+        "oxfmt": "catalog:",
+        "oxlint": "catalog:",
+        "oxlint-tsgolint": "catalog:",
+        "tsdown": "catalog:",
+        "tsx": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:"
+    },
+    "packageManager": "pnpm@12.4.2"
+}

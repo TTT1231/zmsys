@@ -1,0 +1,23 @@
+{
+    "name": "@zmsys/request",
+    "version": "0.0.1",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./src/index.ts",
+            "default": "./src/index.ts"
+        }
+    },
+    "scripts": {
+        "typecheck": "tsc"
+    },
+    "dependencies": {
+        "@zmsys/utils": "workspace:*",
+        "axios": "catalog:",
+        "qs": "catalog:"
+    },
+    "devDependencies": {
+        "@types/qs": "catalog:",
+        "axios-mock-adapter": "catalog:"
+    }
+}

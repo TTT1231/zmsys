@@ -1,0 +1,12 @@
+{
+    "folders": [
+        {
+            "name": "@zmsys/request",
+            "path": "packages/request",
+        },
+        {
+            "name": "@zmsys/utils",
+            "path": "packages/utils",
+        },
+    ],
+}

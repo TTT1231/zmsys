@@ -1,0 +1,30 @@
+{
+    "ignorePatterns": [
+        "dist",
+        ".local",
+        ".claude",
+        ".agent",
+        ".agents",
+        ".codex",
+        "node_modules",
+        ".nvmrc",
+        "coverage",
+        ".output",
+        "**/*.svg",
+        "**/*.sh",
+        "public",
+        ".npmrc",
+        "*-lock.yaml",
+        "skills-lock.json"
+    ],
+    "semi": true,
+    "trailingComma": "all",
+    "printWidth": 120,
+    "tabWidth": 4,
+    "useTabs": false,
+    "quoteProps": "as-needed",
+    "bracketSpacing": true,
+    "bracketSameLine": false,
+    "arrowParens": "avoid",
+    "endOfLine": "lf"
+}

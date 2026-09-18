@@ -1,0 +1,17 @@
+{
+    "$schema": "https://json.schemastore.org/tsconfig",
+    "display": "Node",
+    "extends": "./base.json",
+    "compilerOptions": {
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "lib": ["ESNext"],
+        "types": ["node"],
+
+        "emitDecoratorMetadata": true,
+        "strictPropertyInitialization": false,
+        "verbatimModuleSyntax": false,
+
+        "noEmit": true
+    }
+}
