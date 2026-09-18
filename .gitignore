@@ -58,6 +58,9 @@ vite.config.ts.*
 .history
 .cursor
 
+# generate prisma
+apps/backend/src/generated
+
 # AI
 .agent
 .agents

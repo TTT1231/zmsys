@@ -1,20 +1,25 @@
 /**
  * 自动化冒烟：spawn 真实进程（编译产物 dist/main.js）→ 等健康就绪 → 登录 →
  * profile → ready 探活 → 发停止信号 → 断言优雅退出（退出码 + Prisma/池关闭日志）。
- * 全程连 *_test 专用库（护栏同 e2e）。前置：pnpm build、测试库已 reset。
- * Windows 不支持向子进程投递真实信号，停止阶段降级为仅断言进程退出；
+ * 全程连 *_test 专用库（护栏同 e2e）。前置：pnpm --filter ./apps/backend run build、
+ * 测试库已 reset。Windows 不支持向子进程投递真实信号，停止阶段降级为仅断言进程退出；
  * Linux（CI）下完整验证 SIGINT 优雅停机。
  */
 import { config } from "dotenv";
-import "../src/process-tz";
+import "../apps/backend/src/process-tz.js";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-// env 统一在仓库根 .env（相对本包 cwd 解析）；包内 .env 兜底（容器/独立部署）
-config({ path: ["../../.env", ".env"] });
+// 路径以脚本位置锚定（仓库根 scripts/），任意 cwd 下执行均一致
+const repoRoot = resolve(fileURLToPath(import.meta.url), "..", "..");
+const backendDir = join(repoRoot, "apps", "backend");
 
-const ENTRY = join(__dirname, "..", "dist", "main.js");
+// env 统一在仓库根 .env；包内 .env 兜底（容器/独立部署）
+config({ path: [join(repoRoot, ".env"), join(backendDir, ".env")] });
+
+const ENTRY = join(backendDir, "dist", "main.js");
 const PORT = Number(process.env.PORT ?? 5000);
 const base = `http://127.0.0.1:${PORT}/api`;
 
@@ -50,7 +55,7 @@ const waitFor = async (label: string, check: () => Promise<boolean>, timeoutMs: 
 
 const main = async (): Promise<void> => {
     if (!existsSync(ENTRY)) {
-        throw new Error("缺少编译产物 dist/main.js，请先执行 pnpm build");
+        throw new Error("缺少编译产物 dist/main.js，请先执行 pnpm --filter ./apps/backend run build");
     }
 
     const output: string[] = [];

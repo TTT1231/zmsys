@@ -8,5 +8,5 @@
         "noEmit": false,
         "incremental": true
     },
-    "include": ["src/**/*", "test/**/*", "scripts/**/*", "prisma7.config.ts"]
+    "include": ["src/**/*", "test/**/*", "prisma7.config.ts"]
 }

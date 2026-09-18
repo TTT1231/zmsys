@@ -9,8 +9,14 @@
 
 ```
 zmsys/
+├── docs/
+│   ├── business/             # 业务文档
+│   ├── db-scheme.md          # 数据库设计文档
+│   ├── mysql-8-schema.sql    # 数据库约束文档
+│   ├── openapi.yaml          # api 文档
+│   └── ai-rules/             # AI 规则
 ├── apps/
-│   ├── frontend/             # 管理后台，/api 代理到 backend:5000
+│   ├── frontend/             # 管理后台
 │   └── backend/              # 后端 nestjs API
 ├── internal/                 # 配置包
 ├── packages/                 # 内部包，exports 直指 src 源码
@@ -35,4 +41,12 @@ pnpm typecheck                # 类型检查
 pnpm lint                     # 全量 oxlint（type-aware）
 pnpm lint --fix               # 自动修复（包装器会跑两遍，收敛重叠修复）
 pnpm test                     # test（递归各包）
+pnpm test:db:reset            # 重置 e2e 测试库（DROP/CREATE + 迁移 + seed，仅 *_test 库）
+pnpm test:e2e                 # 重置测试库 + 后端 e2e
+pnpm smoke                    # 后端冒烟（前置：build backend + 测试库已 reset）
 ```
+
+## 业务参考
+
+- [业务流程](./docs/business/process.md)
+- [角色划分](./docs/business/roles.md)

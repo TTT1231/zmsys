@@ -15,12 +15,17 @@
         "typecheck": "tsx scripts/run-typecheck.ts",
         "lint": "tsx scripts/run-oxlint.ts",
         "format": "oxfmt .",
-        "test": "pnpm -r --if-present run test"
+        "test": "pnpm -r --if-present run test",
+        "test:db:reset": "tsx scripts/reset-test-db.ts",
+        "test:e2e": "pnpm test:db:reset && pnpm --filter ./apps/backend exec vitest run --config ./vitest.config.e2e.ts",
+        "smoke": "tsx scripts/smoke.ts"
     },
     "devDependencies": {
         "@types/node": "catalog:",
         "@zmsys/tsconfig": "workspace:*",
+        "dotenv": "^17.4.2",
         "lefthook": "catalog:",
+        "mariadb": "3.4.5",
         "oxfmt": "catalog:",
         "oxlint": "catalog:",
         "oxlint-tsgolint": "catalog:",
