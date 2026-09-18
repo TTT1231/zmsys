@@ -1,5 +1,14 @@
 import { Transform } from "class-transformer";
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsNotEmpty, IsOptional, IsString, MaxLength } from "class-validator";
+import {
+    ArrayMaxSize,
+    ArrayMinSize,
+    IsArray,
+    IsNotEmpty,
+    IsObject,
+    IsOptional,
+    IsString,
+    MaxLength,
+} from "class-validator";
 
 /** openapi CreateBomInput：品类名匹配后端目录；编号与明细快照由服务端决定 */
 export class CreateBomDto {
@@ -14,6 +23,12 @@ export class CreateBomDto {
     @ArrayMaxSize(200, { message: "单份 BOM 最多选择 200 项物料" })
     @IsString({ each: true, message: "物料编号必须是字符串" })
     materialItemIds!: string[];
+
+    /** 数量分组（qty=1）选中项的数量表：物料 id → 1-99 整数；
+     * 数值范围与「非数量分组不得携带数量」在 service 按目录校验 */
+    @IsOptional()
+    @IsObject({ message: "物料数量表必须是对象" })
+    quantities?: Record<string, number>;
 
     /** 品类子选（category key）：品类标记 childCategories 时必填（如跌倒开关的微动开关类型），
      * 服务端将该子品类的完整物料目录并入本品类的校验范围 */

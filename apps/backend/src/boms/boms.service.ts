@@ -28,6 +28,7 @@ type BomItemRow = {
     groupName: string;
     name: string;
     position: number;
+    quantity?: number;
 };
 
 type BomRowWithItems = BomTable & {
@@ -168,8 +169,13 @@ export class BomsService {
                 ...(await this.loadCatalog(tx, category.id)),
                 ...(childCategoryRow ? await this.loadCatalog(tx, childCategoryRow.id) : []),
             ];
-            const selection = resolveMaterialSelection(catalog, dto.materialItemIds);
-            const hash = materialSetHash(selection.ids);
+            const selection = resolveMaterialSelection(catalog, dto.materialItemIds, dto.quantities);
+            const hash = materialSetHash(
+                selection.snapshots.map(snapshot => ({
+                    id: snapshot.materialId.toString(),
+                    quantity: snapshot.quantity,
+                })),
+            );
 
             const duplicate = await tx.bomTable.findFirst({
                 where: { categoryId: category.id, specHash: hash },
@@ -209,6 +215,7 @@ export class BomsService {
                     groupName: snapshot.groupName,
                     name: snapshot.name,
                     position: snapshot.position,
+                    quantity: snapshot.quantity,
                     createdAt: now,
                 })),
             });
@@ -218,11 +225,12 @@ export class BomsService {
                 code: bomCode,
                 name: category.name,
                 modelCode: snapshot.modelCode,
-                items: snapshot.items.map(({ materialId, groupKey, groupName, name }) => ({
+                items: snapshot.items.map(({ materialId, groupKey, groupName, name, quantity }) => ({
                     materialId,
                     groupKey,
                     groupName,
                     name,
+                    quantity,
                 })),
                 spec: snapshot.spec,
                 created: beijingDayKey(now),
@@ -351,6 +359,7 @@ export class BomsService {
                     groupKey: node.groupKey,
                     groupName: node.name,
                     multi: node.multi,
+                    qty: node.qty === true,
                     name: item.name,
                 });
             }
@@ -380,6 +389,7 @@ export class BomsService {
             name: row.name,
             key: isGroup ? row.groupKey : null,
             multi: isGroup ? row.multi : null,
+            qty: isGroup ? (row.qty ?? false) : null,
             items: isGroup ? row.items.map(item => ({ id: item.id.toString(), name: item.name })) : [],
         };
     }

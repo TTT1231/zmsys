@@ -41,6 +41,7 @@ interface GroupFixture {
     name: string;
     groupKey: string | null;
     multi: boolean | null;
+    qty?: boolean | null;
     sortOrder: number;
     status: boolean;
     items: ItemFixture[];
@@ -91,6 +92,19 @@ const rotaryGroups = (): GroupFixture[] => [
         sortOrder: 7,
         status: true,
         items: [{ id: 3008n, groupId: 2007n, name: "0.5", sortOrder: 1, status: true }],
+    },
+    {
+        id: 2016n,
+        categoryId: 1001n,
+        parentId: null,
+        kind: "GROUP",
+        name: "静片",
+        groupKey: "static-plate",
+        multi: false,
+        qty: true,
+        sortOrder: 9,
+        status: true,
+        items: [{ id: 3031n, groupId: 2016n, name: "带点静片", sortOrder: 1, status: true }],
     },
 ];
 
@@ -241,7 +255,12 @@ const mkBom = (overrides: Partial<BomTable> = {}): BomTable =>
         id: 5000n,
         bomCode: "XK2010",
         categoryId: 1001n,
-        specHash: Buffer.from(materialSetHash(["3003", "3008"])),
+        specHash: Buffer.from(
+            materialSetHash([
+                { id: "3003", quantity: 1 },
+                { id: "3008", quantity: 1 },
+            ]),
+        ),
         unit: "个",
         status: true,
         rowVersion: 1n,
@@ -474,8 +493,12 @@ describe("BomsService", () => {
                 ["group", "型号", null],
                 ["group", "银丝厚度", null],
                 ["group", "弹簧", null],
+                ["group", "静片", null],
             ]);
             expect(rotary.groups[1]!.items).toEqual([{ id: "3003", name: "0.2" }]);
+            // 数量分组下发 qty=true，普通分组 qty=false，分区为 null
+            expect(rotary.groups[3]).toMatchObject({ name: "静片", qty: true });
+            expect(rotary.groups[0]).toMatchObject({ name: "型号", qty: false });
             const micro = categories[1]!;
             expect(micro.seqWidth).toBe(4);
             expect(micro.groups.map(group => group.name)).toEqual(["PA66塑料", "底座", "五金件", "支架"]);
@@ -506,8 +529,14 @@ describe("BomsService", () => {
                 name: "旋转XK2",
                 modelCode: "1-1",
                 items: [
-                    { materialId: "3001", groupKey: "model", groupName: "型号", name: "1-1" },
-                    { materialId: "3003", groupKey: "silver-wire-thickness", groupName: "银丝厚度", name: "0.2" },
+                    { materialId: "3001", groupKey: "model", groupName: "型号", name: "1-1", quantity: 1 },
+                    {
+                        materialId: "3003",
+                        groupKey: "silver-wire-thickness",
+                        groupName: "银丝厚度",
+                        name: "0.2",
+                        quantity: 1,
+                    },
                 ],
                 spec: "型号：1-1 · 银丝厚度：0.2",
                 created: "2026-09-01",
@@ -583,6 +612,53 @@ describe("BomsService", () => {
             ).rejects.toThrow(new BadRequestException("分组「支架」只能选择一项物料"));
         });
 
+        it("数量分组（qty=1）携带 1-99 数量建档：明细/摘要/hash 均含数量", async () => {
+            const { service, store: written } = mkService(store);
+            const bom = await service.createBom(
+                dtoOf({ materialItemIds: ["3001", "3031"], quantities: { "3031": 4 } }),
+                actor,
+                ID_KEY,
+            );
+            expect(bom.items).toEqual([
+                { materialId: "3001", groupKey: "model", groupName: "型号", name: "1-1", quantity: 1 },
+                { materialId: "3031", groupKey: "static-plate", groupName: "静片", name: "带点静片", quantity: 4 },
+            ]);
+            expect(bom.spec).toBe("型号：1-1 · 静片：带点静片 ×4");
+            expect(written.createdItems.map(item => [item.materialId, item.quantity])).toEqual([
+                [3001n, 1],
+                [3031n, 4],
+            ]);
+            expect(
+                Buffer.compare(
+                    written.createdBoms[0]!.specHash as Buffer,
+                    Buffer.from(
+                        materialSetHash([
+                            { id: "3001", quantity: 1 },
+                            { id: "3031", quantity: 4 },
+                        ]),
+                    ),
+                ) === 0,
+            ).toBe(true);
+            // 同物料集合不同数量可并存（判重输入含数量），缺省数量按 1 冻结
+            const plain = await service.createBom(dtoOf({ materialItemIds: ["3001", "3031"] }), actor, "idem-key-02");
+            expect(plain.items).toEqual([
+                { materialId: "3001", groupKey: "model", groupName: "型号", name: "1-1", quantity: 1 },
+                { materialId: "3031", groupKey: "static-plate", groupName: "静片", name: "带点静片", quantity: 1 },
+            ]);
+        });
+
+        it("数量校验：qty 分组 0/100/非整数 400；非 qty 分组携带数量 400", async () => {
+            const { service } = mkService(store);
+            for (const bad of [0, 100, 1.5, "3" as unknown as number]) {
+                await expect(
+                    service.createBom(dtoOf({ materialItemIds: ["3031"], quantities: { "3031": bad } }), actor, ID_KEY),
+                ).rejects.toThrow(BadRequestException);
+            }
+            await expect(
+                service.createBom(dtoOf({ materialItemIds: ["3001"], quantities: { "3001": 2 } }), actor, ID_KEY),
+            ).rejects.toThrow(new BadRequestException("分组「型号」的物料不带数量"));
+        });
+
         it("建档成功：冻结快照按目录顺序分配 position，hash 与输入顺序无关", async () => {
             const { service, store: written } = mkService(store);
             // 输入顺序与目录顺序相反，验证 position 仍按目录序冻结
@@ -595,14 +671,25 @@ describe("BomsService", () => {
                 unit: "个",
             });
             expect(bom.items).toEqual([
-                { materialId: "3003", groupKey: "silver-wire-thickness", groupName: "银丝厚度", name: "0.2" },
-                { materialId: "3008", groupKey: "spring", groupName: "弹簧", name: "0.5" },
+                {
+                    materialId: "3003",
+                    groupKey: "silver-wire-thickness",
+                    groupName: "银丝厚度",
+                    name: "0.2",
+                    quantity: 1,
+                },
+                { materialId: "3008", groupKey: "spring", groupName: "弹簧", name: "0.5", quantity: 1 },
             ]);
             expect(written.createdBoms[0]).toMatchObject({ bomCode: "XK2011", unit: "个", categoryId: 1001n });
             expect(
                 Buffer.compare(
                     written.createdBoms[0]!.specHash as Buffer,
-                    Buffer.from(materialSetHash(["3003", "3008"])),
+                    Buffer.from(
+                        materialSetHash([
+                            { id: "3003", quantity: 1 },
+                            { id: "3008", quantity: 1 },
+                        ]),
+                    ),
                 ) === 0,
             ).toBe(true);
             expect(written.createdItems.map(item => [item.materialId, item.position])).toEqual([

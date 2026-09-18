@@ -175,7 +175,7 @@ describe("销售订单 (e2e)", () => {
                     id: bomId,
                     bomCode: BOM_CODE,
                     categoryId: category!.id,
-                    specHash: materialSetHash(materialIds.map(id => id.toString())),
+                    specHash: materialSetHash(materialIds.map(id => ({ id: id.toString(), quantity: 1 }))),
                     requestKey: `e2e-bom-${BOM_CODE}`,
                     createdBy: superUser!.id,
                     updatedBy: superUser!.id,
