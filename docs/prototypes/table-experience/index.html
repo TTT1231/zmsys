@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>表格体验原型 · 智造管理系统</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="reviewbar"><div><span class="review-dot"></span><strong>表格体验提案</strong><span class="review-note">交互原型 · 示例数据</span></div><div class="device-switch"><button id="desktop-mode" class="selected" aria-pressed="true">电脑预览</button><button id="phone-mode" aria-pressed="false">手机预览</button></div><button id="guide" class="review-help">试用说明 ↗</button></div>
+  <div id="phone-stage" hidden><p>手机预览 · 可直接点按操作</p><iframe title="手机交互原型" id="phone-frame"></iframe></div>
+  <div id="workspace" class="workspace">
+    <aside class="sidebar"><div class="brand"><span class="brand-mark">智</span><strong>智造管理系统</strong></div><div class="nav-label">业务管理</div><nav id="desktop-nav" aria-label="业务导航"></nav><div class="sidebar-footer"><span class="avatar">郭</span><div>郭均<small>超级管理员 · 原型角色</small></div></div></aside>
+    <div class="content"><header class="topbar"><span>业务管理 <span class="slash">/</span> <span id="breadcrumb">成品入库</span></span><span class="sample"><i></i> 示例工作空间</span></header>
+      <main id="main"><div class="page-heading"><div><div class="eyebrow">成品管理</div><h1 id="title">成品入库</h1><p id="subtitle">核对成品规格与数量，追溯每一笔入库。</p></div><button class="primary" id="create"></button></div>
+      <section class="data-panel" aria-label="业务记录"><div class="toolbar"><label class="search"><span data-icon="search"></span><input id="search" type="search" aria-label="搜索记录" placeholder="搜索单号、BOM 编码、登记人"></label><label class="sr-only" for="category">品类</label><select id="category"><option value="">全部品类</option><option>旋转XK2</option><option>新微动</option></select><button id="filters" class="secondary"><span data-icon="filter"></span>筛选<span id="filter-count"></span></button><span class="toolbar-spacer"></span><button id="refresh" class="icon-button" aria-label="刷新示例记录" title="刷新"><span data-icon="refresh"></span></button><button id="export" class="secondary export"><span data-icon="download"></span>导出</button></div>
+      <div id="active-filters" class="active-filters" hidden></div>
+      <div class="viewbar"><span><strong id="record-count">12</strong> 条记录 <span id="view-description"></span></span><div><button class="text-button" id="fit"><span data-icon="fit"></span>适合屏幕</button><button class="secondary" id="settings"><span data-icon="settings"></span>显示设置</button></div></div>
+      <div id="resize-status" role="status" hidden></div><div class="table-scroll" id="table-scroll"><table id="data-table"></table></div><div id="mobile-list" class="mobile-list"></div>
+      <div id="empty" class="empty" hidden><span data-icon="search"></span><h3>没有找到符合条件的记录</h3><p>试试其他单号或 BOM 编码，或清除筛选条件。</p><button class="secondary" id="clear-empty">清除全部条件</button></div>
+      <footer class="pagination"><span id="page-summary"></span><div><label class="page-size">每页 <select id="page-size" aria-label="每页记录数"><option>8</option><option>12</option></select> 条</label><button id="prev" class="icon-button" aria-label="上一页">‹</button><span id="page-index"></span><button id="next" class="icon-button" aria-label="下一页">›</button></div></footer></section>
+      <p class="below-note"><span data-icon="info"></span><span id="table-hint">拖动表头右边界调整列宽；高亮区域就是正在调整的列。双击边界可恢复推荐宽度。</span></p>
+      </main>
+    </div>
+    <nav id="mobile-nav" class="mobile-nav" aria-label="手机业务导航"></nav>
+  </div>
+  <dialog id="settings-dialog" class="settings-dialog" aria-labelledby="settings-title"><header class="dialog-header"><div><h2 id="settings-title">按你的习惯显示</h2><p>只影响当前设备上的这张表。</p></div><button class="icon-button" data-close aria-label="关闭显示设置">×</button></header><div class="dialog-body"><h3>每行显示多少信息</h3><div id="density-options" class="choice-group"></div><p class="help">紧凑方便快速查单；标准同时显示产品规格。</p><div class="section-heading"><h3>显示哪些内容</h3><span>勾选后立即预览</span></div><div id="column-options"></div><div class="setting-callout"><span data-icon="info"></span><span>产品信息会优先分配空间。完整规格与物料可从 BOM 编码进入查看。</span></div></div><footer class="dialog-footer"><button id="reset-settings" class="text-button">恢复推荐设置</button><button class="primary" data-close>完成</button></footer></dialog>
+  <dialog id="detail-dialog" class="detail-dialog" aria-labelledby="detail-title"><header class="dialog-header"><div><span class="eyebrow" id="detail-kicker">入库凭证</span><h2 id="detail-title"></h2></div><button class="icon-button" data-close aria-label="关闭详情">×</button></header><div id="detail-body" class="dialog-body"></div><footer class="dialog-footer"><span class="help">示例数据 · 仅供体验</span><button class="primary" data-close>返回列表</button></footer></dialog>
+  <dialog id="filter-dialog" aria-labelledby="filter-title"><header class="dialog-header"><div><h2 id="filter-title">筛选记录</h2><p>缩小范围，更快找到需要的单据。</p></div><button class="icon-button" data-close aria-label="关闭筛选">×</button></header><form id="filter-form"><div class="dialog-body filter-fields"><label>日期范围<select id="date-filter"><option value="">全部日期</option><option value="today">2026-09-19</option><option value="recent">2026-09-18 至 2026-09-19</option></select></label><label id="person-label">登记人<select id="person-filter"><option value="">全部人员</option><option>吉英</option><option>郭均</option></select></label><label id="status-label">状态<select id="status-filter"><option value="">全部状态</option><option>待发货</option><option>部分发货</option><option>已完成</option></select></label></div><footer class="dialog-footer"><button type="button" id="reset-filter" class="text-button">清除筛选</button><button type="submit" class="primary">查看结果</button></footer></form></dialog>
+  <dialog id="guide-dialog" aria-labelledby="guide-title"><header class="dialog-header"><h2 id="guide-title">这版可以这样试</h2><button class="icon-button" data-close aria-label="关闭试用说明">×</button></header><div class="dialog-body guide-copy"><ol><li><strong>调整 BOM 列：</strong>拖动表头右边界，整列高亮，其他列保持原来的宽度。也可以用键盘左右键。</li><li><strong>点“显示设置”：</strong>选择信息密度、显示列和宽窄，无需输入尺寸。</li><li><strong>点 BOM 编码：</strong>侧边打开完整规格与物料，关闭后仍在原来的位置。</li><li><strong>切换手机预览：</strong>体验入库、出库、订单的记录卡片、搜索、筛选和详情。</li></ol><p>可以直接告诉我：“这里我看不清”“这个点起来麻烦”“我更想先看到数量”。这些反馈就足够了。</p><div class="setting-callout">本页不连接业务系统。搜索、排序、翻页、列宽与显示设置可操作；新增、发货、打印等业务动作只展示交互示意。示例物料与库存不代表真实记录。</div></div></dialog>
+  <div id="toast" role="status" hidden></div>
+  <script src="app.js"></script>
+</body></html>
