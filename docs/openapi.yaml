@@ -19,7 +19,7 @@ info:
         - 业务编码由后端通过 `biz_sequence` 事务取号，禁止使用 `MAX(code)+1`。
         - 库存 = 有效入库合计 + 库存调整合计 - 有效出库净额。出库登记、作废、打印与订单取消按固定顺序加行锁并在一个事务提交。
         - 业务日期使用 `yyyy-MM-dd`；系统时间使用带时区 ISO 8601，数据库保存 UTC。
-        - 当前前端由基础资源的完整计算窗口派生工作台数据；启用服务端分页前必须提供对应聚合端点，不能以分页局部数据计算库存。
+        - 工作台数据由 `/workbench/overview` 聚合端点统一供给（订单/台账契约当前无分页，仍返回完整计算窗口）；后续启用服务端分页时，不能以分页局部数据在派生侧计算全局库存。
 servers:
     - url: /api
       description: Vite 代理或 MSW
@@ -43,6 +43,8 @@ tags:
       description: 系统用户与离岗移交
     - name: roles
       description: 固定角色、实时授权与授权日志
+    - name: workbench
+      description: 工作台经营总览聚合
 
 paths:
     /auth/login:
@@ -763,6 +765,24 @@ paths:
                 "404": { $ref: "#/components/responses/NotFound" }
                 "409": { $ref: "#/components/responses/Conflict" }
 
+    /workbench/overview:
+        get:
+            tags: [workbench]
+            operationId: getWorkbenchOverview
+            summary: 工作台经营总览聚合
+            description: |
+                登录即可访问（各角色公共首页）。返回工作台读模型：products 含 v_bom_stock
+                实时库存，orders 的 shipped 为 v_order_outbound_qty 净额（无流水订单缺行按 0），
+                movements 按业务日聚合有效入库与出库净额（含作废冲销）；库存调整计入库存
+                但不出现在出入库趋势。周期汇总、交付风险、客户排行与趋势分桶由前端派生。
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/WorkbenchOverviewEnvelope" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+
 components:
     securitySchemes:
         bearerAuth:
@@ -1462,3 +1482,48 @@ components:
                 - $ref: "#/components/schemas/Envelope"
                 - type: object
                   properties: { code: { const: 0 }, data: { type: array, items: { $ref: "#/components/schemas/GrantLogEntry" } }, message: { const: ok } }
+        WorkbenchOverviewEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/WorkbenchData" }, message: { const: ok } }
+        WorkbenchData:
+            type: object
+            required: [asOf, unit, products, orders, movements]
+            properties:
+                asOf: { type: string, format: date, description: 业务截至日（北京日） }
+                unit: { type: string, description: 全部 BOM 单位一致时取该值，混合时为“多单位” }
+                products: { type: array, items: { $ref: "#/components/schemas/WorkbenchProduct" } }
+                orders: { type: array, items: { $ref: "#/components/schemas/WorkbenchOrder" } }
+                movements: { type: array, items: { $ref: "#/components/schemas/WorkbenchMovement" } }
+        WorkbenchProduct:
+            type: object
+            required: [code, category, model, spec, unit, stock]
+            properties:
+                code: { type: string }
+                category: { type: string }
+                model: { type: string, description: 型号组选中项（建档冻结快照，无则空串） }
+                spec: { type: string, description: “组名：物料名 ×N” 摘要，按冻结 position 排序 }
+                unit: { type: string }
+                stock: { type: integer, description: v_bom_stock 口径，无流水 BOM 为 0 }
+        WorkbenchOrder:
+            type: object
+            required: [no, customerCode, customer, bomCode, date, due, qty, shipped]
+            properties:
+                no: { type: string }
+                customerCode: { type: string }
+                customer: { type: string }
+                bomCode: { type: string }
+                date: { type: string, format: date, description: 下单日期 }
+                due: { type: string, format: date, description: 交货日期 }
+                qty: { type: integer, minimum: 1 }
+                shipped: { type: integer, minimum: 0, description: 有效出库净额（v_order_outbound_qty） }
+                cancelled: { type: boolean, description: 仅已取消订单携带 }
+        WorkbenchMovement:
+            type: object
+            required: [date, bomCode, inbound, outbound]
+            properties:
+                date: { type: string, format: date, description: 业务日期 }
+                bomCode: { type: string }
+                inbound: { type: integer, minimum: 0, description: 有效检验入库合计 }
+                outbound: { type: integer, description: 出库净额（含作废冲销，跨日冲销当天可能为负） }

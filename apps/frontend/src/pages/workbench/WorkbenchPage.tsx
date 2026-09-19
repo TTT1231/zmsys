@@ -140,16 +140,10 @@ function OwnerWorkbench() {
                 title="经营总览"
                 description="掌握订单全貌，让每一份交付心中有数。"
                 actions={
-                    <>
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-primary-border bg-primary-soft px-3 py-1 text-11 font-medium text-primary">
-                            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                            演示数据
-                        </span>
-                        <span className="flex items-center gap-1.5 text-12 text-muted">
-                            <Icon name="calendar" size={15} />
-                            截至 {data.asOf}
-                        </span>
-                    </>
+                    <span className="flex items-center gap-1.5 text-12 text-muted">
+                        <Icon name="calendar" size={15} />
+                        截至 {data.asOf}
+                    </span>
                 }
             />
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -261,7 +255,6 @@ function OwnerWorkbench() {
                     </span>
                     笔<Icon name="chevron-right" size={14} />
                 </button>
-                <span className="ml-auto text-11 text-warning">全部有效订单 · 不随统计周期变化</span>
             </section>
             <ProductProgressChart
                 categories={summary.categories}
@@ -279,7 +272,6 @@ function OwnerWorkbench() {
                     onDetails={() => setDetail({ kind: "customers" })}
                 />
             </div>
-            <p className="text-center text-11 text-muted">独立演示数据 · 交付进度按订单统计，未发货不等于未生产</p>
 
             <Modal
                 open={detail !== null}
@@ -528,7 +520,7 @@ function OwnerWorkbench() {
                             ],
                             [
                                 "客户排行与单位",
-                                "按当前订单周期排名；下单笔数不计完全取消且未履行的订单。相同客户编码合并；数量按统一单位统计，当前演示均为个。真实数据若有不同单位，须分开呈现。",
+                                "按当前订单周期排名；下单笔数不计完全取消且未履行的订单。相同客户编码合并，数量按 BOM 计量单位统计，混合单位时汇总值仅作参考。",
                             ],
                         ].map(([title, description]) => (
                             <div key={title}>

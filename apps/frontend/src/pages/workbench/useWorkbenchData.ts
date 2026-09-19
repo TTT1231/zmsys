@@ -1,4 +1,4 @@
-/* 工作台数据：GET /workbench/overview，由后端统一供给（演示/真实聚合）；
+/* 工作台数据：GET /workbench/overview，由后端统一聚合供给；
  * 页面与纯统计函数无需改写，加载期间以空模型兜底。 */
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";

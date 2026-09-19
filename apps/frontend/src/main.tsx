@@ -13,7 +13,7 @@ const queryClient = new QueryClient({
     },
 });
 
-/* Mock 已移除：所有数据来自后端 API（演示数据由后端 MOCK_ENABLED 控制）。 */
+/* 所有数据来自后端 API。 */
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
         <QueryClientProvider client={queryClient}>

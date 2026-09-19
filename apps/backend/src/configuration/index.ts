@@ -24,9 +24,6 @@ export interface AppConfig {
     cors: {
         origins: string[];
     };
-    workbench: {
-        mockEnabled: boolean;
-    };
 }
 
 type NodeEnv = "development" | "production" | "test";
@@ -110,12 +107,6 @@ export default (): AppConfig => {
         .map(origin => origin.trim())
         .filter(origin => origin.length > 0);
 
-    // 工作台演示数据开关：仅开发/测试可用，生产开启即拒绝启动
-    const workbenchMockEnabled = process.env.MOCK_ENABLED === "true";
-    if (isProduction && workbenchMockEnabled) {
-        errors.push("生产环境禁止开启 MOCK_ENABLED");
-    }
-
     if (errors.length > 0) {
         throw new Error(`环境变量校验失败：\n- ${errors.join("\n- ")}`);
     }
@@ -141,6 +132,5 @@ export default (): AppConfig => {
         },
         snowflake: { workerId },
         cors: { origins: corsOrigins },
-        workbench: { mockEnabled: workbenchMockEnabled },
     };
 };

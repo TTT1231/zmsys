@@ -29,7 +29,7 @@ export interface WorkbenchMovement {
     outbound: number;
 }
 
-/** 接真实数据时由数据适配层提供此模型；数量必须使用同一种计量单位。 */
+/** 由后端 /workbench/overview 聚合供给；跨 BOM 汇总仅在单一计量单位下精确。 */
 export interface WorkbenchData {
     asOf: string;
     unit: string;

@@ -11,7 +11,7 @@
 | `views.ts`          | 派生统计纯函数（快照 → 待发货 / 缺口 / 趋势 / TOP），出库可发量的前端口径                           |
 | `queries.ts`        | react-query hooks，页面数据入口，含签名适配                                                         |
 
-链路：`页面 → queries.ts → api/ → http/ → [MSW | 后端]`。当前演示由完整快照在 `views.ts` 派生统计；真实后端分页前须补聚合端点。
+链路：`页面 → queries.ts → api/ → http/ → 后端`。工作台统计由 `/workbench/overview` 聚合端点供给；列表页统计仍由 `views.ts` 按完整快照派生，后端分页前须补聚合端点。
 
 注意：
 
