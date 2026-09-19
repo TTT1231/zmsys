@@ -38,8 +38,11 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     pnpm --config.minimum-release-age=0 install \
         --filter ./apps/backend... --prod --frozen-lockfile
 
-# 迁移目录与 seed 随产物层进镜像（容器启动时 migrate deploy 才读）
-COPY apps/backend/prisma/migrations apps/backend/prisma/seed.ts ./apps/backend/prisma/
+# 迁移目录与 seed 随产物层进镜像（容器启动时 migrate deploy 才读）。
+# 目录作为 COPY 源时只复制其内容、不保留目录名——migrations 必须显式
+# 指向同名目标目录，否则迁移散落进 prisma/ 根，migrate deploy 静默空跑
+COPY apps/backend/prisma/migrations ./apps/backend/prisma/migrations
+COPY apps/backend/prisma/seed.ts ./apps/backend/prisma/seed.ts
 
 # 本地已构建产物（dist/generated 里带 prisma client，运行时无需再 generate）
 COPY apps/backend/dist ./apps/backend/dist
