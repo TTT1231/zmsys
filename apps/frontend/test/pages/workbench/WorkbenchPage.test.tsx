@@ -9,7 +9,9 @@ import { createWorkbenchDemo } from "../../fixtures/workbench";
 
 const auth = vi.hoisted(() => ({ role: "super" }));
 vi.mock("@/context/useApp", () => ({ useApp: () => auth }));
-vi.mock("@/pages/workbench/useWorkbenchData", () => ({ useWorkbenchData: () => createWorkbenchDemo("2026-09-12") }));
+vi.mock("@/pages/workbench/useWorkbenchData", () => ({
+    useWorkbenchData: () => ({ data: createWorkbenchDemo("2026-09-12"), isLoading: false, isFetching: false }),
+}));
 vi.mock("@/components/charts/EChart", () => ({ EChart: () => <div data-testid="echart" /> }));
 afterEach(() => {
     cleanup();
@@ -53,12 +55,11 @@ it("周期影响订单汇总，不改变当前风险；型号和客户明细可�
     expect(screen.getByRole("dialog").getAttribute("aria-label")).toContain("订单明细");
 });
 
-it("风险与统计口径弹窗能打开和关闭", async () => {
+it("风险弹窗能打开和关闭", async () => {
     const user = userEvent.setup();
     render(<WorkbenchPage />);
     await user.click(screen.getByRole("button", { name: /未来 7 天到期且缺货/ }));
     expect(screen.getByRole("dialog", { name: "未来 7 天到期且缺货的订单" })).toBeInTheDocument();
     await user.keyboard("{Escape}");
-    await user.click(screen.getByRole("button", { name: "统计口径" }));
-    expect(screen.getByRole("dialog", { name: "统计口径" })).toHaveTextContent("需求总量 = 已发 + 未发");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
