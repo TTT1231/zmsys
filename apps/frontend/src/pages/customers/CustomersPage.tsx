@@ -240,6 +240,7 @@ export function CustomerDetailModal({
                 title={customer.name}
                 subtitle={`${customer.code} · 建档 ${customer.created}`}
                 width={560}
+                layout="detail"
                 footer={
                     <>
                         {onEdit && (
@@ -588,7 +589,8 @@ export function CustomersPage() {
                     ) : (
                         <DataTable
                             tableId="customers"
-                            defaultWidths={[180, 110, 135, 150, 100, 100, 120, 105, 110]}
+                            defaultWidths={[240, 124, 150, 170, 120, 130, 138, 110, 120]}
+                            recordCount={rows.length}
                             identityColumn={0}
                             scrollRef={tableScrollRef}
                         >

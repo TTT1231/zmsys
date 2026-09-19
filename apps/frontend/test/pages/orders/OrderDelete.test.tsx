@@ -44,7 +44,10 @@ const openEdit = async (orderNo: string) => {
     const row = within(screen.getByRole("table"))
         .getAllByRole("row")
         .find(tr => tr.textContent?.includes(orderNo))!;
-    await user.click(within(row).getByRole("button", { name: "编辑" }));
+    expect(within(row).queryByRole("button", { name: "编辑" })).not.toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: "登记发货" })).not.toBeInTheDocument();
+    await user.click(within(row).getByRole("button", { name: "查看详情" }));
+    await user.click(within(screen.getByRole("dialog", { name: orderNo })).getByRole("button", { name: "编辑订单" }));
     return screen.getByRole("dialog", { name: "编辑销售订单" });
 };
 

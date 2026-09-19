@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { DataTable } from "@/components/ui/DataTable";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
@@ -222,7 +223,17 @@ export function InboundModal({
     );
 }
 
-export function VoucherModal({ row, snap, onClose }: { row: InboundRow | null; snap: Snapshot; onClose: () => void }) {
+export function VoucherModal({
+    row,
+    snap,
+    onClose,
+    actions,
+}: {
+    row: InboundRow | null;
+    snap: Snapshot;
+    onClose: () => void;
+    actions?: ReactNode;
+}) {
     if (!row) return null;
     const bom = bomByCode(snap, row.bomCode);
     return (
@@ -232,14 +243,14 @@ export function VoucherModal({ row, snap, onClose }: { row: InboundRow | null; s
             label="入库凭证"
             title={row.no}
             width={560}
+            layout="detail"
             footer={
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover"
-                >
-                    关闭
-                </button>
+                <>
+                    {actions}
+                    <Button variant="secondary" onClick={onClose}>
+                        关闭
+                    </Button>
+                </>
             }
         >
             <div className="flex flex-col gap-4">
@@ -476,6 +487,7 @@ export function InboundPage() {
     const [sort, setSort] = useState<SortState<LedgerSortKey>>({ key: "date", dir: "asc" });
     const [newOpen, setNewOpen] = useState(false);
     const [voucher, setVoucher] = useState<InboundRow | null>(null);
+    const currentVoucher = voucher ? (snap.inboundLedger.find(row => row.no === voucher.no) ?? null) : null;
     const [voidTarget, setVoidTarget] = useState<InboundRow | null>(null);
     const [editTarget, setEditTarget] = useState<InboundRow | null>(null);
 
@@ -612,43 +624,26 @@ export function InboundPage() {
                         {pageRows.map(row => (
                             <RecordCard
                                 key={row.no}
-                                title={row.bomCode}
-                                subtitle={row.no}
-                                badge={<strong className="text-success">+{num(row.qty)} 个</strong>}
+                                title={row.no}
+                                subtitle={row.date}
+                                badge={
+                                    <Badge tone={row.status === "voided" ? "danger" : "success"}>
+                                        {row.status === "voided" ? "已作废" : "已入库"}
+                                    </Badge>
+                                }
                                 actions={
-                                    <div className="flex flex-wrap gap-2">
-                                        <Button variant="secondary" onClick={() => setVoucher(row)}>
-                                            查看凭证
-                                        </Button>
-                                        {voidable(row) && (
-                                            <>
-                                                <Button
-                                                    variant="secondary"
-                                                    disabled={voidRequest.isPending}
-                                                    onClick={() => setEditTarget(row)}
-                                                >
-                                                    修正
-                                                </Button>
-                                                <Button
-                                                    variant="secondary"
-                                                    disabled={voidRequest.isPending}
-                                                    onClick={() => setVoidTarget(row)}
-                                                >
-                                                    作废
-                                                </Button>
-                                            </>
-                                        )}
-                                    </div>
+                                    <Button variant="secondary" onClick={() => setVoucher(row)}>
+                                        查看凭证
+                                    </Button>
                                 }
                             >
                                 <BomCell
                                     categories={snap.bomCategories}
                                     bom={bomByCode(snap, row.bomCode)}
                                     bomCode={row.bomCode}
-                                    showIdentity={false}
                                 />
                                 <div className="mt-2 flex flex-col gap-1.5">
-                                    <CardField label="入库日期" value={row.date} />
+                                    <CardField label="入库数量" value={`${num(row.qty)} 个`} strong />
                                     <CardField label="登记人" value={row.inspector} />
                                 </div>
                             </RecordCard>
@@ -661,7 +656,8 @@ export function InboundPage() {
                     ) : (
                         <DataTable
                             tableId="inbound"
-                            defaultWidths={[185, 230, 155, 155, 150, 245]}
+                            defaultWidths={[166, 370, 132, 138, 130, 120]}
+                            recordCount={filtered.length}
                             identityColumn={0}
                             scrollRef={tableScrollRef}
                         >
@@ -714,37 +710,13 @@ export function InboundPage() {
                                         <td className="px-3 py-3 tnum text-13 text-td">{row.date}</td>
                                         <td className="px-3 py-3 text-13 text-td">{row.inspector}</td>
                                         <td className="px-5 py-3 text-right">
-                                            <div className="flex items-center justify-end gap-3">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setVoucher(row)}
-                                                    className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline"
-                                                >
-                                                    查看凭证
-                                                </button>
-                                                {voidable(row) && (
-                                                    <>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setEditTarget(row)}
-                                                            className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline"
-                                                        >
-                                                            修正
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            disabled={voidRequest.isPending}
-                                                            onClick={() => setVoidTarget(row)}
-                                                            className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                                                        >
-                                                            {voidRequest.isPending &&
-                                                            voidRequest.variables?.no === row.no
-                                                                ? "处理中…"
-                                                                : "作废"}
-                                                        </button>
-                                                    </>
-                                                )}
-                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setVoucher(row)}
+                                                className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline"
+                                            >
+                                                查看凭证
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
@@ -769,7 +741,33 @@ export function InboundPage() {
             </section>
 
             {canRegister && <InboundModal open={newOpen} onClose={() => setNewOpen(false)} />}
-            <VoucherModal row={voucher} snap={snap} onClose={() => setVoucher(null)} />
+            <VoucherModal
+                row={currentVoucher}
+                snap={snap}
+                onClose={() => setVoucher(null)}
+                actions={
+                    currentVoucher &&
+                    voidable(currentVoucher) && (
+                        <>
+                            <button
+                                type="button"
+                                disabled={voidRequest.isPending}
+                                onClick={() => setVoidTarget(currentVoucher)}
+                                className="min-h-10 rounded-btn border border-danger/30 bg-danger-soft px-4 text-13 font-medium text-danger disabled:opacity-50"
+                            >
+                                作废
+                            </button>
+                            <Button
+                                variant="secondary"
+                                disabled={voidRequest.isPending}
+                                onClick={() => setEditTarget(currentVoucher)}
+                            >
+                                修正
+                            </Button>
+                        </>
+                    )
+                }
+            />
             {editTarget && <EditInboundModal row={editTarget} onClose={() => setEditTarget(null)} />}
             {voidTarget && (
                 <VoidInboundModal

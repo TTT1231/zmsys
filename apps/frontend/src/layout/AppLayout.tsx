@@ -57,7 +57,7 @@ export function AppLayout() {
                 <Topbar title={title} onOpenDrawer={() => setDrawerPath(location.pathname)} />
                 <main
                     id="mainContent"
-                    className="mx-auto w-full max-w-390 flex-1 px-[clamp(16px,3vw,48px)] pt-6 pb-[calc(76px+env(safe-area-inset-bottom))] lg:pb-11"
+                    className="mx-auto w-full min-w-0 flex-1 px-[clamp(16px,2vw,32px)] pt-6 pb-[calc(76px+env(safe-area-inset-bottom))] lg:pb-8"
                 >
                     {accessDenied ? (
                         <ErrorPage kind="forbidden" />

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { DataTable } from "@/components/ui/DataTable";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
@@ -592,10 +593,12 @@ export function OutboundDetailModal({
     row,
     snap,
     onClose,
+    actions,
 }: {
     row: OutboundRow | null;
     snap: Snapshot;
     onClose: () => void;
+    actions?: ReactNode;
 }) {
     if (!row) return null;
     const bom = bomByCode(snap, row.bomCode);
@@ -607,14 +610,14 @@ export function OutboundDetailModal({
             title={row.no}
             subtitle={`${row.customer} · ${row.customerCode}`}
             width={560}
+            layout="detail"
             footer={
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover"
-                >
-                    关闭
-                </button>
+                <>
+                    {actions}
+                    <Button variant="secondary" onClick={onClose}>
+                        关闭
+                    </Button>
+                </>
             }
         >
             <div className="flex flex-col gap-4">
@@ -670,6 +673,7 @@ export function OutboundPage() {
     const [emergencyTarget, setEmergencyTarget] = useState<OutboundRow | null>(null);
 
     const rows = snap.outboundLedger;
+    const currentDetail = detail ? (rows.find(row => row.no === detail.no) ?? null) : null;
     const boms = snap.boms;
     const bomCategory = new Map(boms.map(bom => [bom.code, bom.name]));
     const categories = [...new Set(boms.map(bom => bom.name))];
@@ -854,42 +858,17 @@ export function OutboundPage() {
                         {pageRows.map(row => (
                             <RecordCard
                                 key={row.no}
-                                title={row.customer}
-                                subtitle={row.orderNo}
+                                title={row.no}
+                                subtitle={`${row.customer} · ${row.orderNo}`}
                                 badge={
-                                    row.state === "voided" ? (
-                                        <Badge tone="danger">已作废</Badge>
-                                    ) : (
-                                        <strong className="text-primary">{num(row.qty)} 个</strong>
-                                    )
+                                    <Badge tone={row.state === "voided" ? "danger" : "progress"}>
+                                        {outboundStateLabel(row)}
+                                    </Badge>
                                 }
                                 actions={
-                                    <div className="flex flex-wrap gap-2">
-                                        <Button variant="secondary" onClick={() => setDetail(row)}>
-                                            查看凭证
-                                        </Button>
-                                        {canPrint && row.state !== "voided" && (
-                                            <Button
-                                                variant="secondary"
-                                                disabled={printRequest.isPending}
-                                                onClick={() =>
-                                                    row.state === "printed" ? setReprintTarget(row) : requestPrint(row)
-                                                }
-                                            >
-                                                {row.state === "printed" ? "重打" : "打印"}
-                                            </Button>
-                                        )}
-                                        {canVoid && row.state === "registered" && (
-                                            <Button variant="secondary" onClick={() => setVoidTarget(row)}>
-                                                作废
-                                            </Button>
-                                        )}
-                                        {canEmergencyVoid && row.state === "printed" && (
-                                            <Button variant="secondary" onClick={() => setEmergencyTarget(row)}>
-                                                紧急撤销
-                                            </Button>
-                                        )}
-                                    </div>
+                                    <Button variant="secondary" onClick={() => setDetail(row)}>
+                                        查看详情
+                                    </Button>
                                 }
                             >
                                 <BomCell
@@ -897,14 +876,8 @@ export function OutboundPage() {
                                     bom={bomByCode(snap, row.bomCode)}
                                     bomCode={row.bomCode}
                                 />
-                                <p className="mt-0.5 tnum text-13 text-muted">
-                                    {row.state === "voided" ? (
-                                        <span className="line-through decoration-danger/50">{row.no}</span>
-                                    ) : (
-                                        row.no
-                                    )}
-                                </p>
                                 <div className="mt-2 flex flex-col gap-1.5">
+                                    <CardField label="出库数量" value={`${num(row.qty)} 个`} strong />
                                     <CardField label="出库日期" value={row.date} />
                                     <CardField label="操作人" value={row.operator} />
                                 </div>
@@ -918,7 +891,8 @@ export function OutboundPage() {
                     ) : (
                         <DataTable
                             tableId="outbound"
-                            defaultWidths={[160, 185, 140, 230, 140, 95, 120, 224]}
+                            defaultWidths={[158, 170, 360, 132, 138, 104, 104, 120]}
+                            recordCount={filtered.length}
                             identityColumn={0}
                             scrollRef={tableScrollRef}
                         >
@@ -999,58 +973,13 @@ export function OutboundPage() {
                                             )}
                                         </td>
                                         <td className="px-5 py-3 text-right">
-                                            <div className="flex items-center justify-end gap-3">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setDetail(row)}
-                                                    className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline"
-                                                >
-                                                    查看详情
-                                                </button>
-                                                {canPrint && row.state !== "voided" && (
-                                                    <button
-                                                        type="button"
-                                                        disabled={printRequest.isPending}
-                                                        onClick={() =>
-                                                            row.state === "printed"
-                                                                ? setReprintTarget(row)
-                                                                : requestPrint(row)
-                                                        }
-                                                        className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                                                    >
-                                                        {printRequest.isPending && printRequest.variables?.no === row.no
-                                                            ? "处理中…"
-                                                            : row.state === "printed"
-                                                              ? "重打"
-                                                              : "打印"}
-                                                    </button>
-                                                )}
-                                                {canVoid && row.state === "registered" && (
-                                                    <button
-                                                        type="button"
-                                                        disabled={voidRequest.isPending}
-                                                        onClick={() => setVoidTarget(row)}
-                                                        className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                                                    >
-                                                        {voidRequest.isPending && voidRequest.variables?.no === row.no
-                                                            ? "处理中…"
-                                                            : "作废"}
-                                                    </button>
-                                                )}
-                                                {canEmergencyVoid && row.state === "printed" && (
-                                                    <button
-                                                        type="button"
-                                                        disabled={emergencyVoidRequest.isPending}
-                                                        onClick={() => setEmergencyTarget(row)}
-                                                        className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                                                    >
-                                                        {emergencyVoidRequest.isPending &&
-                                                        emergencyVoidRequest.variables?.no === row.no
-                                                            ? "处理中…"
-                                                            : "紧急撤销"}
-                                                    </button>
-                                                )}
-                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setDetail(row)}
+                                                className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline"
+                                            >
+                                                查看详情
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
@@ -1075,7 +1004,53 @@ export function OutboundPage() {
             </section>
 
             {canRegister && <OutboundModal open={newOpen} onClose={() => setNewOpen(false)} />}
-            <OutboundDetailModal row={detail} snap={snap} onClose={() => setDetail(null)} />
+            <OutboundDetailModal
+                row={currentDetail}
+                snap={snap}
+                onClose={() => setDetail(null)}
+                actions={
+                    currentDetail && (
+                        <>
+                            {canVoid && currentDetail.state === "registered" && (
+                                <Button
+                                    variant="secondary"
+                                    disabled={voidRequest.isPending}
+                                    onClick={() => setVoidTarget(currentDetail)}
+                                >
+                                    作废
+                                </Button>
+                            )}
+                            {canEmergencyVoid && currentDetail.state === "printed" && (
+                                <button
+                                    type="button"
+                                    disabled={emergencyVoidRequest.isPending}
+                                    onClick={() => setEmergencyTarget(currentDetail)}
+                                    className="min-h-10 rounded-btn border border-danger/30 bg-danger-soft px-4 text-13 font-medium text-danger disabled:opacity-50"
+                                >
+                                    紧急撤销
+                                </button>
+                            )}
+                            {canPrint && currentDetail.state !== "voided" && (
+                                <Button
+                                    icon="print"
+                                    disabled={printRequest.isPending}
+                                    onClick={() =>
+                                        currentDetail.state === "printed"
+                                            ? setReprintTarget(currentDetail)
+                                            : requestPrint(currentDetail)
+                                    }
+                                >
+                                    {printRequest.isPending
+                                        ? "处理中…"
+                                        : currentDetail.state === "printed"
+                                          ? "重打"
+                                          : "打印"}
+                                </Button>
+                            )}
+                        </>
+                    )
+                }
+            />
             {reprintTarget && (
                 <ReprintModal
                     row={reprintTarget}

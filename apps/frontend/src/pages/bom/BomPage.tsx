@@ -37,10 +37,12 @@ export function BomDetailModal({
     bom,
     onClose,
     categories,
+    onDelete,
 }: {
     bom: Bom | null;
     onClose: () => void;
     categories?: BomCategory[];
+    onDelete?: () => void;
 }) {
     const toast = useToast();
     if (!bom) return null;
@@ -65,14 +67,22 @@ export function BomDetailModal({
                 </button>
             }
             width={560}
+            layout="detail"
             footer={
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover"
-                >
-                    关闭
-                </button>
+                <>
+                    {onDelete && (
+                        <button
+                            type="button"
+                            onClick={onDelete}
+                            className="mr-auto min-h-10 rounded-btn border border-danger/30 bg-danger-soft px-4 text-13 font-medium text-danger"
+                        >
+                            删除 BOM
+                        </button>
+                    )}
+                    <Button variant="secondary" onClick={onClose}>
+                        关闭
+                    </Button>
+                </>
             }
         >
             <BomSpecs bom={bom} categories={categories} />
@@ -881,17 +891,12 @@ export function BomPage() {
                         {pageRows.map(bom => (
                             <RecordCard
                                 key={bom.code}
-                                title={bom.name}
-                                subtitle={bom.code}
+                                title={bom.code}
+                                subtitle={bom.name}
                                 actions={
-                                    <>
-                                        {canDeleteBom && deletable(bom) && (
-                                            <Button variant="secondary" onClick={() => setDeleting(bom)}>
-                                                删除
-                                            </Button>
-                                        )}
-                                        <Button onClick={() => setDetail(bom)}>查看物料</Button>
-                                    </>
+                                    <Button variant="secondary" onClick={() => setDetail(bom)}>
+                                        查看详情
+                                    </Button>
                                 }
                             >
                                 <BomCell
@@ -916,7 +921,8 @@ export function BomPage() {
                     ) : (
                         <DataTable
                             tableId="bom"
-                            defaultWidths={[96, 190, 150, 430, 170]}
+                            defaultWidths={[80, 180, 150, 430, 120]}
+                            recordCount={filtered.length}
                             identityColumn={1}
                             scrollRef={tableScrollRef}
                         >
@@ -972,18 +978,7 @@ export function BomPage() {
                                             />
                                         </td>
                                         <td className="px-5 py-3 text-right">
-                                            <div className="flex items-center justify-end gap-3">
-                                                <TableLink onClick={() => setDetail(bom)}>查看详情</TableLink>
-                                                {canDeleteBom && deletable(bom) && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setDeleting(bom)}
-                                                        className="text-13 font-medium text-danger underline-offset-2 transition hover:underline"
-                                                    >
-                                                        删除
-                                                    </button>
-                                                )}
-                                            </div>
+                                            <TableLink onClick={() => setDetail(bom)}>查看详情</TableLink>
                                         </td>
                                     </tr>
                                 ))}
@@ -1008,7 +1003,12 @@ export function BomPage() {
             </section>
 
             {canCreate && <NewBomModal open={newOpen} onClose={() => setNewOpen(false)} />}
-            <BomDetailModal categories={categoriesQuery.data} bom={detail} onClose={() => setDetail(null)} />
+            <BomDetailModal
+                categories={categoriesQuery.data}
+                bom={detail ? (boms.find(bom => bom.code === detail.code) ?? null) : null}
+                onClose={() => setDetail(null)}
+                onDelete={detail && canDeleteBom && deletable(detail) ? () => setDeleting(detail) : undefined}
+            />
             <DeleteBomModal bom={deleting} onClose={() => setDeleting(null)} />
         </div>
     );

@@ -25,7 +25,7 @@ interface ModalProps {
     width?: number;
     children: ReactNode;
     footer?: ReactNode;
-    layout?: "default" | "workspace";
+    layout?: "default" | "workspace" | "detail";
 }
 
 export function Modal({
@@ -116,7 +116,7 @@ export function Modal({
     return createPortal(
         <div
             ref={overlayRef}
-            className="fixed inset-0 z-150 flex items-center justify-center bg-scrim p-4 backdrop-blur-[2px] max-md:items-end max-md:p-0"
+            className={`fixed inset-0 z-150 flex bg-scrim backdrop-blur-[2px] ${layout === "detail" ? "items-stretch justify-end" : "items-center justify-center p-4 max-md:items-end max-md:p-0"}`}
             onMouseDown={event => {
                 if (event.target === event.currentTarget) onClose();
             }}
@@ -128,7 +128,7 @@ export function Modal({
                 aria-label={title}
                 tabIndex={-1}
                 style={{ maxWidth: width }}
-                className={`flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-panel bg-white shadow-modal max-md:max-h-[calc(100dvh-16px)] max-md:rounded-b-none max-md:rounded-t-[22px] ${layout === "workspace" ? "h-[min(760px,88dvh)]" : ""}`}
+                className={`flex w-full flex-col overflow-hidden bg-white shadow-modal ${layout === "detail" ? "h-dvh max-h-dvh rounded-l-panel max-md:rounded-none" : "max-h-[88dvh] rounded-panel max-md:max-h-[calc(100dvh-16px)] max-md:rounded-b-none max-md:rounded-t-[22px]"} ${layout === "workspace" ? "h-[min(760px,88dvh)]" : ""}`}
             >
                 <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-4">
                     <div>
@@ -156,7 +156,7 @@ export function Modal({
                     {children}
                 </div>
                 {footer && (
-                    <div className="modal-footer flex justify-end gap-2 border-t border-line bg-panel px-6 py-3.5">
+                    <div className="modal-footer flex flex-wrap justify-end gap-2 border-t border-line bg-panel px-6 py-3.5">
                         {footer}
                     </div>
                 )}

@@ -41,13 +41,13 @@ export function RecordCard({
         <article className="record-card">
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <h3 className="text-16 font-semibold text-ink break-words">{title}</h3>
+                    <h3 className="text-14 font-semibold text-ink wrap-anywhere">{title}</h3>
                     {subtitle && <div className="mt-1 text-12 text-muted break-words">{subtitle}</div>}
                 </div>
                 {badge && <div className="shrink-0">{badge}</div>}
             </div>
             {children && <div className="mt-3 text-14 text-td">{children}</div>}
-            {actions && <div className="mt-3 flex flex-wrap items-center justify-end gap-2">{actions}</div>}
+            {actions && <div className="record-card-actions">{actions}</div>}
         </article>
     );
 }
@@ -55,9 +55,11 @@ export function RecordCard({
 /* 卡片键值行：标签左灰、值右对齐（数字/日期 tabular-nums），只用于短值指标；长文本仍走文字流 */
 export function CardField({ label, value, strong }: { label: string; value: ReactNode; strong?: boolean }) {
     return (
-        <div className="flex items-baseline justify-between gap-3">
+        <div className={`flex min-w-0 items-baseline justify-between gap-3 ${strong ? "card-metric" : ""}`}>
             <span className="text-13 text-muted">{label}</span>
-            <span className={`tnum text-right text-13 ${strong ? "font-semibold text-ink" : "font-medium text-td"}`}>
+            <span
+                className={`min-w-0 tnum text-right wrap-anywhere ${strong ? "text-22 font-semibold text-ink" : "text-13 font-medium text-td"}`}
+            >
                 {value}
             </span>
         </div>
@@ -85,8 +87,8 @@ export function OrderTaskCard({
     const daysLate = Math.max(0, Math.floor((Date.parse(todayIso()) - Date.parse(order.deliverDate)) / 86400000));
     return (
         <RecordCard
-            title={order.customer}
-            subtitle={order.orderNo}
+            title={order.orderNo}
+            subtitle={order.customer}
             badge={
                 remaining > 0 && daysLate > 0 ? (
                     <Badge tone="danger">逾期 {daysLate} 天</Badge>
@@ -101,7 +103,7 @@ export function OrderTaskCard({
                             编辑
                         </Button>
                     )}
-                    <Button variant={onShip && maxShip > 0 ? "secondary" : "primary"} onClick={onDetail}>
+                    <Button variant="secondary" onClick={onDetail}>
                         查看详情
                     </Button>
                     {onShip && maxShip > 0 && (
@@ -116,14 +118,9 @@ export function OrderTaskCard({
             <div className="mt-3 flex flex-col gap-1.5 border-t border-line pt-3">
                 <CardField label="交货日期" value={order.deliverDate} />
                 <CardField label="已发 / 订单" value={`${num(order.outbound)} / ${num(order.qty)} 个`} />
+                {!cancelled && <CardField label="待交数量" value={`${num(remaining)} 个`} strong />}
                 <div className="flex flex-wrap justify-between gap-2">
-                    {cancelled ? (
-                        <span className="text-muted">已停止交付</span>
-                    ) : (
-                        <span>
-                            待交 <strong className="tnum text-ink">{num(remaining)}</strong> 个
-                        </span>
-                    )}
+                    {cancelled ? <span className="text-muted">已停止交付</span> : null}
                     {!cancelled &&
                         (remaining > 0 ? (
                             <span className={maxShip > 0 ? "text-success" : "text-warning"}>

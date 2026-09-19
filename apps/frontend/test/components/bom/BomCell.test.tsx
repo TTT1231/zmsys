@@ -13,10 +13,10 @@ it("摘要显示关键分组，展开后能核对全部物料", async () => {
     expect(screen.getByText(detailBom.code)).toBeInTheDocument();
     expect(screen.getByTitle("底座：二脚底座（无挡脚） · 按钮：8.5mm")).toBeInTheDocument();
     const summary = screen.getByText("查看物料（5）");
-    expect(summary.closest("details")).not.toHaveAttribute("open");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     await user.click(summary);
-    expect(summary.closest("details")).toHaveAttribute("open");
-    expect(summary.closest("details")).toHaveTextContent("6.3静片：铜镀银");
+    expect(screen.getByRole("dialog", { name: detailBom.code })).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveTextContent("6.3静片：铜镀银");
 });
 it("缺失 BOM 保留编码和占位，旧档案使用完整旧摘要", () => {
     const { rerender } = render(<BomCell bomCode="MISSING" />);

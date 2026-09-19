@@ -442,11 +442,13 @@ export function OrderDetailModal({
     snap,
     onClose,
     onShip,
+    onEdit,
 }: {
     order: Order | null;
     snap: Snapshot;
     onClose: () => void;
     onShip?: () => void;
+    onEdit?: () => void;
 }) {
     if (!order) return null;
     const bom = bomByCode(snap, order.bomCode);
@@ -461,8 +463,14 @@ export function OrderDetailModal({
             title={order.orderNo}
             subtitle={`${order.customer} · ${order.customerCode}`}
             width={560}
+            layout="detail"
             footer={
                 <>
+                    {onEdit && (
+                        <Button variant="secondary" onClick={onEdit}>
+                            编辑订单
+                        </Button>
+                    )}
                     {onShip && maxShipOf(snap, order.orderNo) > 0 && (
                         <Button icon="truck" onClick={onShip}>
                             登记发货
@@ -471,7 +479,7 @@ export function OrderDetailModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover"
+                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink"
                     >
                         关闭
                     </button>
@@ -888,8 +896,6 @@ export function OrdersPage() {
                                 order={order}
                                 snap={snap}
                                 onDetail={() => setDetail(order)}
-                                onEdit={canEdit ? () => setEditing(order) : undefined}
-                                onShip={canShip ? () => setShip(order.orderNo) : undefined}
                             />
                         ))}
                     </ListState>
@@ -900,7 +906,8 @@ export function OrdersPage() {
                     ) : (
                         <DataTable
                             tableId="orders"
-                            defaultWidths={[150, 155, 230, 100, 140, 135, 100, 110]}
+                            defaultWidths={[154, 160, 360, 130, 138, 140, 105, 120]}
+                            recordCount={filtered.length}
                             identityColumn={0}
                             scrollRef={tableScrollRef}
                         >
@@ -1031,17 +1038,7 @@ export function OrdersPage() {
                                                 <StatusBadge status={status.key} label={status.label} />
                                             </td>
                                             <td className="min-w-28 px-5 py-4 text-right whitespace-nowrap">
-                                                <div className="flex flex-col items-end gap-1">
-                                                    <TableLink onClick={() => setDetail(order)}>查看详情</TableLink>
-                                                    {canShip && maxShipOf(snap, order.orderNo) > 0 && (
-                                                        <TableLink onClick={() => setShip(order.orderNo)}>
-                                                            登记发货
-                                                        </TableLink>
-                                                    )}
-                                                    {canEdit && (
-                                                        <TableLink onClick={() => setEditing(order)}>编辑</TableLink>
-                                                    )}
-                                                </div>
+                                                <TableLink onClick={() => setDetail(order)}>查看详情</TableLink>
                                             </td>
                                         </tr>
                                     );
@@ -1079,11 +1076,15 @@ export function OrdersPage() {
                 order={detail ? (orders.find(order => order.orderNo === detail.orderNo) ?? null) : null}
                 snap={snap}
                 onClose={() => setDetail(null)}
+                onEdit={
+                    canEdit && detail
+                        ? () => setEditing(orders.find(order => order.orderNo === detail.orderNo) ?? detail)
+                        : undefined
+                }
                 onShip={
                     canShip
                         ? () => {
                               setShip(detail!.orderNo);
-                              setDetail(null);
                           }
                         : undefined
                 }

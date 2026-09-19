@@ -60,10 +60,10 @@ it("键盘调整列宽不触发排序，刷新后保留宽度且账号隔离", (
     render(<Table />);
     expect(screen.getByRole("separator", { name: "调整数量列宽" })).toHaveAttribute("aria-valuenow", "160");
 });
-it("隐藏次要列时表头、单元格和空态同步，恢复默认重置密度与宽度", async () => {
+it("隐藏次要列时表头、单元格和空态同步，恢复推荐设置重置密度与宽度", async () => {
     const user = userEvent.setup();
     const view = render(<Table />);
-    await user.click(screen.getByRole("button", { name: "表格设置" }));
+    await user.click(screen.getByRole("button", { name: "显示设置" }));
     const dialog = within(screen.getByRole("dialog"));
     expect(dialog.getByRole("checkbox", { name: "编号" })).toBeDisabled();
     expect(dialog.getByRole("checkbox", { name: "操作" })).toBeDisabled();
@@ -75,29 +75,27 @@ it("隐藏次要列时表头、单元格和空态同步，恢复默认重置密�
     expect(screen.getByRole("table").closest(".managed-table")).toHaveAttribute("data-density", "compact");
     view.rerender(<Table empty />);
     expect(screen.getByRole("cell", { name: "暂无数据" })).toHaveAttribute("colspan", "3");
-    await user.click(screen.getByRole("button", { name: "表格设置" }));
-    await user.click(screen.getByRole("button", { name: "恢复默认" }));
+    await user.click(screen.getByRole("button", { name: "显示设置" }));
+    await user.click(screen.getByRole("button", { name: "恢复推荐设置" }));
     await user.click(screen.getByRole("button", { name: "完成" }));
     expect(screen.getAllByRole("columnheader")).toHaveLength(4);
     expect(screen.getByRole("cell", { name: "暂无数据" })).toHaveAttribute("colspan", "4");
-    expect(screen.getByRole("table").closest(".managed-table")).toHaveAttribute("data-density", "comfortable");
+    expect(screen.getByRole("table").closest(".managed-table")).toHaveAttribute("data-density", "standard");
 });
 it("损坏的本地偏好不会阻断表格", () => {
-    localStorage.setItem("zm-table:v1:user-a:test", "{broken");
+    localStorage.setItem("zm-table:v2:user-a:test", "{broken");
     render(<Table />);
     expect(screen.getAllByRole("columnheader")).toHaveLength(4);
 });
 
-it("列宽数值支持清空后完整输入，提交时才限制范围", async () => {
+it("列宽使用直白选项，调宽数量列不会挤压备注列", async () => {
     const user = userEvent.setup();
     render(<Table />);
-    await user.click(screen.getByRole("button", { name: "表格设置" }));
-    const width = screen.getByRole("spinbutton", { name: "数量列宽" });
-    await user.clear(width);
-    await user.type(width, "240");
-    expect(width).toHaveValue(240);
-    await user.tab();
+    await user.click(screen.getByRole("button", { name: "显示设置" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "数量的宽窄" }), "wider");
+    await user.click(screen.getByRole("button", { name: "完成" }));
     expect(screen.getByRole("separator", { name: "调整数量列宽" })).toHaveAttribute("aria-valuenow", "240");
+    expect(screen.getByRole("separator", { name: "调整备注列宽" })).toHaveAttribute("aria-valuenow", "240");
 });
 
 it("指针拖动改变列宽，结束拖动后移动不再更改宽度", () => {
@@ -113,35 +111,56 @@ it("指针拖动改变列宽，结束拖动后移动不再更改宽度", () => {
 });
 
 it("操作列固定，旧偏好中的极窄操作列不会恢复，也没有拖动入口", async () => {
-    localStorage.setItem("zm-table:v1:user-a:test", JSON.stringify({ widths: { 操作: 96 } }));
+    localStorage.setItem("zm-table:v2:user-a:test", JSON.stringify({ widths: { 操作: 96 } }));
     const user = userEvent.setup();
     render(<Table />);
     expect(screen.queryByRole("separator", { name: "调整操作列宽" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "表格设置" }));
+    await user.click(screen.getByRole("button", { name: "显示设置" }));
     expect(screen.queryByRole("spinbutton", { name: "操作列宽" })).not.toBeInTheDocument();
-    expect(screen.getByText("固定 120 px")).toBeInTheDocument();
+    expect(screen.getByText("始终显示")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).not.toHaveTextContent("px");
 });
 
-it("拖动期间保持总宽与操作列不变，取消拖动恢复原宽", () => {
+it("拖动只改变当前列，取消拖动恢复原宽", () => {
     render(<Table />);
     const handle = screen.getByRole("separator", { name: "调整数量列宽" });
     handle.setPointerCapture = vi.fn();
-    const before = localStorage.getItem("zm-table:v1:user-a:test");
+    const before = localStorage.getItem("zm-table:v2:user-a:test");
     fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientX: 160 });
     fireEvent.pointerMove(handle, { pointerId: 1, clientX: 600 });
-    expect(handle).toHaveAttribute("aria-valuenow", "280");
-    expect(localStorage.getItem("zm-table:v1:user-a:test")).toBe(before);
+    expect(handle).toHaveAttribute("aria-valuenow", "600");
+    expect(localStorage.getItem("zm-table:v2:user-a:test")).toBe(before);
     fireEvent.pointerCancel(handle, { pointerId: 1 });
     expect(handle).toHaveAttribute("aria-valuenow", "160");
 });
 
-it("只有表体滚动，横向滚动同步到独立表头", () => {
+it("表头与表体在同一个横向滚动区，纵向不再限制高度", () => {
     const { container } = render(<Table />);
     const body = container.querySelector(".managed-table-body")!;
-    const header = container.querySelector(".managed-table-header > div")!;
-    expect(body.querySelector("thead")).toBeNull();
-    fireEvent.scroll(body, { target: { scrollLeft: 123 } });
-    expect(header.scrollLeft).toBe(123);
+    expect(body.querySelector("thead")).not.toBeNull();
+    expect(body.querySelector("tbody")).not.toBeNull();
+    expect(body.className).not.toContain("max-h-");
+});
+it("旧布局完全弃用，新版列宽从推荐值开始", () => {
+    localStorage.setItem(
+        "zm-table:v1:user-a:test",
+        JSON.stringify({ widths: { 数量: 96 }, hidden: ["备注"], compact: true }),
+    );
+    render(<Table />);
+    expect(screen.getByRole("separator", { name: "调整数量列宽" })).toHaveAttribute("aria-valuenow", "160");
+    expect(screen.getByRole("columnheader", { name: "备注" })).toBeInTheDocument();
+    expect(localStorage.getItem("zm-table:v1:user-a:test")).toBeNull();
+});
+it("聚焦列边界时高亮整列，取消拖动清除高亮", () => {
+    render(<Table />);
+    const handle = screen.getByRole("separator", { name: "调整数量列宽" });
+    fireEvent.focus(handle);
+    expect(screen.getByRole("columnheader", { name: "数量" })).toHaveClass("column-highlight");
+    expect(screen.getByRole("cell", { name: "300" })).toHaveClass("column-highlight");
+    handle.setPointerCapture = vi.fn();
+    fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientX: 160 });
+    fireEvent.pointerCancel(handle, { pointerId: 1 });
+    expect(screen.getByRole("cell", { name: "300" })).not.toHaveClass("column-highlight");
 });
 
 it("ResizeObserver 回调的宽度与槽位不变时不重渲染，阻断滚动条临界抖动", () => {

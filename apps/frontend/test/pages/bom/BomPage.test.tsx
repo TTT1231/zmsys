@@ -50,7 +50,8 @@ it("表格渲染 BOM 行，编码入口可打开详情", () => {
     renderPage();
     const table = screen.getByRole("table");
     expect(table).toHaveTextContent(detailBom.code);
-    expect(table).toHaveTextContent("6.3支架：铜镀银");
+    fireEvent.click(screen.getAllByRole("button", { name: "查看详情" })[0]);
+    expect(screen.getByRole("dialog")).toHaveTextContent("6.3支架：铜镀银");
 });
 
 it("库存余量已加载时移动卡片显示数量，未加载时降级为占位符", () => {
@@ -71,27 +72,27 @@ it("删除入口仅超级管理员且未被订单引用时显示；确认后才�
     ordersRef.current = [];
     stocksRef.current = { [detailBom.code]: 0 };
     const { unmount } = renderPage();
-    expect(screen.queryAllByRole("button", { name: "删除" })).toHaveLength(0);
+    fireEvent.click(screen.getAllByRole("button", { name: "查看详情" })[0]);
+    expect(screen.queryByRole("button", { name: "删除 BOM" })).not.toBeInTheDocument();
     unmount();
 
     // 超级管理员 + 未被订单引用 + 无库存余量：出现删除入口
     authRef.current = { can: (perm: string) => perm === "bom:delete" };
     renderPage();
-    // 移动卡片与桌面表格各一个入口
-    const entries = screen.getAllByRole("button", { name: "删除" });
-    expect(entries).toHaveLength(2);
-    fireEvent.click(entries[0]!);
-    expect(screen.getByText("删除 BOM")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "删除 BOM" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "查看详情" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "删除 BOM" }));
+    expect(screen.getByRole("dialog", { name: "删除 BOM" })).toBeInTheDocument();
     expect(screen.getByText(/未被任何销售订单引用/)).toBeInTheDocument();
     expect(deleteMutate).not.toHaveBeenCalled();
 
     // 二次确认的“取消”退出弹窗，不发起删除
     fireEvent.click(screen.getByRole("button", { name: "取消" }));
-    expect(screen.queryByText("删除 BOM")).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "删除 BOM" })).not.toBeInTheDocument();
     expect(deleteMutate).not.toHaveBeenCalled();
 
     // 再次进入并“确认删除”：按编码发起请求
-    fireEvent.click(screen.getAllByRole("button", { name: "删除" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "删除 BOM" }));
     fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
     expect(deleteMutate).toHaveBeenCalledWith(detailBom.code, expect.anything());
 });
@@ -103,14 +104,16 @@ it("被销售订单引用或有库存余量的档案不显示删除入口", () =
     ordersRef.current = [{ bomCode: detailBom.code }];
     stocksRef.current = { [detailBom.code]: 0 };
     const { unmount } = renderPage();
-    expect(screen.queryAllByRole("button", { name: "删除" })).toHaveLength(0);
+    fireEvent.click(screen.getAllByRole("button", { name: "查看详情" })[0]);
+    expect(screen.queryByRole("button", { name: "删除 BOM" })).not.toBeInTheDocument();
     unmount();
 
     // 有库存余量（必有流水）同样不显示，后端权威校验兜底
     ordersRef.current = [];
     stocksRef.current = { [detailBom.code]: 120 };
     renderPage();
-    expect(screen.queryAllByRole("button", { name: "删除" })).toHaveLength(0);
+    fireEvent.click(screen.getAllByRole("button", { name: "查看详情" })[0]);
+    expect(screen.queryByRole("button", { name: "删除 BOM" })).not.toBeInTheDocument();
 });
 
 it("订单引用或库存余量未加载（含首次请求失败）时，不能把“没有数据”当成“没有引用”", () => {
@@ -120,19 +123,21 @@ it("订单引用或库存余量未加载（含首次请求失败）时，不能�
     ordersRef.current = undefined;
     stocksRef.current = { [detailBom.code]: 0 };
     const { unmount } = renderPage();
-    expect(screen.queryAllByRole("button", { name: "删除" })).toHaveLength(0);
+    fireEvent.click(screen.getAllByRole("button", { name: "查看详情" })[0]);
+    expect(screen.queryByRole("button", { name: "删除 BOM" })).not.toBeInTheDocument();
     unmount();
 
     // 库存余量未加载：即使无订单引用也不显示删除入口
     ordersRef.current = [];
     stocksRef.current = undefined;
     renderPage();
-    expect(screen.queryAllByRole("button", { name: "删除" })).toHaveLength(0);
+    fireEvent.click(screen.getAllByRole("button", { name: "查看详情" })[0]);
+    expect(screen.queryByRole("button", { name: "删除 BOM" })).not.toBeInTheDocument();
 });
 
 it("详情弹窗 BOM 编号旁的复制按钮把编码写入剪贴板", async () => {
     renderPage();
-    fireEvent.click(screen.getByRole("button", { name: "查看物料" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "查看详情" })[0]);
     // Modal 的 aria-label 取 title（BOM 编码）
     expect(screen.getByRole("dialog", { name: detailBom.code })).toBeInTheDocument();
 
