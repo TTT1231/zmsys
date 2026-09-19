@@ -1,0 +1,16 @@
+# backend 镜像的构建上下文白名单：workspace 骨架 + backend 运行件。
+# frontend 静态产物（staging 大头）不进 backend 的 context，缩短传输。
+# 注意：! 例外要求父目录链先解除排除
+**
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!apps
+!apps/backend
+!apps/backend/**
+!apps/frontend
+!apps/frontend/package.json
+!packages
+!packages/**
+!internal
+!internal/**

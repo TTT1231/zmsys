@@ -1,0 +1,7 @@
+# frontend 镜像的构建上下文白名单：nginx 配置 + 静态产物。
+# backend 产物/迁移与 workspace 骨架不进 frontend 的 context，缩短传输。
+**
+!apps
+!apps/frontend
+!apps/frontend/**
+!nginx.conf

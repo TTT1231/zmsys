@@ -78,8 +78,16 @@ const assembleStaging = (): void => {
         cpSync(join(repoRoot, from), target, { recursive: true });
     };
 
-    // deploy 配置（compose 上下文根）
-    for (const file of ["docker-compose.yml", "Dockerfile.backend", "Dockerfile.frontend", "nginx.conf"]) {
+    // deploy 配置（compose 上下文根）；per-Dockerfile 的 .dockerignore 让
+    // frontend/backend 各自只传需要的 context（staging 互不进对方上下文）
+    for (const file of [
+        "docker-compose.yml",
+        "Dockerfile.backend",
+        "Dockerfile.backend.dockerignore",
+        "Dockerfile.frontend",
+        "Dockerfile.frontend.dockerignore",
+        "nginx.conf",
+    ]) {
         copy(join("scripts", "deploy", file), file);
     }
 

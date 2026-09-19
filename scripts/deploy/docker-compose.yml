@@ -26,9 +26,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
-      # 腾讯云内网 npm 镜像加速依赖安装（仅首次构建需要，之后命中层缓存）
-      args:
-        NPM_REGISTRY: https://mirrors.cloud.tencent.com/npm/
+    # npmmirror 加速依赖安装（与 Dockerfile.backend 的 ARG 默认值一致；
+    # 仅依赖层缓存击穿时需要联网，日常命中缓存秒级）。
+    # 备选（npmmirror 不可用时手动替换，注意同步改 Dockerfile.backend 的 ARG）：
+    #   华为云 https://mirrors.huaweicloud.com/repository/npm/
+    args:
+      NPM_REGISTRY: https://registry.npmmirror.com/
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0

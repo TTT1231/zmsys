@@ -1,12 +1,13 @@
 # backend 运行镜像：装配式构建。
 # tsc/vite 编译在开发机完成（服务器规格有限），这里只 COPY dist；依赖安装
 # 独立成层——manifest/schema 不变（含仅新增迁移）时 docker build 直接命中
-# 缓存，日常构建秒级；服务器出网到 npm 源极慢，避免无关变更触发全量重装。
+# 缓存，日常构建秒级。层缓存被 lockfile 变更击穿时，由 BuildKit cache mount
+# 里的 pnpm store 兜底：包与供应链校验缓存仍在，重装不再走网络下载。
 # 用 debian slim 而非 alpine：typescript 原生二进制对 musl 的支持不稳定
 FROM node:24-slim
 
-# npm registry 构建时可注入内网镜像加速，默认官方源
-ARG NPM_REGISTRY=https://registry.npmjs.org/
+# npmmirror：npmjs 完整只读镜像、公网可达（服务器直连官方源仅几十 KiB/s）
+ARG NPM_REGISTRY=https://registry.npmmirror.com/
 ENV NPM_CONFIG_REGISTRY=$NPM_REGISTRY
 # 与根 package.json packageManager 对齐，保证 lockfile 解析行为一致
 RUN npm install -g pnpm@12.4.2
@@ -27,8 +28,15 @@ COPY internal/tsconfig/package.json ./internal/tsconfig/
 # 不需要 migrations——迁移目录挪到 install 之后，新增迁移不再击穿依赖层缓存）
 COPY apps/backend/prisma/schema.prisma ./apps/backend/prisma/schema.prisma
 
-# 全量安装（含 devDeps：migrate deploy 需要 devDependencies 里的 prisma CLI）
-RUN pnpm install --frozen-lockfile
+# 只装 backend（及其 workspace 依赖）的生产包：frontend 的 echarts/vite、根的
+# oxlint/typescript/vitest 等构建工具链全部不进运行镜像。prisma CLI 已在
+# backend dependencies（容器启动的 migrate deploy 需要）。
+# minimum-release-age=0：lockfile 在开发机已通过供应链校验，装配场景跳过
+# 冷校验（逐条拉取包元数据，慢网下要 30s+）；内容完整性仍由 frozen-lockfile
+# 的 integrity 锁定。
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+    pnpm --config.minimum-release-age=0 install \
+        --filter ./apps/backend... --prod --frozen-lockfile
 
 # 迁移目录与 seed 随产物层进镜像（容器启动时 migrate deploy 才读）
 COPY apps/backend/prisma/migrations apps/backend/prisma/seed.ts ./apps/backend/prisma/
