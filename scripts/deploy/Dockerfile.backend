@@ -1,6 +1,7 @@
 # backend 运行镜像：装配式构建。
 # tsc/vite 编译在开发机完成（服务器规格有限），这里只 COPY dist；依赖安装
-# 独立成层——manifest/schema 不变时 docker build 直接命中缓存，日常构建秒级。
+# 独立成层——manifest/schema 不变（含仅新增迁移）时 docker build 直接命中
+# 缓存，日常构建秒级；服务器出网到 npm 源极慢，避免无关变更触发全量重装。
 # 用 debian slim 而非 alpine：typescript 原生二进制对 musl 的支持不稳定
 FROM node:24-slim
 
@@ -22,11 +23,15 @@ COPY packages/request/package.json ./packages/request/
 COPY packages/utils/package.json ./packages/utils/
 COPY internal/tsconfig/package.json ./internal/tsconfig/
 
-# prisma schema 单独成层（backend postinstall 的 prisma generate 依赖它）
-COPY apps/backend/prisma ./apps/backend/prisma
+# prisma schema 单独成层（backend postinstall 的 prisma generate 只读 schema，
+# 不需要 migrations——迁移目录挪到 install 之后，新增迁移不再击穿依赖层缓存）
+COPY apps/backend/prisma/schema.prisma ./apps/backend/prisma/schema.prisma
 
 # 全量安装（含 devDeps：migrate deploy 需要 devDependencies 里的 prisma CLI）
 RUN pnpm install --frozen-lockfile
+
+# 迁移目录与 seed 随产物层进镜像（容器启动时 migrate deploy 才读）
+COPY apps/backend/prisma/migrations apps/backend/prisma/seed.ts ./apps/backend/prisma/
 
 # 本地已构建产物（dist/generated 里带 prisma client，运行时无需再 generate）
 COPY apps/backend/dist ./apps/backend/dist
