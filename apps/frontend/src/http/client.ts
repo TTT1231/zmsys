@@ -1,11 +1,14 @@
-import type { HttpResponse } from "./types";
-import axios from "axios";
-import { RequestClient } from "./request-client";
+import type { HttpResponse } from "@zmsys/request";
+
+import { isCancel, RequestClient } from "@zmsys/request";
+
 import { ApiError } from "./errors";
-import { clearToken, getToken } from "./token";
+import { clearToken, getToken } from "@/lib/token";
 
 export const requestClient = new RequestClient({
     baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
+    // 包内默认 10s，这里维持前端原有的 15s
+    timeout: 15_000,
 });
 
 /* 请求拦截：注入 accessToken；GET 要求向源站再验证，
@@ -38,7 +41,7 @@ requestClient.addResponseInterceptor({
 /* 响应拦截 ②：错误归一化 + 401 登出跳转 */
 requestClient.addResponseInterceptor({
     rejected: (error: unknown) => {
-        if (axios.isCancel(error) || error instanceof ApiError) return Promise.reject(error);
+        if (isCancel(error) || error instanceof ApiError) return Promise.reject(error);
 
         const status = (error as { response?: { status?: number } })?.response?.status ?? -1;
         const serverMessage = (error as { response?: { data?: HttpResponse } })?.response?.data?.message;

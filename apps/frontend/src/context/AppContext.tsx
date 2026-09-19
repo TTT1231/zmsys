@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { ProfileResult, WbUser } from "@/api";
 import { fetchProfile, login as loginRequest, logout as logoutRequest } from "@/api";
-import { getToken } from "@/http";
+import { getToken } from "@/lib/token";
 import { can as checkPerm, type PermCode, type RoleGrant } from "@/data/permissions";
 import { AppContext, EMPTY_GRANT, type AuthStatus, type Role } from "./useApp";
 

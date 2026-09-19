@@ -1,5 +1,6 @@
 import type { ChangePasswordInput, LoginInput, LoginResult, ProfileResult } from "./types";
-import { clearToken, requestClient, setToken } from "@/http";
+import { requestClient } from "@/http";
+import { clearToken, setToken } from "@/lib/token";
 
 export async function login(input: LoginInput): Promise<LoginResult> {
     const result = await requestClient.post<LoginResult>("/auth/login", input);

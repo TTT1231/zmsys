@@ -2,7 +2,7 @@
 /* accessToken 存取：正常往返 + localStorage 抛异常时的静默容错 */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { clearToken, getToken, setToken } from "@/http/token";
+import { clearToken, getToken, setToken } from "@/lib/token";
 
 afterEach(() => {
     localStorage.clear();

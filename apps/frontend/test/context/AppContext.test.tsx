@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LoginResult, WbUser } from "@/api";
 import { fetchProfile, login as loginRequest, logout as logoutRequest } from "@/api";
 import { DEFAULT_GRANTS } from "@/data/permissions";
-import { clearToken, setToken } from "@/http";
+import { clearToken, setToken } from "@/lib/token";
 
 import { AppProvider } from "@/context/AppContext";
 import { useApp } from "@/context/useApp";

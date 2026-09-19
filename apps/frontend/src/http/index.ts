@@ -1,13 +1,4 @@
-/* HTTP 基础设施统一出口（barrel）：api 层一律从 "@/http" 导入 */
+/* HTTP 客户端出口：请求基建来自 @zmsys/request，本目录只做实例组装与错误归一；
+ * token 存取在 @/lib/token，业务接口层（@/api）从这里引用 requestClient */
 export { requestClient } from "./client";
-export { RequestClient } from "./request-client";
-export { InterceptorManager } from "./interceptor-manager";
 export { ApiError, isApiError } from "./errors";
-export { getToken, setToken, clearToken } from "./token";
-export type {
-    HttpResponse,
-    RequestClientOptions,
-    RequestClientConfig,
-    RequestInterceptorConfig,
-    ResponseInterceptorConfig,
-} from "./types";
