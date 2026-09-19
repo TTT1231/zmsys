@@ -168,6 +168,12 @@ function TableView({
         const next = resizeTableColumn(visible, widths, label, desired);
         setPreferences(current => ({ ...current, widths: { ...current.widths, ...next } }));
     };
+    const restoreColumn = (label: string) =>
+        setPreferences(current => {
+            const widths = { ...current.widths };
+            delete widths[label];
+            return { ...current, widths };
+        });
     const finishDrag = (cancel = false) => {
         const drag = dragRef.current;
         if (!drag) return;
@@ -240,7 +246,7 @@ function TableView({
                                             if (!dragRef.current) setActiveColumn(null);
                                         }}
                                         onClick={event => event.stopPropagation()}
-                                        onDoubleClick={() => resize(column.label, column.width)}
+                                        onDoubleClick={() => restoreColumn(column.label)}
                                         onKeyDown={event => {
                                             if (!["ArrowLeft", "ArrowRight", "Home", "Escape"].includes(event.key))
                                                 return;
@@ -251,12 +257,12 @@ function TableView({
                                                 return;
                                             }
                                             setActiveColumn(column.label);
-                                            resize(
-                                                column.label,
-                                                event.key === "Home"
-                                                    ? column.width
-                                                    : widthOf(column) + (event.key === "ArrowRight" ? 16 : -16),
-                                            );
+                                            if (event.key === "Home") restoreColumn(column.label);
+                                            else
+                                                resize(
+                                                    column.label,
+                                                    widthOf(column) + (event.key === "ArrowRight" ? 16 : -16),
+                                                );
                                         }}
                                         onPointerDown={event => {
                                             if (event.button !== 0) return;
@@ -410,14 +416,14 @@ function TableView({
                                     aria-label={`${column.label}的宽窄`}
                                     disabled={preferences.hidden.includes(column.label) && !column.locked}
                                     value={preferences.widths[column.label] === undefined ? "recommended" : "custom"}
-                                    onChange={event =>
-                                        resize(
-                                            column.label,
-                                            event.target.value === "recommended"
-                                                ? column.width
-                                                : widthOf(column) + (event.target.value === "wider" ? 80 : -48),
-                                        )
-                                    }
+                                    onChange={event => {
+                                        if (event.target.value === "recommended") restoreColumn(column.label);
+                                        else
+                                            resize(
+                                                column.label,
+                                                widthOf(column) + (event.target.value === "wider" ? 80 : -48),
+                                            );
+                                    }}
                                     className="min-h-9 rounded-md border border-line-strong bg-white px-2 text-12"
                                 >
                                     <option value="recommended">推荐宽度</option>

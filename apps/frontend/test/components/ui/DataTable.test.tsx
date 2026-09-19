@@ -96,6 +96,10 @@ it("列宽使用直白选项，调宽数量列不会挤压备注列", async () =
     await user.click(screen.getByRole("button", { name: "完成" }));
     expect(screen.getByRole("separator", { name: "调整数量列宽" })).toHaveAttribute("aria-valuenow", "240");
     expect(screen.getByRole("separator", { name: "调整备注列宽" })).toHaveAttribute("aria-valuenow", "240");
+    await user.click(screen.getByRole("button", { name: "显示设置" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "数量的宽窄" }), "recommended");
+    await user.click(screen.getByRole("button", { name: "完成" }));
+    expect(screen.getByRole("separator", { name: "调整数量列宽" })).toHaveAttribute("aria-valuenow", "160");
 });
 
 it("指针拖动改变列宽，结束拖动后移动不再更改宽度", () => {
