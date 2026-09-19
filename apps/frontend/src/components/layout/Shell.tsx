@@ -58,7 +58,7 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose, maximized 
                 aria-label="主导航"
                 inert={!desktop && !open}
                 className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden border-r border-line bg-sidebar transition-[width,transform] duration-300 lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0 ${
-                    maximized ? "lg:w-0 lg:border-r-0 lg:shadow-none" : collapsed ? "lg:w-19" : "lg:w-57.5"
+                    maximized ? "lg:w-0 lg:border-r-0 lg:shadow-none" : collapsed ? "lg:w-19" : "lg:w-64"
                 } w-[min(82vw,300px)] shadow-[8px_0_30px_rgba(16,24,40,.08)] lg:shadow-[8px_0_30px_rgba(16,24,40,.08)] ${
                     open ? "translate-x-0" : "-translate-x-[103%] lg:translate-x-0"
                 }`}
@@ -70,7 +70,7 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose, maximized 
                         </span>
                         {!collapsed && (
                             <span className="min-w-0">
-                                <span className="block truncate text-14.5 font-semibold text-ink">智造管理系统</span>
+                                <span className="block truncate text-14.5 font-semibold text-ink">众茂生产系统</span>
                             </span>
                         )}
                     </div>
@@ -91,7 +91,7 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose, maximized 
                                                 onClose();
                                             }}
                                             title={collapsed ? item.label : undefined}
-                                            className={`group relative flex min-h-10 max-lg:min-h-[44px] items-center gap-2.5 rounded-btn px-2.5 text-14 text-td transition-colors hover:bg-soft ${collapsed ? "justify-center" : ""}`}
+                                            className={`group relative flex min-h-[40px] max-lg:min-h-[44px] items-center gap-2.5 rounded-btn px-3.5 text-14 text-td transition-colors hover:bg-soft ${collapsed ? "justify-center" : ""}`}
                                         >
                                             <Icon
                                                 name={item.icon}
@@ -110,7 +110,7 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose, maximized 
                                             onClick={onClose}
                                             title={collapsed ? item.label : undefined}
                                             className={({ isActive }) =>
-                                                `group relative flex min-h-10 max-lg:min-h-[44px] items-center gap-2.5 rounded-btn px-2.5 text-14 transition-colors ${
+                                                `group relative flex min-h-[40px] max-lg:min-h-[44px] items-center gap-2.5 rounded-btn px-3.5 text-14 transition-colors ${
                                                     isActive
                                                         ? "bg-primary-soft font-semibold text-primary-strong"
                                                         : "text-td hover:bg-soft"
@@ -135,7 +135,7 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose, maximized 
             </aside>
 
             {/* 折叠开关（桌面端左缘悬浮）。
-                left 用 rem 跟随侧栏宽度(lg:w-19/lg:w-57.5):侧栏宽 − 按钮半宽(w-7/2=0.875rem),
+                left 用 rem 跟随侧栏宽度(lg:w-19/lg:w-64):侧栏宽 − 按钮半宽(w-7/2=0.875rem),
                 中心恒骑在侧栏右缘上;html 根字号变化(16→14px 迁移)时不再错位。
                 内容最大化时随侧栏一起收起(宽度过渡中不遮挡内容) */}
             <button
@@ -143,7 +143,7 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose, maximized 
                 aria-label={collapsed ? "展开侧边栏" : "折叠侧边栏"}
                 onClick={onToggleCollapse}
                 className={`fixed top-18.5 z-40 h-7 w-7 items-center justify-center rounded-full border border-line bg-surface text-muted shadow-xs transition hover:text-primary ${maximized ? "hidden" : "hidden lg:flex"}`}
-                style={{ left: collapsed ? "3.875rem" : "13.5rem" }}
+                style={{ left: collapsed ? "3.875rem" : "15.125rem" }}
             >
                 <Icon name={collapsed ? "chevron-right" : "chevron-left"} size={14} />
             </button>
