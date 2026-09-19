@@ -686,6 +686,43 @@ button:active:not(:disabled) {
 .managed-table-body {
     scrollbar-width: thin;
 }
+/* 内容最大化（vben 式，PageHeading 按钮触发，AppLayout 根节点打 data-maximized）：
+   main 已在 maximized 分支改为 flex 列 + overflow-hidden，这里把高度沿
+   动画层 → 页面根 → 列表卡片 → 表格容器 → 表格 → 表体 逐层下传，
+   筛选工具条/分页固定，仅表体滚动。表格外面通常还包着桌面/移动切换层
+   （hidden lg:block），所以中间含 .managed-table 的 div 也要撑高 */
+[data-maximized] #mainContent > div {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+}
+[data-maximized] #mainContent > div > div {
+    flex: 1;
+    min-height: 0;
+}
+[data-maximized] #mainContent .page-heading,
+[data-maximized] #mainContent .task-tabs {
+    display: none;
+}
+[data-maximized] #mainContent section:has(.managed-table),
+[data-maximized] #mainContent section:has(.managed-table) > div:has(.managed-table) {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+}
+[data-maximized] .managed-table {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+}
+[data-maximized] .managed-table-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
 .bom-cell[data-identity="true"] .bom-material-trigger {
     display: none;
 }

@@ -20,9 +20,11 @@ interface SidebarProps {
     onToggleCollapse: () => void;
     open: boolean;
     onClose: () => void;
+    /** 内容最大化时桌面端宽度过渡到 0（不卸载以保留收起/展开动画） */
+    maximized?: boolean;
 }
 
-export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarProps) {
+export function Sidebar({ collapsed, onToggleCollapse, open, onClose, maximized = false }: SidebarProps) {
     const [desktop, setDesktop] = useState(() => window.matchMedia("(min-width: 1024px)").matches);
     useEffect(() => {
         const query = window.matchMedia("(min-width: 1024px)");
@@ -52,8 +54,8 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
             <aside
                 aria-label="主导航"
                 inert={!desktop && !open}
-                className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden bg-linear-to-b from-sidebar to-[#162033] transition-[width,transform] duration-200 lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0 ${
-                    collapsed ? "lg:w-19" : "lg:w-57.5"
+                className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden bg-linear-to-b from-sidebar to-[#162033] transition-[width,transform] duration-300 lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0 ${
+                    maximized ? "lg:w-0 lg:shadow-none" : collapsed ? "lg:w-19" : "lg:w-57.5"
                 } w-[min(82vw,300px)] shadow-[8px_0_30px_rgba(16,24,40,.08)] lg:shadow-[8px_0_30px_rgba(16,24,40,.08)] ${
                     open ? "translate-x-0" : "-translate-x-[103%] lg:translate-x-0"
                 }`}
@@ -123,12 +125,13 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
 
             {/* 折叠开关（桌面端左缘悬浮）。
                 left 用 rem 跟随侧栏宽度(lg:w-19/lg:w-57.5):侧栏宽 − 按钮半宽(w-7/2=0.875rem),
-                中心恒骑在侧栏右缘上;html 根字号变化(16→14px 迁移)时不再错位 */}
+                中心恒骑在侧栏右缘上;html 根字号变化(16→14px 迁移)时不再错位。
+                内容最大化时随侧栏一起收起(宽度过渡中不遮挡内容) */}
             <button
                 type="button"
                 aria-label={collapsed ? "展开侧边栏" : "折叠侧边栏"}
                 onClick={onToggleCollapse}
-                className="fixed top-18.5 z-40 hidden h-7 w-7 items-center justify-center rounded-full border border-line bg-white text-muted shadow-xs transition hover:text-primary lg:flex"
+                className={`fixed top-18.5 z-40 h-7 w-7 items-center justify-center rounded-full border border-line bg-white text-muted shadow-xs transition hover:text-primary ${maximized ? "hidden" : "hidden lg:flex"}`}
                 style={{ left: collapsed ? "3.875rem" : "13.5rem" }}
             >
                 <Icon name={collapsed ? "chevron-right" : "chevron-left"} size={14} />
@@ -198,8 +201,17 @@ export function MobileBottomNav({ onOpenDrawer }: { onOpenDrawer: () => void }) 
     );
 }
 
-/* 顶栏：全局刷新 / 全屏 / 用户菜单（真实登录用户） */
-export function Topbar({ title, onOpenDrawer }: { title: string; onOpenDrawer: () => void }) {
+/* 顶栏：全局刷新 / 全屏 / 用户菜单（真实登录用户）。
+    内容最大化时高度过渡到 0（不卸载以保留收起/展开动画），内容裁掉且不可交互 */
+export function Topbar({
+    title,
+    onOpenDrawer,
+    maximized = false,
+}: {
+    title: string;
+    onOpenDrawer: () => void;
+    maximized?: boolean;
+}) {
     const { refresh, refreshing } = useWbRefresh();
     const { supported, isFullscreen, toggle } = useFullscreen();
 
@@ -207,12 +219,15 @@ export function Topbar({ title, onOpenDrawer }: { title: string; onOpenDrawer: (
         "flex h-11 w-11 shrink-0 max-lg:min-h-[44px] max-lg:min-w-[44px] items-center justify-center rounded-btn text-muted transition hover:bg-soft hover:text-ink active:scale-90";
 
     return (
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-line bg-white/88 px-4 backdrop-blur-[18px] saturate-150 sm:px-6">
-            <div className="flex min-w-0 items-center gap-3">
+        <header
+            className={`sticky top-0 z-30 flex items-center justify-between gap-4 overflow-hidden border-line bg-white/88 px-4 backdrop-blur-[18px] saturate-150 transition-[height] duration-300 sm:px-6 ${maximized ? "h-0 border-b-0" : "h-16 border-b"}`}
+        >
+            <div className={`flex min-w-0 items-center gap-3 ${maximized ? "pointer-events-none" : ""}`}>
                 <button
                     type="button"
                     aria-label="打开主导航"
                     onClick={onOpenDrawer}
+                    tabIndex={maximized ? -1 : 0}
                     className="flex h-11 w-11 shrink-0 max-lg:min-h-[44px] max-lg:min-w-[44px] items-center justify-center rounded-btn border border-line text-ink lg:hidden"
                 >
                     <Icon name="menu" size={19} />
@@ -220,11 +235,17 @@ export function Topbar({ title, onOpenDrawer }: { title: string; onOpenDrawer: (
                 <strong className="block truncate text-15 font-semibold text-ink lg:hidden">{title}</strong>
             </div>
 
-            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
+            <div className={`flex shrink-0 items-center gap-1.5 sm:gap-2.5 ${maximized ? "pointer-events-none" : ""}`}>
                 <TooltipProvider delayDuration={250}>
                     <Tooltip>
                         <TooltipTrigger asChild>
-                            <button type="button" aria-label="刷新数据" onClick={refresh} className={iconBtn}>
+                            <button
+                                type="button"
+                                aria-label="刷新数据"
+                                onClick={refresh}
+                                tabIndex={maximized ? -1 : 0}
+                                className={iconBtn}
+                            >
                                 <Icon name="refresh" size={20} className={refreshing ? "animate-spin" : ""} />
                             </button>
                         </TooltipTrigger>
@@ -237,6 +258,7 @@ export function Topbar({ title, onOpenDrawer }: { title: string; onOpenDrawer: (
                                     type="button"
                                     aria-label={isFullscreen ? "退出全屏" : "进入全屏"}
                                     onClick={toggle}
+                                    tabIndex={maximized ? -1 : 0}
                                     className={`${iconBtn} hidden sm:flex`}
                                 >
                                     <Icon name={isFullscreen ? "minimize" : "maximize"} size={20} />
