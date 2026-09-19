@@ -723,6 +723,11 @@ button:active:not(:disabled) {
     min-height: 0;
     overflow-y: auto;
 }
+/* 用户手动调过列宽后 fitTableWidths 不再自动拉伸(设计上不动手动设置)，
+   最大化时多余空间以 min-width 铺满，列按比例放宽；退出后恢复原宽，偏好不受影响 */
+[data-maximized] .managed-table .data-table {
+    min-width: 100%;
+}
 .bom-cell[data-identity="true"] .bom-material-trigger {
     display: none;
 }
