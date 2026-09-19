@@ -4,6 +4,9 @@ import { useApp } from "@/context/useApp";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Modal } from "@/components/ui/Modal";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
+import { PageLoading } from "@/components/ui/PageLoading";
+import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { Icon } from "@/lib/icons";
 import { num } from "@/lib/format";
 import { addDays } from "@/lib/date";
@@ -29,8 +32,7 @@ type Detail =
           orders: WorkbenchOrder[];
           back: { kind: "products"; category?: string } | { kind: "customers" };
       }
-    | { kind: "risk"; risk: "overdue" | "upcoming" }
-    | { kind: "definitions" };
+    | { kind: "risk"; risk: "overdue" | "upcoming" };
 const percent = (done: number, total: number) => (total ? Math.round((done / total) * 100) : 0);
 const tableClass =
     "w-full min-w-150 text-left text-12 [&_th]:bg-soft [&_th]:p-3 [&_th]:font-medium [&_th]:text-muted [&_td]:border-b [&_td]:border-line/70 [&_td]:p-3 [&_td]:tabular-nums";
@@ -74,7 +76,7 @@ function Metric({
 }
 
 function OwnerWorkbench() {
-    const data = useWorkbenchData();
+    const { data, isLoading, isFetching } = useWorkbenchData();
     const [period, setPeriod] = useState("all");
     const [customStart, setCustomStart] = useState(addDays(data.asOf, -29));
     const [customEnd, setCustomEnd] = useState(data.asOf);
@@ -99,6 +101,9 @@ function OwnerWorkbench() {
         [data, start, end, validRange],
     );
     const risks = useMemo(() => workbenchRisks(data), [data]);
+    // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
+    const overlay = useDelayedFlag(isFetching && !isLoading);
+    if (isLoading) return <PageLoading className="min-h-96" />;
     const overdue = risks.filter(order => order.kind === "overdue");
     const upcoming = risks.filter(order => order.kind === "upcoming");
     const ranking = customerRanking(summary.orders, metric);
@@ -127,18 +132,16 @@ function OwnerWorkbench() {
             ? "客户 TOP 20 · 排行明细"
             : detail.kind === "orders"
               ? detail.title
-              : detail.kind === "definitions"
-                ? "统计口径"
-                : detail.risk === "overdue"
-                  ? "已逾期未发完的订单"
-                  : "未来 7 天到期且缺货的订单";
+              : detail.risk === "overdue"
+                ? "已逾期未发完的订单"
+                : "未来 7 天到期且缺货的订单";
 
     return (
-        <div className="flex flex-col gap-5 pb-4">
+        <div className="relative flex flex-col gap-5 pb-4">
+            {overlay && <LoadingOverlay />}
             <PageHeading
                 eyebrow="BUSINESS OVERVIEW"
                 title="经营总览"
-                description="掌握订单全貌，让每一份交付心中有数。"
                 actions={
                     <span className="flex items-center gap-1.5 text-12 text-muted">
                         <Icon name="calendar" size={15} />
@@ -146,38 +149,29 @@ function OwnerWorkbench() {
                     </span>
                 }
             />
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-3">
-                    <span className="text-12 font-medium text-td">订单统计周期</span>
-                    <div
-                        className="inline-flex rounded-btn border border-line bg-white p-1"
-                        role="group"
-                        aria-label="订单统计周期"
-                    >
-                        {[
-                            ["all", "累计"],
-                            ["year", "今年"],
-                            ["month", "本月"],
-                            ["custom", "自定义"],
-                        ].map(([value, label]) => (
-                            <button
-                                key={value}
-                                aria-pressed={period === value}
-                                onClick={() => setPeriod(value)}
-                                className={`min-h-9 rounded-md px-4 text-12 font-medium transition ${period === value ? "bg-primary-soft text-primary" : "text-muted hover:bg-soft hover:text-ink"}`}
-                            >
-                                {label}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-                <button
-                    onClick={() => setDetail({ kind: "definitions" })}
-                    className="flex min-h-9 items-center gap-1.5 text-12 text-muted hover:text-primary"
+            <div className="flex flex-wrap items-center gap-3">
+                <span className="text-12 font-medium text-td">订单统计周期</span>
+                <div
+                    className="inline-flex rounded-btn border border-line bg-white p-1"
+                    role="group"
+                    aria-label="订单统计周期"
                 >
-                    <Icon name="info" size={15} />
-                    统计口径
-                </button>
+                    {[
+                        ["all", "累计"],
+                        ["year", "今年"],
+                        ["month", "本月"],
+                        ["custom", "自定义"],
+                    ].map(([value, label]) => (
+                        <button
+                            key={value}
+                            aria-pressed={period === value}
+                            onClick={() => setPeriod(value)}
+                            className={`min-h-9 rounded-md px-4 text-12 font-medium transition ${period === value ? "bg-primary-soft text-primary" : "text-muted hover:bg-soft hover:text-ink"}`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
             </div>
             {period === "custom" && (
                 <div className="flex flex-wrap items-center gap-2">
@@ -293,7 +287,7 @@ function OwnerWorkbench() {
                         ? `截至 ${data.asOf} · 全部有效订单，按交期排序`
                         : `${periodLabel}下单 · 交付与库存截至 ${data.asOf} · 数量单位：${data.unit}`
                 }
-                width={detail?.kind === "definitions" ? 620 : 980}
+                width={980}
             >
                 {detail?.kind === "products" && (
                     <>
@@ -498,37 +492,6 @@ function OwnerWorkbench() {
                             共享库存按交期依次分配，缺口不重复使用库存；逾期订单即使库存充足，仍保留提醒。
                         </p>
                     </>
-                )}
-                {detail?.kind === "definitions" && (
-                    <dl className="space-y-5 text-13 leading-relaxed">
-                        {[
-                            [
-                                "订单需求与交付",
-                                "按下单日期筛选，包含已完成与未完成订单；已发数量统计这些订单截至今日的累计交付。需求总量 = 已发 + 未发。取消订单只计入已经履行的数量，未履行部分不再计入需求。",
-                            ],
-                            [
-                                "当前库存与备货缺口",
-                                "始终使用截至今日的全部有效订单，不随订单周期变化。每个 BOM 的缺口 = max(未发需求 − 当前库存, 0)，再按品类汇总，不同规格库存不可互抵。",
-                            ],
-                            [
-                                "交付风险",
-                                "交期早于今天且未发完即为逾期。近期风险包含今天至未来 7 天到期且库存不足的订单；共享库存先分配给交期较早的订单，同交期按订单号排序。",
-                            ],
-                            [
-                                "出入库与生产",
-                                "趋势按业务日期汇总有效检验入库与出库，使用独立时间筛选。作废流水不计入，库存调整不当作生产入库；未发货不等于未生产。",
-                            ],
-                            [
-                                "客户排行与单位",
-                                "按当前订单周期排名；下单笔数不计完全取消且未履行的订单。相同客户编码合并，数量按 BOM 计量单位统计，混合单位时汇总值仅作参考。",
-                            ],
-                        ].map(([title, description]) => (
-                            <div key={title}>
-                                <dt className="mb-1 font-semibold text-ink">{title}</dt>
-                                <dd className="text-muted">{description}</dd>
-                            </div>
-                        ))}
-                    </dl>
                 )}
             </Modal>
         </div>
