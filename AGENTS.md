@@ -50,6 +50,14 @@ pnpm backup-database          # 备份生产库并校验（dump 拉回本地 + �
 pnpm deploy:prod              # 部署生产（本地构建→上传→远端装配起栈；--stage-only 可选；不含备份，需留底先跑 pnpm backup-database）
 ```
 
+## tailwindcss 注意
+
+在编写 tailwindcss 之前需要遵守 [tailwindcss规则](./docs/ai-rules/tailwindcss.md)。
+
+## ssh 注意事项
+
+服务器对 ssh 连接频率有限制（多条命令须合并到单连接内），避免多个 ssh 连接造成卡死、连接不上服务器情况。
+
 ## 部署注意
 
 - `pnpm deploy:prod` 不内嵌备份，是否先备份按本次改动内容判断：
