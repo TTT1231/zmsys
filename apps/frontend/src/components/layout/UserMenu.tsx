@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { ROLE_META, useApp } from "@/context/AppContext";
+import { ROLE_META, useApp } from "@/context/useApp";
 import { Icon } from "@/lib/icons";
 import { Button } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
-import { useToast } from "@/components/ui/Toast";
+import { useToast } from "@/components/ui/toastContexts";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -45,7 +45,7 @@ export function UserMenu() {
                     className="flex shrink-0 items-center gap-2.5 rounded-btn px-1.5 py-1 transition hover:bg-soft"
                     aria-label="用户菜单"
                 >
-                    <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 text-13 font-semibold text-white">
+                    <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-indigo-500 to-indigo-600 text-13 font-semibold text-white">
                         {user?.name.slice(0, 1) ?? "?"}
                         <span className="absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-success" />
                     </span>
@@ -66,7 +66,7 @@ export function UserMenu() {
                         个人中心
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                        className="text-danger data-[highlighted]:bg-danger-soft data-[highlighted]:text-danger"
+                        className="text-danger data-highlighted:bg-danger-soft data-highlighted:text-danger"
                         onSelect={() => setConfirmOpen(true)}
                     >
                         <Icon name="logout" size={16} />

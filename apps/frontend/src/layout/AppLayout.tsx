@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
-import { ROLE_META, useApp, type Role } from "@/context/AppContext";
+import { ROLE_META, useApp, type Role } from "@/context/useApp";
 import { MENU_CATALOG, menuLabelFor } from "@/data/permissions";
 import { MobileBottomNav, Sidebar, Topbar } from "@/components/layout/Shell";
 import { PageLoading } from "@/components/ui/PageLoading";
@@ -77,7 +77,7 @@ export function AppLayout() {
                 </main>
             </div>
             <MobileBottomNav onOpenDrawer={() => setDrawerPath(location.pathname)} />
-            {user && <GlobalWatermark text={`${user.name} · ${user.account}`} />}
+            {user && <GlobalWatermark text={user.name} />}
         </div>
     );
 }

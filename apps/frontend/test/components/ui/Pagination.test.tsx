@@ -4,7 +4,8 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Pagination, paginationWindow } from "@/components/ui/Pagination";
+import { Pagination } from "@/components/ui/Pagination";
+import { paginationWindow } from "@/lib/pagination";
 
 afterEach(cleanup);
 

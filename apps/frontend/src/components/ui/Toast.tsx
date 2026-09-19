@@ -1,32 +1,17 @@
-import { createContext, useContext, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Toaster, toast } from "sonner";
 import { Icon } from "@/lib/icons";
+import {
+    MessageContext,
+    NotificationContext,
+    type MessagePush,
+    type NotificationPush,
+    type Tone,
+} from "./toastContexts";
 
-type Tone = "success" | "error";
-type MessagePush = (message: string, error?: boolean) => void;
+/* 此文件只导出 ToastProvider 组件;useToast/useNotification 在 ./toastContexts.ts */
 
-interface NotificationOptions {
-    title: string;
-    message: string;
-    tone?: Tone;
-    duration?: number;
-}
-
-type NotificationPush = (options: NotificationOptions) => void;
-
-const MessageContext = createContext<MessagePush>(() => {});
-const NotificationContext = createContext<NotificationPush>(() => {});
 let activeMessageId: string | number | undefined;
-
-/** 操作结果：顶部居中的单条轻提示。 */
-export function useToast() {
-    return useContext(MessageContext);
-}
-
-/** 标题 + 说明：右上角的通知提醒。 */
-export function useNotification() {
-    return useContext(NotificationContext);
-}
 
 const pushMessage: MessagePush = (message, error) => {
     const tone: Tone = (error ?? /请|未找到|超过|必须|失败|不能/.test(message)) ? "error" : "success";

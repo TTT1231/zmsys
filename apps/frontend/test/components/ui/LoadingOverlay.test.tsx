@@ -5,7 +5,8 @@ import "@testing-library/jest-dom/vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
+import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
+import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 
 function Probe({ value }: { value: boolean }) {
     const shown = useDelayedFlag(value);

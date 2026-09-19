@@ -31,7 +31,7 @@ export function BomPicker({ boms, selected, onSelect, error, rowExtra }: BomPick
                 <input
                     value={keyword}
                     onChange={event => setKeyword(event.target.value)}
-                    placeholder="搜索编码 / 物料"
+                    placeholder="BOM / 物料"
                     aria-label="搜索 BOM"
                     className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
                 />

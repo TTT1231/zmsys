@@ -153,7 +153,7 @@ export function SearchSelect({
                                     onClick={() => choose(option.value)}
                                     className={`cursor-pointer rounded-md px-3 py-2 text-13 ${index === active ? "bg-primary-soft text-primary-strong" : "text-ink hover:bg-soft"}`}
                                 >
-                                    <div className="break-words">{option.label}</div>
+                                    <div className="wrap-break-word">{option.label}</div>
                                     {!option.label.includes(option.value) && (
                                         <div className="mt-0.5 text-12 text-muted">{option.value}</div>
                                     )}

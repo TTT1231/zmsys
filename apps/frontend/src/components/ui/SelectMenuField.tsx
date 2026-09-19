@@ -63,7 +63,7 @@ export function SelectMenuField({
                 <DropdownMenuContent
                     align="start"
                     collisionPadding={16}
-                    className="z-200 max-h-[var(--radix-dropdown-menu-content-available-height)] w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto"
+                    className="z-200 max-h-(--radix-dropdown-menu-content-available-height) w-(--radix-dropdown-menu-trigger-width) overflow-y-auto"
                     onEscapeKeyDown={event => event.stopPropagation()}
                 >
                     <DropdownMenuRadioGroup value={value} onValueChange={onValueChange}>

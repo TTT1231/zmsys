@@ -5,9 +5,9 @@ import { Badge, Button, TableLink } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { SelectField, TextArea, TextField } from "@/components/ui/Field";
-import { useToast } from "@/components/ui/Toast";
+import { useToast } from "@/components/ui/toastContexts";
 import { Icon } from "@/lib/icons";
-import { useApp } from "@/context/AppContext";
+import { useApp } from "@/context/useApp";
 import {
     useCreateUser,
     useGrantLog,
@@ -142,8 +142,8 @@ function AccountsTab({
 
     return (
         <>
-            <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
-                <div className="flex items-center justify-between gap-3 border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
+            <section className="overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
+                <div className="flex items-center justify-between gap-3 border-b border-line bg-linear-to-b from-white to-panel px-5 py-4">
                     <h2 className="text-15 font-semibold text-ink">用户列表</h2>
                     <Button variant="secondary" icon="plus" onClick={() => setEditing("new")}>
                         新增用户
@@ -714,8 +714,8 @@ function RolesTab({ users }: { users: WbUser[] }) {
     return (
         <div className="grid items-start gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
             <div className="flex flex-col gap-5">
-                <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
-                    <div className="border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
+                <section className="overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
+                    <div className="border-b border-line bg-linear-to-b from-white to-panel px-5 py-4">
                         <h2 className="text-15 font-semibold text-ink">角色</h2>
                     </div>
                     <div className="flex flex-col gap-2 p-3">
@@ -753,8 +753,8 @@ function RolesTab({ users }: { users: WbUser[] }) {
                 </section>
             </div>
 
-            <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
+            <section className="overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-linear-to-b from-white to-panel px-5 py-4">
                     <div className="flex items-baseline gap-2.5">
                         <h2 className="text-15 font-semibold text-ink">{roleNameOf(activeRole)}</h2>
                         <span className={`text-12 ${draft ? "text-warning" : "text-muted"}`}>{status}</span>
@@ -943,8 +943,8 @@ function MatrixTab() {
     const grants = data ?? DEFAULT_GRANTS;
     const modules = MENU_CATALOG.filter(menu => !menu.onlyFor && menu.key !== "workbench");
     return (
-        <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
-            <div className="border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
+        <section className="overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
+            <div className="border-b border-line bg-linear-to-b from-white to-panel px-5 py-4">
                 <h2 className="text-15 font-semibold text-ink">角色 × 模块权限矩阵</h2>
             </div>
             <div className="overflow-x-auto">
@@ -1106,8 +1106,8 @@ function GrantLogPanel() {
     const { data } = useGrantLog();
     const logs = (data ?? []).slice(0, 8);
     return (
-        <section className="overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
-            <div className="flex items-center justify-between gap-3 border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4">
+        <section className="overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
+            <div className="flex items-center justify-between gap-3 border-b border-line bg-linear-to-b from-white to-panel px-5 py-4">
                 <h2 className="text-15 font-semibold text-ink">权限变更日志</h2>
                 {!!logs.length && <span className="text-11.5 text-subtle">最近 {logs.length} 条</span>}
             </div>

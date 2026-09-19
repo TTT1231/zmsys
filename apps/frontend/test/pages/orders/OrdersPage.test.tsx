@@ -20,12 +20,12 @@ const snapshot = {
         detailOrder,
     ],
 };
-vi.mock("@/context/AppContext", () => ({ useApp: () => ({ role: "staff", can: () => false }) }));
+vi.mock("@/context/useApp", () => ({ useApp: () => ({ role: "staff", can: () => false }) }));
 vi.mock("@/data/queries", () => ({
     useWbSnapshot: () => ({ data: snapshot }),
     useWbRefresh: () => ({ refresh: vi.fn() }),
 }));
-vi.mock("@/components/ui/Toast", () => ({ useToast: () => vi.fn() }));
+vi.mock("@/components/ui/toastContexts", () => ({ useToast: () => vi.fn() }));
 afterEach(cleanup);
 it("取消订单不显示全部交付或逾期，正常完成与待交数量保持准确", () => {
     render(

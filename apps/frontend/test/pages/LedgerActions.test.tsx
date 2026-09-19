@@ -15,7 +15,7 @@ const state = vi.hoisted(() => ({
     print: vi.fn(),
     void: vi.fn(),
 }));
-vi.mock("@/context/AppContext", () => ({
+vi.mock("@/context/useApp", () => ({
     useApp: () => ({
         role: "super",
         can: (code: string) =>
@@ -24,7 +24,7 @@ vi.mock("@/context/AppContext", () => ({
     }),
 }));
 vi.mock("@/lib/date", () => ({ todayIso: () => state.today }));
-vi.mock("@/components/ui/Toast", () => ({ useToast: () => vi.fn() }));
+vi.mock("@/components/ui/toastContexts", () => ({ useToast: () => vi.fn() }));
 vi.mock("@/data/queries", () => ({
     useWbSnapshot: () => ({
         data: { ...detailSnapshot, outboundLedger: [{ ...detailOutbound, state: state.outboundState }] },

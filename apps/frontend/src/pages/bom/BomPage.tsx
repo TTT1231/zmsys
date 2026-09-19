@@ -9,7 +9,7 @@ import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
 import { copyText } from "@/lib/clipboard";
-import { useApp } from "@/context/AppContext";
+import { useApp } from "@/context/useApp";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Button, TableLink } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
@@ -24,9 +24,10 @@ import {
     useDeleteBom,
     useOrders,
 } from "@/data/queries";
-import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
+import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
+import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { PageLoading } from "@/components/ui/PageLoading";
-import { useToast } from "@/components/ui/Toast";
+import { useToast } from "@/components/ui/toastContexts";
 import { catalogRowsOf } from "@/data/categories";
 import type { Bom, BomCatalogNode, BomCategory } from "@/api";
 import { cn } from "@/lib/utils";
@@ -394,7 +395,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                     )}
                     {!node.multi &&
                         (node.qty ? (
-                            <span className="shrink-0 rounded-full border border-[#fed7aa] bg-[#fff7ed] px-1.5 py-0.5 text-10.5 font-medium text-[#9a3412]">
+                            <span className="shrink-0 rounded-full border border-[#fed7aa] bg-warning-soft px-1.5 py-0.5 text-10.5 font-medium text-[#9a3412]">
                                 单选
                             </span>
                         ) : (
@@ -822,9 +823,9 @@ export function BomPage() {
                 }
             />
 
-            <section className="relative overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
+            <section className="relative overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
                 {overlay && <LoadingOverlay />}
-                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
+                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
                     <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 lg:w-70">
                         <Icon name="search" size={15} className="text-subtle" />
                         <input
@@ -833,7 +834,7 @@ export function BomPage() {
                                 setKeyword(event.target.value);
                                 setPage(1);
                             }}
-                            placeholder="搜索编码 / 品类 / 型号 / 物料"
+                            placeholder="BOM / 品类 / 型号 / 物料"
                             className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
                         />
                     </label>

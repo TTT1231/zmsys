@@ -12,7 +12,8 @@ import { fetchProfile, login as loginRequest, logout as logoutRequest } from "@/
 import { DEFAULT_GRANTS } from "@/data/permissions";
 import { clearToken, setToken } from "@/http";
 
-import { AppProvider, useApp } from "@/context/AppContext";
+import { AppProvider } from "@/context/AppContext";
+import { useApp } from "@/context/useApp";
 
 vi.mock("@/api", () => ({
     fetchProfile: vi.fn(),

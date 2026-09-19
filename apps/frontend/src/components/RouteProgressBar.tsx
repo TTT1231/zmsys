@@ -9,7 +9,7 @@ const MIN_START = 8;
 /** 加载期爬升上限:信号不结束也只逼近不到达(nprogress 0.994 封顶的近似) */
 const CREEP_TARGET = 88;
 /* 加载期宽度爬升:3 秒 CSS 过渡逼近 88%,前快后慢,短窗口只用到曲线前段 */
-const CREEP_TRANSITION = "transition-[width] duration-[3000ms] ease-[cubic-bezier(0.1,0.35,0.25,1)]";
+const CREEP_TRANSITION = "transition-[width] duration-3000 ease-[cubic-bezier(0.1,0.35,0.25,1)]";
 /* 归零退场:width 冲向 100% 与 opacity 淡出并行,无满格停留(对齐 vben speed: 300 与 nprogress set(1) 语义) */
 const SETTLE_TRANSITION = "transition-all duration-300 ease-out";
 /** 冲刺与淡出并行时长,完成后 width 静默回到起步位 */

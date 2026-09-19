@@ -9,8 +9,8 @@ import { detailBom, detailOrder, detailSnapshot } from "../../fixtures/recordDet
 import type { Order, Snapshot } from "@/api";
 
 const mutate = vi.fn();
-vi.mock("@/context/AppContext", () => ({ useApp: () => ({ role: "warehouse", can: () => true }) }));
-vi.mock("@/components/ui/Toast", () => ({ useToast: () => vi.fn() }));
+vi.mock("@/context/useApp", () => ({ useApp: () => ({ role: "warehouse", can: () => true }) }));
+vi.mock("@/components/ui/toastContexts", () => ({ useToast: () => vi.fn() }));
 vi.mock("@/data/queries", () => ({
     useWbSnapshot: () => ({ data: active }),
     useWbRefresh: () => ({ refresh: vi.fn(), refreshing: false }),

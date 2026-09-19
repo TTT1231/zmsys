@@ -1,6 +1,6 @@
 /* 超级管理员经营总览：图表看全貌，明细弹窗查看产品、客户订单和交期风险。 */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useApp } from "@/context/AppContext";
+import { useApp } from "@/context/useApp";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Modal } from "@/components/ui/Modal";
 import { EmptyState } from "@/components/ui/EmptyState";

@@ -8,7 +8,7 @@ import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
-import { useApp } from "@/context/AppContext";
+import { useApp } from "@/context/useApp";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Badge, Button } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
@@ -20,11 +20,12 @@ import { nextSortState, type SortState } from "@/lib/tableSort";
 import { TextArea, TextField } from "@/components/ui/Field";
 import { SelectMenuField } from "@/components/ui/SelectMenuField";
 import { useCreateInbound, useUpdateInbound, useVoidInbound, useWbRefresh, useWbSnapshot } from "@/data/queries";
-import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
+import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
+import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { EMPTY_SNAPSHOT, bomByCode } from "@/data/views";
 import { todayIso } from "@/lib/date";
-import { useToast } from "@/components/ui/Toast";
+import { useToast } from "@/components/ui/toastContexts";
 
 import { BomCell } from "@/components/bom/BomCell";
 import { BomPicker } from "@/components/bom/BomPicker";
@@ -80,7 +81,7 @@ function InboundBomPicker({
                         <span className="rounded-full bg-white px-2 py-1 text-11 font-medium text-success">已选择</span>
                     </div>
                     <p className="mt-1 text-12.5 text-td">{currentBom.name}</p>
-                    <p className="mt-1 break-words text-11.5 text-muted">{currentBom.spec}</p>
+                    <p className="mt-1 wrap-break-word text-11.5 text-muted">{currentBom.spec}</p>
                 </div>
             )}
         </div>
@@ -552,9 +553,9 @@ export function InboundPage() {
                 }
             />
 
-            <section className="relative overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
+            <section className="relative overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
                 {overlay && <LoadingOverlay />}
-                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
+                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
                     <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 lg:w-70">
                         <Icon name="search" size={15} className="text-subtle" />
                         <input
@@ -563,7 +564,7 @@ export function InboundPage() {
                                 setKeyword(event.target.value);
                                 setPage(1);
                             }}
-                            placeholder="搜索单号、BOM 编码或登记人"
+                            placeholder="单号 / BOM / 登记人"
                             className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
                         />
                     </label>

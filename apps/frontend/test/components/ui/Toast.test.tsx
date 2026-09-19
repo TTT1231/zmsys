@@ -6,7 +6,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it } from "vitest";
 import { toast } from "sonner";
 
-import { ToastProvider, useNotification, useToast } from "@/components/ui/Toast";
+import { ToastProvider } from "@/components/ui/Toast";
+import { useNotification, useToast } from "@/components/ui/toastContexts";
 
 function ToastTrigger({ message, error }: { message: string; error?: boolean }) {
     const push = useToast();

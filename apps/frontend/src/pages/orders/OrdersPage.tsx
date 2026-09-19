@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
-import { useApp } from "@/context/AppContext";
+import { useApp } from "@/context/useApp";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Badge, Button, ProgressTrack, StatusBadge, TableLink } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
@@ -23,8 +23,9 @@ import { Field, TextArea, TextField, DateField } from "@/components/ui/Field";
 import { useCreateOrder, useDeleteOrder, useUpdateOrder, useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { EMPTY_SNAPSHOT, bomByCode, maxShipOf, orderStatusOf, remainingOf } from "@/data/views";
 import { addDays, addMonths, todayIso } from "@/lib/date";
-import { useToast } from "@/components/ui/Toast";
-import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
+import { useToast } from "@/components/ui/toastContexts";
+import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
+import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { PageLoading } from "@/components/ui/PageLoading";
 import type { Order, Snapshot } from "@/api";
 
@@ -236,7 +237,7 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
                                     </span>
                                 </div>
                                 <p className="mt-1 text-12.5 text-td">{matchedBom.name}</p>
-                                <p className="mt-1 break-words text-11.5 text-muted">{matchedBom.spec}</p>
+                                <p className="mt-1 wrap-break-word text-11.5 text-muted">{matchedBom.spec}</p>
                             </div>
                         )}
                     </div>
@@ -706,9 +707,9 @@ export function OrdersPage() {
                 ))}
             </div>
 
-            <section className="relative overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
+            <section className="relative overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
                 {overlay && <LoadingOverlay />}
-                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
+                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
                     {/* 搜索最左：窄屏由 list-toolbar 规则独占整行，宽屏固定 280px */}
                     <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 lg:w-70">
                         <Icon name="search" size={15} className="text-subtle" />
@@ -718,7 +719,7 @@ export function OrdersPage() {
                                 setKeyword(event.target.value);
                                 setPage(1);
                             }}
-                            placeholder="搜索客户、订单或产品"
+                            placeholder="客户名 / 订单号 / BOM"
                             className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
                         />
                     </label>

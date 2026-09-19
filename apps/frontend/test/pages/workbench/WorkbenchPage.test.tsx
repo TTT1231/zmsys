@@ -8,7 +8,7 @@ import { WorkbenchPage } from "@/pages/workbench/WorkbenchPage";
 import { createWorkbenchDemo } from "../../fixtures/workbench";
 
 const auth = vi.hoisted(() => ({ role: "super" }));
-vi.mock("@/context/AppContext", () => ({ useApp: () => auth }));
+vi.mock("@/context/useApp", () => ({ useApp: () => auth }));
 vi.mock("@/pages/workbench/useWorkbenchData", () => ({ useWorkbenchData: () => createWorkbenchDemo("2026-09-12") }));
 vi.mock("@/components/charts/EChart", () => ({ EChart: () => <div data-testid="echart" /> }));
 afterEach(() => {

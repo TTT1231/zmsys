@@ -7,12 +7,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMemoryRouter, MemoryRouter, RouterProvider, useLocation } from "react-router";
 
-import {
-    AppContentErrorBoundary,
-    ErrorPage,
-    errorPageKindForRouteError,
-    RouterErrorPage,
-} from "@/pages/error/ErrorPage";
+import { AppContentErrorBoundary, ErrorPage, RouterErrorPage } from "@/pages/error/ErrorPage";
+import { errorPageKindForRouteError } from "@/pages/error/routeError";
 
 function LocationProbe() {
     const location = useLocation();

@@ -9,7 +9,7 @@ import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
-import { useApp } from "@/context/AppContext";
+import { useApp } from "@/context/useApp";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Badge, Button, ProgressTrack, StatusBadge } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
@@ -28,11 +28,12 @@ import {
     useWbRefresh,
     useWbSnapshot,
 } from "@/data/queries";
-import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
+import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
+import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { EMPTY_SNAPSHOT, bomByCode, maxShipOf, orderStatusOf, remainingOf } from "@/data/views";
 import { todayIso } from "@/lib/date";
-import { useToast } from "@/components/ui/Toast";
+import { useToast } from "@/components/ui/toastContexts";
 import type { OutboundPrintDocument, OutboundRow, Snapshot } from "@/api";
 
 /* 可排序列：出库日期 / 发货数量；桌面表头与移动端排序下拉共用 */
@@ -482,7 +483,7 @@ export function OutboundModal({
                                     {selectedBom ? ` · ${selectedBom.name}` : ""}
                                 </p>
                                 {selectedBom?.spec && (
-                                    <p className="mt-0.5 break-words text-11.5 text-muted">{selectedBom.spec}</p>
+                                    <p className="mt-0.5 wrap-break-word text-11.5 text-muted">{selectedBom.spec}</p>
                                 )}
                             </div>
                             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
@@ -762,9 +763,9 @@ export function OutboundPage() {
                 }
             />
 
-            <section className="relative overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
+            <section className="relative overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
                 {overlay && <LoadingOverlay />}
-                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
+                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
                     <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 lg:w-70">
                         <Icon name="search" size={15} className="text-subtle" />
                         <input
@@ -773,7 +774,7 @@ export function OutboundPage() {
                                 setKeyword(event.target.value);
                                 setPage(1);
                             }}
-                            placeholder="搜索单号、订单、客户或 BOM 编码"
+                            placeholder="单号 / 订单 / 客户 / BOM"
                             className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
                         />
                     </label>

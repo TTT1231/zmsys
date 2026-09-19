@@ -1,6 +1,8 @@
 import { Component, useEffect, useRef, type ErrorInfo, type ReactNode } from "react";
-import { isRouteErrorResponse, Link, useLocation, useRouteError } from "react-router";
+import { Link, useLocation, useRouteError } from "react-router";
 import { Icon } from "@/lib/icons";
+
+import { errorPageKindForRouteError } from "./routeError";
 
 export type ErrorPageKind = "not-found" | "forbidden" | "server";
 
@@ -96,7 +98,7 @@ function ErrorArtwork({ kind }: { kind: ErrorPageKind }) {
                 <circle cx="164" cy="16" r="2" fill="currentColor" fillOpacity="0.5" />
             </svg>
             <div
-                className={`relative bg-gradient-to-br ${meta.numerals} bg-clip-text text-88 leading-none font-bold tracking-[-0.05em] text-transparent`}
+                className={`relative bg-linear-to-br ${meta.numerals} bg-clip-text text-88 leading-none font-bold tracking-tighter text-transparent`}
             >
                 {meta.code}
             </div>
@@ -106,7 +108,7 @@ function ErrorArtwork({ kind }: { kind: ErrorPageKind }) {
 
 const actionClassName =
     "inline-flex min-h-11 min-w-32 cursor-pointer items-center justify-center gap-2 rounded-btn px-5 text-13.5 font-semibold transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
-const primaryActionClassName = `${actionClassName} bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-glow hover:from-indigo-700 hover:to-indigo-600 active:scale-[0.98]`;
+const primaryActionClassName = `${actionClassName} bg-linear-to-r from-indigo-600 to-indigo-500 text-white shadow-glow hover:from-indigo-700 hover:to-indigo-600 active:scale-[0.98]`;
 
 /** 应用壳层内的统一错误状态页：用清晰的恢复动作替代技术诊断信息。 */
 export function ErrorPage({ kind }: ErrorPageProps) {
@@ -170,15 +172,6 @@ export function ErrorPage({ kind }: ErrorPageProps) {
             </div>
         </section>
     );
-}
-
-/** 将 React Router 的响应错误映射为用户能理解的错误状态。 */
-export function errorPageKindForRouteError(error: unknown): ErrorPageKind {
-    if (isRouteErrorResponse(error)) {
-        if (error.status === 403) return "forbidden";
-        if (error.status === 404) return "not-found";
-    }
-    return "server";
 }
 
 /** 根路由 ErrorElement：兜住路由加载、loader/action 以及未预期的路由级异常。 */

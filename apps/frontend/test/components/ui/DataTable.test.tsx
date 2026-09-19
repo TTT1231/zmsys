@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DataTable } from "@/components/ui/DataTable";
 import { SortTh } from "@/components/ui/SortTh";
 const auth = vi.hoisted(() => ({ account: "user-a" }));
-vi.mock("@/context/AppContext", () => ({ useApp: () => ({ user: auth }) }));
+vi.mock("@/context/useApp", () => ({ useApp: () => ({ user: auth }) }));
 beforeEach(() => {
     localStorage.clear();
     auth.account = "user-a";

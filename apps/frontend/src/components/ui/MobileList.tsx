@@ -42,7 +42,7 @@ export function RecordCard({
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                     <h3 className="text-14 font-semibold text-ink wrap-anywhere">{title}</h3>
-                    {subtitle && <div className="mt-1 text-12 text-muted break-words">{subtitle}</div>}
+                    {subtitle && <div className="mt-1 text-12 text-muted wrap-break-word">{subtitle}</div>}
                 </div>
                 {badge && <div className="shrink-0">{badge}</div>}
             </div>

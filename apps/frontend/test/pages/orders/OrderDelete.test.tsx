@@ -10,10 +10,10 @@ import { detailBom, detailOrder, detailOutbound, detailSnapshot } from "../../fi
 
 const deleteMutate = vi.fn();
 const canMock = vi.fn<(code: string) => boolean>(() => true);
-vi.mock("@/context/AppContext", () => ({
+vi.mock("@/context/useApp", () => ({
     useApp: () => ({ role: "super", can: (code: string) => canMock(code) }),
 }));
-vi.mock("@/components/ui/Toast", () => ({ useToast: () => vi.fn() }));
+vi.mock("@/components/ui/toastContexts", () => ({ useToast: () => vi.fn() }));
 vi.mock("@/data/queries", () => ({
     useWbSnapshot: () => ({ data: snapshot }),
     useWbRefresh: () => ({ refresh: vi.fn() }),

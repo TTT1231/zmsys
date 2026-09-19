@@ -25,8 +25,8 @@ const { logoutSpy, refreshProfileSpy, navigateSpy } = vi.hoisted(() => ({
     navigateSpy: vi.fn(),
 }));
 
-vi.mock("@/context/AppContext", async importOriginal => {
-    const actual = await importOriginal<typeof import("@/context/AppContext")>();
+vi.mock("@/context/useApp", async importOriginal => {
+    const actual = await importOriginal<typeof import("@/context/useApp")>();
     return {
         ...actual,
         useApp: () => ({

@@ -1,4 +1,5 @@
 import { Icon } from "@/lib/icons";
+import { paginationWindow } from "@/lib/pagination";
 import { num } from "@/lib/format";
 
 interface PaginationProps {
@@ -8,13 +9,6 @@ interface PaginationProps {
     onPageChange: (page: number) => void;
     onPageSizeChange?: (size: number) => void;
     unit?: string;
-}
-
-export function paginationWindow(page: number, pages: number): Array<number | "…"> {
-    if (pages <= 5) return Array.from({ length: pages }, (_, index) => index + 1);
-    if (page <= 3) return [1, 2, 3, 4, "…", pages];
-    if (page >= pages - 2) return [1, "…", pages - 3, pages - 2, pages - 1, pages];
-    return [1, "…", page - 1, page, page + 1, "…", pages];
 }
 
 export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChange, unit = "条" }: PaginationProps) {

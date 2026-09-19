@@ -1,12 +1,12 @@
 import { useState, type ReactNode } from "react";
-import { ROLE_META, useApp } from "@/context/AppContext";
+import { ROLE_META, useApp } from "@/context/useApp";
 import { changePassword } from "@/api";
 import { formatDateTime } from "@/lib/date";
 import { isApiError } from "@/http";
 import { Button } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { TextField } from "@/components/ui/Field";
-import { useToast } from "@/components/ui/Toast";
+import { useToast } from "@/components/ui/toastContexts";
 
 /* 个人信息弹窗:全部信息只读(账号/姓名/角色/状态均为管理员域),仅可自助修改密码。
    姓名修改走用户权限页的管理员编辑,此处不再提供自助改名入口 */
@@ -79,7 +79,7 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
             }
         >
             <div className="flex items-center gap-3 py-1">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 text-15 font-semibold text-white">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-indigo-500 to-indigo-600 text-15 font-semibold text-white">
                     {(user?.name ?? "?").slice(0, 1)}
                 </span>
                 <div className="min-w-0">

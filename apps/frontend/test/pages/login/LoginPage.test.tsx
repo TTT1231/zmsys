@@ -16,11 +16,11 @@ const { loginSpy, toastSpy, notificationSpy } = vi.hoisted(() => ({
     notificationSpy: vi.fn(),
 }));
 
-vi.mock("@/context/AppContext", () => ({
+vi.mock("@/context/useApp", () => ({
     useApp: () => ({ status: "guest", login: loginSpy }),
 }));
 
-vi.mock("@/components/ui/Toast", () => ({
+vi.mock("@/components/ui/toastContexts", () => ({
     useToast: () => toastSpy,
     useNotification: () => notificationSpy,
 }));

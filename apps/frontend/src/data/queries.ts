@@ -1,7 +1,7 @@
 import { useIsFetching, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { GrantMap, RoleId } from "./permissions";
 import type { Snapshot, UpdateCustomerInput, UpdateUserInput } from "@/api";
-import { useApp } from "@/context/AppContext";
+import { useApp } from "@/context/useApp";
 import {
     cancelOrder,
     createBom,

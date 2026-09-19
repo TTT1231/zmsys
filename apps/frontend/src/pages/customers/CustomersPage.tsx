@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
-import { useApp } from "@/context/AppContext";
+import { useApp } from "@/context/useApp";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Pagination } from "@/components/ui/Pagination";
 import { Badge, Button, StatusBadge, TableLink } from "@/components/ui/Badge";
@@ -20,10 +20,11 @@ import { nextSortState, type SortState } from "@/lib/tableSort";
 import { SelectField, TextField } from "@/components/ui/Field";
 import { RegionCascader, type RegionValue } from "@/components/ui/RegionCascader";
 import { useCreateCustomer, useUpdateCustomer, useWbRefresh, useWbSnapshot } from "@/data/queries";
-import { LoadingOverlay, useDelayedFlag } from "@/components/ui/LoadingOverlay";
+import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
+import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { EMPTY_SNAPSHOT, orderStatusOf } from "@/data/views";
-import { useToast } from "@/components/ui/Toast";
+import { useToast } from "@/components/ui/toastContexts";
 import type { Customer, Snapshot } from "@/api";
 
 const AVATAR_TONES = [
@@ -263,7 +264,7 @@ export function CustomerDetailModal({
                 }
             >
                 <div className="flex flex-col gap-4">
-                    <div className="flex items-center gap-3 rounded-panel border border-line bg-gradient-to-r from-[#f7f7ff] to-white px-4 py-3">
+                    <div className="flex items-center gap-3 rounded-panel border border-line bg-linear-to-r from-[#f7f7ff] to-white px-4 py-3">
                         <span
                             className={`flex h-11 w-11 items-center justify-center rounded-full text-16 font-semibold ${AVATAR_TONES[0]}`}
                         >
@@ -476,9 +477,9 @@ export function CustomersPage() {
                 }
             />
 
-            <section className="relative overflow-hidden rounded-panel border border-line bg-white/[.97] shadow-card">
+            <section className="relative overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
                 {overlay && <LoadingOverlay />}
-                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-gradient-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
+                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
                     <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 lg:w-70">
                         <Icon name="search" size={15} className="text-subtle" />
                         <input
@@ -487,7 +488,7 @@ export function CustomersPage() {
                                 setKeyword(event.target.value);
                                 setPage(1);
                             }}
-                            placeholder="搜索公司名称或编码"
+                            placeholder="公司名 / BOM"
                             className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
                         />
                     </label>

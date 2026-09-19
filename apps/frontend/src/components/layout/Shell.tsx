@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink } from "react-router";
 import { Icon } from "@/lib/icons";
-import { useApp } from "@/context/AppContext";
+import { useApp } from "@/context/useApp";
 import { buildNavSections, type NavItem } from "@/data/permissions";
 import { useWbRefresh } from "@/data/queries";
 import { NoteDialog } from "@/components/ui/NoteDialog";
@@ -52,7 +52,7 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
             <aside
                 aria-label="主导航"
                 inert={!desktop && !open}
-                className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden bg-gradient-to-b from-sidebar to-[#162033] transition-[width,transform] duration-200 lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0 ${
+                className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden bg-linear-to-b from-sidebar to-[#162033] transition-[width,transform] duration-200 lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0 ${
                     collapsed ? "lg:w-19" : "lg:w-57.5"
                 } w-[min(82vw,300px)] shadow-[8px_0_30px_rgba(16,24,40,.08)] lg:shadow-[8px_0_30px_rgba(16,24,40,.08)] ${
                     open ? "translate-x-0" : "-translate-x-[103%] lg:translate-x-0"
@@ -60,7 +60,7 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
             >
                 <div className="relative px-4 pt-5 pb-4">
                     <div className="flex items-center gap-3">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-glow">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-linear-to-br from-indigo-500 to-indigo-600 text-white shadow-glow">
                             <Icon name="brand" size={17} />
                         </span>
                         {!collapsed && (
@@ -103,7 +103,7 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose }: SidebarP
                                             className={({ isActive }) =>
                                                 `group relative flex min-h-10 max-lg:min-h-[44px] items-center gap-2.5 rounded-btn px-2.5 text-13 transition ${
                                                     isActive
-                                                        ? "bg-gradient-to-r from-[rgba(99,102,241,.30)] to-[rgba(79,70,229,.16)] font-semibold text-white shadow-[inset_3px_0_0_0_#818cf8]"
+                                                        ? "bg-linear-to-r from-[rgba(99,102,241,.30)] to-[rgba(79,70,229,.16)] font-semibold text-white shadow-[inset_3px_0_0_0_#818cf8]"
                                                         : "text-[#aeb8c8] hover:bg-white/6 hover:text-white"
                                                 } ${collapsed ? "justify-center" : ""}`
                                             }

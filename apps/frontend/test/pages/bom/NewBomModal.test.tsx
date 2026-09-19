@@ -8,8 +8,8 @@ import { NewBomModal } from "@/pages/bom/BomPage";
 import { BOM_CATEGORIES } from "@/data/categories";
 import type { Bom, BomCategory } from "@/api";
 
-vi.mock("@/context/AppContext", () => ({ useApp: () => ({ role: "staff", can: () => true }) }));
-vi.mock("@/components/ui/Toast", () => ({ useToast: () => vi.fn() }));
+vi.mock("@/context/useApp", () => ({ useApp: () => ({ role: "staff", can: () => true }) }));
+vi.mock("@/components/ui/toastContexts", () => ({ useToast: () => vi.fn() }));
 
 const mutate = vi.fn();
 vi.mock("@/data/queries", () => ({

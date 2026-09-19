@@ -11,7 +11,7 @@ import {
     type ReactNode,
     type Ref,
 } from "react";
-import { useApp } from "@/context/AppContext";
+import { useApp } from "@/context/useApp";
 import { Icon } from "@/lib/icons";
 import { Modal } from "./Modal";
 import { SortTh } from "./SortTh";

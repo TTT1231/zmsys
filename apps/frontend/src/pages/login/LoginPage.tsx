@@ -1,9 +1,9 @@
 import { type FormEvent, useRef, useState } from "react";
 import { Navigate, useNavigate } from "react-router";
 import { Icon } from "@/lib/icons";
-import { useApp } from "@/context/AppContext";
+import { useApp } from "@/context/useApp";
 import { isApiError } from "@/http";
-import { useNotification, useToast } from "@/components/ui/Toast";
+import { useNotification, useToast } from "@/components/ui/toastContexts";
 import loginArt from "./login-art.svg";
 
 function loginErrorMessage(error: unknown) {
@@ -58,7 +58,7 @@ export function LoginPage() {
     return (
         <div className="flex min-h-dvh flex-col bg-canvas lg:grid lg:grid-cols-[1.05fr_1fr]">
             {/* 品牌区：移动端为顶部渐变横幅，桌面端为左侧全高面板；只留品牌标识 + 装饰插画，不放营销文案 */}
-            <aside className="relative overflow-hidden bg-gradient-to-br from-indigo-700 via-indigo-600 to-sky-500 px-6 pt-[max(3rem,env(safe-area-inset-top))] pb-20 lg:flex lg:flex-col lg:px-14 lg:py-12">
+            <aside className="relative overflow-hidden bg-linear-to-br from-indigo-700 via-indigo-600 to-sky-500 px-6 pt-[max(3rem,env(safe-area-inset-top))] pb-20 lg:flex lg:flex-col lg:px-14 lg:py-12">
                 {/* 网格纹理与光斑、圆环装饰 */}
                 <div
                     className="absolute inset-0"
@@ -203,7 +203,7 @@ export function LoginPage() {
                                     type="submit"
                                     disabled={busy}
                                     aria-busy={busy}
-                                    className="flex h-12 w-full items-center justify-center gap-2 rounded-btn bg-gradient-to-r from-indigo-600 to-indigo-500 text-15 font-semibold text-white shadow-glow transition-all hover:from-indigo-700 hover:to-indigo-600 active:scale-[0.98] disabled:cursor-wait disabled:from-indigo-500 disabled:to-indigo-400 disabled:shadow-none"
+                                    className="flex h-12 w-full items-center justify-center gap-2 rounded-btn bg-linear-to-r from-indigo-600 to-indigo-500 text-15 font-semibold text-white shadow-glow transition-all hover:from-indigo-700 hover:to-indigo-600 active:scale-[0.98] disabled:cursor-wait disabled:from-indigo-500 disabled:to-indigo-400 disabled:shadow-none"
                                 >
                                     {busy && (
                                         <span

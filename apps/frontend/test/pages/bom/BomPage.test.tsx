@@ -11,8 +11,8 @@ import { detailBom } from "../../fixtures/recordDetails";
 
 /* can() 经 ref 切换角色权限：默认 staff 无任何写权限 */
 const authRef = vi.hoisted(() => ({ current: { can: (perm: string): boolean => perm === "never" } }));
-vi.mock("@/context/AppContext", () => ({ useApp: () => ({ role: "staff", can: authRef.current.can }) }));
-vi.mock("@/components/ui/Toast", () => ({ useToast: () => vi.fn() }));
+vi.mock("@/context/useApp", () => ({ useApp: () => ({ role: "staff", can: authRef.current.can }) }));
+vi.mock("@/components/ui/toastContexts", () => ({ useToast: () => vi.fn() }));
 const copyText = vi.hoisted(() => vi.fn().mockResolvedValue(true));
 vi.mock("@/lib/clipboard", () => ({ copyText }));
 
