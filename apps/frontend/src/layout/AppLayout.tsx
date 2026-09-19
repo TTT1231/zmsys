@@ -59,7 +59,7 @@ export function AppLayout() {
         status === "authenticated" ? (accessDenied ? "没有访问权限" : resolveTitle(location.pathname, role)) : "";
 
     useEffect(() => {
-        if (title) document.title = `${title} · 智造管理系统`;
+        if (title) document.title = `${title} · 众茂生产系统`;
     }, [title]);
 
     // 认证守卫：未登录进登录页；本地 token 校验中显示全屏加载画面（避免未授权请求）

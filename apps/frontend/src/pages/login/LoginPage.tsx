@@ -92,7 +92,7 @@ export function LoginPage() {
                         <Icon name="brand" size={22} />
                     </span>
                     <div className="leading-tight">
-                        <div className="text-17 font-semibold text-white">智造管理系统</div>
+                        <div className="text-17 font-semibold text-white">众茂生产系统</div>
                         <div className="text-12 text-indigo-100">订单驱动的成品仓库管理</div>
                     </div>
                 </div>

@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-    title: 智造管理系统 API
+    title: 众茂生产系统 API
     version: 0.2.0
     description: |
         后端实现基线。修改接口时必须同步 `src/api/types.ts`、`mocks/request/` 与本文件。

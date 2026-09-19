@@ -1,4 +1,4 @@
--- 智造管理系统 · MySQL 8.0.16+ 建表基线
+-- 众茂生产系统 · MySQL 8.0.16+ 建表基线
 -- 时间统一存 UTC DATETIME(3)；Snowflake id 由应用传入；所有表使用 InnoDB。
 
 SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci;

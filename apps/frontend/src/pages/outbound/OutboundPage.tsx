@@ -78,7 +78,7 @@ function renderOutboundDocument(document: OutboundPrintDocument, win: Window) {
     const html = `
     <div style="font-family: Inter, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; max-width: 640px; margin: 32px auto; color: #101828;">
       <h1 style="margin: 0 0 4px; font-size: 20px;">出库单</h1>
-      <p style="margin: 0 0 16px; font-size: 12px; color: #667085;">智造管理系统 · 打印时间 ${new Date(document.printedAt).toLocaleString()}</p>
+      <p style="margin: 0 0 16px; font-size: 12px; color: #667085;">众茂生产系统 · 打印时间 ${new Date(document.printedAt).toLocaleString()}</p>
       <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
         ${items
             .map(
