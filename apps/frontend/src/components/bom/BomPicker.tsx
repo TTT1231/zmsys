@@ -27,7 +27,7 @@ export function BomPicker({ boms, selected, onSelect, error, rowExtra }: BomPick
 
     return (
         <div className="flex flex-col gap-2">
-            <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-white px-3">
+            <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-surface px-3">
                 <input
                     value={keyword}
                     onChange={event => setKeyword(event.target.value)}
@@ -59,7 +59,7 @@ export function BomPicker({ boms, selected, onSelect, error, rowExtra }: BomPick
                             <span className="text-11.5 font-medium text-muted">{bom.name}</span>
                             <span className="tnum ml-2 text-12.5 font-semibold text-primary-strong">{bom.code}</span>
                             {active && (
-                                <span className="ml-2 rounded-full bg-white px-1.5 py-0.5 text-10.5 font-medium text-success">
+                                <span className="ml-2 rounded-full bg-surface px-1.5 py-0.5 text-10.5 font-medium text-success">
                                     已选
                                 </span>
                             )}

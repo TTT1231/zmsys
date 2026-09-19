@@ -79,7 +79,7 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
             }
         >
             <div className="flex items-center gap-3 py-1">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-indigo-500 to-indigo-600 text-15 font-semibold text-white">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-[var(--color-primary)] to-[var(--color-primary-strong)] text-15 font-semibold text-white">
                     {(user?.name ?? "?").slice(0, 1)}
                 </span>
                 <div className="min-w-0">

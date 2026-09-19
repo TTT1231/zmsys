@@ -419,7 +419,7 @@ export function OutboundModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -436,7 +436,7 @@ export function OutboundModal({
         >
             <div className="flex flex-col gap-5">
                 <fieldset className="rounded-panel border border-line p-4">
-                    <legend className="px-1.5 text-12.5 font-semibold text-primary">① 客户与订单</legend>
+                    <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">① 客户与订单</legend>
                     <div className="flex flex-col gap-3">
                         <SearchSelect
                             label="客户"
@@ -468,7 +468,7 @@ export function OutboundModal({
                 </fieldset>
 
                 <fieldset className="rounded-panel border border-line p-4">
-                    <legend className="px-1.5 text-12.5 font-semibold text-primary">② 订单信息</legend>
+                    <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">② 订单信息</legend>
                     {selectedOrder && status ? (
                         <div className="flex flex-col gap-3 rounded-xl border border-primary-border bg-primary-soft/40 px-3.5 py-3">
                             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -539,12 +539,12 @@ export function OutboundModal({
                 </fieldset>
 
                 <fieldset className="rounded-panel border border-line p-4">
-                    <legend className="px-1.5 text-12.5 font-semibold text-primary">③ 发货明细</legend>
+                    <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">③ 发货明细</legend>
                     <div className="grid gap-3 sm:grid-cols-2">
                         {selectedOrder && maxShip > 0 && (
                             <button
                                 type="button"
-                                className="text-left text-13 text-primary sm:col-span-2"
+                                className="text-left text-13 text-primary-strong sm:col-span-2"
                                 onClick={() => {
                                     setQty(String(maxShip));
                                     clearError("qty");
@@ -763,10 +763,10 @@ export function OutboundPage() {
                 }
             />
 
-            <section className="relative overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
+            <section className="relative overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
                 {overlay && <LoadingOverlay />}
-                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
-                    <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 lg:w-70">
+                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4 lg:gap-2.5">
+                    <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-surface px-3 lg:w-70">
                         <Icon name="search" size={15} className="text-subtle" />
                         <input
                             value={keyword}
@@ -785,7 +785,7 @@ export function OutboundPage() {
                             setPage(1);
                         }}
                         aria-label="按状态筛选"
-                        className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-13 text-ink"
                     >
                         {["全部状态", "已登记", "已打印", "已作废"].map(option => (
                             <option key={option}>{option}</option>
@@ -798,7 +798,7 @@ export function OutboundPage() {
                             setPage(1);
                         }}
                         aria-label="按品类筛选"
-                        className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-13 text-ink"
                     >
                         <option>全部品类</option>
                         {categories.map(item => (

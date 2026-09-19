@@ -1,7 +1,7 @@
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
 const inputBase =
-    "w-full rounded-input border border-line-strong bg-white px-3 py-2 text-13 text-ink transition placeholder:text-subtle focus:border-primary focus:outline-none disabled:bg-soft disabled:text-subtle";
+    "w-full rounded-input border border-line-strong bg-surface px-3 py-2 text-13 text-ink transition placeholder:text-subtle focus:border-primary focus:outline-none disabled:bg-soft disabled:text-subtle";
 
 export function TextField({
     label,

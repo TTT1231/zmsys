@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
 /* 覆盖角色隔离、周期筛选、品类与客户明细、风险入口和统计说明。 */
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render as rtlRender, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
+import { PreferencesProvider } from "@/context/PreferencesContext";
 import { WorkbenchPage } from "@/pages/workbench/WorkbenchPage";
 import { createWorkbenchDemo } from "../../fixtures/workbench";
+
+/* 图表读偏好主题令牌，包一层 Provider 提供（浅色默认） */
+const render = (ui: React.ReactElement) => rtlRender(<PreferencesProvider>{ui}</PreferencesProvider>);
 
 const auth = vi.hoisted(() => ({ role: "super" }));
 vi.mock("@/context/useApp", () => ({ useApp: () => auth }));

@@ -9,7 +9,7 @@ export function ToolbarMore({ children }: { children: ReactNode }) {
                     更多
                 </summary>
                 <div
-                    className="absolute right-0 top-full z-20 mt-2 flex min-w-35 flex-col gap-2 rounded-xl border border-line bg-white p-2 shadow-modal"
+                    className="absolute right-0 top-full z-20 mt-2 flex min-w-35 flex-col gap-2 rounded-xl border border-line bg-surface p-2 shadow-modal"
                     onClick={event => {
                         if ((event.target as HTMLElement).closest("button"))
                             event.currentTarget.closest("details")?.removeAttribute("open");

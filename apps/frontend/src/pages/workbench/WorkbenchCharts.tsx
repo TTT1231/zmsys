@@ -2,18 +2,22 @@
 import { useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 import { EChart } from "@/components/charts/EChart";
+import { usePreferences } from "@/context/usePreferences";
 import { num } from "@/lib/format";
+import { chartPalette, type ChartPalette } from "@/lib/chartTheme";
 import { Icon } from "@/lib/icons";
 import type { customerRanking, summarizeWorkbench, RankingMetric } from "@/data/workbench";
 
 type Category = ReturnType<typeof summarizeWorkbench>["categories"][number];
 type Customer = ReturnType<typeof customerRanking>[number];
-const axisLabel = {
-    color: "#667085",
+
+/* 轴标签 / 网格线颜色取当前主题令牌（暗色与内置主题切换时随 preferences 重算） */
+const axisLabelOf = (palette: ChartPalette) => ({
+    color: palette.muted,
     fontSize: 11,
     formatter: (value: number) => (value >= 10000 ? `${+(value / 10000).toFixed(1)}万` : `${value}`),
-};
-const gridLine = { lineStyle: { color: "#eef2f6", type: "dashed" as const } };
+});
+const gridLineOf = (palette: ChartPalette) => ({ lineStyle: { color: palette.soft, type: "dashed" as const } });
 
 export function ProductProgressChart({
     categories,
@@ -25,13 +29,17 @@ export function ProductProgressChart({
     onDetails: (category?: string) => void;
 }) {
     const [view, setView] = useState("delivery");
+    const { preferences } = usePreferences();
     const delivery = view === "delivery";
     const total = categories.reduce((sum, row) => sum + row.qty, 0);
     const shipped = categories.reduce((sum, row) => sum + row.shipped, 0);
     const gap = categories.reduce((sum, row) => sum + row.gap, 0);
-    const option: EChartsOption = useMemo(
-        () => ({
-            color: delivery ? ["#4f46e5", "#c7d2fe"] : ["#0d9488", "#f59e0b"],
+    const option: EChartsOption = useMemo(() => {
+        const palette = chartPalette();
+        const axisLabel = axisLabelOf(palette);
+        const gridLine = gridLineOf(palette);
+        return {
+            color: delivery ? [palette.primary, palette.primaryBorder] : ["#0d9488", "#f59e0b"],
             textStyle: { fontFamily: "Inter, Microsoft YaHei, sans-serif" },
             tooltip: {
                 trigger: "axis",
@@ -45,7 +53,7 @@ export function ProductProgressChart({
                 icon: "roundRect",
                 itemWidth: 10,
                 itemHeight: 10,
-                textStyle: { color: "#667085", fontSize: 12 },
+                textStyle: { color: palette.muted, fontSize: 12 },
             },
             grid: {
                 top: 42,
@@ -67,7 +75,7 @@ export function ProductProgressChart({
                 data: categories.map(row => row.name),
                 axisLine: { show: false },
                 axisTick: { show: false },
-                axisLabel: { color: "#344054", fontSize: 12, margin: 16 },
+                axisLabel: { color: palette.td, fontSize: 12, margin: 16 },
             },
             media: [
                 {
@@ -132,7 +140,7 @@ export function ProductProgressChart({
                               show: true,
                               position: "right",
                               distance: 12,
-                              color: "#475467",
+                              color: palette.tdStrong,
                               fontSize: 11,
                               formatter: params => {
                                   const row = categories[params.dataIndex];
@@ -162,18 +170,17 @@ export function ProductProgressChart({
                               show: true,
                               position: "right",
                               fontSize: 11,
-                              color: "#92400e",
+                              color: palette.warning,
                               formatter: params => (Number(params.value) ? num(Number(params.value)) : "充足"),
                           },
                           data: categories.map(row => row.gap),
                       },
                   ],
-        }),
-        [categories, delivery],
-    );
+        };
+    }, [categories, delivery, preferences]);
     return (
         <section
-            className="min-w-0 rounded-panel border border-line bg-white p-5 shadow-card sm:p-6"
+            className="min-w-0 rounded-panel border border-line bg-surface p-5 shadow-card sm:p-6"
             aria-labelledby="product-chart-title"
         >
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -196,7 +203,7 @@ export function ProductProgressChart({
                             key={value}
                             aria-pressed={view === value}
                             onClick={() => setView(value)}
-                            className={`min-h-9 rounded-md px-3 text-12 font-medium ${view === value ? "bg-white text-primary shadow-xs" : "text-muted hover:text-ink"}`}
+                            className={`min-h-9 rounded-md px-3 text-12 font-medium ${view === value ? "bg-surface text-primary-strong shadow-xs" : "text-muted hover:text-ink"}`}
                         >
                             {label}
                         </button>
@@ -235,7 +242,7 @@ export function ProductProgressChart({
                 </div>
                 <button
                     onClick={() => onDetails()}
-                    className="flex min-h-9 items-center gap-1 text-12 font-medium text-primary hover:underline"
+                    className="flex min-h-9 items-center gap-1 text-12 font-medium text-primary-strong hover:underline"
                 >
                     全部明细
                     <Icon name="chevron-right" size={14} />
@@ -260,8 +267,10 @@ export function CustomerRankingChart({
     onCustomer: (code: string) => void;
     onDetails: () => void;
 }) {
-    const option: EChartsOption = useMemo(
-        () => ({
+    const { preferences } = usePreferences();
+    const option: EChartsOption = useMemo(() => {
+        const palette = chartPalette();
+        return {
             textStyle: { fontFamily: "Inter, Microsoft YaHei, sans-serif" },
             grid: { left: 0, right: 50, top: 8, bottom: 24, outerBoundsMode: "same", outerBoundsContain: "axisLabel" },
             tooltip: {
@@ -270,7 +279,12 @@ export function CustomerRankingChart({
                 confine: true,
                 valueFormatter: value => `${num(Number(value))} ${metric === "qty" ? "个" : "笔"}`,
             },
-            xAxis: { type: "value", minInterval: metric === "count" ? 1 : undefined, axisLabel, splitLine: gridLine },
+            xAxis: {
+                type: "value",
+                minInterval: metric === "count" ? 1 : undefined,
+                axisLabel: axisLabelOf(palette),
+                splitLine: gridLineOf(palette),
+            },
             yAxis: {
                 type: "category",
                 inverse: true,
@@ -280,7 +294,7 @@ export function CustomerRankingChart({
                 axisLabel: {
                     width: 128,
                     overflow: "truncate",
-                    color: "#475467",
+                    color: palette.tdStrong,
                     fontSize: 11,
                     formatter: (name: string, index: number) => `${String(index + 1).padStart(2, "0")}  ${name}`,
                 },
@@ -291,35 +305,38 @@ export function CustomerRankingChart({
                     type: "bar",
                     barWidth: 12,
                     showBackground: true,
-                    backgroundStyle: { color: "#f8fafc", borderRadius: 3 },
+                    backgroundStyle: { color: palette.soft, borderRadius: 3 },
                     itemStyle: {
                         borderRadius: [0, 3, 3, 0],
                         color: params =>
-                            params.dataIndex === 0 ? "#4f46e5" : params.dataIndex < 3 ? "#818cf8" : "#c7d2fe",
+                            params.dataIndex === 0
+                                ? palette.primary
+                                : params.dataIndex < 3
+                                  ? palette.primaryMid
+                                  : palette.primaryBorder,
                     },
                     label: {
                         show: true,
                         position: "right",
-                        color: "#475467",
+                        color: palette.tdStrong,
                         fontSize: 11,
                         formatter: params => num(Number(params.value)),
                     },
                     data: customers.map(row => row[metric]),
                 },
             ],
-        }),
-        [customers, metric],
-    );
+        };
+    }, [customers, metric, preferences]);
     return (
         <section
-            className="flex min-w-0 flex-col rounded-panel border border-line bg-white p-5 shadow-card sm:p-6"
+            className="flex min-w-0 flex-col rounded-panel border border-line bg-surface p-5 shadow-card sm:p-6"
             aria-labelledby="ranking-title"
         >
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h2 id="ranking-title" className="text-16 font-semibold text-ink">
                         客户订单排行{" "}
-                        <span className="ml-1 rounded bg-primary-soft px-1.5 py-0.5 text-10.5 text-primary">
+                        <span className="ml-1 rounded bg-primary-soft px-1.5 py-0.5 text-10.5 text-primary-strong">
                             TOP 20
                         </span>
                     </h2>
@@ -336,7 +353,7 @@ export function CustomerRankingChart({
                             key={value}
                             aria-pressed={metric === value}
                             onClick={() => onMetric(value)}
-                            className={`min-h-9 rounded-md px-2.5 text-12 font-medium ${metric === value ? "bg-white text-primary shadow-xs" : "text-muted hover:text-ink"}`}
+                            className={`min-h-9 rounded-md px-2.5 text-12 font-medium ${metric === value ? "bg-surface text-primary-strong shadow-xs" : "text-muted hover:text-ink"}`}
                         >
                             {label}
                         </button>
@@ -369,7 +386,7 @@ export function CustomerRankingChart({
                 </span>
                 <button
                     onClick={onDetails}
-                    className="flex min-h-9 items-center gap-1 text-12 font-medium text-primary hover:underline"
+                    className="flex min-h-9 items-center gap-1 text-12 font-medium text-primary-strong hover:underline"
                 >
                     排行明细
                     <Icon name="chevron-right" size={14} />

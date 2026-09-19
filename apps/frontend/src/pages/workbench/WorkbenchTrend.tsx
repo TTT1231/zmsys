@@ -2,14 +2,17 @@
 import { useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 import { EChart } from "@/components/charts/EChart";
+import { usePreferences } from "@/context/usePreferences";
 import { workbenchTrend, type WorkbenchData } from "@/data/workbench";
+import { chartPalette, withAlpha } from "@/lib/chartTheme";
 import { addDays } from "@/lib/date";
 import { num } from "@/lib/format";
 
 export const workbenchSelectClass =
-    "min-h-10 rounded-input border border-line bg-white px-3 text-12 text-td outline-none focus:border-primary focus:ring-2 focus:ring-primary/15";
+    "min-h-10 rounded-input border border-line bg-surface px-3 text-12 text-td outline-none focus:border-primary focus:ring-2 focus:ring-primary/15";
 
 export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
+    const { preferences } = usePreferences();
     const [category, setCategory] = useState("");
     const [period, setPeriod] = useState("30");
     const [showTable, setShowTable] = useState(false);
@@ -32,21 +35,22 @@ export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
     );
     const inbound = rows.reduce((sum, row) => sum + row.inbound, 0);
     const outbound = rows.reduce((sum, row) => sum + row.outbound, 0);
-    const option: EChartsOption = useMemo(
-        () => ({
-            color: ["#4f46e5", "#0d9488"],
+    const option: EChartsOption = useMemo(() => {
+        const palette = chartPalette();
+        return {
+            color: [palette.primary, "#0d9488"],
             textStyle: { fontFamily: "Inter, Microsoft YaHei, sans-serif" },
             tooltip: { trigger: "axis", confine: true, valueFormatter: value => `${num(Number(value))} 个` },
-            legend: { bottom: 0, itemWidth: 18, itemHeight: 8, textStyle: { color: "#667085", fontSize: 12 } },
+            legend: { bottom: 0, itemWidth: 18, itemHeight: 8, textStyle: { color: palette.muted, fontSize: 12 } },
             grid: { left: 8, right: 16, top: 30, bottom: 42, outerBoundsMode: "same", outerBoundsContain: "axisLabel" },
             xAxis: {
                 type: "category",
                 boundaryGap: false,
                 data: rows.map(row => row.date),
-                axisLine: { lineStyle: { color: "#e4e7ec" } },
+                axisLine: { lineStyle: { color: palette.line } },
                 axisTick: { show: false },
                 axisLabel: {
-                    color: "#667085",
+                    color: palette.muted,
                     fontSize: 11,
                     formatter: (value: string) =>
                         monthly
@@ -57,13 +61,13 @@ export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
             yAxis: {
                 type: "value",
                 name: `数量（${data.unit}）`,
-                nameTextStyle: { color: "#667085", align: "left" },
+                nameTextStyle: { color: palette.muted, align: "left" },
                 axisLabel: {
-                    color: "#667085",
+                    color: palette.muted,
                     fontSize: 11,
                     formatter: (value: number) => (value >= 10000 ? `${value / 10000}万` : `${value}`),
                 },
-                splitLine: { lineStyle: { color: "#eef2f6", type: "dashed" } },
+                splitLine: { lineStyle: { color: palette.soft, type: "dashed" } },
             },
             series: [
                 {
@@ -81,8 +85,8 @@ export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
                             x2: 0,
                             y2: 1,
                             colorStops: [
-                                { offset: 0, color: "rgba(79,70,229,0.12)" },
-                                { offset: 1, color: "rgba(79,70,229,0)" },
+                                { offset: 0, color: withAlpha(palette.primary, 0.12) },
+                                { offset: 1, color: withAlpha(palette.primary, 0) },
                             ],
                         },
                     },
@@ -96,13 +100,12 @@ export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
                     lineStyle: { width: 2.5, type: "dashed" },
                 },
             ],
-        }),
-        [rows, monthly, data.unit],
-    );
+        };
+    }, [rows, monthly, data.unit, preferences]);
 
     return (
         <section
-            className="min-w-0 rounded-panel border border-line bg-white p-5 shadow-card sm:p-6"
+            className="min-w-0 rounded-panel border border-line bg-surface p-5 shadow-card sm:p-6"
             aria-labelledby="trend-title"
         >
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -223,7 +226,7 @@ export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
                     {start} — {end} · 按{monthly ? "月" : "日"}汇总
                 </span>
                 <button
-                    className="min-h-9 text-12 font-medium text-primary hover:underline"
+                    className="min-h-9 text-12 font-medium text-primary-strong hover:underline"
                     onClick={() => setShowTable(value => !value)}
                 >
                     {showTable ? "查看趋势图" : "查看数据表"}

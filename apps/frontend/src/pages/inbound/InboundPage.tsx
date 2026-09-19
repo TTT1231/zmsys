@@ -78,7 +78,9 @@ function InboundBomPicker({
                 >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="tnum text-14 font-semibold text-primary-strong">{currentBom.code}</span>
-                        <span className="rounded-full bg-white px-2 py-1 text-11 font-medium text-success">已选择</span>
+                        <span className="rounded-full bg-surface px-2 py-1 text-11 font-medium text-success">
+                            已选择
+                        </span>
                     </div>
                     <p className="mt-1 text-12.5 text-td">{currentBom.name}</p>
                     <p className="mt-1 wrap-break-word text-11.5 text-muted">{currentBom.spec}</p>
@@ -162,7 +164,7 @@ export function InboundModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -340,7 +342,7 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -553,10 +555,10 @@ export function InboundPage() {
                 }
             />
 
-            <section className="relative overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
+            <section className="relative overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
                 {overlay && <LoadingOverlay />}
-                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
-                    <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 lg:w-70">
+                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4 lg:gap-2.5">
+                    <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-surface px-3 lg:w-70">
                         <Icon name="search" size={15} className="text-subtle" />
                         <input
                             value={keyword}
@@ -575,7 +577,7 @@ export function InboundPage() {
                             setPage(1);
                         }}
                         aria-label="按品类筛选"
-                        className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-13 text-ink"
                     >
                         <option>全部品类</option>
                         {categories.map(item => (

@@ -424,7 +424,7 @@ function TableView({
                                                 widthOf(column) + (event.target.value === "wider" ? 80 : -48),
                                             );
                                     }}
-                                    className="min-h-9 rounded-md border border-line-strong bg-white px-2 text-12"
+                                    className="min-h-9 rounded-md border border-line-strong bg-surface px-2 text-12"
                                 >
                                     <option value="recommended">推荐宽度</option>
                                     <option value="narrower">窄一些</option>

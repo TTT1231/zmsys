@@ -55,7 +55,7 @@ export function Button({ variant = "primary", icon, children, className = "", ..
     const styles =
         variant === "primary"
             ? "bg-primary text-white hover:bg-primary-hover"
-            : "border border-line-strong bg-white text-ink hover:border-indigo-300 hover:text-primary-strong";
+            : "border border-line-strong bg-surface text-ink hover:border-primary-border hover:text-primary-strong";
     return (
         <button type="button" className={`${base} ${styles} ${className}`} {...rest}>
             {icon && <Icon name={icon} size={16} />}
@@ -80,9 +80,9 @@ export function TableLink({ children, onClick }: { children: ReactNode; onClick?
 /* 交付进度条（.ledger-track） */
 export function ProgressTrack({ value, done }: { value: number; done?: boolean }) {
     return (
-        <div className="h-0.75 w-full max-w-30 overflow-hidden rounded-full bg-[#eef2f6]">
+        <div className="h-0.75 w-full max-w-30 overflow-hidden rounded-full bg-soft">
             <div
-                className={`h-full rounded-full ${done ? " bg-accent" : "bg-linear-to-r from-indigo-500 to-indigo-400"}`}
+                className={`h-full rounded-full ${done ? " bg-accent" : "bg-linear-to-r from-[var(--color-primary)] to-[color-mix(in_srgb,var(--color-primary)_60%,white)]"}`}
                 style={{ width: `${Math.min(100, Math.round(value * 100))}%` }}
             />
         </div>

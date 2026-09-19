@@ -54,7 +54,7 @@ function Metric({
 }) {
     return (
         <section
-            className={`rounded-panel border p-4 shadow-card sm:p-5 ${featured ? "border-primary-border bg-linear-to-br from-primary-soft via-white to-white" : "border-line bg-white"}`}
+            className={`rounded-panel border p-4 shadow-card sm:p-5 ${featured ? "border-primary-border bg-linear-to-br from-primary-soft via-surface to-surface" : "border-line bg-surface"}`}
         >
             <div className="flex items-center justify-between">
                 <h2 className="text-13 font-medium text-td-strong">{title}</h2>
@@ -152,7 +152,7 @@ function OwnerWorkbench() {
             <div className="flex flex-wrap items-center gap-3">
                 <span className="text-12 font-medium text-td">订单统计周期</span>
                 <div
-                    className="inline-flex rounded-btn border border-line bg-white p-1"
+                    className="inline-flex rounded-btn border border-line bg-surface p-1"
                     role="group"
                     aria-label="订单统计周期"
                 >
@@ -166,7 +166,7 @@ function OwnerWorkbench() {
                             key={value}
                             aria-pressed={period === value}
                             onClick={() => setPeriod(value)}
-                            className={`min-h-9 rounded-md px-4 text-12 font-medium transition ${period === value ? "bg-primary-soft text-primary" : "text-muted hover:bg-soft hover:text-ink"}`}
+                            className={`min-h-9 rounded-md px-4 text-12 font-medium transition ${period === value ? "bg-primary-soft text-primary-strong" : "text-muted hover:bg-soft hover:text-ink"}`}
                         >
                             {label}
                         </button>
@@ -202,7 +202,7 @@ function OwnerWorkbench() {
             )}
             <div className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2 xl:grid-cols-4">
                 <Metric title="订单需求总量" value={summary.qty} unit={data.unit} icon="order" featured>
-                    <span className="font-medium text-primary">{num(summary.activeCount)} 笔有效订单</span>
+                    <span className="font-medium text-primary-strong">{num(summary.activeCount)} 笔有效订单</span>
                     <span className="mx-2 text-line-strong">/</span>含已完成与未完成
                 </Metric>
                 <Metric title="已发数量" value={summary.shipped} unit={data.unit} icon="check">
@@ -221,7 +221,7 @@ function OwnerWorkbench() {
                 </Metric>
             </div>
             <section
-                className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-card border border-amber-200/80 bg-amber-50/60 px-5 py-3"
+                className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-card border border-warning/40 bg-warning-soft px-5 py-3"
                 aria-label="交付风险提醒"
             >
                 <div className="flex items-center gap-2 text-warning">
@@ -233,18 +233,18 @@ function OwnerWorkbench() {
                     className="flex min-h-10 items-center gap-2 text-13 text-td hover:text-danger"
                 >
                     已逾期未发完
-                    <span className="rounded-md bg-white px-2 py-0.5 font-semibold tabular-nums text-danger">
+                    <span className="rounded-md bg-surface px-2 py-0.5 font-semibold tabular-nums text-danger">
                         {overdue.length}
                     </span>
                     笔<Icon name="chevron-right" size={14} />
                 </button>
-                <span className="hidden h-5 w-px bg-amber-200 sm:block" />
+                <span className="hidden h-5 w-px bg-warning/30 sm:block" />
                 <button
                     onClick={() => setDetail({ kind: "risk", risk: "upcoming" })}
                     className="flex min-h-10 items-center gap-2 text-13 text-td hover:text-warning"
                 >
                     未来 7 天到期且缺货
-                    <span className="rounded-md bg-white px-2 py-0.5 font-semibold tabular-nums text-warning">
+                    <span className="rounded-md bg-surface px-2 py-0.5 font-semibold tabular-nums text-warning">
                         {upcoming.length}
                     </span>
                     笔<Icon name="chevron-right" size={14} />
@@ -274,7 +274,7 @@ function OwnerWorkbench() {
                 footer={
                     detail?.kind === "orders" ? (
                         <button
-                            className="flex min-h-10 items-center gap-1.5 text-13 font-medium text-primary hover:underline"
+                            className="flex min-h-10 items-center gap-1.5 text-13 font-medium text-primary-strong hover:underline"
                             onClick={() => setDetail(detail.back)}
                         >
                             <Icon name="chevron-left" size={16} />
@@ -319,7 +319,7 @@ function OwnerWorkbench() {
                                                 <tr key={product.code}>
                                                     <td>
                                                         <button
-                                                            className="min-h-9 text-left font-medium text-primary hover:underline"
+                                                            className="min-h-9 text-left font-medium text-primary-strong hover:underline"
                                                             onClick={() =>
                                                                 setDetail({
                                                                     kind: "orders",
@@ -382,7 +382,7 @@ function OwnerWorkbench() {
                                         <td>
                                             <button
                                                 onClick={() => showCustomer(customer.code)}
-                                                className="min-h-9 text-left text-primary hover:underline"
+                                                className="min-h-9 text-left text-primary-strong hover:underline"
                                             >
                                                 {customer.name}
                                             </button>
@@ -502,7 +502,7 @@ export function WorkbenchPage() {
     const { role } = useApp();
     if (role === "super") return <OwnerWorkbench />;
     return (
-        <section className="rounded-panel border border-dashed border-line-strong bg-white px-6 py-16 text-center shadow-card">
+        <section className="rounded-panel border border-dashed border-line-strong bg-surface px-6 py-16 text-center shadow-card">
             <h2 className="text-17 font-semibold text-ink">工作台建设中</h2>
             <p className="mx-auto mt-2 max-w-105 text-13 leading-relaxed text-muted">
                 按角色定制的待办、收发与趋势概览将在此统一提供。期间可从左侧菜单进入销售订单、成品出入库等页面处理业务。

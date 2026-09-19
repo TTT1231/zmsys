@@ -5,7 +5,7 @@
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="color-scheme" content="light" />
-        <title>智造管理系统</title>
+        <title>众茂生产</title>
         <!-- 启动画面样式必须内联:Tailwind 产物 CSS 加载完成前它是页面上唯一的视觉 -->
         <style>
             /* 全屏加载画面不产生滚动条(对齐 vben:body 去 margin + 画布固定满视口) */
@@ -19,6 +19,9 @@
                 display: grid;
                 place-items: center;
                 background: #f5f7fb;
+            }
+            html.dark #boot {
+                background: #10141d;
             }
             /* vben 式方块弹跳 loader(内联版,与 index.css 的 loader-jump-ani 同源)。
          全屏启动场景用大尺寸(对齐 vben 的 48px 量级),醒目直观 */
@@ -36,6 +39,12 @@
                 border-radius: 5px;
                 background: #4f46e5;
                 animation: boot-jump 0.5s linear infinite;
+            }
+            html.dark #boot-cube {
+                background: #6366f1;
+            }
+            html.dark #boot-shadow {
+                background: rgba(99, 102, 241, 0.5);
             }
             #boot-shadow {
                 position: absolute;
@@ -87,7 +96,23 @@
                 font-size: 13px;
                 color: #667085;
             }
+            html.dark #boot-name {
+                color: #9aa6ba;
+            }
         </style>
+        <script>
+            /* FOUC 防护（与 src/context/usePreferences.ts 同源）：产物 CSS 加载前先按已存偏好
+               给 <html> 打暗色类，暗色用户冷加载不再白闪；读取失败按浅色启动 */
+            try {
+                var bootPrefs = JSON.parse(localStorage.getItem("zmsys.preferences") || "{}");
+                var bootDark =
+                    bootPrefs.themeMode === "dark" ||
+                    (bootPrefs.themeMode === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+                if (bootDark) document.documentElement.classList.add("dark");
+            } catch (bootError) {
+                /* localStorage 不可用（隐私模式等）时按浅色启动 */
+            }
+        </script>
     </head>
     <body>
         <!-- 静态启动画面:MSW worker 启动完成前兜底,React createRoot().render() 会整体替换。

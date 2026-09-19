@@ -45,9 +45,9 @@ export function UserMenu() {
                     className="flex shrink-0 items-center gap-2.5 rounded-btn px-1.5 py-1 transition hover:bg-soft"
                     aria-label="用户菜单"
                 >
-                    <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-indigo-500 to-indigo-600 text-13 font-semibold text-white">
+                    <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-[var(--color-primary)] to-[var(--color-primary-strong)] text-13 font-semibold text-white">
                         {user?.name.slice(0, 1) ?? "?"}
-                        <span className="absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-success" />
+                        <span className="absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full border-2 border-surface bg-success" />
                     </span>
                     <span className="hidden text-left leading-tight sm:block">
                         <span className="block text-12.5 font-semibold text-ink">{user?.name ?? "未登录"}</span>

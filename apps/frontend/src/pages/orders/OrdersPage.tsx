@@ -141,7 +141,7 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -158,7 +158,7 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
         >
             <div className="flex flex-col gap-5">
                 <fieldset className="rounded-panel border border-line p-4">
-                    <legend className="px-1.5 text-12.5 font-semibold text-primary">① 客户与交付</legend>
+                    <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">① 客户与交付</legend>
                     <div className="grid gap-3 sm:grid-cols-2">
                         <SearchSelect
                             label="客户"
@@ -207,7 +207,7 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
                 </fieldset>
 
                 <fieldset className="rounded-panel border border-line p-4">
-                    <legend className="px-1.5 text-12.5 font-semibold text-primary">② BOM 编码</legend>
+                    <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">② BOM 编码</legend>
                     <div className="flex flex-col gap-3">
                         <TextField
                             label="BOM 编码"
@@ -232,7 +232,7 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
                                     <span className="tnum text-14 font-semibold text-primary-strong">
                                         {matchedBom.code}
                                     </span>
-                                    <span className="rounded-full bg-white px-2 py-1 text-11 font-medium text-success">
+                                    <span className="rounded-full bg-surface px-2 py-1 text-11 font-medium text-success">
                                         已匹配
                                     </span>
                                 </div>
@@ -244,7 +244,7 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
                 </fieldset>
 
                 <fieldset className="rounded-panel border border-line p-4">
-                    <legend className="px-1.5 text-12.5 font-semibold text-primary">③ 订单备注</legend>
+                    <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">③ 订单备注</legend>
                     <TextArea
                         label="备注"
                         placeholder="选填"
@@ -346,7 +346,7 @@ function EditOrderModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -406,7 +406,7 @@ function EditOrderModal({
                             <button
                                 type="button"
                                 onClick={() => setConfirmDelete(false)}
-                                className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
+                                className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
                             >
                                 取消
                             </button>
@@ -480,7 +480,7 @@ export function OrderDetailModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink"
+                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink"
                     >
                         关闭
                     </button>
@@ -707,11 +707,11 @@ export function OrdersPage() {
                 ))}
             </div>
 
-            <section className="relative overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
+            <section className="relative overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
                 {overlay && <LoadingOverlay />}
-                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
+                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4 lg:gap-2.5">
                     {/* 搜索最左：窄屏由 list-toolbar 规则独占整行，宽屏固定 280px */}
-                    <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 lg:w-70">
+                    <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-surface px-3 lg:w-70">
                         <Icon name="search" size={15} className="text-subtle" />
                         <input
                             value={keyword}
@@ -730,7 +730,7 @@ export function OrdersPage() {
                             setPage(1);
                         }}
                         aria-label="按状态筛选"
-                        className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-13 text-ink"
                     >
                         {STATUS_OPTIONS.map(option => (
                             <option key={option}>{option}</option>
@@ -743,7 +743,7 @@ export function OrdersPage() {
                             setPage(1);
                         }}
                         aria-label="按品类筛选"
-                        className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-13 text-ink"
                     >
                         <option>全部品类</option>
                         {categories.map(item => (
@@ -768,7 +768,7 @@ export function OrdersPage() {
                             className="fixed inset-0 z-40 bg-scrim backdrop-blur-[2px] lg:hidden"
                             onClick={event => event.currentTarget.closest("details")?.removeAttribute("open")}
                         />
-                        <div className="absolute top-12 right-0 z-50 grid w-75 grid-cols-1 gap-2 rounded-xl border border-line bg-white p-3 shadow-modal max-lg:fixed max-lg:inset-x-0 max-lg:top-auto max-lg:bottom-0 max-lg:left-0 max-lg:w-auto max-lg:gap-3 max-lg:rounded-b-none max-lg:rounded-t-[22px] max-lg:border-x-0 max-lg:border-b-0 max-lg:p-4 max-lg:pb-[max(16px,env(safe-area-inset-bottom))]">
+                        <div className="absolute top-12 right-0 z-50 grid w-75 grid-cols-1 gap-2 rounded-xl border border-line bg-surface p-3 shadow-modal max-lg:fixed max-lg:inset-x-0 max-lg:top-auto max-lg:bottom-0 max-lg:left-0 max-lg:w-auto max-lg:gap-3 max-lg:rounded-b-none max-lg:rounded-t-[22px] max-lg:border-x-0 max-lg:border-b-0 max-lg:p-4 max-lg:pb-[max(16px,env(safe-area-inset-bottom))]">
                             <div className="flex items-center justify-between lg:hidden">
                                 <span className="text-14 font-semibold text-ink">按交货日期筛选</span>
                                 <button
@@ -796,7 +796,7 @@ export function OrdersPage() {
                                             className={`min-h-8 rounded-full border px-3 text-12.5 font-medium transition ${
                                                 active
                                                     ? "border-primary-border bg-primary-soft text-primary-strong"
-                                                    : "border-line-strong bg-white text-muted hover:text-primary-strong"
+                                                    : "border-line-strong bg-surface text-muted hover:text-primary-strong"
                                             }`}
                                         >
                                             {item.label}

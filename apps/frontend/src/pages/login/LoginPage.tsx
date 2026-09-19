@@ -112,7 +112,7 @@ export function LoginPage() {
             {/* 表单区：移动端卡片上浮叠在横幅上，桌面端垂直居中 */}
             <main className="relative flex flex-1 justify-center px-4 pb-[max(2.5rem,env(safe-area-inset-bottom))] lg:items-center lg:px-10">
                 <div className="-mt-14 w-full max-w-105 animate-rise lg:mt-0">
-                    <div className="rounded-panel border border-line bg-white p-6 shadow-modal sm:p-8 lg:shadow-card">
+                    <div className="rounded-panel border border-line bg-surface p-6 shadow-modal sm:p-8 lg:shadow-card">
                         <div className="mb-7">
                             <h2 className="text-22 font-semibold text-ink">欢迎回来</h2>
                             <p className="mt-1 text-13 text-muted">登录您的账号以继续</p>
@@ -132,7 +132,7 @@ export function LoginPage() {
                                     <input
                                         ref={accountInputRef}
                                         id="login-account"
-                                        className={`h-12 w-full rounded-input bg-soft pr-3 pl-10 text-14 text-ink transition-all placeholder:text-subtle/70 focus:bg-white focus:ring-4 focus:outline-none ${
+                                        className={`h-12 w-full rounded-input bg-soft pr-3 pl-10 text-14 text-ink transition-all placeholder:text-subtle/70 focus:bg-surface focus:ring-4 focus:outline-none ${
                                             accountError
                                                 ? "border-danger focus:border-danger focus:ring-danger/10"
                                                 : "border-line focus:border-primary focus:ring-primary/10"
@@ -166,7 +166,7 @@ export function LoginPage() {
                                     <input
                                         ref={passwordInputRef}
                                         id="login-password"
-                                        className={`h-12 w-full rounded-input bg-soft pr-11 pl-10 text-14 text-ink transition-all placeholder:text-subtle/70 focus:bg-white focus:ring-4 focus:outline-none ${
+                                        className={`h-12 w-full rounded-input bg-soft pr-11 pl-10 text-14 text-ink transition-all placeholder:text-subtle/70 focus:bg-surface focus:ring-4 focus:outline-none ${
                                             passwordError
                                                 ? "border-danger focus:border-danger focus:ring-danger/10"
                                                 : "border-line focus:border-primary focus:ring-primary/10"
@@ -203,7 +203,7 @@ export function LoginPage() {
                                     type="submit"
                                     disabled={busy}
                                     aria-busy={busy}
-                                    className="flex h-12 w-full items-center justify-center gap-2 rounded-btn bg-linear-to-r from-indigo-600 to-indigo-500 text-15 font-semibold text-white shadow-glow transition-all hover:from-indigo-700 hover:to-indigo-600 active:scale-[0.98] disabled:cursor-wait disabled:from-indigo-500 disabled:to-indigo-400 disabled:shadow-none"
+                                    className="flex h-12 w-full items-center justify-center gap-2 rounded-btn bg-primary text-15 font-semibold text-white shadow-glow transition-all hover:bg-primary-hover active:scale-[0.98] disabled:cursor-wait disabled:opacity-70 disabled:shadow-none"
                                 >
                                     {busy && (
                                         <span

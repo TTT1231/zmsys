@@ -18,7 +18,9 @@ export function PageHeading({ eyebrow, title, description, actions, maximizable 
     return (
         <section className="page-heading flex flex-wrap items-end justify-between gap-4">
             <div className="page-heading-copy">
-                {eyebrow && <div className="text-12 font-semibold tracking-[0.08em] text-primary">{eyebrow}</div>}
+                {eyebrow && (
+                    <div className="text-12 font-semibold tracking-[0.08em] text-primary-strong">{eyebrow}</div>
+                )}
                 <h1
                     className={`text-[clamp(25px,2.2vw,32px)] leading-tight font-bold tracking-[-0.035em] text-ink ${eyebrow ? "mt-1" : ""}`}
                 >
@@ -35,7 +37,7 @@ export function PageHeading({ eyebrow, title, description, actions, maximizable 
                         aria-pressed={maximized}
                         title={maximized ? "退出内容最大化（Esc）" : "内容最大化：收起侧边栏与顶栏"}
                         onClick={toggle}
-                        className="hidden h-10 w-10 items-center justify-center rounded-btn border border-line bg-white text-muted transition hover:bg-soft hover:text-ink active:scale-90 lg:flex"
+                        className="hidden h-10 w-10 items-center justify-center rounded-btn border border-line bg-surface text-muted transition hover:bg-soft hover:text-ink active:scale-90 lg:flex"
                     >
                         <Icon name={maximized ? "minimize" : "maximize"} size={17} />
                     </button>

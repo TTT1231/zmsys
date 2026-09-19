@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
 /* 覆盖产品图表视图切换、条形点击钻取和客户排名切换。 */
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render as rtlRender, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
+import { PreferencesProvider } from "@/context/PreferencesContext";
 import { ProductProgressChart, CustomerRankingChart } from "@/pages/workbench/WorkbenchCharts";
 import { summarizeWorkbench, customerRanking } from "@/data/workbench";
 import { createWorkbenchDemo } from "../../fixtures/workbench";
+
+/* 图表读偏好主题令牌，包一层 Provider 提供（浅色默认） */
+const render = (ui: React.ReactElement) => rtlRender(<PreferencesProvider>{ui}</PreferencesProvider>);
 
 vi.mock("@/components/charts/EChart", () => ({
     EChart: ({ onClick }: { onClick: (value: { dataIndex: number }) => void }) => (

@@ -115,7 +115,7 @@ export function AppLayout() {
                         aria-label="退出内容最大化"
                         title="退出内容最大化（Esc）"
                         onClick={toggleMaximize}
-                        className="fixed top-2.5 right-2.5 z-50 flex h-9 w-9 items-center justify-center rounded-btn border border-line bg-white/92 text-muted shadow-card backdrop-blur transition hover:bg-soft hover:text-ink active:scale-90"
+                        className="fixed top-2.5 right-2.5 z-50 flex h-9 w-9 items-center justify-center rounded-btn border border-line bg-surface/92 text-muted shadow-card backdrop-blur transition hover:bg-soft hover:text-ink active:scale-90"
                     >
                         <Icon name="minimize" size={16} />
                     </button>

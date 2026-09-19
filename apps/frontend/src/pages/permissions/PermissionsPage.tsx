@@ -72,7 +72,7 @@ export function PermissionsPage() {
                 ].map(kpi => (
                     <div
                         key={kpi.label}
-                        className="relative flex min-h-18.5 flex-col justify-center overflow-hidden rounded-card border border-line/70 bg-white/90 px-4 py-3 shadow-xs"
+                        className="relative flex min-h-18.5 flex-col justify-center overflow-hidden rounded-card border border-line/70 bg-surface/90 px-4 py-3 shadow-xs"
                     >
                         <span className="absolute top-0 bottom-0 left-0 w-0.75 bg-primary-border" />
                         <span className="text-11.5 text-muted">
@@ -142,8 +142,8 @@ function AccountsTab({
 
     return (
         <>
-            <section className="overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
-                <div className="flex items-center justify-between gap-3 border-b border-line bg-linear-to-b from-white to-panel px-5 py-4">
+            <section className="overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
+                <div className="flex items-center justify-between gap-3 border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4">
                     <h2 className="text-15 font-semibold text-ink">用户列表</h2>
                     <Button variant="secondary" icon="plus" onClick={() => setEditing("new")}>
                         新增用户
@@ -298,7 +298,7 @@ function UserActiveToggle({
             className={`relative h-5 w-9 rounded-full transition ${user.active ? "bg-success" : "bg-line-strong"}`}
         >
             <span
-                className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow-xs transition ${user.active ? "translate-x-4" : ""}`}
+                className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-surface shadow-xs transition ${user.active ? "translate-x-4" : ""}`}
             />
         </button>
     ) : (
@@ -714,8 +714,8 @@ function RolesTab({ users }: { users: WbUser[] }) {
     return (
         <div className="grid items-start gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
             <div className="flex flex-col gap-5">
-                <section className="overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
-                    <div className="border-b border-line bg-linear-to-b from-white to-panel px-5 py-4">
+                <section className="overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
+                    <div className="border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4">
                         <h2 className="text-15 font-semibold text-ink">角色</h2>
                     </div>
                     <div className="flex flex-col gap-2 p-3">
@@ -729,7 +729,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                     className={`rounded-xl border px-3.5 py-3 text-left transition ${
                                         role.id === activeRole
                                             ? "border-primary bg-primary-soft shadow-[0_0_0_1px_var(--color-primary)]"
-                                            : "border-line bg-white hover:border-primary-border hover:bg-row-hover"
+                                            : "border-line bg-surface hover:border-primary-border hover:bg-row-hover"
                                     }`}
                                 >
                                     <span className="flex items-center gap-2">
@@ -753,8 +753,8 @@ function RolesTab({ users }: { users: WbUser[] }) {
                 </section>
             </div>
 
-            <section className="overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-linear-to-b from-white to-panel px-5 py-4">
+            <section className="overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4">
                     <div className="flex items-baseline gap-2.5">
                         <h2 className="text-15 font-semibold text-ink">{roleNameOf(activeRole)}</h2>
                         <span className={`text-12 ${draft ? "text-warning" : "text-muted"}`}>{status}</span>
@@ -779,7 +779,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
                         <div className="mb-2 flex items-center justify-between">
                             <h3 className="text-13 font-semibold text-ink">菜单权限</h3>
                             <label
-                                className={`flex items-center gap-1.5 text-12 font-medium text-primary ${locked ? "pointer-events-none opacity-50" : ""}`}
+                                className={`flex items-center gap-1.5 text-12 font-medium text-primary-strong ${locked ? "pointer-events-none opacity-50" : ""}`}
                             >
                                 <input
                                     type="checkbox"
@@ -874,7 +874,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                                                 : "cursor-pointer " +
                                                                   (checked
                                                                       ? "border-primary-border bg-primary-soft font-semibold text-primary-strong"
-                                                                      : "border-line bg-white text-td")
+                                                                      : "border-line bg-surface text-td")
                                                         }`}
                                                     >
                                                         <input
@@ -943,8 +943,8 @@ function MatrixTab() {
     const grants = data ?? DEFAULT_GRANTS;
     const modules = MENU_CATALOG.filter(menu => !menu.onlyFor && menu.key !== "workbench");
     return (
-        <section className="overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
-            <div className="border-b border-line bg-linear-to-b from-white to-panel px-5 py-4">
+        <section className="overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
+            <div className="border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4">
                 <h2 className="text-15 font-semibold text-ink">角色 × 模块权限矩阵</h2>
             </div>
             <div className="overflow-x-auto">
@@ -1106,8 +1106,8 @@ function GrantLogPanel() {
     const { data } = useGrantLog();
     const logs = (data ?? []).slice(0, 8);
     return (
-        <section className="overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
-            <div className="flex items-center justify-between gap-3 border-b border-line bg-linear-to-b from-white to-panel px-5 py-4">
+        <section className="overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
+            <div className="flex items-center justify-between gap-3 border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4">
                 <h2 className="text-15 font-semibold text-ink">权限变更日志</h2>
                 {!!logs.length && <span className="text-11.5 text-subtle">最近 {logs.length} 条</span>}
             </div>

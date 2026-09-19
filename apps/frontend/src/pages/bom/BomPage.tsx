@@ -141,7 +141,7 @@ function DeleteBomModal({ bom, onClose }: { bom: Bom | null; onClose: () => void
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -425,7 +425,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                                     type="button"
                                                     aria-label={`${item.name} 数量减一`}
                                                     onClick={() => changeQty(item.id, -1)}
-                                                    className="grid size-5 place-items-center rounded-md border border-line-strong bg-white text-13 leading-none text-td transition hover:border-primary-border hover:bg-primary-soft hover:text-primary"
+                                                    className="grid size-5 place-items-center rounded-md border border-line-strong bg-surface text-13 leading-none text-td transition hover:border-primary-border hover:bg-primary-soft hover:text-primary"
                                                 >
                                                     −
                                                 </button>
@@ -436,7 +436,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                                     type="button"
                                                     aria-label={`${item.name} 数量加一`}
                                                     onClick={() => changeQty(item.id, 1)}
-                                                    className="grid size-5 place-items-center rounded-md border border-line-strong bg-white text-13 leading-none text-td transition hover:border-primary-border hover:bg-primary-soft hover:text-primary"
+                                                    className="grid size-5 place-items-center rounded-md border border-line-strong bg-surface text-13 leading-none text-td transition hover:border-primary-border hover:bg-primary-soft hover:text-primary"
                                                 >
                                                     +
                                                 </button>
@@ -464,7 +464,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                         <button
                             type="button"
                             onClick={onClose}
-                            className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
+                            className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
                         >
                             取消
                         </button>
@@ -512,7 +512,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                                 "flex min-h-11 cursor-pointer items-center gap-2 rounded-input border px-4 text-13",
                                                 childCategoryKey === key
                                                     ? "border-primary bg-primary-soft text-primary-strong"
-                                                    : "border-line-strong bg-white",
+                                                    : "border-line-strong bg-surface",
                                             )}
                                         >
                                             <input
@@ -555,8 +555,8 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
 
                     {category && (!category.childCategories?.length || childCategoryKey) && (
                         <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:grid-rows-[minmax(0,1fr)]">
-                            <fieldset className="flex min-h-0 flex-col lg:overflow-hidden rounded-panel border border-line bg-white">
-                                <legend className="px-1.5 text-12.5 font-semibold text-primary">可选物料</legend>
+                            <fieldset className="flex min-h-0 flex-col lg:overflow-hidden rounded-panel border border-line bg-surface">
+                                <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">可选物料</legend>
                                 <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-3">
                                     {/* 本品类物料（跌倒开关：跌倒盖/跌倒底/钢球/翘板） */}
                                     {tipoverBlocks.map(({ section, groups }) => {
@@ -590,7 +590,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                                 type="button"
                                                 onClick={() => toggleCollapse("child-category-wrapper")}
                                                 aria-expanded={!collapsed.has("child-category-wrapper")}
-                                                className="flex min-h-8 w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-12.5 font-semibold text-primary transition hover:text-primary-strong"
+                                                className="flex min-h-8 w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-12.5 font-semibold text-primary-strong transition hover:text-primary-strong"
                                             >
                                                 <Icon
                                                     name={
@@ -647,7 +647,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                             </fieldset>
 
                             <fieldset className="flex min-h-0 flex-col lg:overflow-hidden rounded-panel border border-line bg-panel/40">
-                                <legend className="px-1.5 text-12.5 font-semibold text-primary">
+                                <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">
                                     已选物料（{selectedRows.length}）
                                 </legend>
                                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
@@ -662,7 +662,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                                         {section.rows.map(row => (
                                                             <li
                                                                 key={row.id}
-                                                                className="flex items-center gap-2 rounded-btn border border-line bg-white px-2.5 py-1.5"
+                                                                className="flex items-center gap-2 rounded-btn border border-line bg-surface px-2.5 py-1.5"
                                                             >
                                                                 <span className="min-w-0 flex-1 text-13 text-td wrap-anywhere">
                                                                     {row.name}
@@ -823,10 +823,10 @@ export function BomPage() {
                 }
             />
 
-            <section className="relative overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
+            <section className="relative overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
                 {overlay && <LoadingOverlay />}
-                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
-                    <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 lg:w-70">
+                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4 lg:gap-2.5">
+                    <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-surface px-3 lg:w-70">
                         <Icon name="search" size={15} className="text-subtle" />
                         <input
                             value={keyword}
@@ -844,7 +844,7 @@ export function BomPage() {
                             setCategory(event.target.value);
                             setPage(1);
                         }}
-                        className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-13 text-ink"
                         aria-label="按品类筛选"
                     >
                         <option>全部品类</option>

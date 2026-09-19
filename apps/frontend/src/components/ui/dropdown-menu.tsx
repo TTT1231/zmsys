@@ -19,7 +19,7 @@ export function DropdownMenuContent({
             <DropdownMenuPrimitive.Content
                 sideOffset={sideOffset}
                 className={cn(
-                    "z-50 min-w-44 overflow-hidden rounded-card border border-line bg-white p-1.5 shadow-modal",
+                    "z-50 min-w-44 overflow-hidden rounded-card border border-line bg-surface p-1.5 shadow-modal",
                     "data-[state=open]:animate-fade-in",
                     className,
                 )}
@@ -59,7 +59,7 @@ export function DropdownMenuRadioItem({
             )}
             {...props}
         >
-            <DropdownMenuPrimitive.ItemIndicator className="absolute left-2.5 flex items-center text-primary">
+            <DropdownMenuPrimitive.ItemIndicator className="absolute left-2.5 flex items-center text-primary-strong">
                 <span className="size-1.5 rounded-full bg-current" />
             </DropdownMenuPrimitive.ItemIndicator>
             {children}

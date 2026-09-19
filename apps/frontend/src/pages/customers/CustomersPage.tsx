@@ -132,7 +132,7 @@ function CustomerFormModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -248,7 +248,7 @@ export function CustomerDetailModal({
                             <button
                                 type="button"
                                 onClick={() => onEdit(customer)}
-                                className="min-h-10 rounded-btn border border-line-strong bg-white px-4 text-13 font-medium text-ink hover:border-primary-border"
+                                className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
                             >
                                 编辑档案
                             </button>
@@ -264,7 +264,7 @@ export function CustomerDetailModal({
                 }
             >
                 <div className="flex flex-col gap-4">
-                    <div className="flex items-center gap-3 rounded-panel border border-line bg-linear-to-r from-[#f7f7ff] to-white px-4 py-3">
+                    <div className="flex items-center gap-3 rounded-panel border border-line bg-linear-to-r from-primary-soft to-surface px-4 py-3">
                         <span
                             className={`flex h-11 w-11 items-center justify-center rounded-full text-16 font-semibold ${AVATAR_TONES[0]}`}
                         >
@@ -477,10 +477,10 @@ export function CustomersPage() {
                 }
             />
 
-            <section className="relative overflow-hidden rounded-panel border border-line bg-white/97 shadow-card">
+            <section className="relative overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
                 {overlay && <LoadingOverlay />}
-                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-white to-panel px-5 py-4 lg:gap-2.5">
-                    <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-white px-3 lg:w-70">
+                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4 lg:gap-2.5">
+                    <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-surface px-3 lg:w-70">
                         <Icon name="search" size={15} className="text-subtle" />
                         <input
                             value={keyword}
@@ -499,7 +499,7 @@ export function CustomersPage() {
                             setPage(1);
                         }}
                         aria-label="按合作状态筛选"
-                        className="h-10 rounded-btn border border-line-strong bg-white px-3 text-13 text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-13 text-ink"
                     >
                         {["全部状态", "合作中", "待跟进"].map(option => (
                             <option key={option}>{option}</option>

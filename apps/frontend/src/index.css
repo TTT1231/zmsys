@@ -130,7 +130,6 @@
     }
 }
 
-/* 智造管理系统 · 设计令牌（源自原型 manufacturing-saas-theme.css 最终生效层） */
 @theme {
     --font-sans:
         Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei",
@@ -157,8 +156,9 @@
     --color-line-strong: #d0d5dd;
     --color-surface: #ffffff;
     --color-canvas: #f5f7fb;
-    --color-sidebar: #101828;
-    --color-sidebar-soft: #1d2939;
+    /* 侧边栏跟随主题：浅色下白底（vben 式），暗色下与画布同源的深色 */
+    --color-sidebar: #ffffff;
+    --color-sidebar-soft: #f5f7fb;
 
     --color-td: #344054;
     --color-td-strong: #475467;
@@ -178,29 +178,31 @@
     --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
     --shadow-card: 0 2px 6px rgba(16, 24, 40, 0.04);
     --shadow-modal: 0 18px 45px rgba(16, 24, 40, 0.12);
-    --shadow-glow: 0 6px 18px rgba(79, 70, 229, 0.45);
+    /* 辉光跟随主色（内置主题切换时同步变色），color-mix 在运行期取当前 --color-primary */
+    --shadow-glow: 0 6px 18px color-mix(in srgb, var(--color-primary) 45%, transparent);
 
-    /* 字号：数字类名 = 设计稿 px 值（text-13 即 13px；不设 --line-height 对，保持继承 1.5） */
-    --text-11: 11px;
-    --text-12: 12px;
-    --text-13: 13px;
-    --text-14: 14px;
-    --text-15: 15px;
-    --text-16: 16px;
-    --text-17: 17px;
-    --text-20: 20px;
-    --text-22: 22px;
-    --text-24: 24px;
-    --text-30: 30px;
+    /* 字号：数字类名 = 设计稿 px 值（text-13 即 13px；不设 --line-height 对，保持继承 1.5）。
+       偏好设置的“字体大小”通过 --app-font-scale 统一缩放字号与 rem 间距（见 html 根字号） */
+    --text-11: calc(11px * var(--app-font-scale, 1));
+    --text-12: calc(12px * var(--app-font-scale, 1));
+    --text-13: calc(13px * var(--app-font-scale, 1));
+    --text-14: calc(14px * var(--app-font-scale, 1));
+    --text-15: calc(15px * var(--app-font-scale, 1));
+    --text-16: calc(16px * var(--app-font-scale, 1));
+    --text-17: calc(17px * var(--app-font-scale, 1));
+    --text-20: calc(20px * var(--app-font-scale, 1));
+    --text-22: calc(22px * var(--app-font-scale, 1));
+    --text-24: calc(24px * var(--app-font-scale, 1));
+    --text-30: calc(30px * var(--app-font-scale, 1));
     /* 错误页主视觉代号数字（404/403/500） */
-    --text-88: 88px;
+    --text-88: calc(88px * var(--app-font-scale, 1));
 
     /* 半像素字号（类名带点，如 text-12.5 = 12.5px） */
-    --text-10\.5: 10.5px;
-    --text-11\.5: 11.5px;
-    --text-12\.5: 12.5px;
-    --text-13\.5: 13.5px;
-    --text-14\.5: 14.5px;
+    --text-10\.5: calc(10.5px * var(--app-font-scale, 1));
+    --text-11\.5: calc(11.5px * var(--app-font-scale, 1));
+    --text-12\.5: calc(12.5px * var(--app-font-scale, 1));
+    --text-13\.5: calc(13.5px * var(--app-font-scale, 1));
+    --text-14\.5: calc(14.5px * var(--app-font-scale, 1));
 
     /* 过渡动画：遮罩 / 下拉 / tooltip 淡入 */
     --animate-fade-in: fade-in 0.18s ease-out;
@@ -321,6 +323,134 @@
     }
 }
 
+/* ── 暗色模式（vben 式）：<html class="dark"> 重声明语义令牌。
+   工具类引用的是 var(--color-*)，变量在 html 上被覆盖后全站自动换色，无需改动组件类名 ── */
+html.dark {
+    --color-primary: #6366f1;
+    --color-primary-hover: #7c7ff5;
+    --color-primary-strong: #a5b0fb;
+    --color-primary-soft: rgba(99, 102, 241, 0.16);
+    --color-primary-border: rgba(129, 140, 248, 0.38);
+
+    --color-accent: #38bdf8;
+    --color-accent-soft: rgba(56, 189, 248, 0.14);
+    --color-success: #34d399;
+    --color-success-soft: rgba(52, 211, 153, 0.14);
+    --color-warning: #fbbf24;
+    --color-warning-soft: rgba(251, 191, 36, 0.14);
+    --color-danger: #f87171;
+    --color-danger-soft: rgba(248, 113, 113, 0.14);
+
+    --color-ink: #e6eaf2;
+    --color-muted: #9aa6ba;
+    --color-subtle: #9aa6ba;
+    --color-line: #2a3244;
+    --color-line-strong: #3a4557;
+    --color-surface: #171d29;
+    --color-canvas: #10141d;
+    --color-sidebar: #10141d;
+    --color-sidebar-soft: #1d2432;
+
+    --color-td: #c3cbdb;
+    --color-td-strong: #d4dbe8;
+    --color-row-hover: #1f2736;
+    --color-soft: #1c2431;
+    --color-panel: #1a2130;
+    --color-scrim: rgba(4, 7, 12, 0.62);
+
+    color-scheme: dark;
+}
+
+/* ── 内置主题（vben 式 BUILT_IN_THEME_PRESETS 的精选子集）：<html data-theme="...">。
+   每个预设给主色五件套 + 行悬停染色；默认预设不设块，直接用上方 @theme 的浅色值 ── */
+[data-theme="green"] {
+    --color-primary: hsl(161 90% 43%);
+    --color-primary-hover: hsl(161 88% 37%);
+    /* 绿色 sRGB 亮度感知偏高，strong 需比其它预设更深一档才够文字对比（≥4.5:1） */
+    --color-primary-strong: hsl(161 84% 24%);
+    --color-primary-soft: hsl(161 70% 94%);
+    --color-primary-border: hsl(161 65% 84%);
+    --color-row-hover: hsl(161 45% 97%);
+}
+
+[data-theme="deep-green"] {
+    --color-primary: hsl(181 84% 32%);
+    --color-primary-hover: hsl(181 80% 27%);
+    --color-primary-strong: hsl(181 76% 22%);
+    --color-primary-soft: hsl(180 60% 93%);
+    --color-primary-border: hsl(180 52% 82%);
+    --color-row-hover: hsl(180 35% 97%);
+}
+
+[data-theme="orange"] {
+    --color-primary: hsl(18 89% 40%);
+    --color-primary-hover: hsl(18 86% 34%);
+    --color-primary-strong: hsl(18 82% 28%);
+    --color-primary-soft: hsl(24 90% 95%);
+    --color-primary-border: hsl(24 85% 86%);
+    --color-row-hover: hsl(24 60% 98%);
+}
+
+/* 预设在暗色下的变体：主色提亮一档保对比，soft/border 用半透明叠在深色面上 */
+html.dark[data-theme="green"] {
+    --color-primary: hsl(160 84% 52%);
+    --color-primary-hover: hsl(160 88% 60%);
+    --color-primary-strong: hsl(160 80% 70%);
+    --color-primary-soft: hsl(160 84% 52% / 0.16);
+    --color-primary-border: hsl(160 84% 60% / 0.38);
+}
+
+html.dark[data-theme="deep-green"] {
+    --color-primary: hsl(181 80% 48%);
+    --color-primary-hover: hsl(181 84% 56%);
+    --color-primary-strong: hsl(181 76% 66%);
+    --color-primary-soft: hsl(181 80% 48% / 0.16);
+    --color-primary-border: hsl(181 80% 56% / 0.38);
+}
+
+html.dark[data-theme="orange"] {
+    --color-primary: hsl(18 92% 56%);
+    --color-primary-hover: hsl(18 96% 64%);
+    --color-primary-strong: hsl(24 90% 70%);
+    --color-primary-soft: hsl(18 92% 56% / 0.16);
+    --color-primary-border: hsl(18 92% 62% / 0.38);
+}
+
+/* ── 色弱 / 灰色模式（vben 式整页滤镜）──。
+   色弱在纯反相上补 hue-rotate(180deg)：色相转回原位、明度反转，
+   红绿等语义色不丢失色相，比裸 invert 更利于辨色 */
+html.invert-mode {
+    filter: invert(100%) hue-rotate(180deg);
+}
+
+html.grayscale-mode {
+    filter: grayscale(100%);
+}
+
+/* ── 明暗切换动画（vben 式 View Transitions）：关掉默认交叉淡入，
+   由 JS 侧在点击坐标处做 clip-path 圆形扩散；z 序决定新/旧视图谁在上面 ── */
+::view-transition-new(root),
+::view-transition-old(root) {
+    animation: none;
+    mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+    z-index: 1;
+}
+
+::view-transition-new(root) {
+    z-index: 2147483646;
+}
+
+html.dark::view-transition-old(root) {
+    z-index: 2147483646;
+}
+
+html.dark::view-transition-new(root) {
+    z-index: 1;
+}
+
 /* 列表表格（.data-table）：吸附表头——滚动容器内 th 固定在顶部；
    border-collapse 的边框不随吸附移动，改用不透明内阴影画表头底线（比行线深一档） */
 .data-table thead th {
@@ -335,7 +465,7 @@
     padding: 18px;
     border: 1px solid var(--color-line);
     border-radius: 16px;
-    background: white;
+    background: var(--color-surface);
 }
 .mobile-records {
     display: grid;
@@ -354,7 +484,7 @@
     padding: 8px 12px;
     font-size: 14px;
     color: var(--color-muted);
-    background: white;
+    background: var(--color-surface);
     border: 1px solid var(--color-line);
 }
 .task-tabs button[aria-pressed="true"] {
@@ -397,7 +527,7 @@ button:active:not(:disabled) {
 }
 @media (max-width: 1023px) {
     body {
-        background: #f5f7fa;
+        background: var(--color-canvas);
     }
     #mainContent {
         padding-top: 16px;
@@ -479,7 +609,11 @@ button:active:not(:disabled) {
 
 @layer base {
     html {
-        font-size: 14px;
+        /* 根字号随偏好设置缩放（--app-font-scale 由 usePreferences 写入）：
+           rem 间距与上方 calc 化的 px 字号令牌同倍缩放，整站等比放大缩小 */
+        font-size: calc(14px * var(--app-font-scale, 1));
+        /* 浅色下的原生控件 / 滚动条配色（html.dark 内对应声明 dark） */
+        color-scheme: light;
         /* 滚动条槽位常驻：弹窗锁 body 滚动时内容宽度不变，表格不因列宽重排而抖动 */
         scrollbar-gutter: stable;
     }
@@ -511,19 +645,6 @@ button:active:not(:disabled) {
         ::-webkit-scrollbar-corner {
             background: transparent;
         }
-
-        /* 深色侧栏内的滚动条用浅色半透明 */
-        aside ::-webkit-scrollbar-thumb {
-            border: 3px solid transparent;
-            background-color: rgba(255, 255, 255, 0.16);
-            background-clip: padding-box;
-        }
-        aside ::-webkit-scrollbar-thumb:hover {
-            background-color: rgba(255, 255, 255, 0.28);
-        }
-        aside * {
-            scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
-        }
     }
 
     body {
@@ -532,16 +653,21 @@ button:active:not(:disabled) {
         line-height: 1.5;
         color: var(--color-ink);
         background:
-            radial-gradient(circle at 82% -10%, rgba(79, 70, 229, 0.07), transparent 28rem), var(--color-canvas);
+            radial-gradient(
+                circle at 82% -10%,
+                color-mix(in srgb, var(--color-primary) 7%, transparent),
+                transparent 28rem
+            ),
+            var(--color-canvas);
         -webkit-font-smoothing: antialiased;
     }
 
     ::selection {
-        background: rgba(79, 70, 229, 0.22);
+        background: color-mix(in srgb, var(--color-primary) 22%, transparent);
     }
 
     :focus-visible {
-        outline: 3px solid rgba(79, 70, 229, 0.3);
+        outline: 3px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
         outline-offset: 1px;
     }
 }
@@ -558,7 +684,7 @@ button:active:not(:disabled) {
     gap: 12px;
     min-height: 52px;
     padding: 8px 18px;
-    background: white;
+    background: var(--color-surface);
 }
 .table-display-button {
     display: inline-flex;
@@ -570,7 +696,7 @@ button:active:not(:disabled) {
     border-radius: 7px;
     font-size: 12px;
     color: var(--color-muted);
-    background: white;
+    background: var(--color-surface);
 }
 .table-display-button:hover {
     background: var(--color-soft);
@@ -586,7 +712,7 @@ button:active:not(:disabled) {
     padding-top: 14px;
     padding-bottom: 14px;
     vertical-align: middle;
-    background: white;
+    background: var(--color-surface);
     text-overflow: ellipsis;
 }
 .managed-table .data-table tr:last-child td {
@@ -614,7 +740,7 @@ button:active:not(:disabled) {
 .managed-table [data-pinned] {
     position: sticky;
     z-index: 2;
-    background: white;
+    background: var(--color-surface);
 }
 .managed-table [data-pinned="start"] {
     left: 0;

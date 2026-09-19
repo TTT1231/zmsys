@@ -128,11 +128,11 @@ export function Modal({
                 aria-label={title}
                 tabIndex={-1}
                 style={{ maxWidth: width }}
-                className={`flex w-full flex-col overflow-hidden bg-white shadow-modal ${layout === "detail" ? "h-dvh max-h-dvh rounded-l-panel max-md:rounded-none" : "max-h-[88dvh] rounded-panel max-md:max-h-[calc(100dvh-16px)] max-md:rounded-b-none max-md:rounded-t-[22px]"} ${layout === "workspace" ? "h-[min(760px,88dvh)]" : ""}`}
+                className={`flex w-full flex-col overflow-hidden bg-surface shadow-modal ${layout === "detail" ? "h-dvh max-h-dvh rounded-l-panel max-md:rounded-none" : "max-h-[88dvh] rounded-panel max-md:max-h-[calc(100dvh-16px)] max-md:rounded-b-none max-md:rounded-t-[22px]"} ${layout === "workspace" ? "h-[min(760px,88dvh)]" : ""}`}
             >
                 <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-4">
                     <div>
-                        <div className="text-11 font-semibold tracking-[0.08em] text-primary" hidden={!label}>
+                        <div className="text-11 font-semibold tracking-[0.08em] text-primary-strong" hidden={!label}>
                             {label}
                         </div>
                         <div className="mt-0.5 flex flex-wrap items-center gap-1.5">

@@ -108,7 +108,7 @@ function ErrorArtwork({ kind }: { kind: ErrorPageKind }) {
 
 const actionClassName =
     "inline-flex min-h-11 min-w-32 cursor-pointer items-center justify-center gap-2 rounded-btn px-5 text-13.5 font-semibold transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
-const primaryActionClassName = `${actionClassName} bg-linear-to-r from-indigo-600 to-indigo-500 text-white shadow-glow hover:from-indigo-700 hover:to-indigo-600 active:scale-[0.98]`;
+const primaryActionClassName = `${actionClassName} bg-primary text-white shadow-glow hover:bg-primary-hover active:scale-[0.98]`;
 
 /** 应用壳层内的统一错误状态页：用清晰的恢复动作替代技术诊断信息。 */
 export function ErrorPage({ kind }: ErrorPageProps) {

@@ -101,7 +101,7 @@ export function BomSpecs({ bom, layout = "detail", showIdentity = true, categori
                             aria-label={section.title}
                             className={cn(
                                 "rounded-input border border-line p-3",
-                                section.key === "body" ? "bg-white" : "bg-primary-soft/30",
+                                section.key === "body" ? "bg-surface" : "bg-primary-soft/30",
                             )}
                         >
                             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">

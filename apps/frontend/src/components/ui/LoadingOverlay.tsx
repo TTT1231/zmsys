@@ -11,7 +11,7 @@ export function LoadingOverlay({ label = "刷新中…" }: LoadingOverlayProps) 
         <div
             role="status"
             aria-live="polite"
-            className="absolute inset-0 z-10 grid animate-fade-in place-items-center bg-white/60 backdrop-blur-[2px]"
+            className="absolute inset-0 z-10 grid animate-fade-in place-items-center bg-surface/60 backdrop-blur-[2px]"
         >
             <span className="flex items-center gap-2.5 text-13 text-muted">
                 <Loader size={16} /> {label}
