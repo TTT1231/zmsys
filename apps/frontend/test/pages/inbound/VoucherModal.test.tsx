@@ -11,10 +11,9 @@ it("数量与状态先于规格，作废说明不隐藏原始数量和备注", (
     const summary = screen.getByRole("region", { name: "数量与状态" });
     expect(summary).toHaveTextContent("已作废");
     expect(summary).toHaveTextContent("200个");
-    expect(
-        summary.compareDocumentPosition(screen.getByRole("region", { name: "BOM 详细" })) &
-            Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    const productDetail = screen.getByRole("region", { name: "详情" });
+    expect(summary.compareDocumentPosition(productDetail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(productDetail).toHaveTextContent("BOM 备注：—");
     expect(screen.getByText(detailInbound.remark!)).toBeInTheDocument();
     expect(screen.getByText(detailInbound.time)).toBeInTheDocument();
 });

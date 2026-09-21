@@ -53,7 +53,9 @@ function openOutbound() {
     expect(table.queryByRole("button", { name: "重打" })).not.toBeInTheDocument();
     expect(table.queryByRole("button", { name: "紧急撤销" })).not.toBeInTheDocument();
     fireEvent.click(table.getByRole("button", { name: "查看详情" }));
-    return within(screen.getByRole("dialog", { name: detailOutbound.no }));
+    const detail = within(screen.getByRole("dialog", { name: detailOutbound.no }));
+    expect(detail.getByRole("region", { name: "详情" })).toHaveTextContent("BOM 备注：—");
+    return detail;
 }
 it("已打印出库的重打与紧急撤销在详情中，撤销仍要求原因和两项线下确认", () => {
     const detail = openOutbound();

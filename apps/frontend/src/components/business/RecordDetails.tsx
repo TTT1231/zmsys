@@ -4,7 +4,7 @@ import { BomSpecs } from "@/components/bom/BomSpecs";
 import { BomRemarkNote } from "@/components/bom/BomRemarkNote";
 import { num } from "@/lib/format";
 
-/** 业务凭证共用的数量概览、BOM 详细与登记信息，保持一致的阅读顺序。 */
+/** 业务凭证共用的数量概览、成品详情与登记信息，保持一致的阅读顺序。 */
 export function RecordSummary({
     metrics,
     status,
@@ -47,9 +47,9 @@ export function RecordProduct({
     categories?: BomCategory[];
 }) {
     return (
-        <section aria-label="BOM 详细" className="min-w-0">
+        <section aria-label="详情" className="min-w-0">
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <h3 className="text-14 font-medium text-ink">BOM 详细</h3>
+                <h3 className="text-14 font-medium text-ink">详情</h3>
                 <p className="tnum text-12 text-muted wrap-anywhere">{bomCode}</p>
             </div>
             {bom ? (

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/* 共用凭证区块：BOM 详细两列键值网格、头部只显 BOM 编码、缺失兜底与备注换行。 */
+/* 共用凭证区块：详情两列键值网格、头部只显 BOM 编码、缺失兜底与备注换行。 */
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
@@ -7,9 +7,9 @@ import { RecordFields, RecordProduct, RecordSummary } from "@/components/busines
 import { detailBom } from "../../fixtures/recordDetails";
 afterEach(cleanup);
 
-it("BOM 详细呈两列键值网格，头部只显 BOM 编码，BOM 缺失仍能核对编码", () => {
+it("详情呈两列键值网格，头部只显 BOM 编码，BOM 缺失仍能核对编码", () => {
     const { rerender, container } = render(<RecordProduct bom={detailBom} bomCode={detailBom.code} />);
-    const region = screen.getByRole("region", { name: "BOM 详细" });
+    const region = screen.getByRole("region", { name: "详情" });
     expect(region).toHaveTextContent("二脚底座（无挡脚）");
     // 头部裸显编码，无「BOM 编码」前缀杂项文字
     expect(screen.getByText(detailBom.code)).toBeInTheDocument();
