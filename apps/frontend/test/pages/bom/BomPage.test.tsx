@@ -63,7 +63,8 @@ it("库存余量已加载时移动卡片显示数量，未加载时降级为占�
 
     stocksRef.current = undefined;
     renderPage();
-    expect(screen.getByText("—")).toBeInTheDocument();
+    // 库存与备注两个卡片字段都降级为占位符
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
     expect(screen.queryByText("200 个")).not.toBeInTheDocument();
 });
 

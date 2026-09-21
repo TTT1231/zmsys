@@ -256,11 +256,16 @@ const mkBom = (overrides: Partial<BomTable> = {}): BomTable =>
         bomCode: "XK2010",
         categoryId: 1001n,
         specHash: Buffer.from(
-            materialSetHash([
-                { id: "3003", quantity: 1 },
-                { id: "3008", quantity: 1 },
-            ]),
+            materialSetHash(
+                "1001",
+                [
+                    { id: "3003", quantity: 1 },
+                    { id: "3008", quantity: 1 },
+                ],
+                "",
+            ),
         ),
+        remark: "",
         unit: "个",
         status: true,
         rowVersion: 1n,
@@ -539,6 +544,7 @@ describe("BomsService", () => {
                     },
                 ],
                 spec: "型号：1-1 · 银丝厚度：0.2",
+                remark: "",
                 created: "2026-09-01",
                 unit: "个",
             });
@@ -632,10 +638,14 @@ describe("BomsService", () => {
                 Buffer.compare(
                     written.createdBoms[0]!.specHash as Buffer,
                     Buffer.from(
-                        materialSetHash([
-                            { id: "3001", quantity: 1 },
-                            { id: "3031", quantity: 4 },
-                        ]),
+                        materialSetHash(
+                            "1001",
+                            [
+                                { id: "3001", quantity: 1 },
+                                { id: "3031", quantity: 4 },
+                            ],
+                            "",
+                        ),
                     ),
                 ) === 0,
             ).toBe(true);
@@ -645,6 +655,35 @@ describe("BomsService", () => {
                 { materialId: "3001", groupKey: "model", groupName: "型号", name: "1-1", quantity: 1 },
                 { materialId: "3031", groupKey: "static-plate", groupName: "静片", name: "带点静片", quantity: 1 },
             ]);
+        });
+
+        it("备注判重：同构成不同备注可并存；同构成同备注 409 返回已有编码", async () => {
+            let seq = 0;
+            const nextBomCode = vi.fn(async () => (++seq === 1 ? "XK2011" : "XK2012"));
+            const { service } = mkService(store, undefined, nextBomCode);
+            const first = await service.createBom(
+                dtoOf({ materialItemIds: ["3003", "3008"], remark: "镀锡：触点是反的" }),
+                actor,
+                "idem-remark-01",
+            );
+            expect(first.code).toBe("XK2011");
+            expect(first.remark).toBe("镀锡：触点是反的");
+            // 同构成同备注：命中判重
+            await expect(
+                service.createBom(
+                    dtoOf({ materialItemIds: ["3008", "3003"], remark: "镀锡：触点是反的" }),
+                    actor,
+                    "idem-remark-02",
+                ),
+            ).rejects.toThrow(new ConflictException("BOM 已存在：XK2011"));
+            // 同构成不同备注：新档案
+            const second = await service.createBom(
+                dtoOf({ materialItemIds: ["3003", "3008"], remark: "常规触点方向" }),
+                actor,
+                "idem-remark-03",
+            );
+            expect(second.code).toBe("XK2012");
+            expect(second.remark).toBe("常规触点方向");
         });
 
         it("数量校验：qty 分组 0/100/非整数 400；非 qty 分组携带数量 400", async () => {
@@ -685,10 +724,14 @@ describe("BomsService", () => {
                 Buffer.compare(
                     written.createdBoms[0]!.specHash as Buffer,
                     Buffer.from(
-                        materialSetHash([
-                            { id: "3003", quantity: 1 },
-                            { id: "3008", quantity: 1 },
-                        ]),
+                        materialSetHash(
+                            "1001",
+                            [
+                                { id: "3003", quantity: 1 },
+                                { id: "3008", quantity: 1 },
+                            ],
+                            "",
+                        ),
                     ),
                 ) === 0,
             ).toBe(true);

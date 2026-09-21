@@ -53,6 +53,8 @@ export interface BomCategory {
     codePrefix: string;
     seqWidth?: number;
     childCategories?: string[];
+    /** false = 目录容器品类（旋转XK3 的焊线/插线变体）：仅随目录接口下发供合并树，不在建档下拉 */
+    status?: boolean;
     groups: BomCatalogNode[];
 }
 
@@ -72,6 +74,7 @@ export interface Bom {
     modelCode: string; // model 组选中项名称（品类无 model 组时为空串）
     items: BomItemView[]; // 选中物料集合（无数量，跌倒开关含微动物料）
     spec: string; // 摘要（"组名：物料名"以 " · " 连接）
+    remark: string; // 建档备注（工艺差异，参与判重指纹）；空串 = 无备注
     created: string;
     unit: string;
 }
@@ -312,6 +315,8 @@ export interface CreateBomInput {
     quantities?: Record<string, number>;
     /** 品类子选（category key）：品类标记 childCategories 时必填（跌倒开关的微动开关类型） */
     childCategory?: string;
+    /** 建档备注（trim 后存储）：物料构成之外的工艺差异，参与判重——同构成不同备注 = 不同 BOM */
+    remark?: string;
 }
 
 export interface CreateInboundInput {

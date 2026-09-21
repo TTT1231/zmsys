@@ -61,7 +61,8 @@ it("先选客户再选订单，选中即带出 BOM、数量、交期与交付情
     expect(screen.getByText(/6.3静片：铜镀银/)).toBeInTheDocument();
     expect(screen.getByText("300 个")).toBeInTheDocument();
     expect(screen.getByText("2026-09-30")).toBeInTheDocument();
-    expect(screen.getByText("已发 200 / 300")).toBeInTheDocument();
+    expect(screen.getByText(/BOM 备注：/)).toBeInTheDocument();
+    expect(screen.getByText("已发 200 个")).toBeInTheDocument();
     expect(screen.getByText("部分发货")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "填入全部可发数量（100 个）" })).toBeInTheDocument();
 
@@ -91,7 +92,7 @@ it("换客户会清空已选订单并回到占位提示，改选新客户的订�
     await choose(user, /^销售订单/, new RegExp(laterOrder.orderNo));
     expect(screen.getByText(laterOrder.orderNo)).toBeInTheDocument();
     expect(screen.getByText("500 个")).toBeInTheDocument();
-    expect(screen.getByText("已发 0 / 500")).toBeInTheDocument();
+    expect(screen.getByText("已发 0 个")).toBeInTheDocument();
 });
 
 it("数量为 0 被明确拦截，补填有效数量后报错即时消失", async () => {
@@ -119,7 +120,7 @@ it("从订单入口打开时客户与订单已预选，订单信息直接呈现"
     expect((screen.getByRole("combobox", { name: /^销售订单/ }) as HTMLInputElement).value).toContain(
         detailOrder.orderNo,
     );
-    expect(screen.getByText("已发 200 / 300")).toBeInTheDocument();
+    expect(screen.getByText("已发 200 个")).toBeInTheDocument();
     expect(screen.getByText(detailBom.code)).toBeInTheDocument();
 });
 
@@ -132,7 +133,7 @@ it("没有库存时客户与订单仍可选（还有待交数量即列出），�
     await choose(user, /^销售订单/, new RegExp(detailOrder.orderNo));
 
     expect(screen.getByText(detailOrder.orderNo)).toBeInTheDocument();
-    expect(screen.getByText("已发 200 / 300")).toBeInTheDocument();
+    expect(screen.getByText("已发 200 个")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /填入全部可发数量/ })).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText(/发货数量/), "10");

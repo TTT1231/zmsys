@@ -86,7 +86,7 @@ describe("BOM/成品档案 (e2e)", () => {
         const list = await app.inject({ method: "GET", url: "/api/bom-categories", headers: authHeaders(superToken) });
         expect(list.statusCode).toBe(200);
         const categories = list.json().data;
-        expect(categories).toHaveLength(7);
+        expect(categories).toHaveLength(9);
         expect(categories.map((category: { key: string }) => category.key)).toEqual([
             "rotary-switch",
             "rotary-xk3",
@@ -95,7 +95,17 @@ describe("BOM/成品档案 (e2e)", () => {
             "safety-switch",
             "tipover-switch",
             "piano-key-switch",
+            "xk3-wire",
+            "xk3-plug",
         ]);
+        // 焊线/插线为目录容器品类：随接口下发（合并树用）但标记停用，建档下拉不显示
+        expect(categories.find((category: { key: string }) => category.key === "xk3-wire")).toMatchObject({
+            status: false,
+        });
+        expect(categories.find((category: { key: string }) => category.key === "xk3-plug")).toMatchObject({
+            status: false,
+        });
+        expect(categories.filter((category: { status?: boolean }) => category.status === false)).toHaveLength(2);
         // seqWidth 为默认 3 时省略（新微动统一 3 位宽度后同样省略）
         expect(categories[0]).toMatchObject({ name: "旋转XK2", codePrefix: "XK2" });
         expect(categories[0]).not.toHaveProperty("seqWidth");
@@ -146,19 +156,23 @@ describe("BOM/成品档案 (e2e)", () => {
             ["group", "动片", micro[4]!.id],
             ["group", "摆片", micro[4]!.id],
             ["group", "弹片", micro[4]!.id],
+            ["group", "压杆", micro[4]!.id],
             ["section", "触点", null],
-            ["group", "触点大小", micro[10]!.id],
-            ["group", "触点厚度", micro[10]!.id],
-            ["group", "触点类别", micro[10]!.id],
+            ["group", "触点大小", micro[11]!.id],
+            ["group", "触点厚度", micro[11]!.id],
+            ["group", "触点类别", micro[11]!.id],
         ]);
         expect(micro.find(group => group.name === "支架")).toMatchObject({ key: "bracket", multi: false });
-        // 旋转XK3：根分组与分区按 sort_order 混排（外壳/底座/杆子 → 五金件）；无触点分区
-        const xk3 = categories[1].groups as Array<{
+        // 旋转XK3：接线工艺二分——主品类无目录，childCategories 指向焊线/插线
+        expect(categories[1].groups).toEqual([]);
+        expect(categories[1].childCategories).toEqual(["xk3-wire", "xk3-plug"]);
+        const xk3 = categories.find((category: { key: string }) => category.key === "xk3-plug")!.groups as Array<{
             kind: string;
             name: string;
             multi: boolean | null;
             items: Array<{ name: string }>;
         }>;
+        // 插线目录（原 XK3 目录整体迁移）：根分组混排 + 五金件分区；无触点分区
         expect(xk3.slice(0, 3).map(group => group.name)).toEqual(["PC塑料外壳", "PC塑料底座", "PA66塑料杆子"]);
         expect(xk3.filter(group => group.kind === "section").map(group => group.name)).toEqual(["五金件"]);
         // 弹簧多选（0.45长/短可同选）；卡线片为底/盖组合选项
@@ -168,6 +182,25 @@ describe("BOM/成品档案 (e2e)", () => {
             "底盖0.15",
             "底盖0.2",
         ]);
+        // 焊线目录：静片/弹簧多选，钢球为 3.0mm 电镀
+        const wire = categories.find((category: { key: string }) => category.key === "xk3-wire")!.groups as Array<{
+            name: string;
+            multi: boolean | null;
+            items: Array<{ name: string }>;
+        }>;
+        expect(wire.map(group => group.name)).toEqual([
+            "PC塑料",
+            "外壳",
+            "底座",
+            "PA66塑料杆子",
+            "五金件",
+            "静片",
+            "动片",
+            "弹簧",
+            "钢球",
+        ]);
+        expect(wire.find(group => group.name === "静片")).toMatchObject({ multi: true });
+        expect(wire.find(group => group.name === "钢球")!.items.map(item => item.name)).toEqual(["3.0mm电镀钢球"]);
         // 安全开关：短款/长款系列配件为多选组
         const safety = categories[4].groups as Array<{ kind: string; name: string; multi: boolean | null }>;
         expect(safety.find(group => group.name === "短款/31mm系列配件")).toMatchObject({

@@ -63,6 +63,18 @@ const qtyGroup = (
     qty: true,
 });
 
+/* 多选数量分组：可选多项，每个选中项各带 1-99 数量（琴键开关静片） */
+const multiQtyGroup = (
+    id: string,
+    name: string,
+    key: string,
+    parentId: string | null,
+    items: Array<[string, string]>,
+): BomCatalogNode => ({
+    ...qtyGroup(id, name, key, parentId, items),
+    multi: true,
+});
+
 export const BOM_CATEGORIES: CategoryDef[] = [
     {
         key: "rotary-switch",
@@ -132,24 +144,26 @@ export const BOM_CATEGORIES: CategoryDef[] = [
                 ["3032", "三脚铜点"],
                 ["3033", "塑料盖板"],
                 ["3034", "全方位左脚银点"],
-                ["3035", "全方位右脚银点"],
-                ["3036", "左脚银点（全银点）"],
+                ["3036", "左脚银点"],
                 ["3037", "右脚银点"],
                 ["3038", "右脚铜点"],
                 ["3039", "全方位左脚铜点"],
                 ["3624", "左脚铜点"],
+                ["3750", "全方位双脚铜点"],
+                ["3751", "全方位双脚银点"],
             ]),
             group("2006", "B面", "face-b", null, [
                 ["3041", "三脚银点"],
                 ["3042", "三脚铜点"],
                 ["3043", "塑料盖板"],
                 ["3044", "全方位左脚银点"],
-                ["3045", "全方位右脚银点"],
-                ["3046", "左脚银点（全银点）"],
+                ["3046", "左脚银点"],
                 ["3047", "右脚银点"],
                 ["3048", "右脚铜点"],
                 ["3049", "全方位左脚铜点"],
                 ["3625", "左脚铜点"],
+                ["3752", "全方位双脚铜点"],
+                ["3753", "全方位双脚银点"],
             ]),
             group("2007", "弹簧", "spring", null, [
                 ["3008", "0.5"],
@@ -176,6 +190,40 @@ export const BOM_CATEGORIES: CategoryDef[] = [
         key: "rotary-xk3",
         name: "旋转XK3",
         codePrefix: "XK3",
+        childCategories: ["xk3-wire", "xk3-plug"],
+        groups: [],
+    },
+    {
+        key: "xk3-wire",
+        name: "焊线",
+        codePrefix: "XK3W",
+        status: false,
+        groups: [
+            section("2711", "PC塑料"),
+            group("2712", "外壳", "shell", "2711", [["3754", "外壳"]]),
+            group("2713", "底座", "base", "2711", [["3755", "底座"]]),
+            group("2714", "PA66塑料杆子", "pa66-lever", null, [
+                ["3756", "圆轴"],
+                ["3757", "扁轴4.8"],
+            ]),
+            section("2715", "五金件"),
+            multiGroup("2716", "静片", "static-plate", "2715", [
+                ["3758", "小静片"],
+                ["3759", "半圆静片"],
+            ]),
+            group("2717", "动片", "moving-plate", "2715", [["3760", "带圈动片"]]),
+            multiGroup("2718", "弹簧", "spring", "2715", [
+                ["3761", "长弹簧"],
+                ["3762", "短弹簧"],
+            ]),
+            group("2719", "钢球", "steel-ball", "2715", [["3763", "3.0mm电镀钢球"]]),
+        ],
+    },
+    {
+        key: "xk3-plug",
+        name: "插线",
+        codePrefix: "XK3P",
+        status: false,
         groups: [
             group("2401", "PC塑料外壳", "pc-shell", null, [
                 ["3401", "圆孔长外壳（茶色）"],
@@ -272,6 +320,10 @@ export const BOM_CATEGORIES: CategoryDef[] = [
                 ["3128", "0.15"],
                 ["3129", "0.2"],
             ]),
+            group("2709", "压杆", "press-rod", "2102", [
+                ["3747", "直杆"],
+                ["3748", "弯杆"],
+            ]),
             section("2103", "触点"),
             group("2119", "触点大小", "contact-size", "2103", [
                 ["3131", "3.0mm"],
@@ -319,6 +371,7 @@ export const BOM_CATEGORIES: CategoryDef[] = [
                 ["3211", "0.27"],
             ]),
             group("2218", "挡脚", "stop-foot", "2202", [["3212", "挡脚"]]),
+            group("2710", "压杆", "press-rod", "2202", [["3749", "直杆"]]),
             section("2203", "触点"),
             group("2219", "触点大小", "contact-size", "2203", [
                 ["3141", "3.0mm"],
@@ -364,14 +417,14 @@ export const BOM_CATEGORIES: CategoryDef[] = [
                 ["3510", "短帽子"],
                 ["3511", "短弹簧"],
             ]),
-            multiGroup("2613", "长款/41mm系列配件", "long-41-parts", "2503", [
+            multiGroup("2613", "长款/40mm系列配件", "long-41-parts", "2503", [
                 ["3612", "动片"],
                 ["3613", "静片"],
                 ["3614", "长杆子"],
                 ["3615", "长帽子"],
                 ["3616", "长弹簧"],
             ]),
-            multiGroup("2614", "长款/43mm系列配件", "long-43-parts", "2503", [
+            multiGroup("2614", "长款/41mm系列配件", "long-43-parts", "2503", [
                 ["3512", "动片"],
                 ["3513", "静片"],
                 ["3514", "长杆子"],
@@ -458,7 +511,7 @@ export const BOM_CATEGORIES: CategoryDef[] = [
                 ["3731", "四键连锁片"],
                 ["3732", "五键连锁片"],
             ]),
-            qtyGroup("2706", "静片", "static-plate", null, [
+            multiQtyGroup("2706", "静片", "static-plate", null, [
                 ["3733", "带点静片"],
                 ["3734", "不带点静片"],
                 ["3735", "四键焊线静片"],

@@ -1,5 +1,5 @@
 // 覆盖物料集合判重规范化：数字串校验、BigInt 十进制消除前导零、去重、数值升序、
-// 数量参与判重与 SHA-256 指纹
+// 数量与备注参与判重、品类维度与 SHA-256 指纹
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { canonicalMaterialEntries, materialSetHash, normalizeMaterialId, type MaterialSpecEntry } from "./bom-spec";
@@ -48,39 +48,75 @@ describe("canonicalMaterialEntries（集合规范化）", () => {
     });
 });
 
-describe("materialSetHash（SHA-256 指纹）", () => {
+describe("materialSetHash（SHA-256 指纹：品类 + 构成 + 备注）", () => {
     it("同一集合不同输入顺序指纹一致（ID 顺序不影响判重）", () => {
-        const a = materialSetHash([entry("3001"), entry("3002"), entry("3003")]);
-        const b = materialSetHash([entry("3003"), entry("3001"), entry("3002")]);
+        const a = materialSetHash("1003", [entry("3001"), entry("3002"), entry("3003")], "");
+        const b = materialSetHash("1003", [entry("3003"), entry("3001"), entry("3002")], "");
         expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true);
     });
 
     it("重复输入去重后指纹一致；前导零双表示指纹一致", () => {
-        const base = materialSetHash([entry("3001")]);
-        expect(Buffer.from(materialSetHash([entry("3001"), entry("3001")])).equals(Buffer.from(base))).toBe(true);
-        expect(Buffer.from(materialSetHash([entry("03001")])).equals(Buffer.from(base))).toBe(true);
+        const base = materialSetHash("1003", [entry("3001")], "");
+        expect(Buffer.from(materialSetHash("1003", [entry("3001"), entry("3001")], "")).equals(Buffer.from(base))).toBe(
+            true,
+        );
+        expect(Buffer.from(materialSetHash("1003", [entry("03001")], "")).equals(Buffer.from(base))).toBe(true);
     });
 
     it("不同集合指纹不同（增删物料均变化）", () => {
-        const base = materialSetHash([entry("3001"), entry("3002")]);
-        expect(Buffer.from(materialSetHash([entry("3001"), entry("3003")])).equals(Buffer.from(base))).toBe(false);
-        expect(Buffer.from(materialSetHash([entry("3001")])).equals(Buffer.from(base))).toBe(false);
+        const base = materialSetHash("1003", [entry("3001"), entry("3002")], "");
+        expect(Buffer.from(materialSetHash("1003", [entry("3001"), entry("3003")], "")).equals(Buffer.from(base))).toBe(
+            false,
+        );
+        expect(Buffer.from(materialSetHash("1003", [entry("3001")], "")).equals(Buffer.from(base))).toBe(false);
     });
 
     it("同一物料集合不同数量指纹不同（数量参与判重）", () => {
-        const base = materialSetHash([entry("3001"), entry("3002", 1)]);
-        expect(Buffer.from(materialSetHash([entry("3001"), entry("3002", 2)])).equals(Buffer.from(base))).toBe(false);
-        expect(Buffer.from(materialSetHash([entry("3001", 2), entry("3002", 2)])).equals(Buffer.from(base))).toBe(
+        const base = materialSetHash("1003", [entry("3001"), entry("3002", 1)], "");
+        expect(
+            Buffer.from(materialSetHash("1003", [entry("3001"), entry("3002", 2)], "")).equals(Buffer.from(base)),
+        ).toBe(false);
+        expect(
+            Buffer.from(materialSetHash("1003", [entry("3001", 2), entry("3002", 2)], "")).equals(Buffer.from(base)),
+        ).toBe(false);
+    });
+
+    it("同一构成不同备注指纹不同；同备注跨品类指纹不同（备注与品类参与判重）", () => {
+        const base = materialSetHash("1003", [entry("3001"), entry("3002")], "");
+        expect(
+            Buffer.from(materialSetHash("1003", [entry("3001"), entry("3002")], "触点是反的")).equals(
+                Buffer.from(base),
+            ),
+        ).toBe(false);
+        expect(
+            Buffer.from(materialSetHash("1003", [entry("3001"), entry("3002")], "触点正装")).equals(
+                Buffer.from(materialSetHash("1003", [entry("3001"), entry("3002")], "触点是反的")),
+            ),
+        ).toBe(false);
+        expect(Buffer.from(materialSetHash("1004", [entry("3001"), entry("3002")], "")).equals(Buffer.from(base))).toBe(
             false,
         );
     });
 
-    it("指纹与 [[id, quantity]] JSON 序列化直接对齐（迁移 SQL 同构校验）", () => {
-        const expected = createHash("sha256").update('[["3001",1],["3002",3]]', "utf8").digest();
-        expect(Buffer.from(materialSetHash([entry("3002", 3), entry("3001")])).equals(expected)).toBe(true);
+    it("品类 id 前导零双表示指纹一致；非法品类 id 快速失败", () => {
+        const base = materialSetHash("1003", [entry("3001")], "");
+        expect(Buffer.from(materialSetHash("01003", [entry("3001")], "")).equals(Buffer.from(base))).toBe(true);
+        expect(Buffer.from(materialSetHash(BigInt(1003), [entry("3001")], "")).equals(Buffer.from(base))).toBe(true);
+        expect(() => materialSetHash("abc", [entry("3001")], "")).toThrow("品类编号非法");
+    });
+
+    it("指纹与 [category, [[id, quantity]], remark] JSON 序列化直接对齐（迁移 SQL 同构校验）", () => {
+        const expected = createHash("sha256")
+            .update('["1003",[["3001",1],["3002",3]],"镀锡：触点是反的"]', "utf8")
+            .digest();
+        expect(
+            Buffer.from(materialSetHash("1003", [entry("3002", 3), entry("3001")], "镀锡：触点是反的")).equals(
+                expected,
+            ),
+        ).toBe(true);
     });
 
     it("指纹长度 32 字节（对应 BINARY(32) 列）", () => {
-        expect(materialSetHash([entry("3001")]).length).toBe(32);
+        expect(materialSetHash("1003", [entry("3001")], "").length).toBe(32);
     });
 });

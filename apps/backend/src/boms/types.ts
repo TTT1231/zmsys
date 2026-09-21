@@ -10,18 +10,23 @@ export interface BomCategory {
     key: string;
     name: string;
     codePrefix: string;
+    /** false = 目录容器品类（如旋转XK3 的焊线/插线变体）：仅随目录接口下发供
+     * 合并树使用，不出现在建档品类下拉；缺省（启用品类）不下发该字段 */
+    status?: boolean;
     seqWidth?: number;
     childCategories?: string[];
     groups: BomCatalogNode[];
 }
 
-/** 契约 Bom：items 按建档 position 排序；modelCode 由 model 组选中项派生（无则 ""） */
+/** 契约 Bom：items 按建档 position 排序；modelCode 由 model 组选中项派生（无则 ""）；
+ * remark 为建档备注（工艺差异，参与判重指纹），空串 = 无备注 */
 export interface Bom {
     code: string;
     name: string;
     modelCode: string;
     items: BomItemView[];
     spec: string;
+    remark: string;
     created: string;
     unit: string;
 }

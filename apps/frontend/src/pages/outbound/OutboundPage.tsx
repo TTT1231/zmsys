@@ -36,11 +36,13 @@ import { todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/toastContexts";
 import type { OutboundPrintDocument, OutboundRow, Snapshot } from "@/api";
 
-/* 可排序列：出库日期 / 发货数量；桌面表头与移动端排序下拉共用 */
-type LedgerSortKey = "date" | "qty";
+/* 可排序列：出库单号 / BOM 编码 / 发货数量 / 出库日期；桌面表头与移动端排序下拉共用 */
+type LedgerSortKey = "no" | "bomCode" | "qty" | "date";
 const LEDGER_SORT_COLUMNS: Array<{ key: LedgerSortKey; label: string }> = [
-    { key: "date", label: "出库日期" },
+    { key: "no", label: "出库单号" },
+    { key: "bomCode", label: "BOM 编码" },
     { key: "qty", label: "发货数量" },
+    { key: "date", label: "出库日期" },
 ];
 
 const escapeHtml = (value: string) =>
@@ -485,6 +487,12 @@ export function OutboundModal({
                                 {selectedBom?.spec && (
                                     <p className="mt-0.5 wrap-break-word text-11.5 text-muted">{selectedBom.spec}</p>
                                 )}
+                                {selectedBom && (
+                                    <p className="mt-0.5 text-11.5 text-muted">
+                                        BOM 备注：
+                                        <span className="whitespace-pre-wrap text-td">{selectedBom.remark || "—"}</span>
+                                    </p>
+                                )}
                             </div>
                             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
                                 <div className="min-w-0">
@@ -503,7 +511,7 @@ export function OutboundModal({
                                 <div className="min-w-0">
                                     <dt className="text-11.5 text-muted">交付情况</dt>
                                     <dd className="tnum mt-0.5 text-13 font-semibold text-ink">
-                                        已发 {num(shipped)} / {num(selectedOrder.qty)}
+                                        已发 {num(shipped)} 个
                                     </dd>
                                 </div>
                                 <div className="min-w-0">
@@ -524,7 +532,7 @@ export function OutboundModal({
                                     >
                                         {num(maxShip)}
                                     </span>{" "}
-                                    个（可发数量按交期分配库存，不占用更早订单的预留）
+                                    个（按实际入库数量出库）
                                 </p>
                                 {over && (
                                     <p className="mt-1 font-medium text-danger">发货后超过可发数量，请调整发货数量。</p>
@@ -691,7 +699,14 @@ export function OutboundPage() {
     const sorted = useMemo(() => {
         const factor = sort.dir === "asc" ? 1 : -1;
         return [...filtered].sort((a, b) => {
-            const byKey = sort.key === "qty" ? a.qty - b.qty : a.date.localeCompare(b.date);
+            const byKey =
+                sort.key === "no"
+                    ? a.no.localeCompare(b.no)
+                    : sort.key === "bomCode"
+                      ? a.bomCode.localeCompare(b.bomCode)
+                      : sort.key === "qty"
+                        ? a.qty - b.qty
+                        : a.date.localeCompare(b.date);
             return byKey * factor || a.no.localeCompare(b.no);
         });
     }, [filtered, sort]);
@@ -899,9 +914,21 @@ export function OutboundPage() {
                         >
                             <thead>
                                 <tr className="text-left text-12 text-muted">
-                                    <th className="px-5 py-2.5 font-semibold">出库单号</th>
+                                    <SortTh
+                                        label="出库单号"
+                                        active={sort.key === "no"}
+                                        dir={sort.dir}
+                                        onSort={() => applySort("no")}
+                                        className="px-5"
+                                    />
                                     <th className="px-3 py-2.5 font-semibold">订单 / 客户</th>
-                                    <th className="px-3 py-2.5 font-semibold">BOM 编码</th>
+                                    <SortTh
+                                        label="BOM 编码"
+                                        active={sort.key === "bomCode"}
+                                        dir={sort.dir}
+                                        onSort={() => applySort("bomCode")}
+                                        className="px-3"
+                                    />
                                     <SortTh
                                         label="发货数量（个）"
                                         align="right"

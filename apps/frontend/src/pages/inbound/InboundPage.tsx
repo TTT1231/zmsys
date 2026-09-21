@@ -31,11 +31,13 @@ import { BomCell } from "@/components/bom/BomCell";
 import { BomPicker } from "@/components/bom/BomPicker";
 import type { InboundRow, Snapshot } from "@/api";
 
-/* 可排序列：入库日期 / 入库数量；桌面表头与移动端排序下拉共用 */
-type LedgerSortKey = "date" | "qty";
+/* 可排序列：入库单号 / BOM 编码 / 入库数量 / 入库日期；桌面表头与移动端排序下拉共用 */
+type LedgerSortKey = "no" | "bomCode" | "qty" | "date";
 const LEDGER_SORT_COLUMNS: Array<{ key: LedgerSortKey; label: string }> = [
-    { key: "date", label: "入库日期" },
+    { key: "no", label: "入库单号" },
+    { key: "bomCode", label: "BOM 编码" },
     { key: "qty", label: "入库数量" },
+    { key: "date", label: "入库日期" },
 ];
 
 /**
@@ -84,6 +86,9 @@ function InboundBomPicker({
                     </div>
                     <p className="mt-1 text-12.5 text-td">{currentBom.name}</p>
                     <p className="mt-1 wrap-break-word text-11.5 text-muted">{currentBom.spec}</p>
+                    <p className="mt-1.5 text-11.5 text-muted">
+                        BOM 备注：<span className="whitespace-pre-wrap text-td">{currentBom.remark || "—"}</span>
+                    </p>
                 </div>
             )}
         </div>
@@ -510,7 +515,14 @@ export function InboundPage() {
     const sorted = useMemo(() => {
         const factor = sort.dir === "asc" ? 1 : -1;
         return [...filtered].sort((a, b) => {
-            const byKey = sort.key === "qty" ? a.qty - b.qty : a.date.localeCompare(b.date);
+            const byKey =
+                sort.key === "no"
+                    ? a.no.localeCompare(b.no)
+                    : sort.key === "bomCode"
+                      ? a.bomCode.localeCompare(b.bomCode)
+                      : sort.key === "qty"
+                        ? a.qty - b.qty
+                        : a.date.localeCompare(b.date);
             return byKey * factor || a.no.localeCompare(b.no);
         });
     }, [filtered, sort]);
@@ -666,8 +678,20 @@ export function InboundPage() {
                         >
                             <thead>
                                 <tr className="text-left text-12 text-muted">
-                                    <th className="px-5 py-2.5 font-semibold">入库单号</th>
-                                    <th className="px-3 py-2.5 font-semibold">BOM 编码</th>
+                                    <SortTh
+                                        label="入库单号"
+                                        active={sort.key === "no"}
+                                        dir={sort.dir}
+                                        onSort={() => applySort("no")}
+                                        className="px-5"
+                                    />
+                                    <SortTh
+                                        label="BOM 编码"
+                                        active={sort.key === "bomCode"}
+                                        dir={sort.dir}
+                                        onSort={() => applySort("bomCode")}
+                                        className="px-3"
+                                    />
                                     <SortTh
                                         label="入库数量（个）"
                                         align="right"

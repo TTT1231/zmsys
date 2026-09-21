@@ -156,7 +156,8 @@ describe("基础设施并发专项 (e2e)", () => {
                 const rows = await prisma.$queryRaw<Array<{ next_value: bigint }>>`
                     SELECT next_value FROM biz_sequence WHERE sequence_key = 'customer:global'
                 `;
-                return Number(rows[0].next_value);
+                // 序列行由首次取号懒创建：customers 套件未先行时行缺失，基准按 0
+                return Number(rows[0]?.next_value ?? 0n);
             };
             const before = await readNext();
             const first = await app.inject({
@@ -185,7 +186,8 @@ describe("基础设施并发专项 (e2e)", () => {
                 const rows = await prisma.$queryRaw<Array<{ next_value: bigint }>>`
                     SELECT next_value FROM biz_sequence WHERE sequence_key = 'customer:global'
                 `;
-                return Number(rows[0].next_value);
+                // 序列行由首次取号懒创建：customers 套件未先行时行缺失，基准按 0
+                return Number(rows[0]?.next_value ?? 0n);
             };
             const before = await readNext();
             const [a, b] = await Promise.all([

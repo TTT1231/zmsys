@@ -1,5 +1,7 @@
 import { BomCell } from "@/components/bom/BomCell";
 import { DataTable } from "@/components/ui/DataTable";
+import { SortTh } from "@/components/ui/SortTh";
+import { nextSortState, type SortState } from "@/lib/tableSort";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -10,6 +12,7 @@ import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
 import { copyText } from "@/lib/clipboard";
 import { useApp } from "@/context/useApp";
+import { isApiError } from "@/http";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Button, TableLink } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
@@ -87,6 +90,15 @@ export function BomDetailModal({
             }
         >
             <BomSpecs bom={bom} categories={categories} />
+            <section
+                aria-label="BOM 备注"
+                className="mt-4 rounded-input border border-dashed border-line-strong bg-warning-soft/40 p-3.5"
+            >
+                <h3 className="text-12 font-medium text-muted">BOM 备注</h3>
+                <p className="mt-1.5 whitespace-pre-wrap text-14 leading-6 text-td wrap-anywhere">
+                    {bom.remark || "—"}
+                </p>
+            </section>
         </Modal>
     );
 }
@@ -182,9 +194,14 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
     const [childCategoryKey, setChildCategoryKey] = useState("");
     const [pendingChange, setPendingChange] = useState<{ kind: "category" | "child"; value: string } | null>(null);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    /* 建档备注（工艺差异，参与判重）；保存命中重复时展示已有编码 */
+    const [remark, setRemark] = useState("");
+    const [duplicateCode, setDuplicateCode] = useState<string | null>(null);
 
     const category = bomCategories?.find(item => item.name === name);
     const childCategory = bomCategories?.find(item => item.key === childCategoryKey);
+    /* 子选标签：旋转XK3 的变体是接线工艺（焊线/插线），其余为跌倒开关的微动类型 */
+    const childLabel = category?.key === "rotary-xk3" ? "接线工艺" : "微动开关类型";
     /* 合并树：本品类目录 + 子品类目录（跌倒开关 = 跌倒盖/底/钢球/翘板 + 微动开关物料嵌套在"微动开关"大类下） */
     const tipoverBlocks = useMemo(() => (category ? catalogBlocksOf(category) : []), [category]);
     const childBlocks = useMemo(() => (childCategory ? catalogBlocksOf(childCategory) : []), [childCategory]);
@@ -228,6 +245,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
         setQuantities({});
         setCollapsed(new Set());
         setChildCategoryKey("");
+        setRemark("");
         setErrors({});
     };
 
@@ -236,6 +254,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
         setSelectedIds(new Set());
         setQuantities({});
         setCollapsed(new Set());
+        setRemark("");
         setErrors({});
     };
 
@@ -321,7 +340,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
         const nextErrors: Record<string, string> = {};
         if (!category) nextErrors.name = "请选择产品品类";
         if ((category?.childCategories?.length ?? 0) > 0 && !childCategory) {
-            nextErrors.childCategory = "请选择微动开关类型";
+            nextErrors.childCategory = `请选择${childLabel}`;
         }
         if (selectedIds.size === 0) nextErrors.materials = "请至少选择一项物料";
         setErrors(nextErrors);
@@ -339,15 +358,49 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                 materialItemIds: [...selectedIds],
                 ...(Object.keys(quantitiesPayload).length > 0 ? { quantities: quantitiesPayload } : {}),
                 ...(childCategory ? { childCategory: childCategory.key } : {}),
+                ...(remark.trim() ? { remark: remark.trim() } : {}),
             },
             {
-                onError: error => toast(error.message, true),
+                /* 判重命中（品类+构成+备注 完全一致）：数据库未插入新档案，
+                 * 弹层展示已有编码供复制，直接复用该编码下订单 */
+                onError: error => {
+                    if (isApiError(error) && error.code === 409) {
+                        const code = error.message.match(/BOM 已存在：(\S+)/)?.[1];
+                        if (code) {
+                            setDuplicateCode(code);
+                            return;
+                        }
+                    }
+                    toast(error.message, true);
+                },
                 onSuccess: bom => {
                     toast(`BOM ${bom.code} 已创建`);
                     onClose();
                     pickCategory("");
                 },
             },
+        );
+    };
+
+    const renderChildBlock = ({ section, groups }: { section: BomCatalogNode | null; groups: BomCatalogNode[] }) => {
+        const sectionCollapsed = section ? collapsed.has(section.id) : false;
+        return (
+            <div key={section?.id ?? groups[0]?.id ?? "child-root"}>
+                {section && (
+                    <button
+                        type="button"
+                        onClick={() => toggleCollapse(section.id)}
+                        aria-expanded={!sectionCollapsed}
+                        className="flex min-h-8 w-full items-center gap-1.5 rounded-md px-1.5 text-12.5 font-semibold text-muted transition hover:text-td"
+                    >
+                        <Icon name={sectionCollapsed ? "chevron-right" : "chevron-down"} size={14} />
+                        {section.name}
+                    </button>
+                )}
+                <div className={cn("space-y-2", section && "mt-1.5 pl-4")}>
+                    {!sectionCollapsed && groups.map(renderGroup)}
+                </div>
+            </div>
         );
     };
 
@@ -492,15 +545,18 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                         }
                     >
                         <option value="">请选择</option>
-                        {(bomCategories ?? []).map(item => (
-                            <option key={item.key}>{item.name}</option>
-                        ))}
+                        {(bomCategories ?? [])
+                            .filter(item => item.status !== false)
+                            .map(item => (
+                                <option key={item.key}>{item.name}</option>
+                            ))}
                     </SelectField>
 
                     {(category?.childCategories?.length ?? 0) > 0 && (
-                        <fieldset aria-label="微动开关类型" className="shrink-0">
+                        <fieldset aria-label={childLabel} className="shrink-0">
                             <legend className="mb-1 text-12.5 font-medium text-td">
-                                微动开关类型<span className="ml-1 text-danger">*</span>
+                                {childLabel}
+                                <span className="ml-1 text-danger">*</span>
                             </legend>
                             <div className="flex flex-wrap gap-3">
                                 {category!.childCategories!.map(key => {
@@ -547,7 +603,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                             <div>
                                 <p className="text-14 font-medium text-td">配置物料</p>
                                 <p className="mt-2 text-13 text-muted">
-                                    {category ? "请选择微动开关类型，随后配置物料" : "请选择产品品类，随后配置物料"}
+                                    {category ? `请选择${childLabel}，随后配置物料` : "请选择产品品类，随后配置物料"}
                                 </p>
                             </div>
                         </div>
@@ -555,6 +611,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
 
                     {category && (!category.childCategories?.length || childCategoryKey) && (
                         <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:grid-rows-[minmax(0,1fr)]">
+                            {" "}
                             <fieldset className="flex min-h-0 flex-col lg:overflow-hidden rounded-panel border border-line bg-surface">
                                 <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">可选物料</legend>
                                 <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-3">
@@ -583,8 +640,12 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                             </div>
                                         );
                                     })}
-                                    {/* 微动开关大类（可折叠/展开）：子品类完整物料树嵌套在此标题下 */}
-                                    {childBlocks.length > 0 && (
+                                    {/* 子品类物料树：父品类无自有目录（旋转XK3 选完工艺）时直接平铺，
+                                     * 有自有目录（跌倒开关）时收进可折叠大类，与父品类物料区分 */}
+                                    {childBlocks.length > 0 && tipoverBlocks.length === 0 && (
+                                        <div className="space-y-2">{childBlocks.map(renderChildBlock)}</div>
+                                    )}
+                                    {childBlocks.length > 0 && tipoverBlocks.length > 0 && (
                                         <div className="mt-3 border-t border-line pt-3">
                                             <button
                                                 type="button"
@@ -600,52 +661,17 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                                     }
                                                     size={14}
                                                 />
-                                                微动开关
+                                                {childLabel}
                                             </button>
                                             {!collapsed.has("child-category-wrapper") && (
                                                 <div className="mt-2 space-y-2">
-                                                    {childBlocks.map(({ section, groups }) => {
-                                                        const sectionCollapsed = section
-                                                            ? collapsed.has(section.id)
-                                                            : false;
-                                                        return (
-                                                            <div key={section?.id ?? groups[0]?.id ?? "child-root"}>
-                                                                {section && (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => toggleCollapse(section.id)}
-                                                                        aria-expanded={!sectionCollapsed}
-                                                                        className="flex min-h-8 w-full items-center gap-1.5 rounded-md px-1.5 text-12.5 font-semibold text-muted transition hover:text-td"
-                                                                    >
-                                                                        <Icon
-                                                                            name={
-                                                                                sectionCollapsed
-                                                                                    ? "chevron-right"
-                                                                                    : "chevron-down"
-                                                                            }
-                                                                            size={14}
-                                                                        />
-                                                                        {section.name}
-                                                                    </button>
-                                                                )}
-                                                                <div
-                                                                    className={cn(
-                                                                        "space-y-2",
-                                                                        section && "mt-1.5 pl-4",
-                                                                    )}
-                                                                >
-                                                                    {!sectionCollapsed && groups.map(renderGroup)}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
+                                                    {childBlocks.map(renderChildBlock)}
                                                 </div>
                                             )}
                                         </div>
                                     )}
                                 </div>
                             </fieldset>
-
                             <fieldset className="flex min-h-0 flex-col lg:overflow-hidden rounded-panel border border-line bg-panel/40">
                                 <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">
                                     已选物料（{selectedRows.length}）
@@ -692,6 +718,21 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                         </div>
                     )}
 
+                    <fieldset className="shrink-0 rounded-panel border border-line bg-panel/40">
+                        <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">备注</legend>
+                        <div className="p-3">
+                            <textarea
+                                value={remark}
+                                onChange={event => setRemark(event.target.value)}
+                                rows={remark ? 3 : 2}
+                                maxLength={500}
+                                aria-label="BOM 备注"
+                                placeholder="如：杆子白色。最多500字！！"
+                                className="min-h-16 w-full resize-y rounded-input border border-line-strong bg-surface px-3 py-2 text-13 leading-6 text-td outline-none transition placeholder:text-subtle focus:border-primary"
+                            />
+                        </div>
+                    </fieldset>
+
                     {errors.materials && (
                         <p role="alert" className="text-12 text-danger">
                             {errors.materials}
@@ -730,12 +771,51 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                 }
             >
                 <p className="text-14 text-td">
-                    当前已选 {selectedIds.size} 项物料。切换品类或微动开关类型后，需要重新选择物料。
+                    当前已选 {selectedIds.size} 项物料。切换品类或{childLabel}后，需要重新选择物料。
                 </p>
+            </Modal>
+
+            {/* 判重命中：数据库已存在一模一样的 BOM（品类+构成+备注），未插入新档案 */}
+            <Modal
+                open={!!duplicateCode}
+                onClose={() => setDuplicateCode(null)}
+                label="已存在相同 BOM"
+                title="已存在完全相同的 BOM"
+                width={480}
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setDuplicateCode(null)}>
+                            关闭
+                        </Button>
+                        <Button
+                            variant="primary"
+                            onClick={async () => {
+                                if (duplicateCode && (await copyText(duplicateCode))) {
+                                    toast(`已复制 ${duplicateCode}，可直接粘贴到销售订单`);
+                                }
+                            }}
+                        >
+                            复制 BOM 编号
+                        </Button>
+                    </>
+                }
+            >
+                <div className="flex flex-col gap-3">
+                    <p className="text-13 leading-6 text-td">
+                        已存在一模一样的 BOM，没有重复创建。直接用下面这个编号：
+                    </p>
+                    <p className="tnum rounded-input border border-dashed border-line-strong bg-soft px-4 py-3 text-center text-24 font-bold tracking-wide text-primary">
+                        {duplicateCode}
+                    </p>
+                    <p className="text-12 leading-5 text-muted">点「复制 BOM 编号」即可粘贴到销售订单。</p>
+                </div>
             </Modal>
         </>
     );
 }
+
+/* 可排序列：BOM 编码；默认不排序，保持后端「新建置顶」的列表顺序 */
+type BomSortKey = "code";
 
 export function BomPage() {
     const { can } = useApp();
@@ -753,6 +833,7 @@ export function BomPage() {
     const [category, setCategory] = useState("全部品类");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
+    const [sort, setSort] = useState<SortState<BomSortKey> | null>(null);
     const [newOpen, setNewOpen] = useState(false);
     const [detail, setDetail] = useState<Bom | null>(null);
     const [deleting, setDeleting] = useState<Bom | null>(null);
@@ -787,13 +868,18 @@ export function BomPage() {
             );
     }, [boms, keyword, category]);
 
-    const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
+    const sorted = useMemo(() => {
+        if (!sort) return filtered;
+        const factor = sort.dir === "asc" ? 1 : -1;
+        return [...filtered].sort((a, b) => a.code.localeCompare(b.code) * factor);
+    }, [filtered, sort]);
+    const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize);
     const canCreate = can("bom:create");
-    // 翻页后行序变化，滚动区回到顶部
+    // 排序或翻页后行序变化，滚动区回到顶部
     const tableScrollRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
         if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
-    }, [page]);
+    }, [page, sort]);
 
     useEffect(() => {
         if (searchParams.get("new") === "bom") {
@@ -871,12 +957,13 @@ export function BomPage() {
                                 onClick={() =>
                                     downloadCsv(
                                         "BOM",
-                                        ["序号", "BOM编码", "品类", "物料构成"],
+                                        ["序号", "BOM编码", "品类", "物料构成", "备注"],
                                         pageRows.map((bom, index) => [
                                             String((page - 1) * pageSize + index + 1),
                                             bom.code,
                                             bom.name,
                                             bom.spec,
+                                            bom.remark,
                                         ]),
                                     )
                                 }
@@ -906,11 +993,12 @@ export function BomPage() {
                                     bomCode={bom.code}
                                     showIdentity={false}
                                 />
-                                <div className="mt-2">
+                                <div className="mt-2 grid grid-cols-2 gap-2">
                                     <CardField
                                         label="当前库存"
                                         value={stocksQuery.data ? `${num(stocksQuery.data[bom.code] ?? 0)} 个` : "—"}
                                     />
+                                    <CardField label="备注" value={bom.remark || "—"} />
                                 </div>
                             </RecordCard>
                         ))}
@@ -922,7 +1010,7 @@ export function BomPage() {
                     ) : (
                         <DataTable
                             tableId="bom"
-                            defaultWidths={[80, 180, 150, 430, 120]}
+                            defaultWidths={[80, 160, 120, 360, 180, 100]}
                             recordCount={filtered.length}
                             identityColumn={1}
                             scrollRef={tableScrollRef}
@@ -932,13 +1020,25 @@ export function BomPage() {
                                     <th className="px-5 py-2.5 text-right font-semibold" style={{ width: "6%" }}>
                                         序号
                                     </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "16%" }}>
-                                        BOM 编码
-                                    </th>
+                                    <SortTh
+                                        label="BOM 编码"
+                                        active={sort?.key === "code"}
+                                        dir={sort?.dir ?? "asc"}
+                                        onSort={() =>
+                                            setSort(current =>
+                                                current ? nextSortState(current, "code") : { key: "code", dir: "asc" },
+                                            )
+                                        }
+                                        className="px-3"
+                                        width="16%"
+                                    />
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "12%" }}>
                                         品类
                                     </th>
                                     <th className="px-3 py-2.5 font-semibold">物料构成</th>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "16%" }}>
+                                        备注
+                                    </th>
                                     <th className="px-5 py-2.5 text-right font-semibold" style={{ width: "10%" }}>
                                         操作
                                     </th>
@@ -947,7 +1047,7 @@ export function BomPage() {
                             <tbody>
                                 {pageRows.length === 0 && (
                                     <tr>
-                                        <td colSpan={5} className="px-5 py-10 text-center">
+                                        <td colSpan={6} className="px-5 py-10 text-center">
                                             <EmptyState description="暂无 BOM" />
                                         </td>
                                     </tr>
@@ -977,6 +1077,14 @@ export function BomPage() {
                                                 bomCode={bom.code}
                                                 showIdentity={false}
                                             />
+                                        </td>
+                                        <td className="px-3 py-3 text-13 leading-5 text-td">
+                                            <span
+                                                className="line-clamp-2 whitespace-pre-line"
+                                                title={bom.remark || undefined}
+                                            >
+                                                {bom.remark || "—"}
+                                            </span>
                                         </td>
                                         <td className="px-5 py-3 text-right">
                                             <TableLink onClick={() => setDetail(bom)}>查看详情</TableLink>

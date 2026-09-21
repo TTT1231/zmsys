@@ -301,12 +301,16 @@ CREATE TABLE bom_category (
 -- 物料目录模式：7 品类。
 INSERT INTO bom_category (id, category_key, name, code_prefix, seq_width, child_categories) VALUES
     (1001, 'rotary-switch', '旋转XK2', 'XK2', 3),
-    (1002, 'rotary-xk3', '旋转XK3', 'XK3', 3),
+    (1002, 'rotary-xk3', '旋转XK3', 'XK3', 3, '["xk3-wire", "xk3-plug"]'),
     (1003, 'new-micro-switch', '新微动', 'KW', 3),
     (1004, 'old-micro-switch', '老微动', 'KWO', 3),
     (1005, 'safety-switch', '安全开关', 'AQ', 3),
     (1006, 'tipover-switch', '跌倒开关', 'KD', 3, '["new-micro-switch", "old-micro-switch"]'),
-    (1007, 'piano-key-switch', '琴键开关', 'KQ', 3);
+    (1007, 'piano-key-switch', '琴键开关', 'KQ', 3),
+    (1008, 'xk3-wire', '焊线', 'XK3W', 3),
+    (1009, 'xk3-plug', '插线', 'XK3P', 3);
+-- 焊线/插线为旋转XK3 的接线工艺目录容器（child_categories 引用），停用后不在建档下拉出现。
+UPDATE bom_category SET status = 0 WHERE id IN (1008, 1009);
 
 -- 物料目录节点：分区（SECTION，仅展示与折叠、不挂物料）或分组（GROUP，挂可选物料）。
 -- 分组 key 为稳定标识（model 用于型号派生）；qty=1 的分组选中项可携带 1-99 数量
@@ -492,22 +496,24 @@ INSERT INTO material_item (id, group_id, name, sort_order) VALUES
     (3032, 2005, '三脚铜点', 2),
     (3033, 2005, '塑料盖板', 3),
     (3034, 2005, '全方位左脚银点', 4),
-    (3035, 2005, '全方位右脚银点', 5),
-    (3036, 2005, '左脚银点（全银点）', 6),
+    (3036, 2005, '左脚银点', 6),
     (3037, 2005, '右脚银点', 7),
     (3038, 2005, '右脚铜点', 8),
     (3039, 2005, '全方位左脚铜点', 9),
     (3624, 2005, '左脚铜点', 10),
+    (3750, 2005, '全方位双脚铜点', 11),
+    (3751, 2005, '全方位双脚银点', 12),
     (3041, 2006, '三脚银点', 1),
     (3042, 2006, '三脚铜点', 2),
     (3043, 2006, '塑料盖板', 3),
     (3044, 2006, '全方位左脚银点', 4),
-    (3045, 2006, '全方位右脚银点', 5),
-    (3046, 2006, '左脚银点（全银点）', 6),
+    (3046, 2006, '左脚银点', 6),
     (3047, 2006, '右脚银点', 7),
     (3048, 2006, '右脚铜点', 8),
     (3049, 2006, '全方位左脚铜点', 9),
     (3625, 2006, '左脚铜点', 10),
+    (3752, 2006, '全方位双脚铜点', 11),
+    (3753, 2006, '全方位双脚银点', 12),
     (3008, 2007, '0.5', 1),
     (3009, 2007, '0.55', 2),
     (3010, 2007, '0.6', 3),
@@ -532,6 +538,7 @@ INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, m
     (2116, 1003, 2102, 'GROUP', '动片', 'moving-plate', 0, 3),
     (2117, 1003, 2102, 'GROUP', '摆片', 'swing-plate', 0, 4),
     (2118, 1003, 2102, 'GROUP', '弹片', 'spring-plate', 0, 5),
+    (2709, 1003, 2102, 'GROUP', '压杆', 'press-rod', 0, 6),
     (2103, 1003, NULL, 'SECTION', '触点', NULL, NULL, 3),
     (2119, 1003, 2103, 'GROUP', '触点大小', 'contact-size', 0, 1),
     (2120, 1003, 2103, 'GROUP', '触点厚度', 'contact-thickness', 0, 2),
@@ -568,6 +575,8 @@ INSERT INTO material_item (id, group_id, name, sort_order) VALUES
     (3127, 2118, '0.12', 1),
     (3128, 2118, '0.15', 2),
     (3129, 2118, '0.2', 3),
+    (3747, 2709, '直杆', 1),
+    (3748, 2709, '弯杆', 2),
     (3131, 2119, '3.0mm', 1),
     (3132, 2119, '3.5mm', 2),
     (3133, 2120, '0.15', 1),
@@ -588,6 +597,7 @@ INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, m
     (2216, 1004, 2202, 'GROUP', '弹片', 'spring-plate', 0, 3),
     (2217, 1004, 2202, 'GROUP', '弹簧', 'spring', 0, 4),
     (2218, 1004, 2202, 'GROUP', '挡脚', 'stop-foot', 0, 5),
+    (2710, 1004, 2202, 'GROUP', '压杆', 'press-rod', 0, 6),
     (2203, 1004, NULL, 'SECTION', '触点', NULL, NULL, 3),
     (2219, 1004, 2203, 'GROUP', '触点大小', 'contact-size', 0, 1),
     (2220, 1004, 2203, 'GROUP', '触点厚度', 'contact-thickness', 0, 2),
@@ -608,6 +618,7 @@ INSERT INTO material_item (id, group_id, name, sort_order) VALUES
     (3210, 2217, '0.25', 1),
     (3211, 2217, '0.27', 2),
     (3212, 2218, '挡脚', 1),
+    (3749, 2710, '直杆', 1),
     (3141, 2219, '3.0mm', 1),
     (3142, 2219, '3.5mm', 2),
     (3143, 2220, '0.15', 1),
@@ -620,18 +631,30 @@ INSERT INTO material_item (id, group_id, name, sort_order) VALUES
 -- + 五金件分区（小静片/半圆静片/动片 各 不电镀·镀锡、带圈动片、钢球、卡线片、弹簧——
 -- 弹簧为多选组，0.45长/短弹簧可同时勾选）；
 -- 无触点分区（XK3 类开关不带触点，电流不大）。
+-- 旋转XK3 拆接线工艺（child_categories 指向焊线/插线）：插线目录（下）挂 xk3-plug(1009)，
+-- 焊线目录挂 xk3-wire(1008)：外壳/底座各一种，杆子圆轴/扁轴4.8，
+-- 静片（多选）/动片/弹簧（多选）/3.0mm电镀钢球。
 INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, multi, sort_order) VALUES
-    (2401, 1002, NULL, 'GROUP', 'PC塑料外壳', 'pc-shell', 0, 1),
-    (2402, 1002, NULL, 'GROUP', 'PC塑料底座', 'pc-base', 0, 2),
-    (2403, 1002, NULL, 'GROUP', 'PA66塑料杆子', 'pa66-lever', 0, 3),
-    (2404, 1002, NULL, 'SECTION', '五金件', NULL, NULL, 4),
-    (2411, 1002, 2404, 'GROUP', '小静片', 'small-static-plate', 0, 1),
-    (2412, 1002, 2404, 'GROUP', '半圆静片', 'half-round-static-plate', 0, 2),
-    (2413, 1002, 2404, 'GROUP', '动片', 'moving-plate', 0, 3),
-    (2414, 1002, 2404, 'GROUP', '带圈动片', 'ring-moving-plate', 0, 4),
-    (2415, 1002, 2404, 'GROUP', '钢球', 'steel-ball', 0, 5),
-    (2416, 1002, 2404, 'GROUP', '卡线片', 'wire-clip', 0, 6),
-    (2417, 1002, 2404, 'GROUP', '弹簧', 'spring', 1, 7);
+    (2401, 1009, NULL, 'GROUP', 'PC塑料外壳', 'pc-shell', 0, 1),
+    (2402, 1009, NULL, 'GROUP', 'PC塑料底座', 'pc-base', 0, 2),
+    (2403, 1009, NULL, 'GROUP', 'PA66塑料杆子', 'pa66-lever', 0, 3),
+    (2404, 1009, NULL, 'SECTION', '五金件', NULL, NULL, 4),
+    (2411, 1009, 2404, 'GROUP', '小静片', 'small-static-plate', 0, 1),
+    (2412, 1009, 2404, 'GROUP', '半圆静片', 'half-round-static-plate', 0, 2),
+    (2413, 1009, 2404, 'GROUP', '动片', 'moving-plate', 0, 3),
+    (2414, 1009, 2404, 'GROUP', '带圈动片', 'ring-moving-plate', 0, 4),
+    (2415, 1009, 2404, 'GROUP', '钢球', 'steel-ball', 0, 5),
+    (2416, 1009, 2404, 'GROUP', '卡线片', 'wire-clip', 0, 6),
+    (2417, 1009, 2404, 'GROUP', '弹簧', 'spring', 1, 7),
+    (2711, 1008, NULL, 'SECTION', 'PC塑料', NULL, NULL, 1),
+    (2712, 1008, 2711, 'GROUP', '外壳', 'shell', 0, 0, 1),
+    (2713, 1008, 2711, 'GROUP', '底座', 'base', 0, 0, 2),
+    (2714, 1008, NULL, 'GROUP', 'PA66塑料杆子', 'pa66-lever', 0, 0, 2),
+    (2715, 1008, NULL, 'SECTION', '五金件', NULL, NULL, 3),
+    (2716, 1008, 2715, 'GROUP', '静片', 'static-plate', 1, 0, 1),
+    (2717, 1008, 2715, 'GROUP', '动片', 'moving-plate', 0, 0, 2),
+    (2718, 1008, 2715, 'GROUP', '弹簧', 'spring', 1, 0, 3),
+    (2719, 1008, 2715, 'GROUP', '钢球', 'steel-ball', 0, 0, 4);
 
 INSERT INTO material_item (id, group_id, name, sort_order) VALUES
     (3401, 2401, '圆孔长外壳（茶色）', 1),
@@ -657,7 +680,17 @@ INSERT INTO material_item (id, group_id, name, sort_order) VALUES
     (3420, 2416, '底盖0.15', 2),
     (3421, 2416, '底盖0.2', 3),
     (3422, 2417, '0.45长弹簧', 1),
-    (3423, 2417, '0.45短弹簧', 2);
+    (3423, 2417, '0.45短弹簧', 2),
+    (3754, 2712, '外壳', 1),
+    (3755, 2713, '底座', 1),
+    (3756, 2714, '圆轴', 1),
+    (3757, 2714, '扁轴4.8', 2),
+    (3758, 2716, '小静片', 1),
+    (3759, 2716, '半圆静片', 2),
+    (3760, 2717, '带圈动片', 1),
+    (3761, 2718, '长弹簧', 1),
+    (3762, 2718, '短弹簧', 2),
+    (3763, 2719, '3.0mm电镀钢球', 1);
 
 -- 安全开关（1005 / AQ / 3）：PC塑料（外壳类）根分组 + PA66塑料分区（盖板）
 -- + 五金件分区（短款/30mm→31mm、长款/41mm→43mm 四个多选组，id 连续按展示序）+ 触点分区。
@@ -668,8 +701,8 @@ INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, m
     (2503, 1005, NULL, 'SECTION', '五金件', NULL, NULL, 3),
     (2611, 1005, 2503, 'GROUP', '短款/30mm系列配件', 'short-30-parts', 1, 1),
     (2612, 1005, 2503, 'GROUP', '短款/31mm系列配件', 'short-31-parts', 1, 2),
-    (2613, 1005, 2503, 'GROUP', '长款/41mm系列配件', 'long-41-parts', 1, 3),
-    (2614, 1005, 2503, 'GROUP', '长款/43mm系列配件', 'long-43-parts', 1, 4),
+    (2613, 1005, 2503, 'GROUP', '长款/40mm系列配件', 'long-41-parts', 1, 3),
+    (2614, 1005, 2503, 'GROUP', '长款/41mm系列配件', 'long-43-parts', 1, 4),
     (2504, 1005, NULL, 'SECTION', '触点', NULL, NULL, 4),
     (2514, 1005, 2504, 'GROUP', '触点大小', 'contact-size', 0, 1),
     (2515, 1005, 2504, 'GROUP', '触点厚度', 'contact-thickness', 0, 2),
@@ -725,7 +758,7 @@ INSERT INTO material_item (id, group_id, name, sort_order) VALUES
     (3605, 2603, '18mm钢球', 1),
     (3606, 2604, '翘板', 1);
 
--- 琴键开关（1007 / KQ / 3）：8 个单选根组；扣板/连锁片/静片/动片四组 qty=1
+-- 琴键开关（1007 / KQ / 3）：7 个单选根组 + 静片多选；扣板/连锁片/静片/动片四组 qty=1
 -- （选中项可携带 1-99 数量），其余分组不带数量。
 INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, multi, qty, sort_order) VALUES
     (2701, 1007, NULL, 'GROUP', '琴键底', 'piano-base', 0, 0, 1),
@@ -733,7 +766,7 @@ INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, m
     (2703, 1007, NULL, 'GROUP', '卡板', 'clamp-plate', 0, 0, 3),
     (2704, 1007, NULL, 'GROUP', '扣板', 'buckle-plate', 0, 1, 4),
     (2705, 1007, NULL, 'GROUP', '连锁片', 'interlock-tab', 0, 1, 5),
-    (2706, 1007, NULL, 'GROUP', '静片', 'static-plate', 0, 1, 6),
+    (2706, 1007, NULL, 'GROUP', '静片', 'static-plate', 1, 1, 6),
     (2707, 1007, NULL, 'GROUP', '动片', 'moving-plate', 0, 1, 7),
     (2708, 1007, NULL, 'GROUP', '弹簧规格', 'spring-spec', 0, 0, 8);
 

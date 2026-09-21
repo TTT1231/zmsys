@@ -31,10 +31,18 @@ export class CreateBomDto {
     quantities?: Record<string, number>;
 
     /** 品类子选（category key）：品类标记 childCategories 时必填（如跌倒开关的微动开关类型），
-     * 服务端将该子品类的完整物料目录并入本品类的校验范围 */
+     * 服务端将该子品类的完整物料目录并入本品类的选择范围 */
     @IsOptional()
     @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
     @IsString()
     @MaxLength(40, { message: "子品类最多 40 个字符" })
     childCategory?: string;
+
+    /** 建档备注：物料构成之外的工艺差异（如"触点是反的"），参与判重指纹——
+     * 同构成不同备注 = 不同 BOM；trim 后空串 = 无备注 */
+    @IsOptional()
+    @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+    @IsString({ message: "备注必须是字符串" })
+    @MaxLength(500, { message: "备注最多 500 个字符" })
+    remark?: string;
 }

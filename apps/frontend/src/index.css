@@ -857,6 +857,7 @@ button:active:not(:disabled) {
 .bom-cell[data-identity="true"] .bom-material-trigger {
     display: none;
 }
+.managed-table[data-density="standard"] .bom-material-trigger,
 .managed-table[data-density="roomy"] .bom-material-trigger {
     display: inline-block;
 }

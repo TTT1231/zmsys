@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/* 共用凭证区块：物料组成两列键值网格、头部只显 BOM 编码、缺失兜底与备注换行。 */
+/* 共用凭证区块：BOM 详细两列键值网格、头部只显 BOM 编码、缺失兜底与备注换行。 */
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
@@ -7,9 +7,9 @@ import { RecordFields, RecordProduct, RecordSummary } from "@/components/busines
 import { detailBom } from "../../fixtures/recordDetails";
 afterEach(cleanup);
 
-it("物料组成呈两列键值网格，头部只显 BOM 编码，BOM 缺失仍能核对编码", () => {
+it("BOM 详细呈两列键值网格，头部只显 BOM 编码，BOM 缺失仍能核对编码", () => {
     const { rerender, container } = render(<RecordProduct bom={detailBom} bomCode={detailBom.code} />);
-    const region = screen.getByRole("region", { name: "物料组成" });
+    const region = screen.getByRole("region", { name: "BOM 详细" });
     expect(region).toHaveTextContent("二脚底座（无挡脚）");
     // 头部裸显编码，无「BOM 编码」前缀杂项文字
     expect(screen.getByText(detailBom.code)).toBeInTheDocument();
@@ -22,6 +22,12 @@ it("物料组成呈两列键值网格，头部只显 BOM 编码，BOM 缺失仍�
     rerender(<RecordProduct bomCode={detailBom.code} />);
     expect(screen.getByText(detailBom.code)).toBeInTheDocument();
     expect(screen.getByText("未找到该成品的物料信息")).toBeInTheDocument();
+});
+it("BOM 备注随凭证固定展示：空备注显示 —，有备注保留换行", () => {
+    const { rerender } = render(<RecordProduct bom={detailBom} bomCode={detailBom.code} />);
+    expect(screen.getByText(/BOM 备注：/).textContent).toBe("BOM 备注：—");
+    rerender(<RecordProduct bom={{ ...detailBom, remark: "第一行\n第二行" }} bomCode={detailBom.code} />);
+    expect(screen.getByText(/BOM 备注：/).textContent).toBe("BOM 备注：第一行\n第二行");
 });
 it("零数量、状态和换行备注完整显示", () => {
     render(

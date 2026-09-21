@@ -1,13 +1,12 @@
 import { createHash } from "node:crypto";
 
-/**
- * BOM 物料集合判重（db-scheme.md §5 bom_table）：输入为「物料 id + 数量」对，
- * id 先校验为正十进制 BIGINT 数字串，再规范化为 BigInt 十进制字符串（消除
- * "001"/"1" 的双表示——同一物料 id 只允许一种判重形式），数量为 1-99 整数
- * （qty 分组步进器范围，非 qty 分组恒 1）。去重后按 id 数值升序序列化为
- * [[id, quantity], ...] 的 JSON 数组（数字不加引号），SHA-256 → 32 字节
- * spec_hash。同一物料集合、不同数量 = 不同 BOM。展示值与判重值分离，判重只用这一套。
- */
+/** 判重指纹维度：品类 + 物料构成 + 备注（db-scheme.md §5 bom_table）。
+ * 输入为「物料 id + 数量」对，id 先校验为正十进制 BIGINT 数字串，再规范化为
+ * BigInt 十进制字符串（消除 "001"/"1" 的双表示——同一物料 id 只允许一种判重
+ * 形式），数量为 1-99 整数（qty 分组步进器范围，非 qty 分组恒 1）。去重后按
+ * id 数值升序序列化为 [[id, quantity], ...] 的 JSON 数组（数字不加引号），
+ * 再与品类 id、备注组成三元素 JSON 数组，SHA-256 → 32 字节 spec_hash。
+ * 同一物料集合、不同数量或不同备注 = 不同 BOM。展示值与判重值分离，判重只用这一套。 */
 
 /** MySQL BIGINT 有符号上限（2^63-1）：id 为 Snowflake/种子正数，不允许越界 */
 const BIGINT_MAX = 9223372036854775807n;
@@ -63,13 +62,31 @@ export function canonicalMaterialEntries(entries: MaterialSpecEntry[]): Material
 }
 
 /**
- * spec_hash = SHA-256(规范化 [[id, quantity], ...] 的 JSON 序列化 UTF-8 字节)，
- * 32 字节（对应 BINARY(32)）。迁移 20260922030000 以同构 SQL 重算了全部存量。
+ * spec_hash = SHA-256(JSON.stringify([categoryId, [[id, quantity], ...], remark])
+ * 的 UTF-8 字节)，32 字节（对应 BINARY(32)）。categoryId 与物料 id 同规范
+ * （BigInt 十进制字符串）；remark 为 trim 后原文（空串 = 无备注）。迁移
+ * 20260922030000 引入数量维度、20260927000000 引入品类+备注维度，两次均以
+ * 同构 SQL 重算全部存量。
  */
-export function materialSetHash(entries: MaterialSpecEntry[]): Uint8Array<ArrayBuffer> {
+export function materialSetHash(
+    categoryId: string | bigint,
+    entries: MaterialSpecEntry[],
+    remark: string,
+): Uint8Array<ArrayBuffer> {
+    const categoryKey = typeof categoryId === "string" ? normalizeMaterialId(categoryId) : categoryId.toString();
+    if (categoryKey === null) {
+        throw new Error(`品类编号非法：${categoryId}`);
+    }
     return new Uint8Array(
         createHash("sha256")
-            .update(JSON.stringify(canonicalMaterialEntries(entries).map(({ id, quantity }) => [id, quantity])), "utf8")
+            .update(
+                JSON.stringify([
+                    categoryKey,
+                    canonicalMaterialEntries(entries).map(({ id, quantity }) => [id, quantity]),
+                    remark,
+                ]),
+                "utf8",
+            )
             .digest(),
     );
 }

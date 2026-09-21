@@ -201,6 +201,8 @@ it("目录块顺序：根分组在外壳侧在前、触点分区始终排最后�
         (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
     const { rerender } = render(<NewBomModal open onClose={vi.fn()} />);
     await pickCategory(user, "旋转XK3");
+    // 接线工艺二分：先选插线，出现插线目录
+    await user.click(screen.getByRole("radio", { name: "插线" }));
     const shell = screen.getByRole("button", { name: "PC塑料外壳" });
     const hardware = screen.getByRole("button", { name: "五金件" });
     expect(follows(shell, hardware)).toBe(true);
@@ -283,6 +285,32 @@ it("数量分组：勾选后出现步进器，右框显示 ×N，提交携带 qu
     expect(within(right3).queryByText(/×\d/)).not.toBeInTheDocument();
 });
 
+it("多选数量组（琴键静片）：可选多项并保留，各自携带数量提交", async () => {
+    const user = userEvent.setup();
+    render(<NewBomModal open onClose={vi.fn()} />);
+    await pickCategory(user, "琴键开关");
+
+    await user.click(itemCheckbox("带点静片"));
+    await user.click(itemCheckbox("四键焊线静片"));
+    // 多选语义：两项同时保留，组头出现全选框
+    let right = screen.getByRole("group", { name: /已选物料（2）/ });
+    expect(within(right).getByText("带点静片")).toBeInTheDocument();
+    expect(within(right).getByText("四键焊线静片")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "全选静片" })).toBeInTheDocument();
+
+    // 每个选中项独立步进：四键焊线静片 ×2、带点静片保持 ×1
+    await user.click(screen.getByRole("button", { name: "四键焊线静片 数量加一" }));
+    right = screen.getByRole("group", { name: /已选物料（2）/ });
+    expect(within(right).getByText("×2")).toBeInTheDocument();
+    expect(within(right).getByText("×1")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "保存 BOM" }));
+    expect(mutate).toHaveBeenCalledWith(
+        { name: "琴键开关", materialItemIds: ["3733", "3735"], quantities: { "3733": 1, "3735": 2 } },
+        expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+});
+
 it("空集合提交被拦截；选中后提交携带物料 id 集合", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
@@ -333,16 +361,16 @@ it("跌倒开关：品类子选微动类型后合并树展示，提交携带 chi
     // 选新微动 → 合并树：跌倒物料 + "微动开关"大类（可折叠）+ 微动分区/分组
     await user.click(screen.getByRole("radio", { name: "新微动" }));
     expect(screen.getByRole("button", { name: "跌倒盖" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "微动开关" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "微动开关类型" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "PA66塑料" })).toBeInTheDocument();
 
     // 折叠微动开关大类 → 整棵微动物料树隐藏
-    await user.click(screen.getByRole("button", { name: "微动开关" }));
+    await user.click(screen.getByRole("button", { name: "微动开关类型" }));
     expect(screen.queryByRole("button", { name: "PA66塑料" })).not.toBeInTheDocument();
     expect(screen.queryByRole("checkbox", { name: "二脚底座（无挡脚）" })).not.toBeInTheDocument();
 
     // 展开 → 物料树恢复
-    await user.click(screen.getByRole("button", { name: "微动开关" }));
+    await user.click(screen.getByRole("button", { name: "微动开关类型" }));
     expect(screen.getByRole("button", { name: "PA66塑料" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "五金件" })).toBeInTheDocument();
 

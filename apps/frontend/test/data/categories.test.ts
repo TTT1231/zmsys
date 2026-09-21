@@ -9,10 +9,25 @@ const of = (name: string, ...codes: string[]) => codes.map(code => ({ code, name
 const cat = (name: string) => categoryOf(name)!;
 
 describe("categoryOf", () => {
-    it("系统共 7 个品类：旋转XK2 / 旋转XK3 / 新微动 / 老微动 / 安全开关 / 跌倒开关 / 琴键开关", () => {
+    it("系统共 9 个品类：7 个建档品类 + 旋转XK3 的焊线/插线两个工艺变体（目录容器，不在建档下拉）", () => {
+        expect(BOM_CATEGORIES.filter(category => category.status !== false).map(category => category.key)).toEqual([
+            "rotary-switch",
+            "rotary-xk3",
+            "new-micro-switch",
+            "old-micro-switch",
+            "safety-switch",
+            "tipover-switch",
+            "piano-key-switch",
+        ]);
+        expect(BOM_CATEGORIES.filter(category => category.status === false).map(category => category.key)).toEqual([
+            "xk3-wire",
+            "xk3-plug",
+        ]);
         expect(BOM_CATEGORIES.map(category => category.key)).toEqual([
             "rotary-switch",
             "rotary-xk3",
+            "xk3-wire",
+            "xk3-plug",
             "new-micro-switch",
             "old-micro-switch",
             "safety-switch",
@@ -113,6 +128,8 @@ describe("catalogRowsOf", () => {
             "弹片",
             "弹片",
             "弹片",
+            "压杆",
+            "压杆",
             "触点大小",
             "触点大小",
             "触点厚度",
@@ -144,12 +161,13 @@ describe("catalogRowsOf", () => {
             "三脚铜点",
             "塑料盖板",
             "全方位左脚银点",
-            "全方位右脚银点",
-            "左脚银点（全银点）",
+            "左脚银点",
             "右脚银点",
             "右脚铜点",
             "全方位左脚铜点",
             "左脚铜点",
+            "全方位双脚铜点",
+            "全方位双脚银点",
         ];
         expect(itemsOf("A面")).toEqual(faceOptions);
         expect(itemsOf("B面")).toEqual(faceOptions);
@@ -161,22 +179,48 @@ describe("catalogRowsOf", () => {
 });
 
 describe("旋转XK3 / 安全开关目录", () => {
-    it("旋转XK3：三个根分组 + 五金件分区（无触点，电流不大不带触点），小静片等按 不电镀/镀锡 拆选项，弹簧为多选组", () => {
+    it("旋转XK3：接线工艺二分——主品类无目录指向焊线/插线；插线目录三根分组 + 五金件分区", () => {
         const xk3 = categoryOf("旋转XK3")!;
-        expect(xk3.groups.slice(0, 3).map(node => [node.kind, node.name])).toEqual([
+        expect(xk3.groups).toEqual([]);
+        expect(xk3.childCategories).toEqual(["xk3-wire", "xk3-plug"]);
+
+        const plug = categoryOf("插线")!;
+        expect(plug.groups.slice(0, 3).map(node => [node.kind, node.name])).toEqual([
             ["group", "PC塑料外壳"],
             ["group", "PC塑料底座"],
             ["group", "PA66塑料杆子"],
         ]);
-        expect(xk3.groups.filter(node => node.kind === "section").map(node => node.name)).toEqual(["五金件"]);
+        expect(plug.groups.filter(node => node.kind === "section").map(node => node.name)).toEqual(["五金件"]);
         const itemsOf = (groupName: string) =>
-            xk3.groups.find(node => node.name === groupName)!.items.map(item => item.name);
+            plug.groups.find(node => node.name === groupName)!.items.map(item => item.name);
         expect(itemsOf("PC塑料外壳")).toHaveLength(5);
         expect(itemsOf("小静片")).toEqual(["不电镀", "镀锡"]);
         expect(itemsOf("卡线片")).toEqual(["底0.15 盖0.2", "底盖0.15", "底盖0.2"]);
         // 弹簧多选：0.45长/短弹簧可同时勾选
-        expect(xk3.groups.find(node => node.name === "弹簧")).toMatchObject({ kind: "group", multi: true });
+        expect(plug.groups.find(node => node.name === "弹簧")).toMatchObject({ kind: "group", multi: true });
         expect(itemsOf("弹簧")).toEqual(["0.45长弹簧", "0.45短弹簧"]);
+    });
+
+    it("焊线目录：外壳/底座各一种，杆子圆轴/扁轴4.8，静片/弹簧多选，3.0mm电镀钢球", () => {
+        const wire = categoryOf("焊线")!;
+        expect(wire.groups.map(node => node.name)).toEqual([
+            "PC塑料",
+            "外壳",
+            "底座",
+            "PA66塑料杆子",
+            "五金件",
+            "静片",
+            "动片",
+            "弹簧",
+            "钢球",
+        ]);
+        const itemsOf = (groupName: string) =>
+            wire.groups.find(node => node.name === groupName)!.items.map(item => item.name);
+        expect(itemsOf("外壳")).toEqual(["外壳"]);
+        expect(itemsOf("PA66塑料杆子")).toEqual(["圆轴", "扁轴4.8"]);
+        expect(itemsOf("静片")).toEqual(["小静片", "半圆静片"]);
+        expect(wire.groups.find(node => node.name === "静片")).toMatchObject({ multi: true });
+        expect(itemsOf("钢球")).toEqual(["3.0mm电镀钢球"]);
     });
 
     it("安全开关：外壳单选（KW16 31mm 茶色/透明拆两项）、短款/长款系列为多选组", () => {
@@ -198,7 +242,7 @@ describe("旋转XK3 / 安全开关目录", () => {
         const short = safety.groups.find(node => node.name === "短款/31mm系列配件")!;
         expect(short).toMatchObject({ kind: "group", multi: true });
         expect(short.items.map(item => item.name)).toEqual(["动片", "静片", "短杆子", "短帽子", "短弹簧"]);
-        const long = safety.groups.find(node => node.name === "长款/43mm系列配件")!;
+        const long = safety.groups.find(node => node.name === "长款/41mm系列配件")!;
         expect(long.multi).toBe(true);
         expect(long.items.map(item => item.name)).toEqual(["动片", "静片", "长杆子", "长帽子", "长弹簧"]);
         // 30mm/41mm 系列与既有 31mm/43mm 内容一致，物料 ids 独立
@@ -206,7 +250,7 @@ describe("旋转XK3 / 安全开关目录", () => {
         expect(short30).toMatchObject({ kind: "group", multi: true, parentId: "2503" });
         expect(short30.items.map(item => item.name)).toEqual(["动片", "静片", "短杆子", "短帽子", "短弹簧"]);
         expect(short30.items.map(item => item.id)).toEqual(["3607", "3608", "3609", "3610", "3611"]);
-        const long41 = safety.groups.find(node => node.name === "长款/41mm系列配件")!;
+        const long41 = safety.groups.find(node => node.name === "长款/40mm系列配件")!;
         expect(long41).toMatchObject({ kind: "group", multi: true, parentId: "2503" });
         expect(long41.items.map(item => item.name)).toEqual(["动片", "静片", "长杆子", "长帽子", "长弹簧"]);
         expect(long41.items.map(item => item.id)).toEqual(["3612", "3613", "3614", "3615", "3616"]);
@@ -221,7 +265,7 @@ describe("旋转XK3 / 安全开关目录", () => {
 });
 
 describe("琴键开关目录", () => {
-    it("8 个单选根组按序排列；扣板/连锁片/静片/动片为数量分组（qty=true）", () => {
+    it("根组按序排列；静片多选，扣板/连锁片/静片/动片为数量分组（qty=true）", () => {
         const piano = cat("琴键开关");
         expect(piano.groups.map(node => [node.name, node.multi, node.qty])).toEqual([
             ["琴键底", false, false],
@@ -229,7 +273,7 @@ describe("琴键开关目录", () => {
             ["卡板", false, false],
             ["扣板", false, true],
             ["连锁片", false, true],
-            ["静片", false, true],
+            ["静片", true, true],
             ["动片", false, true],
             ["弹簧规格", false, false],
         ]);

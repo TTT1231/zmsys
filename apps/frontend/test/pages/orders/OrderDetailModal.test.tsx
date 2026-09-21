@@ -21,7 +21,7 @@ it("部分发货后取消显示明确状态、取消原因且不能继续发货"
     expect(screen.getByText("订单已取消，剩余数量不再安排交付。")).toBeInTheDocument();
     expect(screen.getByText("客户调整需求")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "登记发货" })).not.toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "物料组成" })).toHaveTextContent("6.3静片：铜镀银");
+    expect(screen.getByRole("region", { name: "BOM 详细" })).toHaveTextContent("6.3静片：铜镀银");
 });
 it("有效订单保留发货入口，历史作废出库明确标注", () => {
     render(

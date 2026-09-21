@@ -14,6 +14,7 @@ const rotaryBom: Bom = {
     name: "旋转XK2",
     modelCode: "1-1",
     spec: "型号：1-1 · 银丝厚度：0.2 · A面：A面银点",
+    remark: "",
     created: "2026-09-13",
     unit: "个",
     items: [
@@ -28,6 +29,7 @@ const microBom: Bom = {
     name: "新微动",
     modelCode: "",
     spec: "底座：二脚底座（无挡脚） · 盖子：盖子 · 按钮：8.5mm",
+    remark: "",
     created: "2026-09-13",
     unit: "个",
     items: [

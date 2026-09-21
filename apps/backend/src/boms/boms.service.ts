@@ -86,14 +86,28 @@ export class BomsService {
         private readonly sequence: BusinessSequenceService,
     ) {}
 
-    /** 品类目录（契约 bom:view）：仅启用品类与启用目录节点，目录修改只走数据库迁移 */
+    /** 品类目录（契约 bom:view）：仅启用品类与启用目录节点，目录修改只走数据库迁移。
+     * 旋转变体（焊线/插线）等「目录容器品类」停用后不出现在建档下拉，但被启用
+     * 品类的 child_categories 引用，仍随本接口下发（status=false）供前端合并目录。 */
     async listCategories(): Promise<BomCategory[]> {
         const rows = await this.prisma.bomCategory.findMany({
             where: { status: true },
             orderBy: { id: "asc" },
             include: { groups: { include: { items: { where: { status: true } } } } },
         });
-        return rows.map(row => this.toCategory(row));
+        const childKeys = new Set(rows.flatMap(row => childCategoriesOf(row.childCategories).filter(Boolean)));
+        // 被引用的目录容器品类（可能启用如微动，也可能停用如焊线/插线）；启用者已在 rows，去重
+        const seen = new Set(rows.map(row => row.id.toString()));
+        const containers = childKeys.size
+            ? (
+                  await this.prisma.bomCategory.findMany({
+                      where: { categoryKey: { in: [...childKeys] } },
+                      orderBy: { id: "asc" },
+                      include: { groups: { include: { items: { where: { status: true } } } } },
+                  })
+              ).filter(row => !seen.has(row.id.toString()))
+            : [];
+        return [...rows, ...containers].sort((a, b) => (a.id < b.id ? -1 : 1)).map(row => this.toCategory(row));
     }
 
     /**
@@ -160,7 +174,8 @@ export class BomsService {
                     throw new BadRequestException("微动开关类型不在本品类允许范围内");
                 }
                 childCategoryRow = await tx.bomCategory.findUnique({ where: { categoryKey: dto.childCategory } });
-                if (!childCategoryRow || !childCategoryRow.status) {
+                // 目录容器品类（焊线/插线）停用仅表示不出现在建档下拉，仍可被引用合并目录
+                if (!childCategoryRow) {
                     throw new BadRequestException("微动开关类型不存在或已停用");
                 }
             }
@@ -171,10 +186,12 @@ export class BomsService {
             ];
             const selection = resolveMaterialSelection(catalog, dto.materialItemIds, dto.quantities);
             const hash = materialSetHash(
+                category.id,
                 selection.snapshots.map(snapshot => ({
                     id: snapshot.materialId.toString(),
                     quantity: snapshot.quantity,
                 })),
+                dto.remark ?? "",
             );
 
             const duplicate = await tx.bomTable.findFirst({
@@ -198,6 +215,7 @@ export class BomsService {
                     bomCode,
                     categoryId: category.id,
                     specHash: hash,
+                    remark: dto.remark ?? "",
                     unit: "个",
                     requestKey: this.idempotency.requestKey(BigInt(actor.id), CREATE_OPERATION_KEY, key),
                     createdBy: BigInt(actor.id),
@@ -233,6 +251,7 @@ export class BomsService {
                     quantity,
                 })),
                 spec: snapshot.spec,
+                remark: dto.remark ?? "",
                 created: beijingDayKey(now),
                 unit: "个",
             };
@@ -367,13 +386,15 @@ export class BomsService {
         return entries;
     }
 
-    /** 契约 BomCategory 映射：seqWidth 为 3 时省略；groups 为分区/分组扁平树（parentId 关联） */
+    /** 契约 BomCategory 映射：seqWidth 为 3 时省略；groups 为分区/分组扁平树（parentId 关联）；
+     * status=false 标记目录容器品类（被 child 引用但不在建档下拉展示） */
     private toCategory(row: CategoryRowWithGroups): BomCategory {
         const childCategories = childCategoriesOf(row.childCategories);
         return {
             key: row.categoryKey,
             name: row.name,
             codePrefix: row.codePrefix,
+            ...(row.status ? {} : { status: false }),
             ...(row.seqWidth !== 3 ? { seqWidth: row.seqWidth } : {}),
             ...(childCategories.length > 0 ? { childCategories } : {}),
             groups: orderedCatalog(row.groups).map(({ node }) => this.toNode(node)),
@@ -397,7 +418,7 @@ export class BomsService {
         };
     }
 
-    /** 契约 Bom 映射：created 为北京日；modelCode/spec/明细全部由冻结快照派生 */
+    /** 契约 Bom 映射：created 为北京日；modelCode/spec/明细全部由冻结快照派生；remark 为建档备注 */
     private toBom(row: BomRowWithItems): Bom {
         const snapshot = bomItemsSnapshotOf(row.items);
         return {
@@ -406,6 +427,7 @@ export class BomsService {
             modelCode: snapshot.modelCode,
             items: bomItemViewsOf(row.items),
             spec: snapshot.spec,
+            remark: row.remark,
             created: beijingDayKey(row.createdAt),
             unit: row.unit,
         };

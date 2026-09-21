@@ -3,7 +3,7 @@ import type { Bom, BomCategory } from "@/api";
 import { BomSpecs } from "@/components/bom/BomSpecs";
 import { num } from "@/lib/format";
 
-/** 业务凭证共用的数量概览、物料组成与登记信息，保持一致的阅读顺序。 */
+/** 业务凭证共用的数量概览、BOM 详细与登记信息，保持一致的阅读顺序。 */
 export function RecordSummary({
     metrics,
     status,
@@ -46,13 +46,21 @@ export function RecordProduct({
     categories?: BomCategory[];
 }) {
     return (
-        <section aria-label="物料组成" className="min-w-0">
+        <section aria-label="BOM 详细" className="min-w-0">
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <h3 className="text-14 font-medium text-ink">物料组成</h3>
+                <h3 className="text-14 font-medium text-ink">BOM 详细</h3>
                 <p className="tnum text-12 text-muted wrap-anywhere">{bomCode}</p>
             </div>
             {bom ? (
-                <BomSpecs bom={bom} categories={categories} layout="record" />
+                <>
+                    <BomSpecs bom={bom} categories={categories} layout="record" />
+                    {/* BOM 备注是同编码下的工艺差异说明，各凭证统一展示供核对 */}
+                    <div className="mt-3 border-t border-dashed border-line pt-2.5">
+                        <p className="text-12 text-muted">
+                            BOM 备注：<span className="whitespace-pre-wrap text-td">{bom.remark || "—"}</span>
+                        </p>
+                    </div>
+                </>
             ) : (
                 <p className="text-14 text-muted">未找到该成品的物料信息</p>
             )}
