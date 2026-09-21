@@ -42,6 +42,21 @@ const LEDGER_SORT_COLUMNS: Array<{ key: LedgerSortKey; label: string }> = [
 ];
 
 /**
+ * BOM 备注（同构成不同备注 = 不同 BOM）：台账里直接看到入库的是哪个 BOM，
+ * 沿用警示色突出工艺差异；空值显示占位，避免误以为遗漏字段。
+ */
+function BomRemarkText({ remark }: { remark?: string }) {
+    const text = remark?.trim();
+    return text ? (
+        <span className="wrap-break-word font-medium text-warning" title={text}>
+            {text}
+        </span>
+    ) : (
+        <span className="text-subtle">—</span>
+    );
+}
+
+/**
  * 成品选择（入库建档用）：品类 → 按编码 / 物料关键字搜索 + 列表点选；
  * 点选即回填 bomCode。
  */
@@ -616,10 +631,19 @@ export function InboundPage() {
                                 onClick={() =>
                                     downloadCsv(
                                         "成品入库",
-                                        ["入库单号", "BOM 编码", "入库数量", "入库日期", "检验登记人", "状态"],
+                                        [
+                                            "入库单号",
+                                            "BOM 编码",
+                                            "BOM 备注",
+                                            "入库数量",
+                                            "入库日期",
+                                            "检验登记人",
+                                            "状态",
+                                        ],
                                         pageRows.map(row => [
                                             row.no,
                                             row.bomCode,
+                                            bomByCode(snap, row.bomCode)?.remark.trim() || "—",
                                             String(row.qty),
                                             row.date,
                                             row.inspector,
@@ -636,33 +660,33 @@ export function InboundPage() {
 
                 <div className="mobile-records">
                     <ListState loading={isLoading} empty={!pageRows.length}>
-                        {pageRows.map(row => (
-                            <RecordCard
-                                key={row.no}
-                                title={row.no}
-                                subtitle={row.date}
-                                badge={
-                                    <Badge tone={row.status === "voided" ? "danger" : "success"}>
-                                        {row.status === "voided" ? "已作废" : "已入库"}
-                                    </Badge>
-                                }
-                                actions={
-                                    <Button variant="secondary" onClick={() => setVoucher(row)}>
-                                        查看凭证
-                                    </Button>
-                                }
-                            >
-                                <BomCell
-                                    categories={snap.bomCategories}
-                                    bom={bomByCode(snap, row.bomCode)}
-                                    bomCode={row.bomCode}
-                                />
-                                <div className="mt-2 flex flex-col gap-1.5">
-                                    <CardField label="入库数量" value={`${num(row.qty)} 个`} strong />
-                                    <CardField label="登记人" value={row.inspector} />
-                                </div>
-                            </RecordCard>
-                        ))}
+                        {pageRows.map(row => {
+                            const bom = bomByCode(snap, row.bomCode);
+                            return (
+                                <RecordCard
+                                    key={row.no}
+                                    title={row.no}
+                                    subtitle={row.date}
+                                    badge={
+                                        <Badge tone={row.status === "voided" ? "danger" : "success"}>
+                                            {row.status === "voided" ? "已作废" : "已入库"}
+                                        </Badge>
+                                    }
+                                    actions={
+                                        <Button variant="secondary" onClick={() => setVoucher(row)}>
+                                            查看凭证
+                                        </Button>
+                                    }
+                                >
+                                    <BomCell categories={snap.bomCategories} bom={bom} bomCode={row.bomCode} />
+                                    <div className="mt-2 flex flex-col gap-1.5">
+                                        <CardField label="BOM 备注" value={<BomRemarkText remark={bom?.remark} />} />
+                                        <CardField label="入库数量" value={`${num(row.qty)} 个`} strong />
+                                        <CardField label="登记人" value={row.inspector} />
+                                    </div>
+                                </RecordCard>
+                            );
+                        })}
                     </ListState>
                 </div>
                 <div className="hidden lg:block">
@@ -671,7 +695,7 @@ export function InboundPage() {
                     ) : (
                         <DataTable
                             tableId="inbound"
-                            defaultWidths={[166, 370, 132, 138, 130, 120]}
+                            defaultWidths={[166, 370, 190, 132, 138, 130, 120]}
                             recordCount={filtered.length}
                             identityColumn={0}
                             scrollRef={tableScrollRef}
@@ -692,6 +716,7 @@ export function InboundPage() {
                                         onSort={() => applySort("bomCode")}
                                         className="px-3"
                                     />
+                                    <th className="px-3 py-2.5 font-semibold">BOM 备注</th>
                                     <SortTh
                                         label="入库数量（个）"
                                         align="right"
@@ -714,39 +739,45 @@ export function InboundPage() {
                             <tbody>
                                 {pageRows.length === 0 && (
                                     <tr>
-                                        <td colSpan={6} className="px-5 py-10 text-center">
+                                        <td colSpan={7} className="px-5 py-10 text-center">
                                             <EmptyState description="没有找到匹配的入库记录" />
                                         </td>
                                     </tr>
                                 )}
-                                {pageRows.map(row => (
-                                    <tr key={row.no} className="border-t border-line transition hover:bg-row-hover">
-                                        <td className="px-5 py-3 tnum text-13 font-semibold text-td-strong">
-                                            {row.no}
-                                        </td>
-                                        <td className="px-3 py-4">
-                                            <BomCell
-                                                categories={snap.bomCategories}
-                                                bom={bomByCode(snap, row.bomCode)}
-                                                bomCode={row.bomCode}
-                                            />
-                                        </td>
-                                        <td className="px-3 py-3 text-right">
-                                            <QtyCell value={row.qty} />
-                                        </td>
-                                        <td className="px-3 py-3 tnum text-13 text-td">{row.date}</td>
-                                        <td className="px-3 py-3 text-13 text-td">{row.inspector}</td>
-                                        <td className="px-5 py-3 text-right">
-                                            <button
-                                                type="button"
-                                                onClick={() => setVoucher(row)}
-                                                className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline"
-                                            >
-                                                查看凭证
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
+                                {pageRows.map(row => {
+                                    const bom = bomByCode(snap, row.bomCode);
+                                    return (
+                                        <tr key={row.no} className="border-t border-line transition hover:bg-row-hover">
+                                            <td className="px-5 py-3 tnum text-13 font-semibold text-td-strong">
+                                                {row.no}
+                                            </td>
+                                            <td className="px-3 py-4">
+                                                <BomCell
+                                                    categories={snap.bomCategories}
+                                                    bom={bom}
+                                                    bomCode={row.bomCode}
+                                                />
+                                            </td>
+                                            <td className="px-3 py-3 text-12.5 leading-5 text-td">
+                                                <BomRemarkText remark={bom?.remark} />
+                                            </td>
+                                            <td className="px-3 py-3 text-right">
+                                                <QtyCell value={row.qty} />
+                                            </td>
+                                            <td className="px-3 py-3 tnum text-13 text-td">{row.date}</td>
+                                            <td className="px-3 py-3 text-13 text-td">{row.inspector}</td>
+                                            <td className="px-5 py-3 text-right">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setVoucher(row)}
+                                                    className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline"
+                                                >
+                                                    查看凭证
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </DataTable>
                     )}
