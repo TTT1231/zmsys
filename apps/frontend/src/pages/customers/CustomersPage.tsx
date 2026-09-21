@@ -23,7 +23,7 @@ import { useCreateCustomer, useUpdateCustomer, useWbRefresh, useWbSnapshot } fro
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { PageLoading } from "@/components/ui/PageLoading";
-import { EMPTY_SNAPSHOT, orderStatusOf } from "@/data/views";
+import { EMPTY_SNAPSHOT, orderStatusOf, remainingOf } from "@/data/views";
 import { useToast } from "@/components/ui/toastContexts";
 import type { Customer, Snapshot } from "@/api";
 
@@ -228,7 +228,8 @@ export function CustomerDetailModal({
     }
     if (!customer) return null;
     const orders = snap.orders.filter(order => order.customerCode === customer.code);
-    const pendingQty = orders.reduce((sum, order) => sum + Math.max(0, order.qty - order.outbound), 0);
+    // 待交付口径与订单列表一致：已取消/已归档订单剩余按 0，不再计入
+    const pendingQty = orders.reduce((sum, order) => sum + remainingOf(order), 0);
     const timeline = [...orders].sort((a, b) => b.orderDate.localeCompare(a.orderDate)).slice(0, 3);
     const orderDetail = orderNo ? (snap.orders.find(order => order.orderNo === orderNo) ?? null) : null;
 
@@ -320,11 +321,13 @@ export function CustomerDetailModal({
                             {timeline.length === 0 && <li className="text-12.5 text-subtle">暂无订单记录。</li>}
                             {timeline.map(order => {
                                 const cancelled = order.lifecycleStatus === "cancelled";
+                                const archived = order.lifecycleStatus === "archived";
+                                const inactive = cancelled || archived;
                                 const status = orderStatusOf(snap, order);
                                 return (
                                     <li key={order.orderNo} className="relative">
                                         <span
-                                            className={`absolute top-1.5 -left-5.25 h-2 w-2 rounded-full ${cancelled ? "bg-subtle" : "bg-primary"}`}
+                                            className={`absolute top-1.5 -left-5.25 h-2 w-2 rounded-full ${inactive ? "bg-subtle" : "bg-primary"}`}
                                         />
                                         {/* 整行可点保证触屏命中区，订单号 hover 出下划线 */}
                                         <button
@@ -336,7 +339,7 @@ export function CustomerDetailModal({
                                             <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                                                 <span
                                                     className={`tnum text-12.5 font-semibold underline-offset-2 group-hover:underline ${
-                                                        cancelled ? "text-td-strong" : "text-primary-strong"
+                                                        inactive ? "text-td-strong" : "text-primary-strong"
                                                     }`}
                                                 >
                                                     {order.orderNo}
@@ -406,7 +409,7 @@ export function CustomersPage() {
             })
             .map(customer => {
                 const own = orders.filter(order => order.customerCode === customer.code);
-                const pendingQty = own.reduce((sum, order) => sum + Math.max(0, order.qty - order.outbound), 0);
+                const pendingQty = own.reduce((sum, order) => sum + remainingOf(order), 0);
                 const lastOrderDate =
                     own
                         .map(order => order.orderDate)

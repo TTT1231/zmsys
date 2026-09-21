@@ -28,13 +28,26 @@ export function stockOf(snap: Pick<Snapshot, "stock">, bomCode: string): number 
 }
 
 export function remainingOf(order: Order): number {
-    if (order.lifecycleStatus === "cancelled") return 0;
+    // 非活跃（已取消/已归档）订单剩余量按 0 处理：欠量关闭，不参与待交与可发量分配
+    if (order.lifecycleStatus !== "active") return 0;
     return Math.max(0, order.qty - order.outbound);
 }
 
 /* 状态判定核心：可发量（按交期分配，同"本次最多可发"口径）对比剩余待交。
- * 可发量盖不住整单剩余 → 部分可发货；已发过货且剩余可整单覆盖（或暂无可发）→ 部分发货。 */
+ * 可发量盖不住整单剩余 → 部分可发货；已发过货且剩余可整单覆盖（或暂无可发）→ 部分发货。
+ * 归档为最终终态：徽章按归档前形态区分（取消后归档/完成/部分发货），仅供归档页展示。 */
 function statusOf(order: Order, maxShip: number): OrderStatus {
+    if (order.lifecycleStatus === "archived")
+        return {
+            label: order.cancelledAt
+                ? order.outbound > 0
+                    ? "部分发货取消后归档"
+                    : "取消后归档"
+                : order.outbound >= order.qty
+                  ? "已完成后归档"
+                  : "部分发货后归档",
+            key: "archived",
+        };
     if (order.lifecycleStatus === "cancelled")
         return { label: order.outbound > 0 ? "部分发货后取消" : "已取消", key: "cancelled" };
     if (order.outbound >= order.qty) return { label: "已完成", key: "done" };

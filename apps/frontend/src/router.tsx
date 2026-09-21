@@ -7,6 +7,7 @@ import { ErrorPage, RouterErrorPage } from "./pages/error/ErrorPage";
 /* 懒加载页面组件单独成文件(RouterPages.tsx):本文件还要导出 router 实例,
    混放组件定义会破坏 React Fast Refresh */
 import {
+    ArchivedOrdersPage,
     BomPage,
     CustomersPage,
     InboundPage,
@@ -39,6 +40,7 @@ export const router = createBrowserRouter([
                     { path: "/workbench", element: <WorkbenchPage /> },
                     { path: "/search", element: <SearchPage /> },
                     { path: "/orders", element: <OrdersPage /> },
+                    { path: "/archived-orders", element: <ArchivedOrdersPage /> },
                     { path: "/customers", element: <CustomersPage /> },
                     { path: "/bom", element: <BomPage /> },
                     { path: "/inbound", element: <InboundPage /> },

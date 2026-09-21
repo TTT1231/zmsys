@@ -1,4 +1,11 @@
-import type { CancelOrderInput, CreateOrderInput, DeleteOrderInput, Order, UpdateOrderInput } from "./types";
+import type {
+    ArchiveOrderInput,
+    CancelOrderInput,
+    CreateOrderInput,
+    DeleteOrderInput,
+    Order,
+    UpdateOrderInput,
+} from "./types";
 import { requestClient } from "@/http";
 import { idempotencyConfig } from "./idempotency";
 
@@ -16,6 +23,11 @@ export function updateOrder(orderNo: string, input: UpdateOrderInput): Promise<O
 
 export function cancelOrder(orderNo: string, input: CancelOrderInput): Promise<Order> {
     return requestClient.post<Order>(`/orders/${orderNo}/cancel`, input, idempotencyConfig());
+}
+
+/** 归档订单（仅超级管理员）：终态不可恢复，归档后移入归档订单页 */
+export function archiveOrder(orderNo: string, input: ArchiveOrderInput): Promise<Order> {
+    return requestClient.post<Order>(`/orders/${orderNo}/archive`, input, idempotencyConfig());
 }
 
 /** 删除完全未发货的订单（仅超级管理员）；订单移除后不再返回 */

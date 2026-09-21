@@ -3,8 +3,8 @@ import type { RoleGrant, RoleId } from "@/data/permissions";
 
 /* ---------- 业务实体（对应 db-scheme.md 各表，业务码为唯一 API key） ---------- */
 
-export type StatusKey = "done" | "progress" | "ready" | "partReady" | "pending" | "cancelled";
-export type OrderLifecycleStatus = "active" | "cancelled";
+export type StatusKey = "done" | "progress" | "ready" | "partReady" | "pending" | "cancelled" | "archived";
+export type OrderLifecycleStatus = "active" | "cancelled" | "archived";
 
 export interface OrderStatus {
     label: string;
@@ -26,6 +26,9 @@ export interface Order {
     cancelledAt?: string;
     cancelledBy?: string;
     cancelReason?: string;
+    archivedAt?: string; // 仅归档终态返回
+    archivedBy?: string;
+    archiveReason?: string;
 }
 
 /** 目录节点：分区（section）为纯展示树节点（不挂物料、不提供全选），分组（group）挂可选物料 */
@@ -271,6 +274,12 @@ export interface UpdateOrderInput {
 export interface CancelOrderInput {
     expectedVersion: number;
     reason: string;
+}
+
+/** 归档订单仅限超级管理员；备注选填（留空不上送） */
+export interface ArchiveOrderInput {
+    expectedVersion: number;
+    reason?: string;
 }
 
 /** 删除订单仅限超级管理员，且订单须完全未发货（累计已发为 0、无任何出库流水） */

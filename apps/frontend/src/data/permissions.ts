@@ -40,6 +40,13 @@ export const MENU_CATALOG: MenuNode[] = [
         to: "/orders",
         labelByRole: { warehouse: "待发货订单" },
     },
+    {
+        key: "archived-orders",
+        label: "归档订单",
+        icon: "archive",
+        group: "业务导航",
+        to: "/archived-orders",
+    },
     { key: "customers", label: "客户档案", icon: "users", group: "业务导航", to: "/customers" },
     { key: "bom", label: "物料与 BOM", icon: "layers", group: "业务导航", to: "/bom" },
     { key: "inbound", label: "成品入库", icon: "inbound", group: "业务导航", to: "/inbound" },
@@ -74,6 +81,7 @@ export const ACTION_CATALOG = {
         { id: "create", label: "新建订单" },
         { id: "edit", label: "编辑订单" },
         { id: "cancel", label: "取消订单" },
+        { id: "archive", label: "归档订单", protected: true },
         { id: "delete", label: "删除订单", protected: true },
     ],
     customers: [
@@ -154,7 +162,7 @@ export function buildDefaultGrants(): GrantMap {
         },
         admin: {
             version: 1,
-            menus: ["workbench", "orders", "customers", "bom", "inbound", "outbound"],
+            menus: ["workbench", "orders", "archived-orders", "customers", "bom", "inbound", "outbound"],
             actions: {
                 // 删除订单/删除 BOM 为受保护动作（仅超级管理员），普通角色不随 allActions 下发
                 orders: ["view", "create", "edit", "cancel"],
@@ -166,7 +174,7 @@ export function buildDefaultGrants(): GrantMap {
         },
         warehouse: {
             version: 1,
-            menus: ["workbench", "orders", "bom", "inbound", "outbound"],
+            menus: ["workbench", "orders", "archived-orders", "bom", "inbound", "outbound"],
             actions: {
                 orders: ["view"],
                 bom: ["view"],
@@ -176,7 +184,7 @@ export function buildDefaultGrants(): GrantMap {
         },
         sales: {
             version: 1,
-            menus: ["workbench", "orders", "customers", "bom", "inbound", "outbound"],
+            menus: ["workbench", "orders", "archived-orders", "customers", "bom", "inbound", "outbound"],
             actions: {
                 orders: ["view", "create", "edit", "cancel"],
                 customers: ["view", "create", "edit"],
@@ -187,7 +195,7 @@ export function buildDefaultGrants(): GrantMap {
         },
         staff: {
             version: 1,
-            menus: ["workbench", "orders", "bom", "inbound", "outbound"],
+            menus: ["workbench", "orders", "archived-orders", "bom", "inbound", "outbound"],
             actions: {
                 orders: ["view"],
                 bom: ["view"],
@@ -221,6 +229,7 @@ const ACTION_SHORT: Record<string, string> = {
     create: "新建",
     edit: "编辑",
     cancel: "取消",
+    archive: "归档",
     delete: "删除",
     "bulk-transfer": "移交",
     register: "入库",

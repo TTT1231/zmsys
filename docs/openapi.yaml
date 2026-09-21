@@ -146,7 +146,7 @@ paths:
             tags: [orders]
             operationId: updateOrder
             summary: 修改销售订单
-            description: 权限 `orders:edit`。新数量不得小于该订单有效出库净额；已取消订单不可修改。删除走专用端点 POST /orders/{orderNo}/delete。
+            description: 权限 `orders:edit`。未发货订单可改数量/交货日期/备注，新数量不得小于该订单有效出库净额；已发货（有效出库净额 > 0）订单数量与交货日期锁定，仅可修改备注；已取消/已归档订单不可修改。删除走专用端点 POST /orders/{orderNo}/delete，归档走 POST /orders/{orderNo}/archive。
             parameters:
                 - $ref: "#/components/parameters/OrderNo"
             requestBody:
@@ -179,6 +179,31 @@ paths:
                 content:
                     application/json:
                         schema: { $ref: "#/components/schemas/CancelOrderInput" }
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/OrderEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
+
+    /orders/{orderNo}/archive:
+        post:
+            tags: [orders]
+            operationId: archiveOrder
+            summary: 归档订单（终态）
+            description: 受保护权限 `orders:archive`，仅 super。收尾已完成、部分发货或已取消的订单使其退出活跃视图：归档后订单从销售订单页移入归档订单页，仅供查询，不可修改/取消/删除，剩余欠量（若有）不再安排交付。未发货的 ACTIVE 订单不可归档（手误单走取消/删除）；存在已登记未打印的出库单必须先作废或打印。归档为最终终态，不可恢复；归档人、归档时间与备注（选填）随行落库并写 change_log ARCHIVE 事件与 op_log 供审计。幂等（Idempotency-Key）。
+            parameters:
+                - $ref: "#/components/parameters/OrderNo"
+                - $ref: "#/components/parameters/IdempotencyKey"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/ArchiveOrderInput" }
             responses:
                 "200":
                     description: 成功
@@ -999,10 +1024,13 @@ components:
                 orderDate: { type: string, format: date }
                 deliverDate: { type: string, format: date, description: 交货日期（单个日历日，排序/逾期口径） }
                 remark: { type: string }
-                lifecycleStatus: { type: string, enum: [active, cancelled] }
-                cancelledAt: { type: string, format: date-time }
+                lifecycleStatus: { type: string, enum: [active, cancelled, archived] }
+                cancelledAt: { type: string, format: date-time, description: 实际取消过才返回（含取消后归档的订单） }
                 cancelledBy: { type: string }
                 cancelReason: { type: string }
+                archivedAt: { type: string, format: date-time, description: 仅归档终态返回 }
+                archivedBy: { type: string, description: 归档操作人姓名 }
+                archiveReason: { type: string, description: 归档备注（选填） }
 
         CreateOrderInput:
             type: object
@@ -1034,6 +1062,14 @@ components:
             properties:
                 expectedVersion: { type: integer, minimum: 1 }
                 reason: { type: string, minLength: 2, maxLength: 500 }
+
+        ArchiveOrderInput:
+            type: object
+            additionalProperties: false
+            required: [expectedVersion]
+            properties:
+                expectedVersion: { type: integer, minimum: 1 }
+                reason: { type: string, maxLength: 500, description: 归档备注（选填） }
 
         DeleteOrderInput:
             type: object

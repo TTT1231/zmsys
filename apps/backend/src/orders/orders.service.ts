@@ -16,18 +16,21 @@ import type { Order } from "./types";
 import type { CreateOrderDto } from "./dto/create-order.dto";
 import type { UpdateOrderDto } from "./dto/update-order.dto";
 import type { CancelOrderDto } from "./dto/cancel-order.dto";
+import type { ArchiveOrderDto } from "./dto/archive-order.dto";
 import type { DeleteOrderDto } from "./dto/delete-order.dto";
 
-/** api_idempotency 的 operation_key；取消/删除按订单号独立域，与前端 mock 同粒度 */
+/** api_idempotency 的 operation_key；取消/归档/删除按订单号独立域，与前端 mock 同粒度 */
 const CREATE_OPERATION_KEY = "orders:create";
 const cancelOperationKeyOf = (orderNo: string): string => `orders:cancel:${orderNo}`;
+const archiveOperationKeyOf = (orderNo: string): string => `orders:archive:${orderNo}`;
 const deleteOperationKeyOf = (orderNo: string): string => `orders:delete:${orderNo}`;
 
-/** 订单行 + 响应映射必需的关联（canceller 仅取消后有值） */
+/** 订单行 + 响应映射必需的关联（canceller/archiver 仅终态后有值） */
 type OrderRow = SalesOrderTable & {
     customer: { customerCode: string };
     bom: { bomCode: string };
     canceller: { name: string } | null;
+    archiver: { name: string } | null;
 };
 
 @Injectable()
@@ -41,9 +44,9 @@ export class OrdersService {
     ) {}
 
     /**
-     * 销售订单列表（契约 orders:view）：取消订单仍返回用于历史审计；
-     * outbound 为有效出库净额，经 v_order_outbound_qty 统一聚合口径
-     * （db-scheme.md §7.2：无流水的订单不在视图，缺行按 0 理解）。
+     * 销售订单列表（契约 orders:view）：取消/归档订单仍返回用于历史审计，前端
+     * 按生命周期分流到归档订单页；outbound 为有效出库净额，经 v_order_outbound_qty
+     * 统一聚合口径（db-scheme.md §7.2：无流水的订单不在视图，缺行按 0 理解）。
      */
     async listOrders(): Promise<Order[]> {
         const rows = await this.prisma.salesOrderTable.findMany({
@@ -52,6 +55,7 @@ export class OrdersService {
                 customer: { select: { customerCode: true } },
                 bom: { select: { bomCode: true } },
                 canceller: { select: { name: true } },
+                archiver: { select: { name: true } },
             },
         });
         const outboundRows = await this.prisma.$queryRaw<Array<{ order_id: bigint; outbound_qty: bigint }>>(
@@ -145,6 +149,7 @@ export class OrdersService {
                     customer: { customerCode: customer.customerCode },
                     bom: { bomCode: bom.bomCode },
                     canceller: null,
+                    archiver: null,
                 },
                 0,
             );
@@ -159,8 +164,8 @@ export class OrdersService {
     }
 
     /**
-     * 修改销售订单：乐观锁 + 已取消不可改；新数量不得低于
-     * 该订单有效出库净额（db-scheme.md §6.1）。锁序：BOM → 订单。
+     * 修改销售订单：乐观锁 + 已取消/已归档不可改；发过货（有效出库净额 > 0）
+     * 的订单数量与交货日期锁定，仅可改备注（db-scheme.md §6.1）。锁序：BOM → 订单。
      */
     async updateOrder(orderNo: string, dto: UpdateOrderDto, actor: AuthUser): Promise<Order> {
         if (dto.qty === undefined && dto.deliverDate === undefined && dto.remark === undefined) {
@@ -175,8 +180,14 @@ export class OrdersService {
             if (current.lifecycleStatus === "CANCELLED") {
                 throw new ConflictException("订单已取消，不可修改");
             }
+            if (current.lifecycleStatus === "ARCHIVED") {
+                throw new ConflictException("订单已归档，不可修改");
+            }
 
             const outbound = await this.outboundNetOf(tx, current.id);
+            if (outbound > 0 && (dto.qty !== undefined || dto.deliverDate !== undefined)) {
+                throw new ConflictException("订单已有出库记录，数量与交货日期不可修改，仅可修改备注");
+            }
             if (dto.qty !== undefined && dto.qty < outbound) {
                 throw new ConflictException(`新数量不得小于该订单有效出库净额（当前已发 ${outbound}）`);
             }
@@ -194,6 +205,7 @@ export class OrdersService {
                     customer: { select: { customerCode: true } },
                     bom: { select: { bomCode: true } },
                     canceller: { select: { name: true } },
+                    archiver: { select: { name: true } },
                 },
             });
             await tx.salesOrderChangeLog.create({
@@ -250,6 +262,9 @@ export class OrdersService {
             if (current.lifecycleStatus === "CANCELLED") {
                 throw new ConflictException("订单已取消");
             }
+            if (current.lifecycleStatus === "ARCHIVED") {
+                throw new ConflictException("订单已归档，不可取消");
+            }
             const registered = await tx.outboundShipment.findFirst({
                 where: { orderId: current.id, state: "REGISTERED" },
                 select: { id: true },
@@ -276,6 +291,7 @@ export class OrdersService {
                     customer: { select: { customerCode: true } },
                     bom: { select: { bomCode: true } },
                     canceller: { select: { name: true } },
+                    archiver: { select: { name: true } },
                 },
             });
             await tx.salesOrderChangeLog.create({
@@ -295,6 +311,117 @@ export class OrdersService {
             });
 
             const order = this.toOrder(updated, outbound);
+            await this.idempotency.complete(tx, {
+                id: placeholderId,
+                httpStatus: 200,
+                responseBody: order as unknown as Prisma.InputJsonValue,
+                resource: { type: "order", code: orderNo },
+            });
+            return order;
+        });
+    }
+
+    /**
+     * 归档订单（契约 orders:archive，幂等，仅超级管理员，db-scheme.md §6.1）：
+     * 收尾已完成/部分发货/已取消的订单，使其退出活跃视图仅供查询。终态不可恢复；
+     * 未发货的 ACTIVE 订单不可归档（手误单走取消/删除）；存在已登记未打印的
+     * 出库单须先作废或打印。归档人/时间/备注（选填）随行落库供审计，change_log
+     * 记 ARCHIVE 事件（操作人与时间），op_log 另记里程碑与删除前同构快照。
+     */
+    async archiveOrder(
+        orderNo: string,
+        dto: ArchiveOrderDto,
+        actor: AuthUser,
+        idempotencyKey: string | undefined,
+    ): Promise<Order> {
+        const operationKey = archiveOperationKeyOf(orderNo);
+        const key = this.idempotency.requireKey(idempotencyKey);
+        const requestHash = this.idempotency.digest({ method: "POST", pathParams: { orderNo }, body: dto });
+
+        return this.txRunner.run(async (tx: Tx) => {
+            const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
+                actorId: BigInt(actor.id),
+                operationKey,
+                key,
+                requestHash,
+            });
+            if (replay) {
+                return replay.body as unknown as Order;
+            }
+            if (placeholderId === null) {
+                throw new Error("幂等占位缺失");
+            }
+
+            const now = new Date();
+            const current = await this.lockOrderForWrite(tx, orderNo);
+            if (current.rowVersion !== BigInt(dto.expectedVersion)) {
+                throw new ConflictException("订单已被其他人修改，请刷新后重试");
+            }
+            if (current.lifecycleStatus === "ARCHIVED") {
+                throw new ConflictException("订单已归档");
+            }
+            if (current.lifecycleStatus === "ACTIVE") {
+                const outbound = await this.outboundNetOf(tx, current.id);
+                if (outbound === 0) {
+                    throw new ConflictException("订单尚未发货，无需归档；手误订单请取消或删除");
+                }
+            }
+            const registered = await tx.outboundShipment.findFirst({
+                where: { orderId: current.id, state: "REGISTERED" },
+                select: { id: true },
+            });
+            if (registered) {
+                throw new ConflictException("存在已登记未打印的出库单，请先作废或打印后再归档");
+            }
+
+            const updated = await tx.salesOrderTable.update({
+                where: { id: current.id },
+                data: {
+                    lifecycleStatus: "ARCHIVED",
+                    archivedAt: now,
+                    archivedBy: BigInt(actor.id),
+                    archiveReason: dto.reason?.length ? dto.reason : null,
+                    updatedBy: BigInt(actor.id),
+                    rowVersion: { increment: 1 },
+                },
+                include: {
+                    customer: { select: { customerCode: true } },
+                    bom: { select: { bomCode: true } },
+                    canceller: { select: { name: true } },
+                    archiver: { select: { name: true } },
+                },
+            });
+            await tx.salesOrderChangeLog.create({
+                data: {
+                    id: this.snowflake.next(),
+                    orderId: current.id,
+                    operatorId: BigInt(actor.id),
+                    eventType: "ARCHIVE",
+                    beforeVersion: current.rowVersion,
+                    afterVersion: updated.rowVersion,
+                    createdAt: now,
+                    reason: dto.reason?.length ? dto.reason : "",
+                    requestKey: this.idempotency.requestKey(BigInt(actor.id), operationKey, key),
+                    beforeJson: this.orderSnapshot(current),
+                    afterJson: this.orderSnapshot(updated),
+                },
+            });
+            await recordOpLog(tx, this.snowflake, actor, {
+                action: "archive_order",
+                targetType: "order",
+                targetId: current.id,
+                targetCode: current.orderNo,
+                detail: {
+                    ...(this.orderSnapshot(updated) as Record<string, unknown>),
+                    customer: updated.customerNameSnapshot,
+                    customerCode: updated.customer.customerCode,
+                    bomCode: updated.bom.bomCode,
+                    archivedBy: updated.archiver?.name ?? null,
+                } as unknown as Prisma.InputJsonValue,
+                now,
+            });
+
+            const order = this.toOrder(updated, await this.outboundNetOf(tx, current.id));
             await this.idempotency.complete(tx, {
                 id: placeholderId,
                 httpStatus: 200,
@@ -343,6 +470,9 @@ export class OrdersService {
             const current = await this.lockOrderForWrite(tx, orderNo);
             if (current.rowVersion !== BigInt(dto.expectedVersion)) {
                 throw new ConflictException("订单已被其他人修改，请刷新后重试");
+            }
+            if (current.lifecycleStatus === "ARCHIVED") {
+                throw new ConflictException("订单已归档，不可删除");
             }
             const outbound = await this.outboundNetOf(tx, current.id);
             if (outbound > 0) {
@@ -424,6 +554,7 @@ export class OrdersService {
                 customer: { select: { customerCode: true } },
                 bom: { select: { bomCode: true } },
                 canceller: { select: { name: true } },
+                archiver: { select: { name: true } },
             },
         });
         if (!order) {
@@ -433,8 +564,8 @@ export class OrdersService {
     }
 
     /** 变更日志快照：行内业务字段（before/after 同构，便于审计比对）。
-        含取消时间/原因与 BOM 冻结快照：订单删除后 changeLog 与 BOM 行均可能不复存在，
-        删除事件的 op_log 是唯一留存，须能独立还原取消语境与建档时的成品形态 */
+        含取消/归档时间与原因及 BOM 冻结快照：订单删除后 changeLog 与 BOM 行均可能
+        不复存在，删除事件的 op_log 是唯一留存，须能独立还原终态语境与建档时的成品形态 */
     private orderSnapshot(order: SalesOrderTable): Prisma.InputJsonValue {
         return {
             orderNo: order.orderNo,
@@ -445,6 +576,8 @@ export class OrdersService {
             lifecycleStatus: order.lifecycleStatus,
             cancelledAt: order.cancelledAt ? order.cancelledAt.toISOString() : null,
             cancelReason: order.cancelReason,
+            archivedAt: order.archivedAt ? order.archivedAt.toISOString() : null,
+            archiveReason: order.archiveReason,
             bomName: order.bomNameSnapshot,
             bomModel: order.bomModelSnapshot,
             bomSpec: order.bomSpecSnapshot,
@@ -452,9 +585,10 @@ export class OrdersService {
         };
     }
 
-    /** 契约 Order 映射：version 序列化为 number；日期列 yyyy-MM-dd；取消字段仅终态返回 */
+    /** 契约 Order 映射：version 序列化为 number；日期列 yyyy-MM-dd；取消/归档字段仅
+        终态且有值时返回（曾取消再归档的订单两套终态字段并存，均返回供审计） */
     private toOrder(row: OrderRow, outbound: number): Order {
-        const cancelled = row.lifecycleStatus === "CANCELLED";
+        const archived = row.lifecycleStatus === "ARCHIVED";
         return {
             version: Number(row.rowVersion),
             orderNo: row.orderNo,
@@ -466,12 +600,24 @@ export class OrdersService {
             orderDate: formatDateColumn(row.orderDate),
             deliverDate: formatDateColumn(row.deliverDate),
             remark: row.remark,
-            lifecycleStatus: cancelled ? "cancelled" : "active",
-            ...(cancelled
+            lifecycleStatus:
+                row.lifecycleStatus === "ACTIVE"
+                    ? "active"
+                    : row.lifecycleStatus === "CANCELLED"
+                      ? "cancelled"
+                      : "archived",
+            ...(row.cancelledAt
                 ? {
-                      cancelledAt: (row.cancelledAt ?? new Date(0)).toISOString(),
+                      cancelledAt: row.cancelledAt.toISOString(),
                       cancelledBy: row.canceller?.name ?? "",
                       cancelReason: row.cancelReason ?? "",
+                  }
+                : {}),
+            ...(archived
+                ? {
+                      archivedAt: (row.archivedAt ?? new Date(0)).toISOString(),
+                      archivedBy: row.archiver?.name ?? "",
+                      archiveReason: row.archiveReason ?? "",
                   }
                 : {}),
         };

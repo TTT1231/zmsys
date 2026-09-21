@@ -20,7 +20,14 @@ import { SortTh } from "@/components/ui/SortTh";
 import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { nextSortState, type SortState } from "@/lib/tableSort";
 import { Field, TextArea, TextField, DateField } from "@/components/ui/Field";
-import { useCreateOrder, useDeleteOrder, useUpdateOrder, useWbRefresh, useWbSnapshot } from "@/data/queries";
+import {
+    useArchiveOrder,
+    useCreateOrder,
+    useDeleteOrder,
+    useUpdateOrder,
+    useWbRefresh,
+    useWbSnapshot,
+} from "@/data/queries";
 import { EMPTY_SNAPSHOT, bomByCode, maxShipOf, orderStatusOf, remainingOf } from "@/data/views";
 import { addDays, addMonths, todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/toastContexts";
@@ -257,7 +264,8 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
     );
 }
 
-/* 编辑销售订单弹窗（新数量不能低于累计已发；完全未发货的订单可由超级管理员删除） */
+/* 编辑销售订单弹窗：已发货（累计出库>0）订单数量与交期锁定、仅可改备注；
+ * 完全未发货的订单可由超级管理员删除；发过货或已取消的订单可由超级管理员归档 */
 function EditOrderModal({
     order,
     hasShipmentLedger,
@@ -270,22 +278,33 @@ function EditOrderModal({
     const { can } = useApp();
     const updateOrder = useUpdateOrder();
     const deleteOrder = useDeleteOrder();
+    const archiveOrder = useArchiveOrder();
     const toast = useToast();
     const [qty, setQty] = useState(String(order.qty));
     const [deliverDate, setDeliverDate] = useState(order.deliverDate);
     const [remark, setRemark] = useState(order.remark);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [confirmArchive, setConfirmArchive] = useState(false);
+    const [archiveRemark, setArchiveRemark] = useState("");
+    /* 已发货订单锁数量与交期（与后端口径一致），仅备注可改 */
+    const locked = order.outbound > 0;
+    const remarkDirty = remark !== order.remark;
     /* 无删除权限（仅超级管理员）、已有发货或存在任何出库流水（含已作废，与后端口径
      * 一致——曾发货又作废的订单不可删）时不显示删除入口，前端先挡一层误操作 */
     const canDelete = can("orders:delete") && order.outbound === 0 && !hasShipmentLedger;
+    /* 归档（仅超级管理员）：发过货的订单与已取消的订单可归档；未发货的活跃订单走取消/删除 */
+    const cancelled = order.lifecycleStatus === "cancelled";
+    const canArchive = can("orders:archive") && (order.outbound > 0 || cancelled);
 
     const submit = () => {
         if (!order) return;
         const nextErrors: Record<string, string> = {};
-        if (!qty || Number(qty) <= 0) nextErrors.qty = "请填写订单数量";
-        if (Number(qty) < order.outbound) nextErrors.qty = `新数量不能低于累计已发 ${order.outbound} 个`;
-        if (!deliverDate) nextErrors.deliverDate = "请选择交货日期";
+        if (!locked) {
+            if (!qty || Number(qty) <= 0) nextErrors.qty = "请填写订单数量";
+            if (Number(qty) < order.outbound) nextErrors.qty = `新数量不能低于累计已发 ${order.outbound} 个`;
+            if (!deliverDate) nextErrors.deliverDate = "请选择交货日期";
+        }
         setErrors(nextErrors);
         if (Object.keys(nextErrors).length)
             requestAnimationFrame(() =>
@@ -296,8 +315,8 @@ function EditOrderModal({
             {
                 orderNo: order.orderNo,
                 expectedVersion: order.version,
-                qty: Number(qty),
-                deliverDate,
+                // 已发货订单数量/交期不可改，不上送以免触发后端锁定校验
+                ...(locked ? {} : { qty: Number(qty), deliverDate }),
                 remark,
             },
             {
@@ -325,6 +344,21 @@ function EditOrderModal({
         );
     };
 
+    const submitArchive = () => {
+        if (archiveOrder.isPending) return;
+        archiveOrder.mutate(
+            { orderNo: order.orderNo, expectedVersion: order.version, reason: archiveRemark.trim() },
+            {
+                onSuccess: () => {
+                    toast(`订单 ${order.orderNo} 已归档，可在「归档订单」查看`);
+                    setConfirmArchive(false);
+                    onClose();
+                },
+                onError: error => toast(error.message, true),
+            },
+        );
+    };
+
     return (
         <Modal
             open={!!order}
@@ -334,11 +368,20 @@ function EditOrderModal({
             width={520}
             footer={
                 <>
+                    {canArchive && (
+                        <button
+                            type="button"
+                            onClick={() => setConfirmArchive(true)}
+                            className="mr-auto min-h-10 rounded-btn px-2 text-13 font-medium text-muted transition hover:bg-soft hover:text-td-strong"
+                        >
+                            归档订单
+                        </button>
+                    )}
                     {canDelete && (
                         <button
                             type="button"
                             onClick={() => setConfirmDelete(true)}
-                            className="mr-auto min-h-10 rounded-btn px-2 text-13 font-medium text-danger transition hover:bg-danger-soft"
+                            className={`${canArchive ? "" : "mr-auto"} min-h-10 rounded-btn px-2 text-13 font-medium text-danger transition hover:bg-danger-soft`}
                         >
                             删除订单
                         </button>
@@ -352,11 +395,11 @@ function EditOrderModal({
                     </button>
                     <button
                         type="button"
-                        disabled={updateOrder.isPending}
+                        disabled={updateOrder.isPending || (locked && !remarkDirty)}
                         onClick={submit}
                         className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
                     >
-                        保存修改
+                        {updateOrder.isPending ? "正在提交…" : "保存修改"}
                     </button>
                 </>
             }
@@ -369,6 +412,7 @@ function EditOrderModal({
                         inputMode="numeric"
                         value={qty}
                         error={errors.qty}
+                        disabled={locked}
                         onChange={event => setQty(event.target.value.replace(/\D/g, ""))}
                     />
                     <DateField
@@ -376,14 +420,15 @@ function EditOrderModal({
                         required
                         error={errors.deliverDate}
                         value={deliverDate}
+                        disabled={locked}
                         onChange={event => setDeliverDate(event.target.value)}
                     />
                     <div className="sm:col-span-2">
                         <TextArea label="订单备注" value={remark} onChange={event => setRemark(event.target.value)} />
                     </div>
-                    {order.outbound > 0 && (
+                    {locked && (
                         <p className="text-12 text-subtle sm:col-span-2">
-                            该订单累计已发 {order.outbound} 个，新数量不能低于此值。
+                            该订单累计已发 {order.outbound} 个，数量与交货日期不可修改，仅可修改备注。
                         </p>
                     )}
                     {canDelete && (
@@ -433,6 +478,57 @@ function EditOrderModal({
                     </div>
                 </Modal>
             )}
+            {confirmArchive && order && (
+                <Modal
+                    open
+                    onClose={() => setConfirmArchive(false)}
+                    label="终态操作"
+                    title="归档销售订单"
+                    subtitle={`${order.orderNo} · ${order.customer}`}
+                    width={480}
+                    footer={
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => setConfirmArchive(false)}
+                                className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
+                            >
+                                取消
+                            </button>
+                            <button
+                                type="button"
+                                disabled={archiveOrder.isPending}
+                                onClick={submitArchive}
+                                className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
+                            >
+                                {archiveOrder.isPending ? "正在归档…" : "确认归档"}
+                            </button>
+                        </>
+                    }
+                >
+                    <div className="flex flex-col gap-3">
+                        <div className="flex items-start gap-3 rounded-panel border border-line bg-soft p-4">
+                            <Icon name="archive" size={20} className="mt-0.5 shrink-0 text-muted" />
+                            <div className="text-13 leading-6 text-td">
+                                即将归档订单 <span className="tnum font-semibold text-ink">{order.orderNo}</span>（
+                                {order.customer} · 订单 {num(order.qty)} 个 · 已发 {num(order.outbound)} 个）。
+                                {cancelled && <p>该订单已取消，归档后保留取消语境。</p>}
+                                <p className="mt-1 text-subtle">
+                                    归档后订单将从销售订单列表移入「归档订单」，仅供查询，不可修改、取消或删除。
+                                    {order.outbound > 0 && order.outbound < order.qty && " 剩余欠量不再安排交付。"}
+                                </p>
+                                <p className="mt-1 font-medium text-td-strong">归档为最终操作，不可恢复。</p>
+                            </div>
+                        </div>
+                        <TextArea
+                            label="归档备注（选填）"
+                            placeholder="如：行情不好客户弃单"
+                            value={archiveRemark}
+                            onChange={event => setArchiveRemark(event.target.value.slice(0, 500))}
+                        />
+                    </div>
+                </Modal>
+            )}
         </Modal>
     );
 }
@@ -456,6 +552,8 @@ export function OrderDetailModal({
     const status = orderStatusOf(snap, order);
     const remaining = remainingOf(order);
     const shipments = snap.outboundLedger.filter(row => row.orderNo === order.orderNo);
+    // 曾取消过（终态为取消，或取消后再归档）：取消语境保留展示
+    const wasCancelled = order.lifecycleStatus === "cancelled" || !!order.cancelledAt;
     return (
         <Modal
             open={!!order}
@@ -495,7 +593,13 @@ export function OrderDetailModal({
                         { label: "剩余待交付", value: remaining },
                     ]}
                     status={<StatusBadge status={status.key} label={status.label} />}
-                    note={order.lifecycleStatus === "cancelled" ? "订单已取消，剩余数量不再安排交付。" : undefined}
+                    note={
+                        order.lifecycleStatus === "cancelled"
+                            ? "订单已取消，剩余数量不再安排交付。"
+                            : order.lifecycleStatus === "archived"
+                              ? "订单已归档，仅供查询，不可修改。"
+                              : undefined
+                    }
                 />
                 <RecordProduct categories={snap.bomCategories} bom={bom} bomCode={order.bomCode} />
                 <RecordFields
@@ -514,8 +618,15 @@ export function OrderDetailModal({
                             ),
                         },
                         { label: "订单备注", value: order.remark || "—", fullWidth: true },
-                        ...(order.lifecycleStatus === "cancelled"
+                        ...(wasCancelled
                             ? [{ label: "取消原因", value: order.cancelReason || "—", fullWidth: true }]
+                            : []),
+                        ...(order.archivedAt
+                            ? [
+                                  { label: "归档人", value: order.archivedBy || "—" },
+                                  { label: "归档时间", value: new Date(order.archivedAt).toLocaleString() },
+                                  { label: "归档备注", value: order.archiveReason || "—", fullWidth: true },
+                              ]
                             : []),
                     ]}
                 />
@@ -573,20 +684,22 @@ export function OrdersPage() {
     const [detail, setDetail] = useState<Order | null>(null);
     const [editing, setEditing] = useState<Order | null>(null);
 
-    const orders = snap.orders;
+    /* 归档单分流到「归档订单」页，销售订单页只展示活跃与已取消订单 */
+    const orders = snap.orders.filter(order => order.lifecycleStatus !== "archived");
     const boms = snap.boms;
     const bomCategory = new Map(boms.map(bom => [bom.code, bom.name]));
     const categories = [...new Set(boms.map(bom => bom.name))];
     const counts = {
         total: orders.length,
-        unfinished: orders.filter(order => order.qty - order.outbound > 0).length,
+        // 待交付口径与剩余量一致：已取消订单剩余按 0，不再虚增计数
+        unfinished: orders.filter(order => remainingOf(order) > 0).length,
         ready: orders.filter(order => maxShipOf(snap, order.orderNo) > 0).length,
     };
 
     const filtered = (() => {
         const kw = keyword.trim().toLowerCase();
         const rows = orders.filter(order => {
-            if (taskFilter === "pending" && order.qty <= order.outbound) return false;
+            if (taskFilter === "pending" && remainingOf(order) <= 0) return false;
             if (taskFilter === "ready" && maxShipOf(snap, order.orderNo) <= 0) return false;
             if (statusFilter !== "全部状态" && orderStatusOf(snap, order).label !== statusFilter) return false;
             if (categoryFilter !== "全部品类" && bomCategory.get(order.bomCode) !== categoryFilter) return false;
@@ -1078,7 +1191,8 @@ export function OrdersPage() {
                 snap={snap}
                 onClose={() => setDetail(null)}
                 onEdit={
-                    canEdit && detail
+                    // 已取消订单后端不可改，收入口避免打开表单后提交被 409 拒绝
+                    canEdit && detail && detail.lifecycleStatus === "active"
                         ? () => setEditing(orders.find(order => order.orderNo === detail.orderNo) ?? detail)
                         : undefined
                 }

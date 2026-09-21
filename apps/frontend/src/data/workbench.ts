@@ -20,6 +20,7 @@ export interface WorkbenchOrder {
     qty: number;
     shipped: number;
     cancelled?: boolean;
+    archived?: boolean;
 }
 
 export interface WorkbenchMovement {
@@ -43,8 +44,10 @@ export interface WorkbenchRange {
     end: string;
 }
 export type RankingMetric = "qty" | "count";
-export const openQty = (order: WorkbenchOrder) => (order.cancelled ? 0 : Math.max(0, order.qty - order.shipped));
-// 取消订单只保留实际履行部分，取消的未履行数量不算需求。
+/** 活跃口径的未交量：取消/归档订单不再安排交付，剩余按 0（缺口与风险随之剔除） */
+export const openQty = (order: WorkbenchOrder) =>
+    order.cancelled || order.archived ? 0 : Math.max(0, order.qty - order.shipped);
+// 需求口径：取消订单只保留实际履行部分；归档订单是真实历史需求，全额计入排名与统计。
 export const demandQty = (order: WorkbenchOrder) => (order.cancelled ? order.shipped : order.qty);
 export const withinRange = (date: string, range: WorkbenchRange) => date >= range.start && date <= range.end;
 
@@ -83,8 +86,9 @@ export function summarizeWorkbench(data: WorkbenchData, range: WorkbenchRange) {
         qty: products.reduce((sum, product) => sum + product.qty, 0),
         shipped: products.reduce((sum, product) => sum + product.shipped, 0),
         remaining: products.reduce((sum, product) => sum + product.remaining, 0),
-        completed: orders.filter(order => !order.cancelled && order.shipped >= order.qty).length,
-        activeCount: orders.filter(order => !order.cancelled).length,
+        completed: orders.filter(order => !order.cancelled && !order.archived && order.shipped >= order.qty).length,
+        // 有效订单卡片只数仍在推进的单：取消与归档都已收尾
+        activeCount: orders.filter(order => !order.cancelled && !order.archived).length,
     };
 }
 

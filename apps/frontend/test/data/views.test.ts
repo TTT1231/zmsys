@@ -80,6 +80,10 @@ describe("bomByCode / stockOf / remainingOf", () => {
         expect(remainingOf(order({ qty: 10, outbound: 4 }))).toBe(6);
         expect(remainingOf(order({ qty: 5, outbound: 9 }))).toBe(0);
     });
+
+    it("returns zero remaining for archived orders (欠量关闭，与取消同口径)", () => {
+        expect(remainingOf(order({ qty: 10, outbound: 4, lifecycleStatus: "archived" }))).toBe(0);
+    });
 });
 
 describe("orderStatusOf", () => {
@@ -128,6 +132,49 @@ describe("orderStatusOf", () => {
 
     it("returns pending when nothing shipped and no stock to allocate", () => {
         expect(orderStatusOf(snap(), order())).toEqual({ label: "待备货", key: "pending" });
+    });
+
+    it("labels archived orders by their pre-archive shape (key 统一 archived)", () => {
+        // 已完成归档
+        expect(orderStatusOf(snap(), order({ qty: 10, outbound: 10, lifecycleStatus: "archived" }))).toEqual({
+            label: "已完成后归档",
+            key: "archived",
+        });
+        // 部分发货归档（有剩余欠量）
+        expect(orderStatusOf(snap(), order({ qty: 10, outbound: 4, lifecycleStatus: "archived" }))).toEqual({
+            label: "部分发货后归档",
+            key: "archived",
+        });
+        // 取消后归档（未发货取消）
+        expect(
+            orderStatusOf(
+                snap(),
+                order({ lifecycleStatus: "archived", cancelledAt: "2026-03-12T00:00:00Z", outbound: 0 }),
+            ),
+        ).toEqual({ label: "取消后归档", key: "archived" });
+        // 部分发货后取消、再归档
+        expect(
+            orderStatusOf(
+                snap(),
+                order({
+                    qty: 10,
+                    outbound: 4,
+                    lifecycleStatus: "archived",
+                    cancelledAt: "2026-03-12T00:00:00Z",
+                }),
+            ),
+        ).toEqual({ label: "部分发货取消后归档", key: "archived" });
+    });
+
+    it("excludes archived orders from ready-to-ship allocation", () => {
+        // 库存 5：归档单不再参与分配，可发量留给活跃订单
+        const fixture = snap({
+            stock: { ZMXK001: 5 },
+            orders: [order({ orderNo: "ZM-ARC", qty: 10, outbound: 2, lifecycleStatus: "archived" }), order()],
+        });
+        expect(maxShipOf(fixture, "ZM-ARC")).toBe(0);
+        expect(maxShipOf(fixture, "ZM260315001")).toBe(5);
+        expect(readyToShip(fixture).map(row => row.orderNo)).toEqual(["ZM260315001"]);
     });
 
     it("only sees stock left after earlier deliver dates' reservation", () => {

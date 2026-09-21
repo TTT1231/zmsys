@@ -11,6 +11,7 @@ export const PERMISSIONS = {
     MENU_BOM: "menu:bom",
     MENU_INBOUND: "menu:inbound",
     MENU_OUTBOUND: "menu:outbound",
+    MENU_ARCHIVED_ORDERS: "menu:archived-orders",
     // 受保护菜单（仅 super）
     MENU_PERMISSIONS: "menu:permissions",
     MENU_PERMISSIONS_ACCOUNTS: "menu:permissions-accounts",
@@ -23,6 +24,7 @@ export const PERMISSIONS = {
     ORDERS_EDIT: "orders:edit",
     ORDERS_CANCEL: "orders:cancel",
     ORDERS_DELETE: "orders:delete", // 受保护
+    ORDERS_ARCHIVE: "orders:archive", // 受保护
 
     // ---- 客户 ----
     CUSTOMERS_VIEW: "customers:view",

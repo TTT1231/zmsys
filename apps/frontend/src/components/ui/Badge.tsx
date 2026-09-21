@@ -10,6 +10,7 @@ const STATUS_STYLES: Record<string, string> = {
     progress: "bg-[#f2f4f7] text-td-strong border-line",
     pending: "bg-[#fff6e7] text-[#a15c07] border-[#fedf89]",
     cancelled: "bg-danger-soft text-danger border-[#fecdca]",
+    archived: "bg-[#f2f4f7] text-subtle border-line",
     danger: "bg-danger-soft text-danger border-[#fecdca]",
     success: "bg-success-soft text-success border-[#abefc6]",
 };
@@ -21,6 +22,7 @@ const STATUS_LABELS: Record<StatusKey, string> = {
     partReady: "部分可发货",
     pending: "待备货",
     cancelled: "已取消",
+    archived: "已归档",
 };
 
 export function StatusBadge({ status, label }: { status: StatusKey; label?: string }) {

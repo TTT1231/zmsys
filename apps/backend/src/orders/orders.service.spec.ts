@@ -24,6 +24,7 @@ type OrderRow = SalesOrderTable & {
     customer: { customerCode: string };
     bom: { bomCode: string };
     canceller: { name: string } | null;
+    archiver: { name: string } | null;
 };
 
 const mkBom = (overrides: Partial<BomTable> = {}): BomTable & { category: { name: string } } =>
@@ -85,6 +86,9 @@ const mkOrder = (overrides: Partial<OrderRow> = {}): OrderRow =>
         cancelledAt: null,
         cancelledBy: null,
         cancelReason: null,
+        archivedAt: null,
+        archivedBy: null,
+        archiveReason: null,
         rowVersion: 1n,
         requestKey: "req-order",
         createdBy: 1n,
@@ -94,6 +98,7 @@ const mkOrder = (overrides: Partial<OrderRow> = {}): OrderRow =>
         customer: { customerCode: "CUS-0900" },
         bom: { bomCode: "ZMKW0001" },
         canceller: null,
+        archiver: null,
         ...overrides,
     }) as OrderRow;
 
@@ -125,6 +130,7 @@ const createStore = (store: Store) => {
             : { customerCode: "CUS-0000" },
         bom: { bomCode: store.boms.find(b => b.id === order.bomId)?.bomCode ?? "ZM0000000" },
         canceller: null,
+        archiver: null,
     });
     const tx = {
         // 锁查询返回空行集；v_order_outbound_qty 视图查询按 store.outboundNet 应答。
@@ -303,11 +309,21 @@ describe("OrdersService.listOrders", () => {
                 cancelledAt: new Date("2026-09-12T07:30:00Z"),
                 cancelReason: "客户计划变更",
             }),
+            mkOrder({
+                id: 502n,
+                orderNo: "ZM260912003",
+                lifecycleStatus: "ARCHIVED" as const,
+                cancelledAt: new Date("2026-09-12T07:30:00Z"),
+                cancelReason: "客户计划变更",
+                archivedAt: new Date("2026-09-20T08:00:00Z"),
+                archiveReason: "行情不好客户弃单",
+                archiver: { name: "郭均" },
+            }),
         );
         store.outboundNet.set(500n, 60);
         const { service } = mkService(store);
         const list = await service.listOrders();
-        expect(list).toHaveLength(2);
+        expect(list).toHaveLength(3);
         expect(list[0]).toMatchObject({
             orderNo: "ZM260912001",
             customer: "深圳市智造电子",
@@ -324,6 +340,14 @@ describe("OrdersService.listOrders", () => {
             cancelReason: "客户计划变更",
         });
         expect(list[1].outbound).toBe(0);
+        // 取消后归档：两套终态字段并存返回
+        expect(list[2]).toMatchObject({
+            lifecycleStatus: "archived",
+            archivedBy: "郭均",
+            archiveReason: "行情不好客户弃单",
+            cancelReason: "客户计划变更",
+        });
+        expect(list[2].archivedAt).toBe("2026-09-20T08:00:00.000Z");
     });
 });
 
@@ -401,7 +425,7 @@ describe("OrdersService.updateOrder", () => {
         ctx = mkService(store);
     });
 
-    it("订单不存在 404；无可变字段 400；版本不匹配 409；已取消 409", async () => {
+    it("订单不存在 404；无可变字段 400；版本不匹配 409；已取消 409；已归档 409", async () => {
         await expect(ctx.service.updateOrder("ZM999999999", { expectedVersion: 1, qty: 10 }, actor)).rejects.toThrow(
             new NotFoundException("订单不存在"),
         );
@@ -415,14 +439,13 @@ describe("OrdersService.updateOrder", () => {
         await expect(ctx.service.updateOrder("ZM260912001", { expectedVersion: 1, qty: 10 }, actor)).rejects.toThrow(
             new ConflictException("订单已取消，不可修改"),
         );
+        store.orders[0]!.lifecycleStatus = "ARCHIVED" as const;
+        await expect(
+            ctx.service.updateOrder("ZM260912001", { expectedVersion: 1, remark: "x" }, actor),
+        ).rejects.toThrow(new ConflictException("订单已归档，不可修改"));
     });
 
-    it("新数量低于有效出库净额 409；合法修改版本 +1 并写 UPDATE 日志", async () => {
-        store.outboundNet.set(500n, 80);
-        await expect(ctx.service.updateOrder("ZM260912001", { expectedVersion: 1, qty: 50 }, actor)).rejects.toThrow(
-            ConflictException,
-        );
-
+    it("未发货订单可改数量与交期：合法修改版本 +1 并写 UPDATE 日志", async () => {
         const updated = await ctx.service.updateOrder(
             "ZM260912001",
             { expectedVersion: 1, qty: 120, deliverDate: "2026-10-15", remark: "加急" },
@@ -433,9 +456,23 @@ describe("OrdersService.updateOrder", () => {
             qty: 120,
             deliverDate: "2026-10-15",
             remark: "加急",
-            outbound: 80,
+            outbound: 0,
         });
         expect(store.changeLogs.at(-1)).toMatchObject({ eventType: "UPDATE", beforeVersion: 1n, afterVersion: 2n });
+    });
+
+    it("已发货订单数量与交货日期锁定：携带任一字段 409，仅改备注放行", async () => {
+        store.outboundNet.set(500n, 80);
+        await expect(
+            ctx.service.updateOrder("ZM260912001", { expectedVersion: 1, qty: 120, remark: "补备注" }, actor),
+        ).rejects.toThrow(new ConflictException("订单已有出库记录，数量与交货日期不可修改，仅可修改备注"));
+        await expect(
+            ctx.service.updateOrder("ZM260912001", { expectedVersion: 1, deliverDate: "2026-10-15" }, actor),
+        ).rejects.toThrow(new ConflictException("订单已有出库记录，数量与交货日期不可修改，仅可修改备注"));
+
+        const updated = await ctx.service.updateOrder("ZM260912001", { expectedVersion: 1, remark: "仅改备注" }, actor);
+        expect(updated).toMatchObject({ version: 2, qty: 100, deliverDate: "2026-09-30", remark: "仅改备注" });
+        expect(store.changeLogs.at(-1)).toMatchObject({ eventType: "UPDATE" });
     });
 });
 
@@ -514,6 +551,115 @@ describe("OrdersService.cancelOrder", () => {
     });
 });
 
+describe("OrdersService.archiveOrder", () => {
+    let store: Store;
+    let ctx: ReturnType<typeof mkService>;
+
+    beforeEach(() => {
+        store = emptyStore();
+        store.orders.push(mkOrder());
+        ctx = mkService(store);
+    });
+
+    it("订单不存在 404；幂等键非法 400；版本不匹配 409", async () => {
+        await expect(ctx.service.archiveOrder("ZM999999999", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
+            new NotFoundException("订单不存在"),
+        );
+        await expect(ctx.service.archiveOrder("ZM260912001", { expectedVersion: 1 }, actor, "short")).rejects.toThrow(
+            BadRequestException,
+        );
+        await expect(ctx.service.archiveOrder("ZM260912001", { expectedVersion: 9 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException("订单已被其他人修改，请刷新后重试"),
+        );
+        expect(ctx.tx.salesOrderTable.update).not.toHaveBeenCalled();
+    });
+
+    it("未发货的 ACTIVE 订单不可归档 409；已归档重复归档 409；存在已登记未打印出库单 409", async () => {
+        await expect(ctx.service.archiveOrder("ZM260912001", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException("订单尚未发货，无需归档；手误订单请取消或删除"),
+        );
+
+        store.outboundNet.set(500n, 40);
+        store.shipments.push({ orderId: 500n, state: "REGISTERED" } as OutboundShipment);
+        await expect(ctx.service.archiveOrder("ZM260912001", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException("存在已登记未打印的出库单，请先作废或打印后再归档"),
+        );
+
+        store.shipments.pop();
+        store.orders[0]!.lifecycleStatus = "ARCHIVED" as const;
+        await expect(ctx.service.archiveOrder("ZM260912001", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException("订单已归档"),
+        );
+        expect(store.changeLogs).toHaveLength(0);
+    });
+
+    it("归档成功：终态三要素落库（备注选填）、版本 +1、写 ARCHIVE 日志与 op_log、返回归档后订单", async () => {
+        store.outboundNet.set(500n, 40);
+        const archived = await ctx.service.archiveOrder(
+            "ZM260912001",
+            { expectedVersion: 1, reason: "行情不好客户弃单" },
+            actor,
+            ID_KEY,
+        );
+        expect(archived).toMatchObject({
+            lifecycleStatus: "archived",
+            version: 2,
+            qty: 100,
+            outbound: 40,
+            archiveReason: "行情不好客户弃单",
+        });
+        expect(archived.archivedAt).toBeDefined();
+        const stored = store.orders[0]!;
+        expect(stored.archivedBy).toBe(BigInt(actor.id));
+        expect(stored.archivedAt).toBeInstanceOf(Date);
+        expect(store.changeLogs.at(-1)).toMatchObject({
+            eventType: "ARCHIVE",
+            reason: "行情不好客户弃单",
+            beforeVersion: 1n,
+            afterVersion: 2n,
+        });
+        expect(store.opLogs.at(-1)).toMatchObject({ action: "archive_order", targetCode: "ZM260912001" });
+        expect(ctx.idempotency.complete).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ httpStatus: 200, resource: { type: "order", code: "ZM260912001" } }),
+        );
+    });
+
+    it("已取消订单（含未发货取消）可归档：保留取消语境、备注留空存 null", async () => {
+        store.orders[0] = mkOrder({
+            lifecycleStatus: "CANCELLED",
+            cancelledAt: new Date("2026-09-13T10:00:00Z"),
+            cancelReason: "客户撤单",
+        });
+        const archived = await ctx.service.archiveOrder("ZM260912001", { expectedVersion: 1 }, actor, ID_KEY);
+        expect(archived).toMatchObject({
+            lifecycleStatus: "archived",
+            version: 2,
+            cancelReason: "客户撤单",
+        });
+        expect(archived.archivedAt).toBeDefined();
+        expect(archived.archivedBy).toBe("");
+        expect(archived.archiveReason).toBe("");
+        expect(store.orders[0]!.archiveReason).toBeNull();
+        expect(store.opLogs.at(-1)).toMatchObject({
+            action: "archive_order",
+            detailJson: expect.objectContaining({ lifecycleStatus: "ARCHIVED", cancelReason: "客户撤单" }),
+        });
+    });
+
+    it("重放直接返回首次响应，不再执行业务", async () => {
+        store.outboundNet.set(500n, 40);
+        const replayBody = { version: 2, lifecycleStatus: "archived" };
+        const local = mkService(
+            store,
+            vi.fn(async () => ({ replay: { httpStatus: 200, body: replayBody }, placeholderId: null })),
+        );
+        const result = await local.service.archiveOrder("ZM260912001", { expectedVersion: 1 }, actor, ID_KEY);
+        expect(result).toEqual(replayBody);
+        expect(local.tx.salesOrderTable.update).not.toHaveBeenCalled();
+    });
+});
+
 describe("OrdersService.deleteOrder", () => {
     let store: Store;
     let ctx: ReturnType<typeof mkService>;
@@ -533,6 +679,10 @@ describe("OrdersService.deleteOrder", () => {
         );
         await expect(ctx.service.deleteOrder("ZM260912001", { expectedVersion: 9 }, actor, ID_KEY)).rejects.toThrow(
             new ConflictException("订单已被其他人修改，请刷新后重试"),
+        );
+        store.orders[0]!.lifecycleStatus = "ARCHIVED" as const;
+        await expect(ctx.service.deleteOrder("ZM260912001", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException("订单已归档，不可删除"),
         );
         expect(ctx.tx.salesOrderTable.delete).not.toHaveBeenCalled();
     });

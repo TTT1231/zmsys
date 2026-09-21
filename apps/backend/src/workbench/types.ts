@@ -20,6 +20,7 @@ export interface WorkbenchOrder {
     qty: number;
     shipped: number;
     cancelled?: boolean;
+    archived?: boolean;
 }
 
 export interface WorkbenchMovement {

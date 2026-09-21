@@ -9,6 +9,9 @@ export const WorkbenchPage = lazy(() =>
 );
 export const SearchPage = lazy(() => import("./pages/workbench/SearchPage").then(m => ({ default: m.SearchPage })));
 export const OrdersPage = lazy(() => import("./pages/orders/OrdersPage").then(m => ({ default: m.OrdersPage })));
+export const ArchivedOrdersPage = lazy(() =>
+    import("./pages/orders/ArchivedOrdersPage").then(m => ({ default: m.ArchivedOrdersPage })),
+);
 export const CustomersPage = lazy(() =>
     import("./pages/customers/CustomersPage").then(m => ({ default: m.CustomersPage })),
 );

@@ -10,8 +10,11 @@ export interface Order {
     orderDate: string;
     deliverDate: string;
     remark: string;
-    lifecycleStatus: "active" | "cancelled";
+    lifecycleStatus: "active" | "cancelled" | "archived";
     cancelledAt?: string;
     cancelledBy?: string;
     cancelReason?: string;
+    archivedAt?: string;
+    archivedBy?: string;
+    archiveReason?: string;
 }

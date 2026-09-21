@@ -38,10 +38,13 @@ export function SearchPage() {
         ? category
         : (categories[0]?.key ?? "orders");
 
-    const orders = snap.orders.filter(order =>
-        `${order.orderNo} ${order.customer} ${order.customerCode} ${order.bomCode} ${bomByCode(snap, order.bomCode)?.spec}`
-            .toLowerCase()
-            .includes(keyword),
+    // 归档单已分流到「归档订单」页，全局搜索不返回（口径与销售订单列表一致）
+    const orders = snap.orders.filter(
+        order =>
+            order.lifecycleStatus !== "archived" &&
+            `${order.orderNo} ${order.customer} ${order.customerCode} ${order.bomCode} ${bomByCode(snap, order.bomCode)?.spec}`
+                .toLowerCase()
+                .includes(keyword),
     );
     const customers = snap.customers.filter(customer =>
         `${customer.name} ${customer.code} ${customer.contact} ${customer.phone} ${customer.province}${customer.city}${customer.district}${customer.town}`

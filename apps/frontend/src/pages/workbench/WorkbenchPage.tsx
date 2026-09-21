@@ -423,6 +423,7 @@ function OwnerWorkbench() {
                                         <td>
                                             <span className="font-medium text-ink">{order.no}</span>
                                             {order.cancelled && <span className="ml-2 text-warning">已取消</span>}
+                                            {order.archived && <span className="ml-2 text-subtle">已归档</span>}
                                             <p className="mt-1 text-11 text-muted">{order.customer}</p>
                                         </td>
                                         <td>

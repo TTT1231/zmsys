@@ -26,7 +26,7 @@ interface OrderFixture {
     id: bigint;
     orderNo: string;
     qty: number;
-    lifecycleStatus: "ACTIVE" | "CANCELLED";
+    lifecycleStatus: "ACTIVE" | "CANCELLED" | "ARCHIVED";
     orderDate: Date;
     deliverDate: Date;
     customer: { customerCode: string; name: string };
@@ -68,7 +68,7 @@ const orders: OrderFixture[] = [
         id: 23n,
         orderNo: "ZM2609120003",
         qty: 200,
-        lifecycleStatus: "ACTIVE",
+        lifecycleStatus: "ARCHIVED",
         orderDate: day("2026-09-03"),
         deliverDate: day("2026-09-17"),
         customer: { customerCode: "CUS-0001", name: "浙江正泰电器有限公司" },
@@ -139,7 +139,7 @@ describe("WorkbenchService.getOverview", () => {
         ]);
     });
 
-    it("订单 shipped 取视图净额（缺行 0），仅取消订单带 cancelled 标记，日期为 yyyy-MM-dd", () => {
+    it("订单 shipped 取视图净额（缺行 0），取消/归档订单分别带 cancelled/archived 标记，日期为 yyyy-MM-dd", () => {
         expect(data.orders).toEqual([
             {
                 no: "ZM2609120001",
@@ -171,6 +171,7 @@ describe("WorkbenchService.getOverview", () => {
                 due: "2026-09-17",
                 qty: 200,
                 shipped: 0,
+                archived: true,
             },
         ]);
     });

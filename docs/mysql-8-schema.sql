@@ -141,6 +141,7 @@ INSERT INTO sys_permission (code, kind, menu_key, action_id, label, protected) V
     ('menu:bom', 'MENU', 'bom', NULL, '物料与BOM', 0),
     ('menu:inbound', 'MENU', 'inbound', NULL, '成品入库', 0),
     ('menu:outbound', 'MENU', 'outbound', NULL, '成品出库', 0),
+    ('menu:archived-orders', 'MENU', 'archived-orders', NULL, '归档订单', 0),
     ('menu:permissions', 'MENU', 'permissions', NULL, '用户与权限', 1),
     ('menu:permissions-accounts', 'MENU', 'permissions-accounts', NULL, '账号管理', 1),
     ('menu:permissions-roles', 'MENU', 'permissions-roles', NULL, '角色与权限', 1),
@@ -150,6 +151,7 @@ INSERT INTO sys_permission (code, kind, menu_key, action_id, label, protected) V
     ('orders:edit', 'ACTION', 'orders', 'edit', '编辑订单', 0),
     ('orders:cancel', 'ACTION', 'orders', 'cancel', '取消订单', 0),
     ('orders:delete', 'ACTION', 'orders', 'delete', '删除订单', 1),
+    ('orders:archive', 'ACTION', 'orders', 'archive', '归档订单', 1),
     ('customers:view', 'ACTION', 'customers', 'view', '查看', 0),
     ('customers:create', 'ACTION', 'customers', 'create', '新建客户', 0),
     ('customers:edit', 'ACTION', 'customers', 'edit', '编辑客户', 0),
@@ -197,6 +199,7 @@ INSERT INTO sys_grant (role_code, permission_code, grant_source, granted_by) VAL
     ('admin', 'menu:bom', 'BOOTSTRAP', NULL),
     ('admin', 'menu:inbound', 'BOOTSTRAP', NULL),
     ('admin', 'menu:outbound', 'BOOTSTRAP', NULL),
+    ('admin', 'menu:archived-orders', 'BOOTSTRAP', NULL),
     ('admin', 'orders:view', 'BOOTSTRAP', NULL),
     ('admin', 'orders:create', 'BOOTSTRAP', NULL),
     ('admin', 'orders:edit', 'BOOTSTRAP', NULL),
@@ -214,6 +217,7 @@ INSERT INTO sys_grant (role_code, permission_code, grant_source, granted_by) VAL
     ('warehouse', 'menu:bom', 'BOOTSTRAP', NULL),
     ('warehouse', 'menu:inbound', 'BOOTSTRAP', NULL),
     ('warehouse', 'menu:outbound', 'BOOTSTRAP', NULL),
+    ('warehouse', 'menu:archived-orders', 'BOOTSTRAP', NULL),
     ('warehouse', 'orders:view', 'BOOTSTRAP', NULL),
     ('warehouse', 'bom:view', 'BOOTSTRAP', NULL),
     ('warehouse', 'inbound:view', 'BOOTSTRAP', NULL),
@@ -228,6 +232,7 @@ INSERT INTO sys_grant (role_code, permission_code, grant_source, granted_by) VAL
     ('sales', 'menu:bom', 'BOOTSTRAP', NULL),
     ('sales', 'menu:inbound', 'BOOTSTRAP', NULL),
     ('sales', 'menu:outbound', 'BOOTSTRAP', NULL),
+    ('sales', 'menu:archived-orders', 'BOOTSTRAP', NULL),
     ('sales', 'orders:view', 'BOOTSTRAP', NULL),
     ('sales', 'orders:create', 'BOOTSTRAP', NULL),
     ('sales', 'orders:edit', 'BOOTSTRAP', NULL),
@@ -244,6 +249,7 @@ INSERT INTO sys_grant (role_code, permission_code, grant_source, granted_by) VAL
     ('staff', 'menu:bom', 'BOOTSTRAP', NULL),
     ('staff', 'menu:inbound', 'BOOTSTRAP', NULL),
     ('staff', 'menu:outbound', 'BOOTSTRAP', NULL),
+    ('staff', 'menu:archived-orders', 'BOOTSTRAP', NULL),
     ('staff', 'orders:view', 'BOOTSTRAP', NULL),
     ('staff', 'bom:view', 'BOOTSTRAP', NULL),
     ('staff', 'inbound:view', 'BOOTSTRAP', NULL),
@@ -891,7 +897,7 @@ CREATE TABLE sales_order_table (
     customer_id BIGINT NOT NULL,
     bom_id BIGINT NOT NULL,
     qty INT UNSIGNED NOT NULL,
-    lifecycle_status ENUM('ACTIVE', 'CANCELLED') NOT NULL DEFAULT 'ACTIVE',
+    lifecycle_status ENUM('ACTIVE', 'CANCELLED', 'ARCHIVED') NOT NULL DEFAULT 'ACTIVE',
     order_date DATE NOT NULL,
     deliver_date DATE NOT NULL,
     remark TEXT NOT NULL,
@@ -902,6 +908,9 @@ CREATE TABLE sales_order_table (
     cancelled_at DATETIME(3) NULL,
     cancelled_by BIGINT NULL,
     cancel_reason VARCHAR(500) NULL,
+    archived_at DATETIME(3) NULL,
+    archived_by BIGINT NULL,
+    archive_reason VARCHAR(500) NULL,
     row_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
     request_key VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     created_by BIGINT NOT NULL,
@@ -919,6 +928,8 @@ CREATE TABLE sales_order_table (
         ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT fk_sales_order_cancelled_by FOREIGN KEY (cancelled_by) REFERENCES sys_user (id)
         ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_sales_order_archived_by FOREIGN KEY (archived_by) REFERENCES sys_user (id)
+        ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT fk_sales_order_creator FOREIGN KEY (created_by) REFERENCES sys_user (id)
         ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT fk_sales_order_updater FOREIGN KEY (updated_by) REFERENCES sys_user (id)
@@ -930,6 +941,13 @@ CREATE TABLE sales_order_table (
         OR
         (lifecycle_status = 'CANCELLED' AND cancelled_at IS NOT NULL AND cancelled_by IS NOT NULL
             AND CHAR_LENGTH(TRIM(cancel_reason)) BETWEEN 2 AND 500)
+        OR
+        (lifecycle_status = 'ARCHIVED')
+    ),
+    CONSTRAINT ck_sales_order_archive CHECK (
+        (lifecycle_status <> 'ARCHIVED' AND archived_at IS NULL AND archived_by IS NULL AND archive_reason IS NULL)
+        OR
+        (lifecycle_status = 'ARCHIVED' AND archived_at IS NOT NULL AND archived_by IS NOT NULL)
     ),
     CONSTRAINT ck_sales_order_version CHECK (row_version > 0),
     CONSTRAINT ck_sales_order_request CHECK (CHAR_LENGTH(request_key) BETWEEN 8 AND 128)
@@ -939,7 +957,7 @@ CREATE TABLE sales_order_change_log (
     id BIGINT NOT NULL,
     order_id BIGINT NOT NULL,
     operator_id BIGINT NOT NULL,
-    event_type ENUM('CREATE', 'UPDATE', 'CANCEL') NOT NULL,
+    event_type ENUM('CREATE', 'UPDATE', 'CANCEL', 'ARCHIVE') NOT NULL,
     before_version BIGINT UNSIGNED NULL,
     after_version BIGINT UNSIGNED NOT NULL,
     reason VARCHAR(500) NOT NULL DEFAULT '',
@@ -959,7 +977,7 @@ CREATE TABLE sales_order_change_log (
     CONSTRAINT ck_sales_order_change_after CHECK (JSON_TYPE(after_json) = 'OBJECT'),
     CONSTRAINT ck_sales_order_change_versions CHECK (
         (event_type = 'CREATE' AND before_version IS NULL AND after_version = 1)
-        OR (event_type IN ('UPDATE', 'CANCEL') AND before_version IS NOT NULL AND after_version = before_version + 1)
+        OR (event_type IN ('UPDATE', 'CANCEL', 'ARCHIVE') AND before_version IS NOT NULL AND after_version = before_version + 1)
     ),
     CONSTRAINT ck_sales_order_change_reason CHECK (
         event_type <> 'CANCEL'
@@ -967,7 +985,7 @@ CREATE TABLE sales_order_change_log (
     ),
     CONSTRAINT ck_sales_order_change_request CHECK (
         (request_key IS NULL OR CHAR_LENGTH(request_key) BETWEEN 8 AND 128)
-        AND (event_type NOT IN ('CREATE', 'CANCEL') OR request_key IS NOT NULL)
+        AND (event_type NOT IN ('CREATE', 'CANCEL', 'ARCHIVE') OR request_key IS NOT NULL)
     )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -1228,7 +1246,7 @@ CREATE TABLE op_log (
     operator_id BIGINT NOT NULL,
     operator_name_snapshot VARCHAR(64) NOT NULL,
     operator_role_snapshot VARCHAR(32) NOT NULL,
-    action ENUM('ship', 'create_customer', 'create_order', 'delete_order', 'delete_bom') NOT NULL,
+    action ENUM('ship', 'create_customer', 'create_order', 'delete_order', 'delete_bom', 'archive_order') NOT NULL,
     target_type VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     target_id BIGINT NOT NULL,
     target_code VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,

@@ -91,6 +91,7 @@ export class WorkbenchService {
             qty: row.qty,
             shipped: outboundByOrderId.get(row.id) ?? 0,
             ...(row.lifecycleStatus === "CANCELLED" ? { cancelled: true } : {}),
+            ...(row.lifecycleStatus === "ARCHIVED" ? { archived: true } : {}),
         }));
 
         const movementMap = new Map<string, WorkbenchMovement>();
