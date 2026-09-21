@@ -29,6 +29,7 @@ import { useToast } from "@/components/ui/toastContexts";
 
 import { BomCell } from "@/components/bom/BomCell";
 import { BomPicker } from "@/components/bom/BomPicker";
+import { BomRemarkNote } from "@/components/bom/BomRemarkNote";
 import type { InboundRow, Snapshot } from "@/api";
 
 /* 可排序列：入库单号 / BOM 编码 / 入库数量 / 入库日期；桌面表头与移动端排序下拉共用 */
@@ -86,9 +87,8 @@ function InboundBomPicker({
                     </div>
                     <p className="mt-1 text-12.5 text-td">{currentBom.name}</p>
                     <p className="mt-1 wrap-break-word text-11.5 text-muted">{currentBom.spec}</p>
-                    <p className="mt-1.5 text-11.5 text-muted">
-                        BOM 备注：<span className="whitespace-pre-wrap text-td">{currentBom.remark || "—"}</span>
-                    </p>
+                    {/* 工艺差异独立警示条：检验入库时需核对的差异 */}
+                    <BomRemarkNote remark={currentBom.remark} className="mt-2" />
                 </div>
             )}
         </div>

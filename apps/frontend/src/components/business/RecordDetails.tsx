@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Bom, BomCategory } from "@/api";
 import { BomSpecs } from "@/components/bom/BomSpecs";
+import { BomRemarkNote } from "@/components/bom/BomRemarkNote";
 import { num } from "@/lib/format";
 
 /** 业务凭证共用的数量概览、BOM 详细与登记信息，保持一致的阅读顺序。 */
@@ -54,12 +55,7 @@ export function RecordProduct({
             {bom ? (
                 <>
                     <BomSpecs bom={bom} categories={categories} layout="record" />
-                    {/* BOM 备注是同编码下的工艺差异说明，各凭证统一展示供核对 */}
-                    <div className="mt-3 border-t border-dashed border-line pt-2.5">
-                        <p className="text-12 text-muted">
-                            BOM 备注：<span className="whitespace-pre-wrap text-td">{bom.remark || "—"}</span>
-                        </p>
-                    </div>
+                    <BomRemarkNote remark={bom.remark} className="mt-3" />
                 </>
             ) : (
                 <p className="text-14 text-muted">未找到该成品的物料信息</p>

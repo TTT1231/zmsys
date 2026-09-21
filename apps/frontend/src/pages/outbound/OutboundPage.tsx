@@ -5,6 +5,7 @@ import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { RecordFields, RecordProduct, RecordSummary } from "@/components/business/RecordDetails";
 import { BomCell } from "@/components/bom/BomCell";
+import { BomRemarkNote } from "@/components/bom/BomRemarkNote";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
@@ -487,13 +488,9 @@ export function OutboundModal({
                                 {selectedBom?.spec && (
                                     <p className="mt-0.5 wrap-break-word text-11.5 text-muted">{selectedBom.spec}</p>
                                 )}
-                                {selectedBom && (
-                                    <p className="mt-0.5 text-11.5 text-muted">
-                                        BOM 备注：
-                                        <span className="whitespace-pre-wrap text-td">{selectedBom.remark || "—"}</span>
-                                    </p>
-                                )}
                             </div>
+                            {/* 工艺差异独立警示条：发货前要核对的差异，不能混在规格小字里 */}
+                            <BomRemarkNote remark={selectedBom?.remark} />
                             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
                                 <div className="min-w-0">
                                     <dt className="text-11.5 text-muted">订单数量</dt>
