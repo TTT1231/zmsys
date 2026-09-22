@@ -242,10 +242,10 @@ describe("旋转XK3 / 安全开关目录", () => {
         const short = safety.groups.find(node => node.name === "短款/31mm系列配件")!;
         expect(short).toMatchObject({ kind: "group", multi: true });
         expect(short.items.map(item => item.name)).toEqual(["动片", "静片", "短杆子", "短帽子", "短弹簧"]);
-        const long = safety.groups.find(node => node.name === "长款/41mm系列配件")!;
+        const long = safety.groups.find(node => node.name === "长款/43mm系列配件")!;
         expect(long.multi).toBe(true);
         expect(long.items.map(item => item.name)).toEqual(["动片", "静片", "长杆子", "长帽子", "长弹簧"]);
-        // 30mm/41mm 系列与既有 31mm/43mm 内容一致，物料 ids 独立
+        // 30mm/40mm 系列与既有 31mm/43mm 内容一致，物料 ids 独立
         const short30 = safety.groups.find(node => node.name === "短款/30mm系列配件")!;
         expect(short30).toMatchObject({ kind: "group", multi: true, parentId: "2503" });
         expect(short30.items.map(item => item.name)).toEqual(["动片", "静片", "短杆子", "短帽子", "短弹簧"]);
@@ -254,7 +254,7 @@ describe("旋转XK3 / 安全开关目录", () => {
         expect(long41).toMatchObject({ kind: "group", multi: true, parentId: "2503" });
         expect(long41.items.map(item => item.name)).toEqual(["动片", "静片", "长杆子", "长帽子", "长弹簧"]);
         expect(long41.items.map(item => item.id)).toEqual(["3612", "3613", "3614", "3615", "3616"]);
-        // 四个系列按 短款30→短款31→长款41→长款43 排列，分组 id 连续递增
+        // 四个系列按 短款30→短款31→长款40→长款43 排列，分组 id 连续递增
         expect(safety.groups.filter(node => node.parentId === "2503").map(node => node.id)).toEqual([
             "2611",
             "2612",

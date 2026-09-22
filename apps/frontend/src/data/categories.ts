@@ -424,7 +424,7 @@ export const BOM_CATEGORIES: CategoryDef[] = [
                 ["3615", "长帽子"],
                 ["3616", "长弹簧"],
             ]),
-            multiGroup("2614", "长款/41mm系列配件", "long-43-parts", "2503", [
+            multiGroup("2614", "长款/43mm系列配件", "long-43-parts", "2503", [
                 ["3512", "动片"],
                 ["3513", "静片"],
                 ["3514", "长杆子"],

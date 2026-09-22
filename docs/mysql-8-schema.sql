@@ -699,7 +699,7 @@ INSERT INTO material_item (id, group_id, name, sort_order) VALUES
     (3763, 2719, '3.0mm电镀钢球', 1);
 
 -- 安全开关（1005 / AQ / 3）：PC塑料（外壳类）根分组 + PA66塑料分区（盖板）
--- + 五金件分区（短款/30mm→31mm、长款/41mm→43mm 四个多选组，id 连续按展示序）+ 触点分区。
+-- + 五金件分区（短款/30mm→31mm、长款/40mm→43mm 四个多选组，id 连续按展示序）+ 触点分区。
 INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, multi, sort_order) VALUES
     (2501, 1005, NULL, 'GROUP', 'PC塑料（外壳类）', 'pc-shell', 0, 1),
     (2502, 1005, NULL, 'SECTION', 'PA66塑料', NULL, NULL, 2),
@@ -708,7 +708,7 @@ INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, m
     (2611, 1005, 2503, 'GROUP', '短款/30mm系列配件', 'short-30-parts', 1, 1),
     (2612, 1005, 2503, 'GROUP', '短款/31mm系列配件', 'short-31-parts', 1, 2),
     (2613, 1005, 2503, 'GROUP', '长款/40mm系列配件', 'long-41-parts', 1, 3),
-    (2614, 1005, 2503, 'GROUP', '长款/41mm系列配件', 'long-43-parts', 1, 4),
+    (2614, 1005, 2503, 'GROUP', '长款/43mm系列配件', 'long-43-parts', 1, 4),
     (2504, 1005, NULL, 'SECTION', '触点', NULL, NULL, 4),
     (2514, 1005, 2504, 'GROUP', '触点大小', 'contact-size', 0, 1),
     (2515, 1005, 2504, 'GROUP', '触点厚度', 'contact-thickness', 0, 2),
