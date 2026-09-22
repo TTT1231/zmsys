@@ -31,8 +31,12 @@ import {
     type RoleId,
 } from "@/data/permissions";
 import { num } from "@/lib/format";
+import { copyText } from "@/lib/clipboard";
 
 type PermTab = "accounts" | "roles" | "matrix";
+
+/** 契约初始密码：新增用户与重置密码统一为 123456（后端 INITIAL_PASSWORD 同值） */
+const INITIAL_PASSWORD = "123456";
 
 const TABS: Array<{ key: PermTab; label: string }> = [
     { key: "accounts", label: "账号管理" },
@@ -128,17 +132,7 @@ function AccountsTab({
     isLoading: boolean;
 }) {
     const [editing, setEditing] = useState<WbUser | "new" | null>(null);
-    const toast = useToast();
-    const resetPwdRequest = useResetUserPassword();
-    // 重置后对方旧会话立即失效，需用初始密码 123456 重新登录
-    const resetPwd = (user: WbUser) =>
-        resetPwdRequest.mutate(
-            { account: user.account, expectedVersion: user.version },
-            {
-                onError: error => toast(error.message, true),
-                onSuccess: () => toast(`已重置【${user.name}】的密码为初始密码 123456`),
-            },
-        );
+    const [resetting, setResetting] = useState<WbUser | null>(null);
 
     return (
         <>
@@ -167,7 +161,7 @@ function AccountsTab({
                                             <Button variant="secondary" onClick={() => setEditing(user)}>
                                                 编辑
                                             </Button>
-                                            <Button variant="secondary" onClick={() => resetPwd(user)}>
+                                            <Button variant="secondary" onClick={() => setResetting(user)}>
                                                 重置密码
                                             </Button>
                                             <UserActiveToggle
@@ -230,7 +224,7 @@ function AccountsTab({
                                             <>
                                                 <TableLink onClick={() => setEditing(user)}>编辑</TableLink>
                                                 <span className="mx-2 text-line-strong">·</span>
-                                                <TableLink onClick={() => resetPwd(user)}>重置密码</TableLink>
+                                                <TableLink onClick={() => setResetting(user)}>重置密码</TableLink>
                                             </>
                                         )}
                                     </td>
@@ -249,7 +243,108 @@ function AccountsTab({
                     onClose={() => setEditing(null)}
                 />
             )}
+            {resetting !== null && <ResetPasswordModal user={resetting} onClose={() => setResetting(null)} />}
         </>
+    );
+}
+
+/* 重置密码二次确认：确认后调用接口，成功留在弹窗内展示初始密码（可复制），
+ * 避免密码随 toast 一闪而过；重置后对方旧会话立即失效，需用初始密码重新登录 */
+function ResetPasswordModal({ user, onClose }: { user: WbUser; onClose: () => void }) {
+    const resetPwd = useResetUserPassword();
+    const toast = useToast();
+    const [done, setDone] = useState(false);
+
+    const confirm = () => {
+        resetPwd.mutate(
+            { account: user.account, expectedVersion: user.version },
+            {
+                onSuccess: () => setDone(true),
+                onError: error => toast(error.message, true),
+            },
+        );
+    };
+
+    const copyPassword = async () => {
+        if (await copyText(INITIAL_PASSWORD)) toast("已复制初始密码");
+    };
+
+    return (
+        <Modal
+            open
+            onClose={onClose}
+            label="用户与权限"
+            title={done ? "密码已重置" : "重置密码"}
+            width={440}
+            footer={
+                done ? (
+                    <Button onClick={onClose}>我已知晓</Button>
+                ) : (
+                    <>
+                        <Button variant="secondary" onClick={onClose}>
+                            取消
+                        </Button>
+                        <Button onClick={confirm} disabled={resetPwd.isPending}>
+                            {resetPwd.isPending ? "重置中…" : "确认重置"}
+                        </Button>
+                    </>
+                )
+            }
+        >
+            {done ? (
+                <div className="flex flex-col items-center gap-2 py-1.5 text-center">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-success-soft">
+                        <Icon name="check" size={22} className="text-success" />
+                    </span>
+                    <p className="text-14 font-semibold text-ink">新密码已生效</p>
+                    <div className="mt-1.5 flex w-full items-center justify-center gap-3.5 rounded-xl border border-primary-border bg-primary-soft px-4 py-3.5">
+                        <span className="tnum text-24 font-bold tracking-[0.18em] text-primary-strong">
+                            {INITIAL_PASSWORD}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={copyPassword}
+                            aria-label="复制初始密码"
+                            title="复制初始密码"
+                            className="flex min-h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-12.5 text-muted transition hover:border-primary-border hover:text-primary"
+                        >
+                            <Icon name="copy" size={13} />
+                            复制
+                        </button>
+                    </div>
+                    <p className="text-12 text-subtle">请告知本人使用新密码登录，其当前登录已失效</p>
+                </div>
+            ) : (
+                <div className="flex flex-col gap-3.5">
+                    <div className="flex items-center gap-2.5 rounded-xl border border-line bg-soft px-3.5 py-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-13.5 font-semibold text-primary-strong">
+                            {user.name.slice(0, 1)}
+                        </span>
+                        <div className="min-w-0">
+                            <p className="truncate text-13.5 font-semibold text-ink">{user.name}</p>
+                            <p className="tnum text-12 text-muted">{user.account}</p>
+                        </div>
+                    </div>
+                    <ul className="flex flex-col gap-2.5">
+                        <li className="flex items-center gap-2.5 text-13 text-td">
+                            <span className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-full bg-primary-soft">
+                                <Icon name="lock" size={14} className="text-primary-strong" />
+                            </span>
+                            <span>
+                                登录密码将重置为{" "}
+                                <strong className="tnum font-semibold text-ink">{INITIAL_PASSWORD}</strong>
+                            </span>
+                        </li>
+                        <li className="flex items-center gap-2.5 text-13 text-td">
+                            <span className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-full bg-warning-soft">
+                                <Icon name="logout" size={14} className="text-warning" />
+                            </span>
+                            <span>该账号当前登录将立即退出</span>
+                        </li>
+                    </ul>
+                </div>
+            )}
+        </Modal>
     );
 }
 
@@ -467,7 +562,7 @@ function UserDialog({
             if (role === "super") return;
             createUser.mutate(
                 { name: name.trim(), account: account.trim(), role },
-                { onSuccess: done(`用户【${name.trim()}】已创建，初始密码为 123456`), onError },
+                { onSuccess: done(`用户【${name.trim()}】已创建，初始密码为 ${INITIAL_PASSWORD}`), onError },
             );
         }
     };
@@ -533,7 +628,9 @@ function UserDialog({
                         onReason={setReason}
                     />
                 )}
-                {!user && <p className="text-12 text-subtle">初始密码统一为 123456，用户可登录后按需修改。</p>}
+                {!user && (
+                    <p className="text-12 text-subtle">初始密码统一为 {INITIAL_PASSWORD}，用户可登录后按需修改。</p>
+                )}
             </div>
         </Modal>
     );

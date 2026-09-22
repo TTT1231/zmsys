@@ -213,6 +213,52 @@ describe("用户管理 (e2e)", () => {
         expect(demote.statusCode).toBe(400);
     });
 
+    it("重置密码：版本过期 409；super 不可重置；成功后旧 JWT 失效可再登录", async () => {
+        await createUser(accountOf("clerk04"), "staff");
+        const login = await app.inject({
+            method: "POST",
+            url: "/api/auth/login",
+            payload: { account: accountOf("clerk04"), password: "123456" },
+        });
+        const oldToken = login.json().data.accessToken;
+        const list = await app.inject({ method: "GET", url: "/api/users", headers: authHeaders(superToken) });
+        const target = list.json().data.find((user: { account: string }) => user.account === accountOf("clerk04"));
+
+        const stale = await app.inject({
+            method: "POST",
+            url: `/api/users/${target.account}/reset-password`,
+            headers: authHeaders(superToken),
+            payload: { expectedVersion: target.version + 5 },
+        });
+        expect(stale.statusCode).toBe(409);
+
+        const asSuper = await app.inject({
+            method: "POST",
+            url: "/api/users/guojun/reset-password",
+            headers: authHeaders(superToken),
+            payload: { expectedVersion: target.version },
+        });
+        expect(asSuper.statusCode).toBe(400);
+
+        const reset = await app.inject({
+            method: "POST",
+            url: `/api/users/${target.account}/reset-password`,
+            headers: authHeaders(superToken),
+            payload: { expectedVersion: target.version },
+        });
+        expect(reset.statusCode).toBe(200);
+        expect(reset.json().data).toMatchObject({ account: target.account, version: target.version + 1 });
+
+        const profile = await app.inject({ method: "GET", url: "/api/auth/profile", headers: authHeaders(oldToken) });
+        expect(profile.statusCode).toBe(401);
+        const relogin = await app.inject({
+            method: "POST",
+            url: "/api/auth/login",
+            payload: { account: accountOf("clerk04"), password: "123456" },
+        });
+        expect(relogin.statusCode).toBe(200);
+    });
+
     it("停用后登录被拒、在途 JWT 失效；重新启用后可再登录", async () => {
         await createUser(accountOf("clerk03"), "staff");
         const login = await app.inject({

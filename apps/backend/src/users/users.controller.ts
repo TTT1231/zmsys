@@ -6,6 +6,7 @@ import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { SetUserStatusDto } from "./dto/set-user-status.dto";
+import { ResetUserPasswordDto } from "./dto/reset-user-password.dto";
 import type { AuthUser } from "../common/types/auth-user";
 import type { WbUser } from "../access-control/types";
 
@@ -49,5 +50,16 @@ export class UsersController {
         @CurrentUser() actor: AuthUser,
     ): Promise<WbUser> {
         return this.usersService.setUserStatus(account, dto, actor);
+    }
+
+    @Post(":account/reset-password")
+    @Permissions([PERMISSIONS.PERMISSIONS_MANAGE], "无权管理用户")
+    @HttpCode(HttpStatus.OK) // openapi 契约为 200，覆盖 @Post 默认的 201
+    async resetUserPassword(
+        @Param("account") account: string,
+        @Body() dto: ResetUserPasswordDto,
+        @CurrentUser() actor: AuthUser,
+    ): Promise<WbUser> {
+        return this.usersService.resetPassword(account, dto, actor);
     }
 }

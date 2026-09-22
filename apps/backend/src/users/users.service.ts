@@ -14,6 +14,7 @@ import type { SysUser } from "../generated/prisma/client";
 import type { CreateUserDto } from "./dto/create-user.dto";
 import type { UpdateUserDto } from "./dto/update-user.dto";
 import type { SetUserStatusDto } from "./dto/set-user-status.dto";
+import type { ResetUserPasswordDto } from "./dto/reset-user-password.dto";
 
 /** 契约初始密码：新增用户统一 123456，数据库只保存强哈希（db-scheme.md §0.6） */
 const INITIAL_PASSWORD = "123456";
@@ -220,6 +221,48 @@ export class UsersService {
                     reason: `${dto.active ? "启用" : "停用"}账号${
                         transferred > 0 ? `；离岗移交 ${transferred} 个客户` : ""
                     }`,
+                    beforeJson: userSnapshot(current),
+                    afterJson: userSnapshot(updated),
+                },
+            });
+            return toWbUser(updated);
+        });
+    }
+
+    /**
+     * 重置为初始密码 123456：super 不可重置；递增 token_version 使目标用户
+     * 旧会话立即失效。密码哈希在事务外计算，缩短行锁持有时间（同 createUser）。
+     */
+    async resetPassword(account: string, dto: ResetUserPasswordDto, actor: AuthUser): Promise<WbUser> {
+        const passwordHash = await bcrypt.hash(INITIAL_PASSWORD, 10);
+        return this.txRunner.run(async (tx: Tx) => {
+            const now = new Date();
+            const current = await this.lockByAccount(tx, account);
+            if (current.rowVersion !== BigInt(dto.expectedVersion)) {
+                throw new ConflictException("用户信息已被其他人修改，请刷新后重试");
+            }
+            if (current.roleCode === SUPER_ROLE_CODE) {
+                throw new BadRequestException("内置超级管理员不可重置密码");
+            }
+
+            const updated = await tx.sysUser.update({
+                where: { id: current.id },
+                data: {
+                    passwordHash,
+                    tokenVersion: { increment: 1 },
+                    rowVersion: { increment: 1 },
+                },
+            });
+            await tx.sysUserChangeLog.create({
+                data: {
+                    id: this.snowflake.next(),
+                    userId: current.id,
+                    operatorId: BigInt(actor.id),
+                    eventType: "PASSWORD_RESET",
+                    createdAt: now,
+                    beforeVersion: current.rowVersion,
+                    afterVersion: updated.rowVersion,
+                    reason: "管理员重置密码为初始密码",
                     beforeJson: userSnapshot(current),
                     afterJson: userSnapshot(updated),
                 },
