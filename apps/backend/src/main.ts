@@ -30,7 +30,8 @@ export function configureApp(app: NestFastifyApplication, corsOrigins: string[] 
         }),
     );
     if (corsOrigins.length > 0) {
-        app.register(cors, { origin: corsOrigins, credentials: true });
+        // Fastify 插件为链式注册，统一在 ready()/listen() 时结算，无需在此等待
+        void app.register(cors, { origin: corsOrigins, credentials: true });
     }
 }
 
@@ -49,7 +50,7 @@ async function bootstrap() {
             },
         }),
     );
-    app.register(helmet);
+    void app.register(helmet);
     const config = app.get(ConfigService<AppConfig>);
     configureApp(app, config.getOrThrow("cors.origins", { infer: true }));
     // SIGINT/SIGTERM 触发 onModuleDestroy 链（Prisma disconnect + mariadb 池关闭）
@@ -62,5 +63,5 @@ async function bootstrap() {
 // 仅作为主模块运行时启动（node dist/main）；e2e 只 import configureApp，
 // 此前模块顶层直接调用会在测试进程里隐式监听真实端口（多 spec 并行时 EADDRINUSE）
 if (typeof require !== "undefined" && require.main === module) {
-    bootstrap();
+    void bootstrap();
 }
