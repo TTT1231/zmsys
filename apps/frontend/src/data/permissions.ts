@@ -70,7 +70,7 @@ export const MENU_CATALOG: MenuNode[] = [
     { key: "bom", label: "物料与 BOM", icon: "layers", group: "业务导航", to: "/bom" },
     { key: "inbound", label: "成品入库", icon: "inbound", group: "业务导航", to: "/inbound" },
     { key: "outbound", label: "成品出库", icon: "truck", group: "业务导航", to: "/outbound" },
-    { key: "stock", label: "库存", icon: "cube", group: "业务导航", to: "/stock" },
+    { key: "stock", label: "库存", icon: "stock", group: "业务导航", to: "/stock" },
     {
         key: "changelog",
         label: "变更记录",
