@@ -15,8 +15,9 @@ export default defineConfig({
     },
     test: {
         environment: "node",
-        // worker 跨文件复用，省去每文件 ~4s 的 worker 启动开销（vitest Isolate 提示）
-        isolate: false,
+        // 保持默认 isolate: true：关闭隔离会让测试文件共享模块注册表，
+        // vi.mock 偶发失效（CI 冷缓存下复现为 "No QueryClient set"）。
+        // vitest 提示的 "~4s/文件启动" 是重叠并行的，实测全量仅多 ~15s。
         coverage: {
             provider: "v8",
             include: ["src/**/*.{ts,tsx}"],
