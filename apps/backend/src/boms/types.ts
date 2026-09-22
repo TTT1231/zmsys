@@ -30,3 +30,22 @@ export interface Bom {
     created: string;
     unit: string;
 }
+
+/** 契约 StockFlowRow（openapi boms tag）：单笔库存变动；qty 有符号
+ * （入库 +、出库 −、调整 ±），balance 为该笔完成后余量，口径同 v_bom_stock */
+export interface StockFlowRow {
+    type: "in" | "out" | "adjust";
+    no: string;
+    date: string;
+    qty: number;
+    balance: number;
+    operator: string;
+    remark: string;
+}
+
+/** 契约 BomStockLedger：flows 按业务日升序（旧 → 新），stockQty 与 flows 末笔 balance 一致 */
+export interface BomStockLedger {
+    bomCode: string;
+    stockQty: number;
+    flows: StockFlowRow[];
+}

@@ -388,6 +388,23 @@ paths:
                             schema: { $ref: "#/components/schemas/BomStockEnvelope" }
                 "403": { $ref: "#/components/responses/Forbidden" }
 
+    /bom-stocks/{code}/ledger:
+        get:
+            tags: [boms]
+            operationId: getBomStockLedger
+            summary: BOM 出入库流水与逐笔结余
+            description: 权限 `bom:view`。入库（ACTIVE）/库存调整/出库三台账按 v_bom_stock 同一口径合并为按业务日升序的流水，`balance` 为该笔完成后余量，`stockQty` 与末笔 `balance` 及 v_bom_stock 恒等；作废入库不计、作废出库经反向事件自动冲销。BOM 不存在返回 404；存在但无流水返回空 flows 与 stockQty 0。
+            parameters:
+                - $ref: "#/components/parameters/BomCode"
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/BomStockLedgerEnvelope" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+
     /inbound:
         get:
             tags: [inbound]
@@ -1459,6 +1476,30 @@ components:
             type: object
             description: bomCode → 当前库存余量
             additionalProperties: { type: integer }
+        BomStockLedgerEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/BomStockLedger" }, message: { const: ok } }
+        BomStockLedger:
+            type: object
+            description: 单个 BOM 的出入库流水；flows 按业务日升序，stockQty 与末笔 balance 一致
+            properties:
+                bomCode: { type: string }
+                stockQty: { type: integer }
+                flows:
+                    type: array
+                    items: { $ref: "#/components/schemas/StockFlowRow" }
+        StockFlowRow:
+            type: object
+            properties:
+                type: { type: string, enum: [in, out, adjust] }
+                no: { type: string }
+                date: { type: string, format: date }
+                qty: { type: integer, description: 有符号数量（入 +、出 −、调整 ±） }
+                balance: { type: integer, description: 该笔完成后余量 }
+                operator: { type: string }
+                remark: { type: string }
         InboundEnvelope:
             allOf:
                 - $ref: "#/components/schemas/Envelope"

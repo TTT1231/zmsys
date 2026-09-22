@@ -11,6 +11,7 @@ export const PERMISSIONS = {
     MENU_BOM: "menu:bom",
     MENU_INBOUND: "menu:inbound",
     MENU_OUTBOUND: "menu:outbound",
+    MENU_STOCK: "menu:stock",
     MENU_ARCHIVED_ORDERS: "menu:archived-orders",
     // 受保护菜单（仅 super）
     MENU_PERMISSIONS: "menu:permissions",

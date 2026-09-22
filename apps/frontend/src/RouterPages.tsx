@@ -20,6 +20,7 @@ export const InboundPage = lazy(() => import("./pages/inbound/InboundPage").then
 export const OutboundPage = lazy(() =>
     import("./pages/outbound/OutboundPage").then(m => ({ default: m.OutboundPage })),
 );
+export const StockPage = lazy(() => import("./pages/stock/StockPage").then(m => ({ default: m.StockPage })));
 export const PermissionsPage = lazy(() =>
     import("./pages/permissions/PermissionsPage").then(m => ({ default: m.PermissionsPage })),
 );

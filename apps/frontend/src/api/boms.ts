@@ -1,4 +1,4 @@
-import type { Bom, BomCategory, BomStockMap, CreateBomInput } from "./types";
+import type { Bom, BomCategory, BomStockLedger, BomStockMap, CreateBomInput } from "./types";
 import { requestClient } from "@/http";
 import { idempotencyConfig } from "./idempotency";
 
@@ -13,6 +13,11 @@ export function fetchBomCategories(): Promise<BomCategory[]> {
 /** BOM 维度余量聚合（口径同 v_bom_stock），供列表页库存列使用，避免拉全量台账推导 */
 export function fetchBomStocks(): Promise<BomStockMap> {
     return requestClient.get<BomStockMap>("/bom-stocks");
+}
+
+/** 单个 BOM 出入库流水（逐笔结余，口径同 v_bom_stock），供库存详情使用 */
+export function fetchBomStockLedger(code: string): Promise<BomStockLedger> {
+    return requestClient.get<BomStockLedger>(`/bom-stocks/${code}/ledger`);
 }
 
 export function createBom(input: CreateBomInput): Promise<Bom> {

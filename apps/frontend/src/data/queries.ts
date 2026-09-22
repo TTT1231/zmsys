@@ -18,6 +18,7 @@ import {
     fetchBomCategories,
     fetchBoms,
     fetchBomStocks,
+    fetchBomStockLedger,
     fetchCustomerOwnerOptions,
     fetchCustomers,
     fetchGrantLog,
@@ -71,6 +72,16 @@ export function useBomCategories() {
 /** 库存余量随台账写操作实时变化：staleTime 沿用全局 30s，台账 mutation 后主动失效 */
 export function useBomStocks() {
     return useQuery({ queryKey: bomKeys.stocks, queryFn: fetchBomStocks });
+}
+
+/** 单个 BOM 出入库流水（库存详情弹窗）：仅打开时拉取，键含 bomCode 互不串档 */
+export function useBomStockLedger(code: string | null) {
+    return useQuery({
+        queryKey: ["boms", "stock-ledger", code],
+        queryFn: () => fetchBomStockLedger(code!),
+        enabled: code !== null,
+        staleTime: 30_000,
+    });
 }
 
 /** 刷新 BOM 域三个查询；页面本地筛选/分页不受影响 */
