@@ -12,22 +12,23 @@
 - [已知限制与延期工作](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
 
------
+---
 
 <a id="use-this-package"></a>
+
 ## 使用本包
 
 本包交付的是可组装的客户端：应用层构造一个 `RequestClient` 单例并注册横切拦截器，业务代码只引用该实例。新增能力时按下表选择入口：
 
-| 你要写的东西 | 使用 |
-|---|---|
-| 普通 JSON 请求 | `client.get / post / put / patch / delete` |
-| 需要读取 headers、status 或文件流 | 保持默认 `responseReturn: "raw"`，拿到 `AxiosResponse` |
-| 上传文件 | `client.upload(url, { file, ...附带字段 })` |
-| 下载文件 | `client.download(url)`，默认返回 `Blob` |
-| AI 对话等流式响应 | `client.postSSE(url, data, { onMessage, onEnd })` |
-| 数组查询参数 | config 传 `paramsSerializer: "brackets" / "comma" / "indices" / "repeat"` |
-| 刷新 token、错误提示等横切逻辑 | `client.addRequestInterceptor / addResponseInterceptor` 注册，或用预设拦截器工厂 |
+| 你要写的东西                      | 使用                                                                             |
+| --------------------------------- | -------------------------------------------------------------------------------- |
+| 普通 JSON 请求                    | `client.get / post / put / patch / delete`                                       |
+| 需要读取 headers、status 或文件流 | 保持默认 `responseReturn: "raw"`，拿到 `AxiosResponse`                           |
+| 上传文件                          | `client.upload(url, { file, ...附带字段 })`                                      |
+| 下载文件                          | `client.download(url)`，默认返回 `Blob`                                          |
+| AI 对话等流式响应                 | `client.postSSE(url, data, { onMessage, onEnd })`                                |
+| 数组查询参数                      | config 传 `paramsSerializer: "brackets" / "comma" / "indices" / "repeat"`        |
+| 刷新 token、错误提示等横切逻辑    | `client.addRequestInterceptor / addResponseInterceptor` 注册，或用预设拦截器工厂 |
 
 ### 创建实例
 
@@ -71,17 +72,24 @@ options 类型为 `CreateAxiosDefaults & ExtendOptions`，构造默认值：`Con
 基于 `fetch` + `ReadableStream` 而非 `EventSource`，因此支持 POST body：
 
 ```ts
-await client.postSSE("/chat/stream", { prompt }, {
-    onMessage: chunk => { /* 解码后的文本片段 */ },
-    onEnd: () => {},
-});
+await client.postSSE(
+    "/chat/stream",
+    { prompt },
+    {
+        onMessage: chunk => {
+            /* 解码后的文本片段 */
+        },
+        onEnd: () => {},
+    },
+);
 ```
 
 `requestSSE(url, data?, requestOptions?)` 为通用入口，`requestOptions` 是 `RequestInit` 的扩展（`SseRequestOptions`），可指定 `method`。url 与 `baseURL` 自动拼接（绝对 url 原样保留）。
 
------
+---
 
 <a id="understand-the-implementation"></a>
+
 ## 理解实现
 
 ### 设计理念
@@ -96,27 +104,29 @@ await client.postSSE("/chat/stream", { prompt }, {
 
 ### 源码地图
 
-| 文件 | 承载 |
-|---|---|
-| `src/index.ts` | 对外出口：re-export `request-client` 与整个 axios |
-| `src/request-client/request-client.ts` | `RequestClient` 类：方法、默认配置、模块组装、`bindMethods` |
-| `src/request-client/types.ts` | 全部导出类型；`responseReturn` / `paramsSerializer` 扩展定义于此 |
-| `src/request-client/preset-interceptors.ts` | 三个预设响应拦截器工厂与内置中文文案 |
-| `src/request-client/modules/interceptor.ts` | `InterceptorManager`：注册逻辑，直接映射 axios interceptors |
-| `src/request-client/modules/uploader.ts` | `FileUploader`：FormData 组装与数组字段序列化 |
-| `src/request-client/modules/downloader.ts` | `FileDownloader`：blob 下载与多 method 分发 |
-| `src/request-client/modules/sse.ts` | `SSE`：fetch 流式读取、拦截器链复用、`safeJoinUrl` |
+| 文件                                        | 承载                                                             |
+| ------------------------------------------- | ---------------------------------------------------------------- |
+| `src/index.ts`                              | 对外出口：re-export `request-client` 与整个 axios                |
+| `src/request-client/request-client.ts`      | `RequestClient` 类：方法、默认配置、模块组装、`bindMethods`      |
+| `src/request-client/types.ts`               | 全部导出类型；`responseReturn` / `paramsSerializer` 扩展定义于此 |
+| `src/request-client/preset-interceptors.ts` | 三个预设响应拦截器工厂与内置中文文案                             |
+| `src/request-client/modules/interceptor.ts` | `InterceptorManager`：注册逻辑，直接映射 axios interceptors      |
+| `src/request-client/modules/uploader.ts`    | `FileUploader`：FormData 组装与数组字段序列化                    |
+| `src/request-client/modules/downloader.ts`  | `FileDownloader`：blob 下载与多 method 分发                      |
+| `src/request-client/modules/sse.ts`         | `SSE`：fetch 流式读取、拦截器链复用、`safeJoinUrl`               |
 
------
+---
 
 <a id="further-exploration"></a>
+
 ## 进一步探索
 
 - `@zmsys/utils`——本包声明的运行时依赖（`package.json` → `workspace:*`）：`bindMethods` / `merge` / `isString` / `isFunction` / `isUndefined` 均来自该包。
 
------
+---
 
 <a id="known-limitations-and-deferred-work"></a>
+
 ## 已知限制与延期工作
 
 这些限制界定了本包不适用的场景，属于当前的包级约束。
@@ -127,9 +137,10 @@ await client.postSSE("/chat/stream", { prompt }, {
 - **错误文案硬编码中文**——`httpErrorMessages` 内置于包内，国际化需在外层替换该预设。
 - **`authenticateResponseInterceptor` 依赖实例公开状态**——直接读写 `client.isRefreshing` / `client.refreshTokenQueue`，刷新失败时队列以空 token 回调（`formatToken("")` 的返回值会写入 `Authorization`）。
 
------
+---
 
 <a id="dev-note"></a>
+
 ### 开发备注
 
 <details>
