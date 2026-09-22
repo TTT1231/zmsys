@@ -10,11 +10,14 @@ export function BomCell({
     bom,
     bomCode,
     showIdentity = true,
+    showName = true,
     categories,
 }: {
     bom?: Bom;
     bomCode: string;
     showIdentity?: boolean;
+    /** 身份行是否内联品类名；品类已单独成列时关闭，避免重复（如库存页） */
+    showName?: boolean;
     categories?: BomCategory[];
 }) {
     const [open, setOpen] = useState(false);
@@ -36,7 +39,7 @@ export function BomCell({
                     ) : (
                         <span className="tnum text-13 font-medium whitespace-nowrap text-td">{bomCode}</span>
                     )}
-                    {bom && (
+                    {bom && showName && (
                         <span className="truncate text-12 text-muted" title={bom.name}>
                             {bom.name}
                         </span>

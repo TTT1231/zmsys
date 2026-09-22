@@ -161,22 +161,26 @@ export class BomsService {
                 type: string;
                 operator: string;
                 remark: string;
+                customer: string | null;
             }>
         >`
-            SELECT flow.no, flow.biz_date, flow.created_at, flow.qty, flow.type, flow.operator, flow.remark
+            SELECT flow.no, flow.biz_date, flow.created_at, flow.qty, flow.type, flow.operator, flow.remark,
+                   flow.customer
             FROM (
                 SELECT i.entry_no AS no, i.business_date AS biz_date, i.created_at, CAST(i.qty AS SIGNED) AS qty,
-                       'in' AS type, u.name AS operator, i.remark
+                       'in' AS type, u.name AS operator, i.remark, NULL AS customer
                 FROM inbound_ledger AS i
                 JOIN sys_user AS u ON u.id = i.operator_id
                 WHERE i.bom_id = ${bom.id} AND i.status = 'ACTIVE'
                 UNION ALL
-                SELECT a.adjustment_no, a.business_date, a.created_at, a.qty_delta, 'adjust', u.name, a.reason
+                SELECT a.adjustment_no, a.business_date, a.created_at, a.qty_delta, 'adjust', u.name, a.reason,
+                       NULL
                 FROM stock_adjustment AS a
                 JOIN sys_user AS u ON u.id = a.operator_id
                 WHERE a.bom_id = ${bom.id}
                 UNION ALL
-                SELECT s.shipment_no, e.business_date, e.created_at, -e.qty_delta, 'out', u.name, e.remark
+                SELECT s.shipment_no, e.business_date, e.created_at, -e.qty_delta, 'out', u.name, e.remark,
+                       o.customer_name_snapshot
                 FROM outbound_ledger AS e
                 JOIN outbound_shipment AS s ON s.id = e.shipment_id
                 JOIN sales_order_table AS o ON o.id = s.order_id
@@ -197,6 +201,8 @@ export class BomsService {
                 operator: row.operator,
                 remark: row.remark,
             };
+            // 只有出库行带客户（订单建档快照）；入库/调整没有客户，字段省略
+            if (row.type === "out" && row.customer) flow.customer = row.customer;
             return flow;
         });
         return { bomCode: code, stockQty: balance, flows };

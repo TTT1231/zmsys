@@ -41,6 +41,8 @@ export interface StockFlowRow {
     balance: number;
     operator: string;
     remark: string;
+    /** 仅出库行：订单建档时的客户名称快照；入库/调整行没有客户，字段省略 */
+    customer?: string;
 }
 
 /** 契约 BomStockLedger：flows 按业务日升序（旧 → 新），stockQty 与 flows 末笔 balance 一致 */

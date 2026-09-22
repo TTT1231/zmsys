@@ -1500,6 +1500,7 @@ components:
                 balance: { type: integer, description: 该笔完成后余量 }
                 operator: { type: string }
                 remark: { type: string }
+                customer: { type: string, description: 仅出库行：订单建档时的客户名称快照；入库/调整行省略 }
         InboundEnvelope:
             allOf:
                 - $ref: "#/components/schemas/Envelope"

@@ -11,21 +11,25 @@ import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { Button, TableLink } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
-import { useBomRefresh, useBomStockLedger, useBomStocks, useBoms } from "@/data/queries";
+import { BomCell } from "@/components/bom/BomCell";
+import { BomSpecs } from "@/components/bom/BomSpecs";
+import { BomRemarkNote } from "@/components/bom/BomRemarkNote";
+import { useBomCategories, useBomRefresh, useBomStockLedger, useBomStocks, useBoms } from "@/data/queries";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { PageLoading } from "@/components/ui/PageLoading";
-import type { Bom, StockFlowRow } from "@/api";
+import type { Bom, BomCategory, StockFlowRow } from "@/api";
 
 /* 可排序列：BOM 编码 / 库存数量；默认不排序，保持「有流水在前、后端新建置顶」的对齐顺序 */
 type StockSortKey = "code" | "stock";
 
-/** 库存行：BOM 元数据（品类/备注）取建档快照，stock 为 v_bom_stock 余量 */
+/** 库存行：BOM 建档快照（品类/备注/物料）+ v_bom_stock 余量 */
 interface StockRow {
     code: string;
     name: string;
     remark: string;
     stock: number;
+    bom: Bom;
 }
 
 const EMPTY_ROWS: StockRow[] = [];
@@ -63,8 +67,17 @@ function FlowTypeTag({ type }: { type: StockFlowRow["type"] }) {
     );
 }
 
-/** 库存流水详情：摘要卡 + 倒序流水（内部滚动、表头吸附），结余由后端逐笔累计 */
-function StockLedgerModal({ bom, onClose }: { bom: Bom | null; onClose: () => void }) {
+/** 库存流水详情：BOM 详情（凭证同款 record 版式）+ 备注警示条 + 统计卡 + 倒序流水（内部滚动、表头吸附），
+ * 结余由后端逐笔累计；出库行客户名挂在单号下方，入库/调整没有客户不渲染占位 */
+function StockLedgerModal({
+    bom,
+    categories,
+    onClose,
+}: {
+    bom: Bom | null;
+    categories?: BomCategory[];
+    onClose: () => void;
+}) {
     const ledgerQuery = useBomStockLedger(bom?.code ?? null);
     const ledger = ledgerQuery.data;
     /* 后端按业务日升序返回（结余正推），展示倒序：最新变动在上 */
@@ -98,12 +111,11 @@ function StockLedgerModal({ bom, onClose }: { bom: Bom | null; onClose: () => vo
             }
         >
             <div className="flex flex-col gap-4">
-                <section
-                    aria-label="BOM 备注"
-                    className="rounded-input border border-dashed border-line-strong px-3.5 py-2.5"
-                >
-                    <span className="text-12 text-muted">BOM 备注：</span>
-                    <BomRemarkText remark={bom.remark} />
+                {/* 区块 1+2：BOM 详情（同入库凭证 record 版式）+ 备注警示条 */}
+                <section aria-label="BOM 详情" className="min-w-0">
+                    <h3 className="mb-2 text-13 font-semibold text-ink">BOM 详情</h3>
+                    <BomSpecs bom={bom} layout="record" categories={categories} />
+                    <BomRemarkNote remark={bom.remark} className="mt-3" />
                 </section>
                 <div
                     className="grid gap-3"
@@ -138,59 +150,70 @@ function StockLedgerModal({ bom, onClose }: { bom: Bom | null; onClose: () => vo
                 ) : flows.length === 0 ? (
                     <EmptyState description="暂无出入库流水" />
                 ) : (
-                    /* max-h + 内部滚动：流水多时不撑高弹窗，表头吸附在滚动区顶部 */
-                    <div className="max-h-105 overflow-y-auto rounded-input border border-line">
-                        <table className="w-full table-fixed border-separate border-spacing-0">
-                            <thead>
-                                <tr className="sticky top-0 z-1 bg-soft text-left text-12.5 font-semibold text-muted shadow-[inset_0_-1px_0_var(--color-line-strong)]">
-                                    <th className="px-3.5 py-2.5" style={{ width: "76px" }}>
-                                        类型
-                                    </th>
-                                    <th className="px-3 py-2.5" style={{ width: "130px" }}>
-                                        单号
-                                    </th>
-                                    <th className="px-3 py-2.5" style={{ width: "104px" }}>
-                                        日期
-                                    </th>
-                                    <th className="px-3 py-2.5 text-right" style={{ width: "100px" }}>
-                                        数量（个）
-                                    </th>
-                                    <th className="px-3 py-2.5 text-right" style={{ width: "100px" }}>
-                                        结余（个）
-                                    </th>
-                                    <th className="px-3 py-2.5" style={{ width: "104px" }}>
-                                        操作人
-                                    </th>
-                                    <th className="px-3.5 py-2.5">备注</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {flows.map(flow => (
-                                    <tr
-                                        key={`${flow.type}-${flow.no}`}
-                                        className="border-b border-line last:border-b-0"
-                                    >
-                                        <td className="px-3.5 py-3.5">
-                                            <FlowTypeTag type={flow.type} />
-                                        </td>
-                                        <td className="tnum px-3 py-3.5 text-14 font-medium text-td">{flow.no}</td>
-                                        <td className="tnum px-3 py-3.5 text-14 text-muted">{flow.date}</td>
-                                        <td
-                                            className={`tnum px-3 py-3.5 text-right text-14 font-semibold ${flow.qty >= 0 ? "text-success" : "text-danger"}`}
-                                        >
-                                            {flow.qty >= 0 ? "+" : "−"}
-                                            {num(Math.abs(flow.qty))}
-                                        </td>
-                                        <td className="tnum px-3 py-3.5 text-right text-14 font-semibold text-ink">
-                                            {num(flow.balance)}
-                                        </td>
-                                        <td className="px-3 py-3.5 text-14 text-td">{flow.operator}</td>
-                                        <td className="px-3.5 py-3.5 text-13 text-muted">{flow.remark || "—"}</td>
+                    /* max-h + 内部滚动：流水多时不撑高弹窗，表头吸附在滚动区顶部；
+                       窄屏横向滚动，列宽不被挤压 */
+                    <section aria-label="库存流水" className="min-w-0">
+                        <h3 className="mb-2 text-13 font-semibold text-ink">库存流水</h3>
+                        <div className="max-h-120 overflow-auto rounded-xl border border-line">
+                            <table className="w-full min-w-[780px] table-fixed border-separate border-spacing-0">
+                                <thead>
+                                    <tr className="sticky top-0 z-1 bg-soft text-left text-12.5 font-semibold text-muted shadow-[inset_0_-1px_0_var(--color-line-strong)]">
+                                        <th className="px-3.5 py-2.5" style={{ width: "72px" }}>
+                                            类型
+                                        </th>
+                                        <th className="px-3 py-2.5" style={{ width: "190px" }}>
+                                            单号
+                                        </th>
+                                        <th className="px-3 py-2.5" style={{ width: "100px" }}>
+                                            日期
+                                        </th>
+                                        <th className="px-3 py-2.5 text-right" style={{ width: "96px" }}>
+                                            数量（个）
+                                        </th>
+                                        <th className="px-3 py-2.5 text-right" style={{ width: "96px" }}>
+                                            结余（个）
+                                        </th>
+                                        <th className="px-3 py-2.5" style={{ width: "80px" }}>
+                                            操作人
+                                        </th>
+                                        <th className="px-3.5 py-2.5">备注</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody>
+                                    {flows.map(flow => (
+                                        <tr
+                                            key={`${flow.type}-${flow.no}`}
+                                            className="border-b border-line last:border-b-0"
+                                        >
+                                            <td className="px-3.5 py-3.5">
+                                                <FlowTypeTag type={flow.type} />
+                                            </td>
+                                            <td className="tnum px-3 py-3.5 text-14 font-medium text-td">
+                                                {flow.no}
+                                                {flow.type === "out" && flow.customer && (
+                                                    <span className="mt-0.5 block text-12.5 font-medium text-ink">
+                                                        {flow.customer}
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="tnum px-3 py-3.5 text-14 text-muted">{flow.date}</td>
+                                            <td
+                                                className={`tnum px-3 py-3.5 text-right text-14 font-semibold ${flow.qty >= 0 ? "text-success" : "text-danger"}`}
+                                            >
+                                                {flow.qty >= 0 ? "+" : "−"}
+                                                {num(Math.abs(flow.qty))}
+                                            </td>
+                                            <td className="tnum px-3 py-3.5 text-right text-14 font-semibold text-ink">
+                                                {num(flow.balance)}
+                                            </td>
+                                            <td className="px-3 py-3.5 text-14 text-td">{flow.operator}</td>
+                                            <td className="px-3.5 py-3.5 text-13 text-muted">{flow.remark || "—"}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
                 )}
             </div>
         </Modal>
@@ -199,6 +222,7 @@ function StockLedgerModal({ bom, onClose }: { bom: Bom | null; onClose: () => vo
 
 export function StockPage() {
     const bomsQuery = useBoms();
+    const categoriesQuery = useBomCategories();
     const stocksQuery = useBomStocks();
     const { refresh } = useBomRefresh();
     const isLoading = bomsQuery.isLoading || stocksQuery.isLoading;
@@ -212,16 +236,18 @@ export function StockPage() {
     const [sort, setSort] = useState<SortState<StockSortKey> | null>(null);
     const [detail, setDetail] = useState<Bom | null>(null);
 
-    /* 行 = 存在流水的 BOM（v_bom_stock 余量 map）；品类/备注取建档快照 */
+    const boms = bomsQuery.data;
+    const bomByCode = useMemo(() => new Map((boms ?? []).map(bom => [bom.code, bom])), [boms]);
+
+    /* 行 = 存在流水的 BOM（v_bom_stock 余量 map）；品类/备注/物料取建档快照 */
     const rows = useMemo<StockRow[]>(() => {
         const stockMap = stocksQuery.data;
         if (!stockMap) return EMPTY_ROWS;
-        const bomByCode = new Map((bomsQuery.data ?? []).map(bom => [bom.code, bom]));
         return Object.entries(stockMap).flatMap(([code, stock]) => {
             const bom = bomByCode.get(code);
-            return bom ? [{ code, name: bom.name, remark: bom.remark, stock }] : [];
+            return bom ? [{ code, name: bom.name, remark: bom.remark, stock, bom }] : [];
         });
-    }, [bomsQuery.data, stocksQuery.data]);
+    }, [bomByCode, stocksQuery.data]);
 
     /* 品类选项取自当前有流水的行，不列无库存的品类，避免筛出空结果 */
     const categories = useMemo(() => [...new Set(rows.map(row => row.name))], [rows]);
@@ -334,10 +360,7 @@ export function StockPage() {
                                 title={row.code}
                                 subtitle={row.name}
                                 actions={
-                                    <Button
-                                        variant="secondary"
-                                        onClick={() => setDetail(rowBom(bomsQuery.data, row.code) ?? null)}
-                                    >
+                                    <Button variant="secondary" onClick={() => setDetail(row.bom)}>
                                         查看详情
                                     </Button>
                                 }
@@ -356,16 +379,15 @@ export function StockPage() {
                     ) : (
                         <DataTable
                             tableId="stock"
-                            defaultWidths={[64, 240, 360, 150, 104]}
+                            defaultWidths={[64, 110, 370, 330, 150, 104]}
                             recordCount={filtered.length}
-                            identityColumn={1}
+                            identityColumn={2}
                             scrollRef={tableScrollRef}
                         >
                             <thead>
                                 <tr className="text-left text-12 text-muted">
-                                    <th className="px-5 py-2.5 font-semibold" style={{ width: "5%" }}>
-                                        序号
-                                    </th>
+                                    <th className="px-5 py-2.5 font-semibold">序号</th>
+                                    <th className="px-3 py-2.5 font-semibold">品类</th>
                                     <SortTh
                                         label="BOM 编码"
                                         active={sort?.key === "code"}
@@ -376,11 +398,11 @@ export function StockPage() {
                                             )
                                         }
                                         className="px-3"
-                                        width="18%"
                                     />
                                     <th className="px-3 py-2.5 font-semibold">BOM 备注</th>
                                     <SortTh
                                         label="库存数量（个）"
+                                        align="right"
                                         active={sort?.key === "stock"}
                                         dir={sort?.dir ?? "asc"}
                                         onSort={() =>
@@ -391,17 +413,14 @@ export function StockPage() {
                                             )
                                         }
                                         className="px-3"
-                                        width="12%"
                                     />
-                                    <th className="px-5 py-2.5 text-center font-semibold" style={{ width: "8%" }}>
-                                        操作
-                                    </th>
+                                    <th className="px-5 py-2.5 text-center font-semibold">操作</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {pageRows.length === 0 && (
                                     <tr>
-                                        <td colSpan={5} className="px-5 py-10 text-center">
+                                        <td colSpan={6} className="px-5 py-10 text-center">
                                             <EmptyState description="暂无库存记录" />
                                         </td>
                                     </tr>
@@ -411,35 +430,27 @@ export function StockPage() {
                                         <td className="tnum px-5 py-3 text-13 text-muted">
                                             {(page - 1) * pageSize + index + 1}
                                         </td>
-                                        <td className="px-3 py-3">
-                                            <button
-                                                type="button"
-                                                onClick={() => setDetail(rowBom(bomsQuery.data, row.code) ?? null)}
-                                                className="tnum text-13 font-semibold whitespace-nowrap text-primary-strong underline-offset-2 hover:underline"
-                                            >
-                                                {row.code}
-                                            </button>
-                                            <span className="ml-2 text-12 text-muted">{row.name}</span>
+                                        <td className="px-3 py-3 text-13 text-td">{row.name}</td>
+                                        <td className="px-3 py-4">
+                                            <BomCell
+                                                categories={categoriesQuery.data}
+                                                bom={row.bom}
+                                                bomCode={row.code}
+                                                showName={false}
+                                            />
                                         </td>
-                                        <td className="px-3 py-3 text-13 leading-5 text-td">
-                                            <span
-                                                className="line-clamp-2 whitespace-pre-line"
-                                                title={row.remark || undefined}
-                                            >
+                                        <td className="px-3 py-3 text-13">
+                                            <span className="block truncate" title={row.remark || undefined}>
                                                 <BomRemarkText remark={row.remark} />
                                             </span>
                                         </td>
                                         <td
-                                            className={`tnum px-3 py-3 text-13 font-semibold ${row.stock === 0 ? "text-muted" : "text-ink"}`}
+                                            className={`tnum px-3 py-3 text-right text-13 font-semibold ${row.stock === 0 ? "text-muted" : "text-ink"}`}
                                         >
                                             {num(row.stock)}
                                         </td>
                                         <td className="px-5 py-3 text-center">
-                                            <TableLink
-                                                onClick={() => setDetail(rowBom(bomsQuery.data, row.code) ?? null)}
-                                            >
-                                                查看详情
-                                            </TableLink>
+                                            <TableLink onClick={() => setDetail(row.bom)}>查看详情</TableLink>
                                         </td>
                                     </tr>
                                 ))}
@@ -463,12 +474,7 @@ export function StockPage() {
                 </div>
             </section>
 
-            <StockLedgerModal bom={detail} onClose={() => setDetail(null)} />
+            <StockLedgerModal bom={detail} categories={categoriesQuery.data} onClose={() => setDetail(null)} />
         </div>
     );
-}
-
-/** 从档案列表取完整 Bom（详情弹窗需要 items 等完整快照） */
-function rowBom(boms: Bom[] | undefined, code: string): Bom | undefined {
-    return boms?.find(bom => bom.code === code);
 }
