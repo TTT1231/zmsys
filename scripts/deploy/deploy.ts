@@ -117,12 +117,32 @@ const localMigrations = (): string[] =>
         .map(entry => entry.name)
         .sort();
 
+/** 前端产物自检：必须是 production 构建。曾因根 .env 的 NODE_ENV=development 污染
+    vite build（envDir 指向仓库根），DEV 守卫把更新检查等逻辑整段死代码消除、
+    bundle 含 jsxDEV 与源码绝对路径；build-id 缺失说明注入插件未生效 */
+const assertFrontendProdBuild = (): void => {
+    const distDir = join(repoRoot, "apps", "frontend", "dist");
+    const indexHtml = readFileSync(join(distDir, "index.html"), "utf8");
+    if (!/<meta name="app-build-id" content="[^"]+"/.test(indexHtml)) {
+        throw new Error("dist/index.html 缺少 app-build-id 构建标识（inject-app-build-id 插件未生效），已中止部署");
+    }
+    for (const file of readdirSync(join(distDir, "assets"))) {
+        if (!file.endsWith(".js")) continue;
+        if (readFileSync(join(distDir, "assets", file), "utf8").includes("jsxDEV")) {
+            throw new Error(
+                `dist/assets/${file} 含 jsxDEV：前端以 development 模式构建（检查根 .env 的 NODE_ENV），已中止部署`,
+            );
+        }
+    }
+};
+
 const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
 const main = async (): Promise<void> => {
     console.log("[1/4] 本地构建 frontend + backend 产物");
     run("pnpm --filter ./apps/frontend run build", repoRoot);
     run("pnpm --filter ./apps/backend run build", repoRoot);
+    assertFrontendProdBuild();
 
     console.log("[2/4] 组装 staging（workspace 骨架 + 产物 + deploy 配置）");
     assembleStaging();
