@@ -382,7 +382,7 @@ export function ArchivedOrdersPage() {
                                                 </button>
                                             </td>
                                             <td className="px-3 py-4">
-                                                <CustomerCell name={order.customer} sub={order.customerCode} />
+                                                <CustomerCell name={order.customer} note={order.customerCode} />
                                             </td>
                                             <td className="px-3 py-4">
                                                 <BomCell

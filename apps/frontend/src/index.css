@@ -785,16 +785,79 @@ button:active:not(:disabled) {
 .managed-table .data-table tr:last-child td {
     border-bottom: 0;
 }
+/* 紧凑档 = 账本模式：单元格一律单行（nowrap + td 的 ellipsis 截断，全文走各格 title/详情），
+   次要信息行收纳不渲染，行高均匀压到 ~33px；只靠减 padding 压不住双行堆叠的行高。 */
 .managed-table[data-density="compact"] .data-table td {
-    padding-top: 8px;
-    padding-bottom: 8px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    white-space: nowrap;
 }
-.managed-table[data-density="compact"] .bom-summary {
+/* 日期 + 逾期徽章这类 inline-flex 在窄列不允许折行，否则行高又翻上去。 */
+.managed-table[data-density="compact"] .data-table td .inline-flex {
+    flex-wrap: nowrap;
+}
+/* 备注格的 line-clamp-2 / pre-line 会切断 nowrap 继承，紧凑档单独压回一行。 */
+.managed-table[data-density="compact"] .data-table .line-clamp-2 {
+    -webkit-line-clamp: 1;
+}
+/* 收纳：物料摘要、微动组件行、客户编码、已发明细文字行、装饰头像。
+   编码类信息悬浮 title / 详情弹窗可达，不丢出口。 */
+.managed-table[data-density="compact"] .bom-summary,
+.managed-table[data-density="compact"] .bom-composite,
+.managed-table[data-density="compact"] .customer-cell-note,
+.managed-table[data-density="compact"] .delivery-shipped,
+.managed-table[data-density="compact"] .customer-avatar {
     display: none;
+}
+/* 物料构成列（data-identity="false" 的 bom-cell）唯一内容就是微动组件行，
+   紧凑档保留它，否则整列空白；压掉 mt-1 保持单行行高。 */
+.managed-table[data-density="compact"] .bom-cell[data-identity="false"] .bom-composite {
+    display: block;
+    margin-top: 0;
+}
+/* 客户格双行改单行排开：名称 + 单号同行（单号是对账主键，必须可见）。 */
+.managed-table[data-density="compact"] .customer-cell {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+.managed-table[data-density="compact"] .customer-cell-sub {
+    margin-top: 0;
+}
+/* 交付情况四层压一行：待交数字 + 细进度条并排，进度百分比可从条形读出。 */
+.managed-table[data-density="compact"] .delivery-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.managed-table[data-density="compact"] .delivery-track {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-top: 0;
+}
+.managed-table[data-density="compact"] .ledger-track {
+    height: 3px;
+}
+/* 徽章降一档（25px→22px），状态列不再把行高托到 36px 以上。 */
+.managed-table[data-density="compact"] .table-badge {
+    padding: 1px 6px;
+    font-size: var(--text-11);
 }
 .managed-table[data-density="roomy"] .data-table td {
     padding-top: 20px;
     padding-bottom: 20px;
+}
+/* 表头随密度阶梯缩放，消除紧凑档“表头比数据行还高”的倒挂。 */
+.managed-table[data-density="compact"] .managed-th {
+    height: 36px;
+}
+.managed-table[data-density="roomy"] .managed-th {
+    height: 48px;
+}
+.managed-table[data-density="compact"] .table-display-toolbar {
+    min-height: 44px;
+    padding-top: 6px;
+    padding-bottom: 6px;
 }
 .managed-table .data-table .managed-th {
     height: 44px;

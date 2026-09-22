@@ -968,7 +968,8 @@ export function OutboundPage() {
                                         <td className="px-3 py-3">
                                             <CustomerCell
                                                 name={row.customer}
-                                                sub={`${row.orderNo} · ${row.customerCode}`}
+                                                sub={row.orderNo}
+                                                note={row.customerCode}
                                             />
                                         </td>
                                         <td className="px-3 py-4">

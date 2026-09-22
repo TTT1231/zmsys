@@ -643,13 +643,13 @@ export function CustomersPage() {
                                         <td className="px-5 py-3">
                                             <div className="flex items-center gap-2.5">
                                                 <span
-                                                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-13 font-semibold ${AVATAR_TONES[index % AVATAR_TONES.length]}`}
+                                                    className={`customer-avatar flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-13 font-semibold ${AVATAR_TONES[index % AVATAR_TONES.length]}`}
                                                 >
                                                     {row.customer.name.slice(0, 1)}
                                                 </span>
                                                 <CustomerCell
                                                     name={row.customer.name}
-                                                    sub={row.customer.code}
+                                                    note={row.customer.code}
                                                     onClick={() => setDetail(row.customer)}
                                                 />
                                             </div>
