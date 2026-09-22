@@ -113,6 +113,19 @@ it("搜索按编码/品类/备注过滤", () => {
     expect(table).toHaveTextContent(detailBom.code);
 });
 
+it("品类下拉筛选库存，选项只含有流水的品类，清空条件恢复", () => {
+    renderPage();
+    const select = screen.getByLabelText("按品类筛选");
+    // 无流水的跌倒开关不进选项，避免筛出空结果
+    expect(within(select).queryByRole("option", { name: idleBom.name })).not.toBeInTheDocument();
+    fireEvent.change(select, { target: { value: otherBom.name } });
+    const table = screen.getByRole("table");
+    expect(table).toHaveTextContent(otherBom.code);
+    expect(table).not.toHaveTextContent(detailBom.code);
+    fireEvent.click(screen.getByRole("button", { name: "清空条件" }));
+    expect(table).toHaveTextContent(detailBom.code);
+});
+
 it("详情弹窗：流水倒序、有符号数量、结余与摘要卡，非零调整显示调整卡", () => {
     renderPage();
     fireEvent.click(screen.getAllByRole("button", { name: "查看详情" })[0]);

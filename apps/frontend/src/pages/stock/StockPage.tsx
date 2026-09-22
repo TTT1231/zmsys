@@ -206,6 +206,7 @@ export function StockPage() {
     // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
     const overlay = useDelayedFlag(isFetching && !isLoading);
     const [keyword, setKeyword] = useState("");
+    const [category, setCategory] = useState("全部品类");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [sort, setSort] = useState<SortState<StockSortKey> | null>(null);
@@ -222,10 +223,17 @@ export function StockPage() {
         });
     }, [bomsQuery.data, stocksQuery.data]);
 
+    /* 品类选项取自当前有流水的行，不列无库存的品类，避免筛出空结果 */
+    const categories = useMemo(() => [...new Set(rows.map(row => row.name))], [rows]);
+
     const filtered = useMemo(() => {
         const kw = keyword.trim().toLowerCase();
-        return rows.filter(row => !kw || `${row.code} ${row.name} ${row.remark}`.toLowerCase().includes(kw));
-    }, [rows, keyword]);
+        return rows.filter(
+            row =>
+                (category === "全部品类" || row.name === category) &&
+                (!kw || `${row.code} ${row.name} ${row.remark}`.toLowerCase().includes(kw)),
+        );
+    }, [rows, keyword, category]);
 
     const sorted = useMemo(() => {
         if (!sort) return filtered;
@@ -244,9 +252,10 @@ export function StockPage() {
 
     const clearFilters = () => {
         setKeyword("");
+        setCategory("全部品类");
         setPage(1);
     };
-    const filtersActive = !!keyword.trim();
+    const filtersActive = !!keyword.trim() || category !== "全部品类";
 
     return (
         <div className="flex flex-col gap-5">
@@ -267,6 +276,20 @@ export function StockPage() {
                             className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
                         />
                     </label>
+                    <select
+                        value={category}
+                        onChange={event => {
+                            setCategory(event.target.value);
+                            setPage(1);
+                        }}
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-13 text-ink"
+                        aria-label="按品类筛选"
+                    >
+                        <option>全部品类</option>
+                        {categories.map(item => (
+                            <option key={item}>{item}</option>
+                        ))}
+                    </select>
                     <button
                         type="button"
                         onClick={clearFilters}
@@ -340,7 +363,7 @@ export function StockPage() {
                         >
                             <thead>
                                 <tr className="text-left text-12 text-muted">
-                                    <th className="px-5 py-2.5 text-right font-semibold" style={{ width: "5%" }}>
+                                    <th className="px-5 py-2.5 font-semibold" style={{ width: "5%" }}>
                                         序号
                                     </th>
                                     <SortTh
@@ -367,11 +390,10 @@ export function StockPage() {
                                                     : { key: "stock", dir: "asc" },
                                             )
                                         }
-                                        align="right"
                                         className="px-3"
                                         width="12%"
                                     />
-                                    <th className="px-5 py-2.5 text-right font-semibold" style={{ width: "8%" }}>
+                                    <th className="px-5 py-2.5 text-center font-semibold" style={{ width: "8%" }}>
                                         操作
                                     </th>
                                 </tr>
@@ -386,7 +408,7 @@ export function StockPage() {
                                 )}
                                 {pageRows.map((row, index) => (
                                     <tr key={row.code} className="border-t border-line transition hover:bg-row-hover">
-                                        <td className="tnum px-5 py-3 text-right text-13 text-muted">
+                                        <td className="tnum px-5 py-3 text-13 text-muted">
                                             {(page - 1) * pageSize + index + 1}
                                         </td>
                                         <td className="px-3 py-3">
@@ -408,11 +430,11 @@ export function StockPage() {
                                             </span>
                                         </td>
                                         <td
-                                            className={`tnum px-3 py-3 text-right text-13 font-semibold ${row.stock === 0 ? "text-muted" : "text-ink"}`}
+                                            className={`tnum px-3 py-3 text-13 font-semibold ${row.stock === 0 ? "text-muted" : "text-ink"}`}
                                         >
                                             {num(row.stock)}
                                         </td>
-                                        <td className="px-5 py-3 text-right">
+                                        <td className="px-5 py-3 text-center">
                                             <TableLink
                                                 onClick={() => setDetail(rowBom(bomsQuery.data, row.code) ?? null)}
                                             >
