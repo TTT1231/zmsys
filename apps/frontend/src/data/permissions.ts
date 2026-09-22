@@ -51,6 +51,7 @@ export const MENU_CATALOG: MenuNode[] = [
     { key: "bom", label: "物料与 BOM", icon: "layers", group: "业务导航", to: "/bom" },
     { key: "inbound", label: "成品入库", icon: "inbound", group: "业务导航", to: "/inbound" },
     { key: "outbound", label: "成品出库", icon: "truck", group: "业务导航", to: "/outbound" },
+    { key: "stock", label: "库存", icon: "cube", group: "业务导航", to: "/stock" },
     {
         key: "permissions",
         label: "用户与权限",
@@ -162,7 +163,7 @@ export function buildDefaultGrants(): GrantMap {
         },
         admin: {
             version: 1,
-            menus: ["workbench", "orders", "archived-orders", "customers", "bom", "inbound", "outbound"],
+            menus: ["workbench", "orders", "archived-orders", "customers", "bom", "inbound", "outbound", "stock"],
             actions: {
                 // 删除订单/删除 BOM 为受保护动作（仅超级管理员），普通角色不随 allActions 下发
                 orders: ["view", "create", "edit", "cancel"],
@@ -174,7 +175,7 @@ export function buildDefaultGrants(): GrantMap {
         },
         warehouse: {
             version: 1,
-            menus: ["workbench", "orders", "archived-orders", "bom", "inbound", "outbound"],
+            menus: ["workbench", "orders", "archived-orders", "bom", "inbound", "outbound", "stock"],
             actions: {
                 orders: ["view"],
                 bom: ["view"],
@@ -184,7 +185,7 @@ export function buildDefaultGrants(): GrantMap {
         },
         sales: {
             version: 1,
-            menus: ["workbench", "orders", "archived-orders", "customers", "bom", "inbound", "outbound"],
+            menus: ["workbench", "orders", "archived-orders", "customers", "bom", "inbound", "outbound", "stock"],
             actions: {
                 orders: ["view", "create", "edit", "cancel"],
                 customers: ["view", "create", "edit"],
@@ -195,7 +196,7 @@ export function buildDefaultGrants(): GrantMap {
         },
         staff: {
             version: 1,
-            menus: ["workbench", "orders", "archived-orders", "bom", "inbound", "outbound"],
+            menus: ["workbench", "orders", "archived-orders", "bom", "inbound", "outbound", "stock"],
             actions: {
                 orders: ["view"],
                 bom: ["view"],

@@ -16,6 +16,7 @@ import {
     OutboundPage,
     PermissionsPage,
     SearchPage,
+    StockPage,
     WorkbenchPage,
 } from "./RouterPages";
 
@@ -45,6 +46,7 @@ export const router = createBrowserRouter([
                     { path: "/bom", element: <BomPage /> },
                     { path: "/inbound", element: <InboundPage /> },
                     { path: "/outbound", element: <OutboundPage /> },
+                    { path: "/stock", element: <StockPage /> },
                     { path: "/permissions", element: <PermissionsPage /> },
                     { path: "*", element: <ErrorPage kind="not-found" /> },
                 ],

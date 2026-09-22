@@ -3,7 +3,7 @@ export type * from "./types";
 export { login, logout, fetchProfile, changePassword } from "./auth";
 export { fetchOrders, createOrder, updateOrder, cancelOrder, archiveOrder, deleteOrder } from "./orders";
 export { fetchCustomers, createCustomer, updateCustomer } from "./customers";
-export { fetchBoms, fetchBomCategories, fetchBomStocks, createBom, deleteBom } from "./boms";
+export { fetchBoms, fetchBomCategories, fetchBomStocks, fetchBomStockLedger, createBom, deleteBom } from "./boms";
 export {
     fetchInboundLedger,
     createInbound,

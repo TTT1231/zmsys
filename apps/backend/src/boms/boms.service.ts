@@ -10,7 +10,8 @@ import { beijingDayKey } from "../common/beijing-day";
 import { IdempotencyService } from "../idempotency/idempotency.service";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
 import { recordOpLog } from "../domain/op-log";
-import type { Bom, BomCategory, BomCatalogNode } from "./types";
+import { formatDateColumn } from "../common/datetime";
+import type { Bom, BomCategory, BomCatalogNode, BomStockLedger, StockFlowRow } from "./types";
 import { resolveMaterialSelection, type CatalogEntry } from "./bom-rules";
 import type { CreateBomDto } from "./dto/create-bom.dto";
 import type { AuthUser } from "../common/types/auth-user";
@@ -134,6 +135,71 @@ export class BomsService {
             JOIN bom_table AS b ON b.id = v.bom_id
         `;
         return Object.fromEntries(rows.map(row => [row.bom_code, Number(row.stock_qty)]));
+    }
+
+    /**
+     * BOM 出入库流水（契约 bom:view）：入库/调整/出库三台账按 v_bom_stock 同一
+     * 口径合并（有效入库 + 全量调整 − 出库事件，作废出库经反向事件自动冲销），
+     * 业务日升序返回并逐笔累计结余，结余与 v_bom_stock 恒等；同日内按操作时间
+     * 排序（单号字母序会把出库排在先发生的入库前，结余出现与可发量校验矛盾
+     * 的负数中间值）；BOM 不存在 404。
+     */
+    async stockLedger(code: string): Promise<BomStockLedger> {
+        const bom = await this.prisma.bomTable.findUnique({
+            where: { bomCode: code },
+            select: { id: true },
+        });
+        if (!bom) {
+            throw new NotFoundException("BOM 不存在");
+        }
+        const rows = await this.prisma.$queryRaw<
+            Array<{
+                no: string;
+                biz_date: Date;
+                created_at: Date;
+                qty: bigint | number;
+                type: string;
+                operator: string;
+                remark: string;
+            }>
+        >`
+            SELECT flow.no, flow.biz_date, flow.created_at, flow.qty, flow.type, flow.operator, flow.remark
+            FROM (
+                SELECT i.entry_no AS no, i.business_date AS biz_date, i.created_at, CAST(i.qty AS SIGNED) AS qty,
+                       'in' AS type, u.name AS operator, i.remark
+                FROM inbound_ledger AS i
+                JOIN sys_user AS u ON u.id = i.operator_id
+                WHERE i.bom_id = ${bom.id} AND i.status = 'ACTIVE'
+                UNION ALL
+                SELECT a.adjustment_no, a.business_date, a.created_at, a.qty_delta, 'adjust', u.name, a.reason
+                FROM stock_adjustment AS a
+                JOIN sys_user AS u ON u.id = a.operator_id
+                WHERE a.bom_id = ${bom.id}
+                UNION ALL
+                SELECT s.shipment_no, e.business_date, e.created_at, -e.qty_delta, 'out', u.name, e.remark
+                FROM outbound_ledger AS e
+                JOIN outbound_shipment AS s ON s.id = e.shipment_id
+                JOIN sales_order_table AS o ON o.id = s.order_id
+                JOIN sys_user AS u ON u.id = e.operator_id
+                WHERE o.bom_id = ${bom.id}
+            ) AS flow
+            ORDER BY flow.biz_date ASC, flow.created_at ASC, flow.no ASC
+        `;
+        let balance = 0;
+        const flows = rows.map(row => {
+            balance += Number(row.qty);
+            const flow: StockFlowRow = {
+                type: row.type as StockFlowRow["type"],
+                no: row.no,
+                date: formatDateColumn(row.biz_date),
+                qty: Number(row.qty),
+                balance,
+                operator: row.operator,
+                remark: row.remark,
+            };
+            return flow;
+        });
+        return { bomCode: code, stockQty: balance, flows };
     }
 
     /**

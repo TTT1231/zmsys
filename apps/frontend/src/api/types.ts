@@ -85,6 +85,25 @@ export interface Bom {
 /** BOM 当前库存余量聚合（GET /bom-stocks）：bomCode → 有效入库 + 库存调整 − 未作废出库 */
 export type BomStockMap = Record<string, number>;
 
+/** 单笔库存变动（GET /bom-stocks/{code}/ledger）：qty 有符号（入 +、出 −、调整 ±） */
+export interface StockFlowRow {
+    type: "in" | "out" | "adjust";
+    no: string;
+    date: string;
+    qty: number;
+    /** 该笔完成后余量，口径同 v_bom_stock */
+    balance: number;
+    operator: string;
+    remark: string;
+}
+
+/** BOM 出入库流水：flows 按业务日升序（旧 → 新），stockQty 与末笔 balance 一致 */
+export interface BomStockLedger {
+    bomCode: string;
+    stockQty: number;
+    flows: StockFlowRow[];
+}
+
 export interface Customer {
     version: number;
     code: string;
