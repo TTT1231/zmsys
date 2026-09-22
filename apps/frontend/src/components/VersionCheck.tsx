@@ -114,7 +114,9 @@ export function VersionCheck() {
                             reload();
                         }
                     }}
-                    className="fixed inset-x-0 top-0 z-140 flex h-11 cursor-pointer items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 px-12 text-13 font-medium text-white hover:brightness-110"
+                    /* sticky 占位式：参与文档流把整个应用下推一行，滚动时吸顶；
+                       不用 fixed 遮盖——会把顶栏 logo/头像切出截断残边 */
+                    className="sticky top-0 z-140 flex h-11 cursor-pointer items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 px-12 text-13 font-medium text-white hover:brightness-110"
                 >
                     <Icon name="refresh" size={15} />
                     <span>新版本可用</span>
