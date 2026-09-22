@@ -112,6 +112,27 @@ describe("偏好上下文", () => {
         });
     });
 
+    it("布局模式经 setLayout 写入偏好与 localStorage，重置回垂直", () => {
+        renderApp();
+        act(() => captured.current!.setLayout("header-nav"));
+        expect(captured.current!.preferences.layout).toBe("header-nav");
+        expect(JSON.parse(localStorage.getItem("zmsys.preferences")!)).toMatchObject({ layout: "header-nav" });
+        act(() => captured.current!.reset());
+        expect(captured.current!.preferences.layout).toBe("sidebar-nav");
+    });
+
+    it("持久化的布局模式在模块加载时恢复，坏值回退垂直", async () => {
+        localStorage.setItem("zmsys.preferences", JSON.stringify({ layout: "mixed-nav" }));
+        vi.resetModules();
+        const restored = await import("@/context/usePreferences");
+        expect(restored.initialPreferences.layout).toBe("mixed-nav");
+
+        localStorage.setItem("zmsys.preferences", JSON.stringify({ layout: "bogus" }));
+        vi.resetModules();
+        const fallback = await import("@/context/usePreferences");
+        expect(fallback.initialPreferences.layout).toBe("sidebar-nav");
+    });
+
     it("模块加载即恢复已存偏好（先于首帧渲染），坏数据回退默认", async () => {
         localStorage.setItem(
             "zmsys.preferences",
@@ -162,6 +183,21 @@ describe("偏好设置抽屉", () => {
         expect(document.documentElement.dataset.theme).toBe("green");
         await user.click(screen.getByRole("switch", { name: "色弱模式" }));
         expect(document.documentElement.classList.contains("invert-mode")).toBe(true);
+    });
+
+    it("外观/布局分段 tab：默认外观，切布局后六选项可点并写入偏好", async () => {
+        const user = userEvent.setup();
+        renderDrawer();
+        // 默认外观 tab：布局选项不渲染
+        expect(screen.queryByRole("button", { name: "混合双列" })).toBeNull();
+        await user.click(screen.getByRole("tab", { name: "布局" }));
+        for (const label of ["垂直", "双列菜单", "水平", "侧边导航", "混合垂直", "混合双列"]) {
+            expect(screen.getByRole("button", { name: label })).toBeVisible();
+        }
+        await user.click(screen.getByRole("button", { name: "水平" }));
+        expect(JSON.parse(localStorage.getItem("zmsys.preferences")!)).toMatchObject({ layout: "header-nav" });
+        await user.click(screen.getByRole("tab", { name: "外观" }));
+        expect(screen.queryByRole("button", { name: "混合双列" })).toBeNull();
     });
 
     it("字号步进按钮在边界处禁用", async () => {
