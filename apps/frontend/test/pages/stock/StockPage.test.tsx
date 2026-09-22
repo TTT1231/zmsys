@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-/* 库存页：仅展示存在流水的 BOM，编码/库存数量可排序；详情弹窗按业务日倒序
-   展示流水（结余取后端逐笔累计），累计出库取绝对值，非零调整才显示调整卡。 */
+/* 库存页：仅展示存在流水的 BOM，品类独立成列，编码/库存数量可排序；详情弹窗含
+   BOM 详情与备注警示条，流水按业务日倒序展示（结余取后端逐笔累计），出库行客户名
+   挂在单号下方，累计出库取绝对值，非零调整才显示调整卡。 */
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
@@ -28,7 +29,16 @@ const ledger: BomStockLedger = {
             remark: "首批建档入库",
         },
         { type: "in", no: "RK26091502", date: "2026-09-15", qty: 300, balance: 500, operator: "张师傅", remark: "" },
-        { type: "out", no: "CK26091801", date: "2026-09-18", qty: -120, balance: 380, operator: "仓库乙", remark: "" },
+        {
+            type: "out",
+            no: "CK26091801",
+            date: "2026-09-18",
+            qty: -120,
+            balance: 380,
+            operator: "仓库乙",
+            remark: "",
+            customer: "东莞市金鸿电子",
+        },
         { type: "out", no: "CK26091903", date: "2026-09-19", qty: -80, balance: 300, operator: "李工", remark: "" },
         {
             type: "adjust",
@@ -44,6 +54,7 @@ const ledger: BomStockLedger = {
 
 vi.mock("@/data/queries", () => ({
     useBoms: () => ({ data: [detailBom, otherBom, idleBom], isLoading: false, isFetching: false }),
+    useBomCategories: () => ({ data: [], isLoading: false, isFetching: false }),
     useBomStocks: () => ({
         data: { [detailBom.code]: 80, [otherBom.code]: 1520 },
         isLoading: false,
@@ -71,6 +82,8 @@ it("仅列出存在流水的 BOM；表格渲染品类与库存数量，移动卡
     expect(table).toHaveTextContent(detailBom.code);
     expect(table).toHaveTextContent(otherBom.code);
     expect(table).not.toHaveTextContent(idleBom.code);
+    // 品类独立成列：行内可见两个有流水 BOM 的品类，无流水的品类不出现
+    expect(table).toHaveTextContent(otherBom.name);
     expect(screen.getByText("1,520")).toBeInTheDocument();
     // 移动卡片：无流水档案同样不可见
     expect(screen.getAllByText("当前库存").length).toBeGreaterThan(0);
@@ -79,10 +92,10 @@ it("仅列出存在流水的 BOM；表格渲染品类与库存数量，移动卡
 
 it("BOM 编码与库存数量可排序（升/降两态循环）", () => {
     renderPage();
-    /* 行内编码列（第二列）的编码按钮文本，驱动排序断言 */
+    /* 编码列（第三列，品类独立成列后右移一位）的编码按钮文本，驱动排序断言 */
     const codes = () =>
         [...screen.getByRole("table").querySelectorAll("tbody tr")].map(tr =>
-            (tr as HTMLTableRowElement).cells[1]?.querySelector("button")?.textContent?.trim(),
+            (tr as HTMLTableRowElement).cells[2]?.querySelector("button")?.textContent?.trim(),
         );
     expect(codes()).toEqual([detailBom.code, otherBom.code]); // 默认按余量 map 顺序
 
@@ -146,4 +159,14 @@ it("详情弹窗：流水倒序、有符号数量、结余与摘要卡，非零�
     expect(rows[1]).toHaveTextContent("360");
     expect(rows.at(-1)).toHaveTextContent("RK26091301");
     expect(rows.at(-1)).toHaveTextContent("200");
+
+    // 客户名只挂在出库单号下方；入库/调整行没有客户占位
+    const outRow = rows.find(row => row.textContent?.includes("CK26091801"));
+    expect(outRow).toHaveTextContent("东莞市金鸿电子");
+    const adjustRow = rows.find(row => row.textContent?.includes("TZ26092001"));
+    expect(adjustRow).not.toHaveTextContent("东莞市金鸿电子");
+
+    // 弹窗含 BOM 详情与备注警示条（凭证同款组合）
+    expect(within(dialog).getByText("BOM 详情")).toBeInTheDocument();
+    expect(within(dialog).getByText(/BOM 备注/)).toBeInTheDocument();
 });

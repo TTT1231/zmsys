@@ -240,8 +240,11 @@ describe("BOM 库存流水 (e2e)", () => {
         ]);
         const byNo = new Map(fresh.map(flow => [flow.no as string, flow]));
         expect(byNo.get(noIn100)).toMatchObject({ qty: 100, operator: expect.any(String), date: today() });
-        expect(byNo.get(noShip60)).toMatchObject({ qty: -60 });
+        expect(byNo.get(noShip60)).toMatchObject({ qty: -60, customer: `库存流水联调客户_${RUN}` });
         expect(byNo.get(noAdjust20)).toMatchObject({ qty: 20, remark: `e2e 盘盈 ${RUN}` });
+        // 客户仅挂在出库行；入库/调整没有客户，不渲染占位
+        expect(byNo.get(noIn100)?.customer).toBeUndefined();
+        expect(byNo.get(noAdjust20)?.customer).toBeUndefined();
 
         // 结余连续性：整条流水逐笔累计 = stockQty
         let running = 0;

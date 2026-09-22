@@ -95,6 +95,8 @@ export interface StockFlowRow {
     balance: number;
     operator: string;
     remark: string;
+    /** 仅出库行：订单建档时的客户名称快照；入库/调整行没有客户，字段省略 */
+    customer?: string;
 }
 
 /** BOM 出入库流水：flows 按业务日升序（旧 → 新），stockQty 与末笔 balance 一致 */
