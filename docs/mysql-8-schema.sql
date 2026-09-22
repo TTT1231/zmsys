@@ -769,7 +769,7 @@ INSERT INTO material_item (id, group_id, name, sort_order) VALUES
     (3605, 2603, '18mm钢球', 1),
     (3606, 2604, '翘板', 1);
 
--- 琴键开关（1007 / KQ / 3）：7 个单选根组 + 静片多选；扣板/连锁片/静片/动片四组 qty=1
+-- 琴键开关（1007 / KQ / 3）：6 个单选根组 + 静片/动片多选；扣板/连锁片/静片/动片四组 qty=1
 -- （选中项可携带 1-99 数量），其余分组不带数量。
 INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, multi, qty, sort_order) VALUES
     (2701, 1007, NULL, 'GROUP', '琴键底', 'piano-base', 0, 0, 1),
@@ -778,7 +778,7 @@ INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, m
     (2704, 1007, NULL, 'GROUP', '扣板', 'buckle-plate', 0, 1, 4),
     (2705, 1007, NULL, 'GROUP', '连锁片', 'interlock-tab', 0, 1, 5),
     (2706, 1007, NULL, 'GROUP', '静片', 'static-plate', 1, 1, 6),
-    (2707, 1007, NULL, 'GROUP', '动片', 'moving-plate', 0, 1, 7),
+    (2707, 1007, NULL, 'GROUP', '动片', 'moving-plate', 1, 1, 7),
     (2708, 1007, NULL, 'GROUP', '弹簧规格', 'spring-spec', 0, 0, 8);
 
 INSERT INTO material_item (id, group_id, name, sort_order) VALUES

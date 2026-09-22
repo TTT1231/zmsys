@@ -265,7 +265,7 @@ describe("旋转XK3 / 安全开关目录", () => {
 });
 
 describe("琴键开关目录", () => {
-    it("根组按序排列；静片多选，扣板/连锁片/静片/动片为数量分组（qty=true）", () => {
+    it("根组按序排列；静片/动片多选，扣板/连锁片/静片/动片为数量分组（qty=true）", () => {
         const piano = cat("琴键开关");
         expect(piano.groups.map(node => [node.name, node.multi, node.qty])).toEqual([
             ["琴键底", false, false],
@@ -274,7 +274,7 @@ describe("琴键开关目录", () => {
             ["扣板", false, true],
             ["连锁片", false, true],
             ["静片", true, true],
-            ["动片", false, true],
+            ["动片", true, true],
             ["弹簧规格", false, false],
         ]);
         expect(piano.groups.flatMap(node => node.items)).toHaveLength(46);
