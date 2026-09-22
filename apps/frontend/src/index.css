@@ -915,8 +915,7 @@ button:active:not(:disabled) {
     min-height: 0;
     overflow-y: auto;
 }
-/* 用户手动调过列宽后 fitTableWidths 不再自动拉伸(设计上不动手动设置)，
-   最大化时多余空间以 min-width 铺满，列按比例放宽；退出后恢复原宽，偏好不受影响 */
+/* DataTable 会保留手动列宽，并用自动列或弹性区铺满容器；这里给最大化首帧保留宽度兜底。 */
 [data-maximized] .managed-table .data-table {
     min-width: 100%;
 }

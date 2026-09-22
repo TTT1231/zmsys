@@ -1,6 +1,7 @@
 import {
     Children,
     cloneElement,
+    Fragment,
     isValidElement,
     useEffect,
     useLayoutEffect,
@@ -100,12 +101,12 @@ function TableView({
     const [preferences, setPreferences] = useState(() => readPreferences(storageKey));
     const [settings, setSettings] = useState(false);
     const [activeColumn, setActiveColumn] = useState<string | null>(null);
-    const [draftWidths, setDraftWidths] = useState<Record<string, number> | null>(null);
+    const [draftPreferences, setDraftPreferences] = useState<Record<string, number> | null>(null);
     const dragRef = useRef<{
         label: string;
         start: number;
         width: number;
-        widths: Record<string, number>;
+        base: Record<string, number>;
         draft: Record<string, number>;
     } | null>(null);
     const sections = cells(children);
@@ -137,9 +138,13 @@ function TableView({
         };
     });
     const visible = columns.filter(column => column.locked || !preferences.hidden.includes(column.label));
-    const widths = draftWidths ?? fitTableWidths(visible, preferences.widths, viewport);
+    const widths = fitTableWidths(visible, draftPreferences ?? preferences.widths, viewport);
     const widthOf = (column: (typeof columns)[number]) => widths[column.label] ?? column.width;
     const totalWidth = visible.reduce((sum, column) => sum + widthOf(column), 0);
+    // 自动列达到上限或全部被用户锁定时，以无语义弹性列补齐，并把固定操作列留在最右侧。
+    const fillWidth = Math.max(0, viewport - totalWidth);
+    const hasFillColumn = fillWidth > 0;
+    const renderedColumnCount = visible.length + (hasFillColumn ? 1 : 0);
     const pinned = (index: number) =>
         index === identityColumn ? "start" : index === headers.length - 1 ? "end" : undefined;
     useImperativeHandle(scrollRef, () => bodyRef.current!, []);
@@ -166,7 +171,9 @@ function TableView({
     }, [preferences, storageKey]);
     const resize = (label: string, desired: number) => {
         const next = resizeTableColumn(visible, widths, label, desired);
-        setPreferences(current => ({ ...current, widths: { ...current.widths, ...next } }));
+        const nextWidth = next[label];
+        if (nextWidth === undefined) return;
+        setPreferences(current => ({ ...current, widths: { ...current.widths, [label]: nextWidth } }));
     };
     const restoreColumn = (label: string) =>
         setPreferences(current => {
@@ -177,16 +184,22 @@ function TableView({
     const finishDrag = (cancel = false) => {
         const drag = dragRef.current;
         if (!drag) return;
-        if (!cancel) setPreferences(current => ({ ...current, widths: { ...current.widths, ...drag.draft } }));
+        const nextWidth = drag.draft[drag.label];
+        if (!cancel && nextWidth !== undefined)
+            setPreferences(current => ({ ...current, widths: { ...current.widths, [drag.label]: nextWidth } }));
         dragRef.current = null;
-        setDraftWidths(null);
+        setDraftPreferences(null);
         setActiveColumn(null);
     };
     return (
-        <div className="managed-table" data-density={preferences.density} data-resizing={!!draftWidths || undefined}>
+        <div
+            className="managed-table"
+            data-density={preferences.density}
+            data-resizing={!!draftPreferences || undefined}
+        >
             <div className="table-display-toolbar">
                 <span className="text-12 text-muted" role="status">
-                    {draftWidths
+                    {draftPreferences
                         ? `正在调整「${activeColumn}」`
                         : recordCount !== undefined
                           ? `${recordCount} 条记录`
@@ -213,16 +226,21 @@ function TableView({
             <div ref={bodyRef} className={`managed-table-body overflow-x-auto ${scrollClassName}`}>
                 <table
                     className="data-table table-fixed border-separate border-spacing-0"
-                    style={{ width: totalWidth }}
+                    style={{ width: totalWidth + fillWidth }}
                 >
                     <colgroup>
-                        {visible.map(column => (
-                            <col key={column.label} style={{ width: widthOf(column) }} />
+                        {visible.map((column, index) => (
+                            <Fragment key={column.label}>
+                                {hasFillColumn && index === visible.length - 1 && (
+                                    <col data-table-fill="" style={{ width: fillWidth }} />
+                                )}
+                                <col style={{ width: widthOf(column) }} />
+                            </Fragment>
                         ))}
                     </colgroup>
                     <thead>
                         <tr className={headRow?.props.className}>
-                            {visible.map(column => {
+                            {visible.map((column, index) => {
                                 const control = !column.fixed ? (
                                     <span
                                         role="separator"
@@ -271,13 +289,17 @@ function TableView({
                                             event.currentTarget.focus({ preventScroll: true });
                                             event.currentTarget.setPointerCapture(event.pointerId);
                                             setActiveColumn(column.label);
-                                            setDraftWidths(widths);
+                                            const draft = {
+                                                ...preferences.widths,
+                                                [column.label]: widthOf(column),
+                                            };
+                                            setDraftPreferences(draft);
                                             dragRef.current = {
                                                 label: column.label,
                                                 start: event.clientX,
                                                 width: widthOf(column),
-                                                widths,
-                                                draft: widths,
+                                                base: draft,
+                                                draft,
                                             };
                                         }}
                                         onPointerMove={event => {
@@ -285,11 +307,11 @@ function TableView({
                                             if (drag?.label !== column.label) return;
                                             drag.draft = resizeTableColumn(
                                                 visible,
-                                                drag.widths,
+                                                drag.base,
                                                 column.label,
                                                 drag.width + event.clientX - drag.start,
                                             );
-                                            setDraftWidths(drag.draft);
+                                            setDraftPreferences(drag.draft);
                                         }}
                                         onPointerUp={() => finishDrag()}
                                         onPointerCancel={() => finishDrag(true)}
@@ -304,9 +326,23 @@ function TableView({
                                     style: undefined,
                                     width: undefined,
                                 };
-                                return column.header.type === SortTh
-                                    ? cloneElement(column.header, { ...shared, resizeControl: control })
-                                    : cloneElement(column.header, shared, column.header.props.children, control);
+                                const renderedHeader =
+                                    column.header.type === SortTh
+                                        ? cloneElement(column.header, { ...shared, resizeControl: control })
+                                        : cloneElement(column.header, shared, column.header.props.children, control);
+                                return (
+                                    <Fragment key={column.label}>
+                                        {hasFillColumn && index === visible.length - 1 && (
+                                            <th
+                                                aria-hidden="true"
+                                                className="managed-th"
+                                                data-table-fill=""
+                                                style={{ padding: 0 }}
+                                            />
+                                        )}
+                                        {renderedHeader}
+                                    </Fragment>
+                                );
                             })}
                         </tr>
                     </thead>
@@ -316,22 +352,36 @@ function TableView({
                             cloneElement(
                                 section,
                                 {},
-                                cells(section.props.children).map(row =>
-                                    cloneElement(
+                                cells(section.props.children).map(row => {
+                                    const rowCells = cells(row.props.children);
+                                    const spansColumns = rowCells.some(cell => (cell.props.colSpan ?? 1) > 1);
+                                    return cloneElement(
                                         row,
                                         {},
-                                        cells(row.props.children).map((cell, index) => {
+                                        rowCells.flatMap((cell, index) => {
                                             if ((cell.props.colSpan ?? 1) > 1)
-                                                return cloneElement(cell, { colSpan: visible.length });
+                                                return cloneElement(cell, { colSpan: renderedColumnCount });
                                             const column = visible.find(column => column.index === index);
-                                            if (!column) return null;
-                                            return cloneElement(cell, {
+                                            if (!column) return [];
+                                            const renderedCell = cloneElement(cell, {
+                                                key: column.label,
                                                 "data-pinned": pinned(index),
                                                 className: `${cell.props.className ?? ""} ${activeColumn === column.label ? "column-highlight" : ""}`,
                                             } as CellProps);
+                                            return hasFillColumn && !spansColumns && column.index === headers.length - 1
+                                                ? [
+                                                      <td
+                                                          key="table-fill"
+                                                          aria-hidden="true"
+                                                          data-table-fill=""
+                                                          style={{ padding: 0 }}
+                                                      />,
+                                                      renderedCell,
+                                                  ]
+                                                : renderedCell;
                                         }),
-                                    ),
-                                ),
+                                    );
+                                }),
                             ),
                         )}
                 </table>

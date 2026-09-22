@@ -1,4 +1,4 @@
-/** 推荐布局优先为产品信息分配空间；手动调整不挤压其他列。 */
+/** 推荐布局优先为产品信息分配空间；手动宽度保持不变，剩余空间交给自动列。 */
 export interface TableColumnSize {
     key: string;
     width: number;
@@ -14,11 +14,12 @@ export function fitTableWidths(columns: TableColumnSize[], saved: Record<string,
             column.fixed ? column.width : Math.min(column.max, Math.max(column.min, saved[column.key] ?? column.width)),
         ]),
     );
-    if (columns.some(column => !column.fixed && saved[column.key] !== undefined)) return widths;
     let spare = Math.max(0, Math.floor(available - Object.values(widths).reduce((sum, width) => sum + width, 0)));
-    // 有多余空间时只分配给数据列；达到上限后继续分配给其余列。
+    // 已手动调整的列保持用户指定宽度；其余空间优先分配给内容型自动列。
     while (spare > 0) {
-        const candidates = columns.filter(column => !column.fixed && widths[column.key] < column.max);
+        const candidates = columns.filter(
+            column => !column.fixed && saved[column.key] === undefined && widths[column.key] < column.max,
+        );
         const preferred = candidates.filter(column => column.grow);
         const flexible = preferred.length ? preferred : candidates;
         if (!flexible.length) break;

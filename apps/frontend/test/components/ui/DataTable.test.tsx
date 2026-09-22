@@ -8,11 +8,27 @@ import { DataTable } from "@/components/ui/DataTable";
 import { SortTh } from "@/components/ui/SortTh";
 const auth = vi.hoisted(() => ({ account: "user-a" }));
 vi.mock("@/context/useApp", () => ({ useApp: () => ({ user: auth }) }));
+function stubResizeObserver() {
+    const callbacks: Array<() => void> = [];
+    class FakeObserver {
+        constructor(callback: () => void) {
+            callbacks.push(callback);
+        }
+        observe() {}
+        disconnect() {}
+        unobserve() {}
+    }
+    vi.stubGlobal("ResizeObserver", FakeObserver);
+    return callbacks;
+}
 beforeEach(() => {
     localStorage.clear();
     auth.account = "user-a";
 });
-afterEach(cleanup);
+afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+});
 function Table({ sort = () => {}, empty = false }: { sort?: () => void; empty?: boolean }) {
     return (
         <DataTable tableId="test" defaultWidths={[180, 160, 240, 120]}>
@@ -110,6 +126,7 @@ it("指针拖动改变列宽，结束拖动后移动不再更改宽度", () => {
     fireEvent.pointerMove(handle, { pointerId: 1, clientX: 224 });
     expect(handle).toHaveAttribute("aria-valuenow", "224");
     fireEvent.pointerUp(handle, { pointerId: 1 });
+    expect(JSON.parse(localStorage.getItem("zm-table:v2:user-a:test")!).widths).toEqual({ 数量: 224 });
     fireEvent.pointerMove(handle, { pointerId: 1, clientX: 500 });
     expect(handle).toHaveAttribute("aria-valuenow", "224");
 });
@@ -123,6 +140,28 @@ it("操作列固定，旧偏好中的极窄操作列不会恢复，也没有拖�
     expect(screen.queryByRole("spinbutton", { name: "操作列宽" })).not.toBeInTheDocument();
     expect(screen.getByText("始终显示")).toBeInTheDocument();
     expect(screen.getByRole("dialog")).not.toHaveTextContent("px");
+});
+
+it("全部可调列锁定后以表格内弹性区铺满，操作列保持最右", () => {
+    const callbacks = stubResizeObserver();
+    localStorage.setItem("zm-table:v2:user-a:test", JSON.stringify({ widths: { 编号: 150, 数量: 120, 备注: 100 } }));
+    const view = render(<Table />);
+    const body = view.container.querySelector(".managed-table-body")!;
+    Object.defineProperty(body, "clientWidth", { configurable: true, get: () => 900 });
+    act(() => callbacks.at(-1)!());
+
+    const table = screen.getByRole("table");
+    expect(table).toHaveStyle({ width: "900px" });
+    expect(table.querySelector("col[data-table-fill]")).toHaveStyle({ width: "410px" });
+    const operationHeader = screen.getByRole("columnheader", { name: "操作" });
+    expect(operationHeader.previousElementSibling).toHaveAttribute("data-table-fill");
+    expect(screen.getAllByRole("columnheader")).toHaveLength(4);
+    const row = screen.getByRole("cell", { name: "300" }).parentElement!;
+    expect(row.children).toHaveLength(5);
+    expect(row.children[3]).toHaveAttribute("data-table-fill");
+
+    view.rerender(<Table empty />);
+    expect(screen.getByRole("cell", { name: "暂无数据" })).toHaveAttribute("colspan", "5");
 });
 
 it("拖动只改变当前列，取消拖动恢复原宽", () => {
@@ -168,16 +207,7 @@ it("聚焦列边界时高亮整列，取消拖动清除高亮", () => {
 });
 
 it("ResizeObserver 回调的宽度与槽位不变时不重渲染，阻断滚动条临界抖动", () => {
-    const callbacks: Array<() => void> = [];
-    class FakeObserver {
-        constructor(callback: () => void) {
-            callbacks.push(callback);
-        }
-        observe() {}
-        disconnect() {}
-        unobserve() {}
-    }
-    vi.stubGlobal("ResizeObserver", FakeObserver);
+    const callbacks = stubResizeObserver();
     const counter = { renders: 0 };
     const countRender = () => {
         counter.renders += 1;
@@ -222,5 +252,4 @@ it("ResizeObserver 回调的宽度与槽位不变时不重渲染，阻断滚动�
     setSize(760, 760);
     act(() => callbacks.at(-1)!());
     expect(counter.renders).toBe(3);
-    vi.unstubAllGlobals();
 });

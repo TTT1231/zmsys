@@ -15,6 +15,9 @@ it("拖动只改变当前列，遵守自身边界且不能拖动操作列", () =
     expect(resizeTableColumn(columns, next, "actions", 640)).toEqual(next);
     expect(resizeTableColumn(columns, next, "name", -100)).toEqual({ name: 120, spec: 360, actions: 120 });
 });
-it("手动缩窄后不自动填满容器，其他列宽和用户调整保持不变", () => {
+it("手动缩窄后保留目标列宽，由未调整的内容列填满容器", () => {
+    expect(fitTableWidths(columns, { name: 150 }, 1000)).toEqual({ name: 150, spec: 730, actions: 120 });
+});
+it("全部数据列均已手动调整时不篡改偏好，剩余宽度交给表格弹性区", () => {
     expect(fitTableWidths(columns, { name: 150, spec: 300 }, 1600)).toEqual({ name: 150, spec: 300, actions: 120 });
 });
