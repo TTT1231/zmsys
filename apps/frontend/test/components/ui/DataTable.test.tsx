@@ -164,6 +164,38 @@ it("全部可调列锁定后以表格内弹性区铺满，操作列保持最右"
     expect(screen.getByRole("cell", { name: "暂无数据" })).toHaveAttribute("colspan", "5");
 });
 
+it("紧凑档宽内容列收紧到 220，剩余宽度整体交给弹性区", () => {
+    const callbacks = stubResizeObserver();
+    localStorage.setItem("zm-table:v2:user-a:test", JSON.stringify({ density: "compact" }));
+    const view = render(
+        <DataTable tableId="test" defaultWidths={[370, 330, 120]}>
+            <thead>
+                <tr>
+                    <th>BOM 编码</th>
+                    <th>BOM 备注</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>KW001</td>
+                    <td>—</td>
+                    <td>
+                        <button>详情</button>
+                    </td>
+                </tr>
+            </tbody>
+        </DataTable>,
+    );
+    const body = view.container.querySelector(".managed-table-body")!;
+    Object.defineProperty(body, "clientWidth", { configurable: true, get: () => 900 });
+    act(() => callbacks.at(-1)!());
+    expect(screen.getByRole("separator", { name: "调整BOM 编码列宽" })).toHaveAttribute("aria-valuenow", "220");
+    expect(screen.getByRole("separator", { name: "调整BOM 备注列宽" })).toHaveAttribute("aria-valuenow", "220");
+    // 剩余 900-560=340 不再分给内容列，集中为操作列前的弹性区
+    expect(view.container.querySelector("col[data-table-fill]")).toHaveStyle({ width: "340px" });
+});
+
 it("拖动只改变当前列，取消拖动恢复原宽", () => {
     render(<Table />);
     const handle = screen.getByRole("separator", { name: "调整数量列宽" });

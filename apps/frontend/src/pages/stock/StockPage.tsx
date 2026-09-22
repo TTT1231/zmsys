@@ -167,11 +167,11 @@ function StockLedgerModal({
                                         <th className="px-3 py-2.5" style={{ width: "100px" }}>
                                             日期
                                         </th>
-                                        <th className="px-3 py-2.5 text-right" style={{ width: "96px" }}>
+                                        <th className="px-3 py-2.5" style={{ width: "96px" }}>
                                             数量（个）
                                         </th>
-                                        <th className="px-3 py-2.5 text-right" style={{ width: "96px" }}>
-                                            结余（个）
+                                        <th className="px-3 py-2.5" style={{ width: "96px" }}>
+                                            库存（个）
                                         </th>
                                         <th className="px-3 py-2.5" style={{ width: "80px" }}>
                                             操作人
@@ -198,12 +198,12 @@ function StockLedgerModal({
                                             </td>
                                             <td className="tnum px-3 py-3.5 text-14 text-muted">{flow.date}</td>
                                             <td
-                                                className={`tnum px-3 py-3.5 text-right text-14 font-semibold ${flow.qty >= 0 ? "text-success" : "text-danger"}`}
+                                                className={`tnum px-3 py-3.5 text-14 font-semibold ${flow.qty >= 0 ? "text-success" : "text-danger"}`}
                                             >
                                                 {flow.qty >= 0 ? "+" : "−"}
                                                 {num(Math.abs(flow.qty))}
                                             </td>
-                                            <td className="tnum px-3 py-3.5 text-right text-14 font-semibold text-ink">
+                                            <td className="tnum px-3 py-3.5 text-14 font-semibold text-ink">
                                                 {num(flow.balance)}
                                             </td>
                                             <td className="px-3 py-3.5 text-14 text-td">{flow.operator}</td>
@@ -402,7 +402,6 @@ export function StockPage() {
                                     <th className="px-3 py-2.5 font-semibold">BOM 备注</th>
                                     <SortTh
                                         label="库存数量（个）"
-                                        align="right"
                                         active={sort?.key === "stock"}
                                         dir={sort?.dir ?? "asc"}
                                         onSort={() =>
@@ -445,7 +444,7 @@ export function StockPage() {
                                             </span>
                                         </td>
                                         <td
-                                            className={`tnum px-3 py-3 text-right text-13 font-semibold ${row.stock === 0 ? "text-muted" : "text-ink"}`}
+                                            className={`tnum px-3 py-3 text-13 font-semibold ${row.stock === 0 ? "text-muted" : "text-ink"}`}
                                         >
                                             {num(row.stock)}
                                         </td>

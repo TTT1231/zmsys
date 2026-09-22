@@ -1,6 +1,7 @@
 /** 推荐布局优先为产品信息分配空间；手动宽度保持不变，剩余空间交给自动列。
  *  推荐宽度超出容器时先收窄自动列（优先最宽的内容列），让默认视图尽量单屏放下，
- *  避免数值被固定操作列遮住；实在放不下（列最小宽之和仍溢出）才允许横向滚动。 */
+ *  避免数值被固定操作列遮住；实在放不下（列最小宽之和仍溢出）才允许横向滚动。
+ *  紧凑档（账本模式）传 stretch:false：内容列不吸收剩余宽度，富余集中到表格尾部弹性区。 */
 export interface TableColumnSize {
     key: string;
     width: number;
@@ -9,7 +10,12 @@ export interface TableColumnSize {
     fixed?: boolean;
     grow?: boolean;
 }
-export function fitTableWidths(columns: TableColumnSize[], saved: Record<string, number>, available: number) {
+export function fitTableWidths(
+    columns: TableColumnSize[],
+    saved: Record<string, number>,
+    available: number,
+    options?: { stretch?: boolean },
+) {
     const widths = Object.fromEntries(
         columns.map(column => [
             column.key,
@@ -33,7 +39,8 @@ export function fitTableWidths(columns: TableColumnSize[], saved: Record<string,
             overflow -= removed;
         }
     }
-    let spare = Math.max(0, Math.floor(available - total()));
+    // stretch=false（紧凑账本档）：剩余宽度不分给内容列，交回调用方的尾部弹性列
+    let spare = options?.stretch === false ? 0 : Math.max(0, Math.floor(available - total()));
     // 已手动调整的列保持用户指定宽度；其余空间优先分配给内容型自动列。
     while (spare > 0) {
         const candidates = columns.filter(

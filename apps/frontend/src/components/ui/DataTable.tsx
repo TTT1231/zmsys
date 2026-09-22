@@ -118,12 +118,17 @@ function TableView({
     const head = sections.find(section => section.type === "thead");
     const headRow = cells(head?.props.children)[0];
     const headers = cells(headRow?.props.children);
+    // 紧凑档=账本：次要信息行收纳后，宽内容列只剩单行，推荐宽收紧到 220，
+    // 且不再吸收视口剩余宽度（fitTableWidths stretch:false），富余集中到操作列前的弹性区；
+    // 手动拖拽与显示设置的调宽不受限（max 仍 800），标准/宽松档行为不变。
+    const compact = preferences.density === "compact";
     const columns = headers.map((header, index) => {
         const label = header.props.label ?? labelOf(header.props.children);
         const width = defaultWidths[index] ?? 160;
-        const grow = /BOM|成品|物料构成|客户信息/.test(label) && width >= 220;
-        const minimum = grow
-            ? Math.min(width, 280)
+        const wide = /BOM|成品|物料构成|客户信息/.test(label) && width >= 220;
+        const recommended = compact && wide ? Math.min(width, 220) : width;
+        const minimum = wide
+            ? Math.min(recommended, 280)
             : index === identityColumn
               ? 150
               : /日期|数量/.test(label)
@@ -134,16 +139,18 @@ function TableView({
             index,
             label,
             key: label,
-            width,
-            min: Math.min(width, minimum),
+            width: recommended,
+            min: Math.min(recommended, minimum),
             max: 800,
-            grow,
+            grow: wide,
             fixed: index === headers.length - 1,
             locked: index === identityColumn || index === headers.length - 1,
         };
     });
     const visible = columns.filter(column => column.locked || !preferences.hidden.includes(column.label));
-    const widths = fitTableWidths(visible, draftPreferences ?? preferences.widths, viewport);
+    const widths = fitTableWidths(visible, draftPreferences ?? preferences.widths, viewport, {
+        stretch: !compact,
+    });
     const widthOf = (column: (typeof columns)[number]) => widths[column.label] ?? column.width;
     const totalWidth = visible.reduce((sum, column) => sum + widthOf(column), 0);
     // 自动列达到上限或全部被用户锁定时，以无语义弹性列补齐，并把固定操作列留在最右侧。
