@@ -11,7 +11,7 @@ import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
 import { useApp } from "@/context/useApp";
-import { PageHeading } from "@/components/ui/PageHeading";
+import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { Badge, Button, ProgressTrack, StatusBadge, TableLink } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
@@ -788,40 +788,39 @@ export function OrdersPage() {
 
     return (
         <div className="flex flex-col gap-5">
-            <PageHeading
-                title={role === "warehouse" ? "待发货订单" : "销售订单"}
-                actions={
-                    canCreate ? (
-                        <Button icon="plus" onClick={() => setNewOpen(true)}>
-                            新建订单
-                        </Button>
-                    ) : undefined
-                }
-            />
-
-            <div className="task-tabs" aria-label="订单快捷筛选">
-                {[
-                    { key: "all", label: "全部", count: counts.total },
-                    { key: "pending", label: "待交付", count: counts.unfinished },
-                    { key: "ready", label: "可发货", count: counts.ready },
-                ].map(item => (
-                    <button
-                        type="button"
-                        key={item.key}
-                        aria-pressed={taskFilter === item.key}
-                        onClick={() => {
-                            setTaskFilter(item.key);
-                            setStatusFilter("全部状态");
-                            setPage(1);
-                        }}
-                    >
-                        {item.label} <strong>{item.count}</strong>
-                    </button>
-                ))}
-            </div>
+            <h1 className="sr-only">{role === "warehouse" ? "待发货订单" : "销售订单"}</h1>
 
             <section className="relative overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
                 {overlay && <LoadingOverlay />}
+                <div className="list-card-primary">
+                    <div className="table-task-tabs" aria-label="订单快捷筛选">
+                        {[
+                            { key: "all", label: "全部", count: counts.total },
+                            { key: "pending", label: "待交付", count: counts.unfinished },
+                            { key: "ready", label: "可发货", count: counts.ready },
+                        ].map(item => (
+                            <button
+                                type="button"
+                                key={item.key}
+                                aria-pressed={taskFilter === item.key}
+                                onClick={() => {
+                                    setTaskFilter(item.key);
+                                    setStatusFilter("全部状态");
+                                    setPage(1);
+                                }}
+                            >
+                                {item.label} <strong>{item.count}</strong>
+                            </button>
+                        ))}
+                    </div>
+                    <TableHeaderActions className="ml-auto">
+                        {canCreate && (
+                            <Button icon="plus" className="max-sm:flex-1" onClick={() => setNewOpen(true)}>
+                                新建订单
+                            </Button>
+                        )}
+                    </TableHeaderActions>
+                </div>
                 <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4 lg:gap-2.5">
                     {/* 搜索最左：窄屏由 list-toolbar 规则独占整行，宽屏固定 280px */}
                     <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-surface px-3 lg:w-70">

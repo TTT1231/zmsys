@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
 import { useWbRefresh, useWbSnapshot } from "@/data/queries";
-import { PageHeading } from "@/components/ui/PageHeading";
+import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { Button, StatusBadge, TableLink } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { CustomerCell, DateCell, QtyCell } from "@/components/ui/cells";
@@ -118,54 +118,7 @@ export function ArchivedOrdersPage() {
 
     return (
         <div className="flex flex-col gap-5">
-            <PageHeading
-                title="归档订单"
-                description="已完成、部分发货与已取消的终态订单存档，仅供查询"
-                actions={
-                    <ToolbarMore>
-                        <Button variant="secondary" icon="refresh" onClick={refresh}>
-                            刷新
-                        </Button>
-                        <Button
-                            variant="secondary"
-                            icon="download"
-                            onClick={() =>
-                                downloadCsv(
-                                    "归档订单",
-                                    [
-                                        "销售订单号",
-                                        "客户",
-                                        "客户编码",
-                                        "BOM 编码",
-                                        "订单数量",
-                                        "交货日期",
-                                        "累计出库",
-                                        "归档时间",
-                                        "归档人",
-                                        "归档备注",
-                                        "状态",
-                                    ],
-                                    pageRows.map(order => [
-                                        order.orderNo,
-                                        order.customer,
-                                        order.customerCode,
-                                        order.bomCode,
-                                        String(order.qty),
-                                        order.deliverDate,
-                                        String(order.outbound),
-                                        order.archivedAt ? datetimeOf(order.archivedAt) : "",
-                                        order.archivedBy ?? "",
-                                        order.archiveReason ?? "",
-                                        orderStatusOf(snap, order).label,
-                                    ]),
-                                )
-                            }
-                        >
-                            导出
-                        </Button>
-                    </ToolbarMore>
-                }
-            />
+            <h1 className="sr-only">归档订单</h1>
 
             <section className="relative overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
                 {overlay && <LoadingOverlay />}
@@ -279,6 +232,50 @@ export function ArchivedOrdersPage() {
                         清空条件
                     </button>
                     <span className="ml-auto text-12.5 text-muted">共 {num(filtered.length)} 条归档</span>
+                    <TableHeaderActions>
+                        <ToolbarMore>
+                            <Button variant="secondary" icon="refresh" onClick={refresh}>
+                                刷新
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                icon="download"
+                                onClick={() =>
+                                    downloadCsv(
+                                        "归档订单",
+                                        [
+                                            "销售订单号",
+                                            "客户",
+                                            "客户编码",
+                                            "BOM 编码",
+                                            "订单数量",
+                                            "交货日期",
+                                            "累计出库",
+                                            "归档时间",
+                                            "归档人",
+                                            "归档备注",
+                                            "状态",
+                                        ],
+                                        pageRows.map(order => [
+                                            order.orderNo,
+                                            order.customer,
+                                            order.customerCode,
+                                            order.bomCode,
+                                            String(order.qty),
+                                            order.deliverDate,
+                                            String(order.outbound),
+                                            order.archivedAt ? datetimeOf(order.archivedAt) : "",
+                                            order.archivedBy ?? "",
+                                            order.archiveReason ?? "",
+                                            orderStatusOf(snap, order).label,
+                                        ]),
+                                    )
+                                }
+                            >
+                                导出
+                            </Button>
+                        </ToolbarMore>
+                    </TableHeaderActions>
                 </div>
 
                 <div className="mobile-records">

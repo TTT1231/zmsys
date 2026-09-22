@@ -6,7 +6,6 @@ import { MENU_CATALOG, menuLabelFor } from "@/data/permissions";
 import { MobileBottomNav, Sidebar, Topbar } from "@/components/layout/Shell";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { GlobalWatermark } from "@/components/ui/Watermark";
-import { Icon } from "@/lib/icons";
 import { AppContentErrorBoundary, ErrorPage } from "@/pages/error/ErrorPage";
 
 // 工作台标题随登录角色；其余页面标题取菜单字典（含仓管在订单页的「待发货订单」别名）
@@ -52,6 +51,7 @@ export function AppLayout() {
     const activeMenu = MENU_CATALOG.find(
         menu => menu.to && menu.key !== "workbench" && location.pathname.startsWith(menu.to),
     );
+    const breadcrumbMenu = MENU_CATALOG.find(menu => menu.to && location.pathname.startsWith(menu.to));
     const accessDenied = Boolean(activeMenu && !grant.menus.includes(activeMenu.key));
     // 授权未就绪（loading/guest）时不按空 grant 判无权限、不动标题：
     // title effect 在 early return 之前，加载期 grant 恒空会闪"没有访问权限"
@@ -75,13 +75,21 @@ export function AppLayout() {
                 {/* 侧边栏/顶栏最大化时收起但不卸载，宽度/高度过渡产生收起动画 */}
                 <Sidebar
                     collapsed={collapsed}
-                    onToggleCollapse={() => setCollapsed(value => !value)}
                     open={drawerPath === location.pathname}
                     onClose={() => setDrawerPath(null)}
                     maximized={maximized}
                 />
                 <div className="flex min-w-0 flex-1 flex-col">
-                    <Topbar title={title} onOpenDrawer={() => setDrawerPath(location.pathname)} maximized={maximized} />
+                    <Topbar
+                        title={title}
+                        group={breadcrumbMenu?.group}
+                        icon={breadcrumbMenu?.icon ?? (location.pathname.startsWith("/search") ? "search" : "info")}
+                        routeKey={location.pathname}
+                        collapsed={collapsed}
+                        onToggleCollapse={() => setCollapsed(value => !value)}
+                        onOpenDrawer={() => setDrawerPath(location.pathname)}
+                        maximized={maximized}
+                    />
                     <main
                         id="mainContent"
                         className={
@@ -108,18 +116,6 @@ export function AppLayout() {
                     </main>
                 </div>
                 {!maximized && <MobileBottomNav onOpenDrawer={() => setDrawerPath(location.pathname)} />}
-                {/* 最大化时页头(含进入按钮)已隐藏，右上角浮动退出按钮接替 */}
-                {maximized && (
-                    <button
-                        type="button"
-                        aria-label="退出内容最大化"
-                        title="退出内容最大化（Esc）"
-                        onClick={toggleMaximize}
-                        className="fixed top-2.5 right-2.5 z-50 flex h-9 w-9 items-center justify-center rounded-btn border border-line bg-surface/92 text-muted shadow-card backdrop-blur transition hover:bg-soft hover:text-ink active:scale-90"
-                    >
-                        <Icon name="minimize" size={16} />
-                    </button>
-                )}
                 {user && <GlobalWatermark text={user.name} />}
             </div>
         </ContentMaximizeContext.Provider>

@@ -8,7 +8,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
 import { useApp } from "@/context/useApp";
-import { PageHeading } from "@/components/ui/PageHeading";
+import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { Pagination } from "@/components/ui/Pagination";
 import { Badge, Button, StatusBadge, TableLink } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
@@ -469,16 +469,7 @@ export function CustomersPage() {
 
     return (
         <div className="flex flex-col gap-5">
-            <PageHeading
-                title="客户档案"
-                actions={
-                    canCreate ? (
-                        <Button icon="plus" onClick={() => setFormTarget("new")}>
-                            新建客户
-                        </Button>
-                    ) : undefined
-                }
-            />
+            <h1 className="sr-only">客户档案</h1>
 
             <section className="relative overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
                 {overlay && <LoadingOverlay />}
@@ -518,7 +509,7 @@ export function CustomersPage() {
                         清空条件
                     </button>
 
-                    <div className="ml-auto">
+                    <TableHeaderActions className="ml-auto">
                         <ToolbarMore>
                             <Button variant="secondary" icon="refresh" onClick={refresh}>
                                 刷新
@@ -555,7 +546,12 @@ export function CustomersPage() {
                                 导出
                             </Button>
                         </ToolbarMore>
-                    </div>
+                        {canCreate && (
+                            <Button icon="plus" onClick={() => setFormTarget("new")}>
+                                新建客户
+                            </Button>
+                        )}
+                    </TableHeaderActions>
                 </div>
 
                 <div className="mobile-records">

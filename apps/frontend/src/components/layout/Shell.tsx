@@ -20,14 +20,13 @@ function useNavSections(): Array<{ group: string; items: NavItem[] }> {
 
 interface SidebarProps {
     collapsed: boolean;
-    onToggleCollapse: () => void;
     open: boolean;
     onClose: () => void;
     /** 内容最大化时桌面端宽度过渡到 0（不卸载以保留收起/展开动画） */
     maximized?: boolean;
 }
 
-export function Sidebar({ collapsed, onToggleCollapse, open, onClose, maximized = false }: SidebarProps) {
+export function Sidebar({ collapsed, open, onClose, maximized = false }: SidebarProps) {
     const [desktop, setDesktop] = useState(() => window.matchMedia("(min-width: 1024px)").matches);
     useEffect(() => {
         const query = window.matchMedia("(min-width: 1024px)");
@@ -55,6 +54,7 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose, maximized 
     return (
         <>
             <aside
+                id="mainNavigation"
                 aria-label="主导航"
                 inert={!desktop && !open}
                 className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden border-r border-line bg-sidebar transition-[width,transform] duration-300 lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0 ${
@@ -134,20 +134,6 @@ export function Sidebar({ collapsed, onToggleCollapse, open, onClose, maximized 
                 </nav>
             </aside>
 
-            {/* 折叠开关（桌面端左缘悬浮）。
-                left 用 rem 跟随侧栏宽度(lg:w-19/lg:w-64):侧栏宽 − 按钮半宽(w-7/2=0.875rem),
-                中心恒骑在侧栏右缘上;html 根字号变化(16→14px 迁移)时不再错位。
-                内容最大化时随侧栏一起收起(宽度过渡中不遮挡内容) */}
-            <button
-                type="button"
-                aria-label={collapsed ? "展开侧边栏" : "折叠侧边栏"}
-                onClick={onToggleCollapse}
-                className={`fixed top-18.5 z-40 h-7 w-7 items-center justify-center rounded-full border border-line bg-surface text-muted shadow-xs transition hover:text-primary ${maximized ? "hidden" : "hidden lg:flex"}`}
-                style={{ left: collapsed ? "3.875rem" : "15.125rem" }}
-            >
-                <Icon name={collapsed ? "chevron-right" : "chevron-left"} size={14} />
-            </button>
-
             {/* 移动端遮罩 */}
             {open && (
                 <button
@@ -216,10 +202,20 @@ export function MobileBottomNav({ onOpenDrawer }: { onOpenDrawer: () => void }) 
     内容最大化时高度过渡到 0（不卸载以保留收起/展开动画），内容裁掉且不可交互 */
 export function Topbar({
     title,
+    group,
+    icon,
+    routeKey,
+    collapsed,
+    onToggleCollapse,
     onOpenDrawer,
     maximized = false,
 }: {
     title: string;
+    group?: string;
+    icon: string;
+    routeKey: string;
+    collapsed: boolean;
+    onToggleCollapse: () => void;
     onOpenDrawer: () => void;
     maximized?: boolean;
 }) {
@@ -241,13 +237,48 @@ export function Topbar({
                     <button
                         type="button"
                         aria-label="打开主导航"
+                        aria-controls="mainNavigation"
                         onClick={onOpenDrawer}
                         tabIndex={maximized ? -1 : 0}
                         className="flex h-11 w-11 shrink-0 max-lg:min-h-[44px] max-lg:min-w-[44px] items-center justify-center rounded-btn border border-line text-ink lg:hidden"
                     >
                         <Icon name="menu" size={19} />
                     </button>
-                    <strong className="block truncate text-15 font-semibold text-ink lg:hidden">{title}</strong>
+                    <button
+                        type="button"
+                        aria-label={collapsed ? "展开侧边栏" : "折叠侧边栏"}
+                        aria-controls="mainNavigation"
+                        aria-expanded={!collapsed}
+                        onClick={onToggleCollapse}
+                        tabIndex={maximized ? -1 : 0}
+                        className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-btn text-muted transition hover:bg-soft hover:text-ink active:scale-90 lg:flex"
+                    >
+                        <Icon name="menu" size={19} />
+                    </button>
+                    <strong
+                        key={`mobile-${routeKey}`}
+                        className="animate-breadcrumb-enter block truncate text-15 font-semibold text-ink lg:hidden"
+                    >
+                        {title}
+                    </strong>
+                    <nav aria-label="面包屑" className="hidden min-w-0 items-center gap-2 whitespace-nowrap lg:flex">
+                        {group && (
+                            <>
+                                <span className="text-13 text-muted">{group}</span>
+                                <span aria-hidden="true" className="text-13 text-subtle">
+                                    /
+                                </span>
+                            </>
+                        )}
+                        <span
+                            key={routeKey}
+                            aria-current="page"
+                            className="animate-breadcrumb-enter flex min-w-0 items-center gap-1.5 text-14 font-semibold text-ink"
+                        >
+                            <Icon name={icon} size={16} className="shrink-0" />
+                            <span className="truncate">{title}</span>
+                        </span>
+                    </nav>
                 </div>
 
                 <div

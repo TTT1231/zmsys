@@ -11,7 +11,7 @@ import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
 import { useApp } from "@/context/useApp";
-import { PageHeading } from "@/components/ui/PageHeading";
+import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { Badge, Button, ProgressTrack, StatusBadge } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
@@ -763,17 +763,7 @@ export function OutboundPage() {
 
     return (
         <div className="flex flex-col gap-5">
-            <PageHeading
-                title="成品出库"
-                description="按订单登记发货。"
-                actions={
-                    canRegister ? (
-                        <Button icon="truck" onClick={() => setNewOpen(true)}>
-                            登记发货
-                        </Button>
-                    ) : undefined
-                }
-            />
+            <h1 className="sr-only">成品出库</h1>
 
             <section className="relative overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
                 {overlay && <LoadingOverlay />}
@@ -826,7 +816,7 @@ export function OutboundPage() {
                     >
                         清空条件
                     </button>
-                    <div className="ml-auto">
+                    <TableHeaderActions className="ml-auto">
                         <ToolbarMore>
                             <Button variant="secondary" icon="refresh" onClick={refresh}>
                                 刷新
@@ -863,7 +853,12 @@ export function OutboundPage() {
                                 导出
                             </Button>
                         </ToolbarMore>
-                    </div>
+                        {canRegister && (
+                            <Button icon="truck" onClick={() => setNewOpen(true)}>
+                                登记发货
+                            </Button>
+                        )}
+                    </TableHeaderActions>
                 </div>
 
                 <div className="mobile-records">

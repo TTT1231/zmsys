@@ -13,7 +13,7 @@ import { downloadCsv, num } from "@/lib/format";
 import { copyText } from "@/lib/clipboard";
 import { useApp } from "@/context/useApp";
 import { isApiError } from "@/http";
-import { PageHeading } from "@/components/ui/PageHeading";
+import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { Button, TableLink } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
@@ -898,16 +898,7 @@ export function BomPage() {
 
     return (
         <div className="flex flex-col gap-5">
-            <PageHeading
-                title="物料与 BOM"
-                actions={
-                    canCreate ? (
-                        <Button icon="plus" onClick={() => setNewOpen(true)}>
-                            新建 BOM
-                        </Button>
-                    ) : undefined
-                }
-            />
+            <h1 className="sr-only">物料与 BOM</h1>
 
             <section className="relative overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
                 {overlay && <LoadingOverlay />}
@@ -946,7 +937,7 @@ export function BomPage() {
                     >
                         清空条件
                     </button>
-                    <div className="ml-auto">
+                    <TableHeaderActions className="ml-auto">
                         <ToolbarMore>
                             <Button variant="secondary" icon="refresh" onClick={refresh}>
                                 刷新
@@ -971,7 +962,12 @@ export function BomPage() {
                                 导出
                             </Button>
                         </ToolbarMore>
-                    </div>
+                        {canCreate && (
+                            <Button icon="plus" onClick={() => setNewOpen(true)}>
+                                新建 BOM
+                            </Button>
+                        )}
+                    </TableHeaderActions>
                 </div>
 
                 <div className="mobile-records">

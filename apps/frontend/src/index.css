@@ -227,6 +227,16 @@
         }
     }
 
+    /* 对齐 vben Breadcrumb TransitionGroup：路由标题从右侧斜切进入，旧标题立即退出。 */
+    --animate-breadcrumb-enter: breadcrumb-enter 0.4s cubic-bezier(0.76, 0, 0.24, 1);
+
+    @keyframes breadcrumb-enter {
+        from {
+            opacity: 0;
+            transform: translateX(30px) skewX(-30deg);
+        }
+    }
+
     /* 全局通知：右上角轻滑入，退出更快；仅使用 transform / opacity 避免布局抖动 */
     --animate-notification-enter: notification-enter 0.22s cubic-bezier(0.2, 0, 0, 1);
     --animate-notification-exit: notification-exit 0.16s ease-in forwards;
@@ -493,6 +503,46 @@ html.dark::view-transition-new(root) {
     border-color: var(--color-primary-border);
     font-weight: 600;
 }
+.list-card-primary {
+    display: flex;
+    min-height: 64px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--color-line);
+    background: linear-gradient(to bottom, var(--color-surface), var(--color-panel));
+}
+.table-task-tabs {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--color-line);
+    border-radius: 12px;
+    background: var(--color-soft);
+}
+.table-task-tabs button {
+    min-height: 36px;
+    padding: 0 13px;
+    border: 0;
+    border-radius: 8px;
+    color: var(--color-muted);
+    background: transparent;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition:
+        color 0.15s ease,
+        background-color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+.table-task-tabs button[aria-pressed="true"] {
+    color: var(--color-ink);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-xs);
+}
 button,
 a,
 summary {
@@ -568,6 +618,23 @@ button:active:not(:disabled) {
     }
     .list-toolbar > div:has(label) {
         width: 100%;
+    }
+    .list-card-primary {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 12px;
+    }
+    .table-task-tabs {
+        width: 100%;
+    }
+    .table-task-tabs button {
+        flex: 1;
+        padding-right: 8px;
+        padding-left: 8px;
+    }
+    .list-card-primary .table-header-actions {
+        width: 100%;
+        justify-content: flex-end;
     }
     .modal-body {
         padding: 16px;
@@ -812,7 +879,7 @@ button:active:not(:disabled) {
 .managed-table-body {
     scrollbar-width: thin;
 }
-/* 内容最大化（vben 式，PageHeading 按钮触发，AppLayout 根节点打 data-maximized）：
+/* 内容最大化（vben 式，表格卡片按钮触发，AppLayout 根节点打 data-maximized）：
    main 已在 maximized 分支改为 flex 列 + overflow-hidden，这里把高度沿
    动画层 → 页面根 → 列表卡片 → 表格容器 → 表格 → 表体 逐层下传，
    筛选工具条/分页固定，仅表体滚动。表格外面通常还包着桌面/移动切换层
@@ -827,8 +894,7 @@ button:active:not(:disabled) {
     flex: 1;
     min-height: 0;
 }
-[data-maximized] #mainContent .page-heading,
-[data-maximized] #mainContent .task-tabs {
+[data-maximized] #mainContent .page-heading {
     display: none;
 }
 [data-maximized] #mainContent section:has(.managed-table),
