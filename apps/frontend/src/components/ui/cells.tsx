@@ -1,8 +1,18 @@
 import { num } from "@/lib/format";
 import { Badge, TableLink } from "@/components/ui/Badge";
 
-/* 表格单元格：客户/单号双行 */
-export function CustomerCell({ name, sub, onClick }: { name: string; sub?: string; onClick?: () => void }) {
+/* 表格单元格：客户/单号双行；note 是低频编码（如客户编码），紧凑档随 customer-cell-note 隐藏 */
+export function CustomerCell({
+    name,
+    sub,
+    note,
+    onClick,
+}: {
+    name: string;
+    sub?: string;
+    note?: string;
+    onClick?: () => void;
+}) {
     const nameNode = onClick ? (
         <button
             type="button"
@@ -14,12 +24,23 @@ export function CustomerCell({ name, sub, onClick }: { name: string; sub?: strin
     ) : (
         <span className="font-medium text-ink">{name}</span>
     );
+    const subText = [sub, note].filter(Boolean).join(" · ");
     return (
-        <div className="min-w-0">
+        <div className="customer-cell min-w-0">
             <div className="truncate" title={name}>
                 {nameNode}
             </div>
-            {sub && <div className="tnum mt-0.5 truncate text-11.5 text-td-strong">{sub}</div>}
+            {(sub || note) && (
+                <div className="customer-cell-sub tnum mt-0.5 truncate text-11.5 text-td-strong" title={subText}>
+                    {sub}
+                    {note && (
+                        <span className="customer-cell-note">
+                            {sub ? " · " : ""}
+                            {note}
+                        </span>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

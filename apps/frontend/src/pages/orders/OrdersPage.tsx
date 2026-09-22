@@ -1105,7 +1105,7 @@ export function OrdersPage() {
                                                 </button>
                                             </td>
                                             <td className="px-3 py-4">
-                                                <CustomerCell name={order.customer} sub={order.customerCode} />
+                                                <CustomerCell name={order.customer} note={order.customerCode} />
                                             </td>
                                             <td className="px-3 py-4">
                                                 <BomCell
@@ -1123,7 +1123,7 @@ export function OrdersPage() {
                                                     overdue={order.deliverDate < todayIso() && remaining > 0}
                                                 />
                                             </td>
-                                            <td className="px-3 py-4">
+                                            <td className="delivery-cell px-3 py-4">
                                                 <div className="text-12.5 text-muted">
                                                     {cancelled ? (
                                                         "已停止交付"
@@ -1135,11 +1135,11 @@ export function OrdersPage() {
                                                         </>
                                                     )}
                                                 </div>
-                                                <div className="tnum mt-0.5 text-11.5 text-muted">
+                                                <div className="delivery-shipped tnum mt-0.5 text-11.5 text-muted">
                                                     已发 {num(order.outbound)} / {num(order.qty)}
                                                 </div>
                                                 {!cancelled && (
-                                                    <div className="mt-1.5">
+                                                    <div className="delivery-track mt-1.5">
                                                         <ProgressTrack
                                                             value={order.qty === 0 ? 0 : order.outbound / order.qty}
                                                             done={done}
