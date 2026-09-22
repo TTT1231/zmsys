@@ -121,13 +121,18 @@ function StockLedgerModal({
                     className="grid gap-3"
                     style={{ gridTemplateColumns: `repeat(${totalAdjust ? 4 : 3}, minmax(0, 1fr))` }}
                 >
+                    {/* 零值不带符号：-(0) 的负零经 toLocaleString 会渲染成 "-0"，拼出 "−-0" */}
                     <div className="rounded-btn border border-line bg-panel px-4.5 py-3.5">
                         <p className="text-13 text-muted">累计入库</p>
-                        <p className="tnum mt-1 text-26 font-bold text-success">+{num(totalIn)}</p>
+                        <p className="tnum mt-1 text-26 font-bold text-success">
+                            {totalIn === 0 ? "0" : `+${num(totalIn)}`}
+                        </p>
                     </div>
                     <div className="rounded-btn border border-line bg-panel px-4.5 py-3.5">
                         <p className="text-13 text-muted">累计出库</p>
-                        <p className="tnum mt-1 text-26 font-bold text-danger">−{num(totalOut)}</p>
+                        <p className="tnum mt-1 text-26 font-bold text-danger">
+                            {totalOut === 0 ? "0" : `−${num(Math.abs(totalOut))}`}
+                        </p>
                     </div>
                     {totalAdjust !== 0 && (
                         <div className="rounded-btn border border-line bg-panel px-4.5 py-3.5">

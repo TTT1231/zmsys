@@ -52,6 +52,23 @@ const ledger: BomStockLedger = {
     ],
 };
 
+/* 仅入库流水的台账：累计出库为零，不得渲染出 "-0"/"−-0" */
+const inOnlyLedger: BomStockLedger = {
+    bomCode: otherBom.code,
+    stockQty: 300,
+    flows: [
+        {
+            type: "in",
+            no: "RK26091601",
+            date: "2026-09-16",
+            qty: 300,
+            balance: 300,
+            operator: "仓库乙",
+            remark: "首批入库",
+        },
+    ],
+};
+
 vi.mock("@/data/queries", () => ({
     useBoms: () => ({ data: [detailBom, otherBom, idleBom], isLoading: false, isFetching: false }),
     useBomCategories: () => ({ data: [], isLoading: false, isFetching: false }),
@@ -61,7 +78,7 @@ vi.mock("@/data/queries", () => ({
         isFetching: false,
     }),
     useBomStockLedger: (code: string | null) => ({
-        data: code === detailBom.code ? ledger : undefined,
+        data: code === detailBom.code ? ledger : code === otherBom.code ? inOnlyLedger : undefined,
         isLoading: false,
         isError: false,
     }),
@@ -169,4 +186,14 @@ it("详情弹窗：流水倒序、有符号数量、结余与摘要卡，非零�
     // 弹窗含 BOM 详情与备注警示条（凭证同款组合）
     expect(within(dialog).getByText("BOM 详情")).toBeInTheDocument();
     expect(within(dialog).getByText(/BOM 备注/)).toBeInTheDocument();
+});
+
+it("累计卡零值不带符号：无出库流水的 BOM 累计出库显示 0", () => {
+    renderPage();
+    // 第二行（QB075）只有入库流水，累计出库合计经负号会得到 -0
+    fireEvent.click(screen.getAllByRole("button", { name: "查看详情" })[1]);
+    const dialog = screen.getByRole("dialog");
+    const cardOf = (label: string) => within(dialog).getByText(label).closest("div")!;
+    expect(cardOf("累计入库")).toHaveTextContent("+300");
+    expect(cardOf("累计出库").textContent).toBe("累计出库0");
 });
