@@ -15,6 +15,8 @@ export default defineConfig({
     },
     test: {
         environment: "node",
+        // worker 跨文件复用，省去每文件 ~4s 的 worker 启动开销（vitest Isolate 提示）
+        isolate: false,
         coverage: {
             provider: "v8",
             include: ["src/**/*.{ts,tsx}"],
