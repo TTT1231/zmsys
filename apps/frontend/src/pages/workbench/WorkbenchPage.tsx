@@ -58,8 +58,9 @@ function Metric({
         >
             <div className="flex items-center justify-between">
                 <h2 className="text-13 font-medium text-td-strong">{title}</h2>
+                {/* 图标芯片统一主色族：featured 实底、其余浅底，避免「一张实底 + 三张灰线性」的风格漂移 */}
                 <span
-                    className={`hidden h-9 w-9 items-center justify-center rounded-xl sm:flex ${featured ? "bg-primary text-white" : "bg-soft text-muted"}`}
+                    className={`hidden h-9 w-9 items-center justify-center rounded-xl sm:flex ${featured ? "bg-primary text-white" : "bg-primary-soft text-primary-strong"}`}
                 >
                     <Icon name={icon} size={18} />
                 </span>

@@ -62,7 +62,7 @@ export function PermissionsPage() {
 
     return (
         <div className="flex flex-col gap-5">
-            <PageHeading eyebrow="系统设置" title="用户与权限" description="维护账号与角色，配置菜单与操作权限。" />
+            <PageHeading eyebrow="工作台" title="用户与权限" description="维护账号与角色，配置菜单与操作权限。" />
 
             <div className="grid grid-cols-3 gap-2.5">
                 {[
@@ -367,7 +367,7 @@ function DeactivateTransferModal({
         <Modal
             open
             onClose={onClose}
-            label="系统设置"
+            label="用户与权限"
             title="停用销售并移交客户"
             width={440}
             footer={
@@ -476,7 +476,7 @@ function UserDialog({
         <Modal
             open
             onClose={onClose}
-            label="系统设置"
+            label="用户与权限"
             title={user ? "编辑用户" : "新增用户"}
             width={440}
             footer={

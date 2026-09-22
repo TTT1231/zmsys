@@ -9,6 +9,7 @@ import {
     resolveDark,
     savePreferences,
     systemPrefersDark,
+    type LayoutMode,
     type Preferences,
     type ThemeMode,
     type ThemePreset,
@@ -57,6 +58,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
             isDark: resolveDark(preferences.themeMode, systemDark),
             setThemeMode: (mode: ThemeMode) => update({ themeMode: mode }),
             setThemePreset: (preset: ThemePreset) => update({ themePreset: preset }),
+            setLayout: (mode: LayoutMode) => update({ layout: mode }),
             // 字号在入口处钳制，任意调用方都拿不到越界值；函数式增量取 ref 最新值，同帧连点不丢步
             setFontSize: (size: number | ((prev: number) => number)) => {
                 const raw = typeof size === "function" ? size(preferencesRef.current.fontSize) : size;

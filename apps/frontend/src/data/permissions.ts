@@ -11,7 +11,7 @@ export interface MenuNode {
     key: string;
     label: string;
     icon: string;
-    group: "业务导航" | "系统设置";
+    group: "工作台" | "业务导航";
     to?: string;
     end?: boolean;
     /** 说明型入口（无路由），点击弹出说明 */
@@ -30,8 +30,34 @@ export interface ActionDef {
     protected?: boolean;
 }
 
+/* 组定义：侧边栏一级导航（图标轨 / 水平菜单 / 树形分组的共用元数据）。
+   工作台组用 chart：grid 已是子项「工作台」的图标，避免组/子项同图 */
+export const NAV_GROUPS = [
+    { group: "工作台", icon: "chart" },
+    { group: "业务导航", icon: "cube" },
+] as const;
+
 export const MENU_CATALOG: MenuNode[] = [
-    { key: "workbench", label: "工作台", icon: "grid", group: "业务导航", to: "/workbench", end: true },
+    { key: "workbench", label: "工作台", icon: "grid", group: "工作台", to: "/workbench", end: true },
+    {
+        key: "archived-orders",
+        label: "归档订单",
+        icon: "archive",
+        group: "工作台",
+        to: "/archived-orders",
+    },
+    {
+        key: "permissions",
+        label: "用户与权限",
+        icon: "shield",
+        group: "工作台",
+        to: "/permissions",
+        children: [
+            { key: "permissions-accounts", label: "账号管理" },
+            { key: "permissions-roles", label: "角色与权限" },
+            { key: "permissions-matrix", label: "权限矩阵" },
+        ],
+    },
     {
         key: "orders",
         label: "销售订单",
@@ -40,29 +66,10 @@ export const MENU_CATALOG: MenuNode[] = [
         to: "/orders",
         labelByRole: { warehouse: "待发货订单" },
     },
-    {
-        key: "archived-orders",
-        label: "归档订单",
-        icon: "archive",
-        group: "业务导航",
-        to: "/archived-orders",
-    },
     { key: "customers", label: "客户档案", icon: "users", group: "业务导航", to: "/customers" },
     { key: "bom", label: "物料与 BOM", icon: "layers", group: "业务导航", to: "/bom" },
     { key: "inbound", label: "成品入库", icon: "inbound", group: "业务导航", to: "/inbound" },
     { key: "outbound", label: "成品出库", icon: "truck", group: "业务导航", to: "/outbound" },
-    {
-        key: "permissions",
-        label: "用户与权限",
-        icon: "shield",
-        group: "系统设置",
-        to: "/permissions",
-        children: [
-            { key: "permissions-accounts", label: "账号管理" },
-            { key: "permissions-roles", label: "角色与权限" },
-            { key: "permissions-matrix", label: "权限矩阵" },
-        ],
-    },
     {
         key: "changelog",
         label: "变更记录",
@@ -266,13 +273,15 @@ export interface NavItem {
 
 export interface NavSection {
     group: string;
+    /** 组图标（图标轨 / 水平菜单用，取自 NAV_GROUPS） */
+    icon: string;
     items: NavItem[];
 }
 
-/** 按角色 + 授权生成侧边栏导航（含仓管固定说明项「变更记录」） */
+/** 按角色 + 授权生成侧边栏二级导航（一级分组 + 二级页面，含仓管固定说明项「变更记录」） */
 export function buildNavSections(role: RoleId, grant: RoleGrant): NavSection[] {
     const sections: NavSection[] = [];
-    for (const group of ["业务导航", "系统设置"] as const) {
+    for (const { group, icon } of NAV_GROUPS) {
         const items: NavItem[] = [];
         for (const menu of MENU_CATALOG) {
             if (menu.group !== group) continue;
@@ -291,9 +300,14 @@ export function buildNavSections(role: RoleId, grant: RoleGrant): NavSection[] {
                 tag: menuTagFor(menu.key, grant),
             });
         }
-        if (items.length) sections.push({ group, items });
+        if (items.length) sections.push({ group, icon, items });
     }
     return sections;
+}
+
+/** 由当前路由反算激活的分组（图标轨高亮 / 双列子面板内容的单一真源） */
+export function findActiveGroup(sections: NavSection[], pathname: string): NavSection | undefined {
+    return sections.find(section => section.items.some(item => item.to && pathname.startsWith(item.to)));
 }
 
 /** 授权对比（before → after），用于变更日志明细 */

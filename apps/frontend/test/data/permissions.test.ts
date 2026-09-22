@@ -9,6 +9,7 @@ import {
     buildNavSections,
     can,
     diffGrants,
+    findActiveGroup,
     menuTagFor,
     menuVisible,
 } from "@/data/permissions";
@@ -122,17 +123,44 @@ describe("buildNavSections", () => {
         expect(all.some(item => item.label === "变更记录")).toBe(false);
     });
 
-    it("drops system group when permissions are invisible", () => {
-        expect(buildNavSections("admin", grantOf("admin")).map(section => section.group)).toEqual(["业务导航"]);
+    it("orders sections workbench-first and drops empty groups", () => {
         expect(buildNavSections("super", grantOf("super")).map(section => section.group)).toEqual([
+            "工作台",
             "业务导航",
-            "系统设置",
         ]);
+        // 管理员无「用户与权限」授权，但工作台组仍有工作台/归档订单两项
+        expect(buildNavSections("admin", grantOf("admin")).map(section => section.group)).toEqual([
+            "工作台",
+            "业务导航",
+        ]);
+        // 组内一项都没有时整组不出现
+        const ordersOnly: RoleGrant = { version: 1, menus: ["orders"], actions: {} };
+        expect(buildNavSections("admin", ordersOnly).map(section => section.group)).toEqual(["业务导航"]);
+    });
+
+    it("carries group icon for rail and horizontal menus", () => {
+        const sections = buildNavSections("super", grantOf("super"));
+        expect(sections.map(section => section.icon)).toEqual(["chart", "cube"]);
     });
 
     it("hides customer menu from warehouse nav", () => {
         const all = buildNavSections("warehouse", grantOf("warehouse")).flatMap(section => section.items);
         expect(all.some(item => item.to === "/customers")).toBe(false);
+    });
+});
+
+describe("findActiveGroup", () => {
+    const sections = buildNavSections("super", grantOf("super"));
+
+    it("resolves the group owning the current route by path prefix", () => {
+        expect(findActiveGroup(sections, "/workbench")?.group).toBe("工作台");
+        expect(findActiveGroup(sections, "/permissions")?.group).toBe("工作台");
+        expect(findActiveGroup(sections, "/orders/12345")?.group).toBe("业务导航");
+    });
+
+    it("returns undefined for routes outside the menu", () => {
+        expect(findActiveGroup(sections, "/search")).toBeUndefined();
+        expect(findActiveGroup(sections, "/login")).toBeUndefined();
     });
 });
 
