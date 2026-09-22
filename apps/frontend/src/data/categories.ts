@@ -63,7 +63,7 @@ const qtyGroup = (
     qty: true,
 });
 
-/* 多选数量分组：可选多项，每个选中项各带 1-99 数量（琴键开关静片） */
+/* 多选数量分组：可选多项，每个选中项各带 1-99 数量（琴键开关静片/动片） */
 const multiQtyGroup = (
     id: string,
     name: string,
@@ -519,7 +519,7 @@ export const BOM_CATEGORIES: CategoryDef[] = [
                 ["3737", "五键焊线静片"],
                 ["3738", "五键插线静片"],
             ]),
-            qtyGroup("2707", "动片", "moving-plate", null, [
+            multiQtyGroup("2707", "动片", "moving-plate", null, [
                 ["3739", "带点动片"],
                 ["3740", "不带点动片"],
                 ["3741", "辅助动片"],
