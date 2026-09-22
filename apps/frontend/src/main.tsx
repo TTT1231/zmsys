@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppProvider } from "./context/AppContext";
 import { PreferencesProvider } from "./context/PreferencesContext";
 import { ToastProvider } from "./components/ui/Toast";
+import { VersionCheck } from "./components/VersionCheck";
 import { router } from "./router";
 import "./index.css";
 
@@ -25,6 +26,9 @@ createRoot(document.getElementById("root")!).render(
                     </ToastProvider>
                 </PreferencesProvider>
             </AppProvider>
+            {/* 新版本检测放在会话树之外：后端不可达/会话校验阻塞时同样生效，
+                部署重启的窗口期用户仍能收到刷新提示 */}
+            <VersionCheck />
         </QueryClientProvider>
     </StrictMode>,
 );
