@@ -510,7 +510,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                 open={open}
                 onClose={onClose}
                 title="新建 BOM"
-                width={1040}
+                width={1180}
                 layout="workspace"
                 footer={
                     <>
@@ -532,7 +532,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                     </>
                 }
             >
-                <div className="flex min-h-0 flex-1 flex-col gap-4">
+                <div className="flex min-h-0 flex-1 flex-col gap-3">
                     <SelectField
                         label="产品品类"
                         required
@@ -610,9 +610,8 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                     )}
 
                     {category && (!category.childCategories?.length || childCategoryKey) && (
-                        <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:grid-rows-[minmax(0,1fr)]">
-                            {" "}
-                            <fieldset className="flex min-h-0 flex-col lg:overflow-hidden rounded-panel border border-line bg-surface">
+                        <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,5fr)_minmax(0,3fr)] lg:grid-rows-[minmax(0,1fr)]">
+                            <fieldset className="flex min-h-0 flex-col rounded-panel border border-line bg-surface lg:overflow-hidden">
                                 <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">可选物料</legend>
                                 <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-3">
                                     {/* 本品类物料（跌倒开关：跌倒盖/跌倒底/钢球/翘板） */}
@@ -672,13 +671,18 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                     )}
                                 </div>
                             </fieldset>
-                            <fieldset className="flex min-h-0 flex-col lg:overflow-hidden rounded-panel border border-line bg-panel/40">
+                            <fieldset className="flex min-h-0 flex-col rounded-panel border border-line bg-panel/40 lg:overflow-hidden">
                                 <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">
                                     已选物料（{selectedRows.length}）
                                 </legend>
-                                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
+                                <div
+                                    className={cn(
+                                        "min-h-0 flex-1 overflow-y-auto overscroll-contain p-3",
+                                        selectedRows.length === 0 && "grid place-items-center",
+                                    )}
+                                >
                                     {selectedRows.length === 0 ? (
-                                        <p className="py-6 text-center text-12.5 text-subtle">从左侧勾选物料</p>
+                                        <p className="text-center text-12.5 text-subtle">从左侧勾选物料</p>
                                     ) : (
                                         <div className="space-y-2.5">
                                             {selectedSections.map(section => (
@@ -720,15 +724,15 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
 
                     <fieldset className="shrink-0 rounded-panel border border-line bg-panel/40">
                         <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">备注</legend>
-                        <div className="p-3">
+                        <div className="p-2">
                             <textarea
                                 value={remark}
                                 onChange={event => setRemark(event.target.value)}
-                                rows={remark ? 3 : 2}
+                                rows={1}
                                 maxLength={500}
                                 aria-label="BOM 备注"
                                 placeholder="如：杆子白色。最多500字！！"
-                                className="min-h-16 w-full resize-y rounded-input border border-line-strong bg-surface px-3 py-2 text-13 leading-6 text-td outline-none transition placeholder:text-subtle focus:border-primary"
+                                className="min-h-10 w-full resize-y rounded-input border border-line-strong bg-surface px-3 py-1.5 text-13 leading-5 text-td outline-none transition placeholder:text-subtle focus:border-primary"
                             />
                         </div>
                     </fieldset>
