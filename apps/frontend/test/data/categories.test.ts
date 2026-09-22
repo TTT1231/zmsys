@@ -277,7 +277,7 @@ describe("琴键开关目录", () => {
             ["动片", true, true],
             ["弹簧规格", false, false],
         ]);
-        expect(piano.groups.flatMap(node => node.items)).toHaveLength(46);
+        expect(piano.groups.flatMap(node => node.items)).toHaveLength(47);
         const itemsOf = (groupName: string) =>
             piano.groups.find(node => node.name === groupName)!.items.map(item => item.name);
         expect(itemsOf("琴键底")).toEqual([
@@ -299,6 +299,15 @@ describe("琴键开关目录", () => {
             "四键插线静片",
             "五键焊线静片",
             "五键插线静片",
+        ]);
+        expect(itemsOf("动片")).toEqual([
+            "带点动片",
+            "不带点动片",
+            "辅助动片",
+            "四键焊线动片",
+            "四键插线动片",
+            "五键焊线动片",
+            "五键插线动片",
         ]);
         expect(itemsOf("弹簧规格")).toEqual(["0.3", "0.35"]);
     });
