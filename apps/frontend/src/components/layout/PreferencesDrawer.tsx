@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { Modal } from "@/components/ui/Modal";
+import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 import { Switch } from "@/components/ui/Switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
     DEFAULT_PREFERENCES,
     FONT_MAX,
@@ -10,9 +12,38 @@ import {
     type ThemeMode,
     type ThemePreset,
 } from "@/context/usePreferences";
+import {
+    HeaderMixedNavIcon,
+    HeaderNavIcon,
+    HeaderSidebarNavIcon,
+    MixedNavIcon,
+    SidebarMixedNavIcon,
+    SidebarNavIcon,
+} from "./LayoutIcons";
+import type { LayoutMode } from "@/context/usePreferences";
 
-/* 偏好设置抽屉（vben 式）：主题模式 / 内置主题 / 字体大小 / 色弱 / 灰色。
+/* 偏好设置抽屉（vben 式）：外观（主题/内置主题/字号/其它）与布局（6 种布局模式）两个 tab。
    复用 Modal 的 detail 布局（右侧全高抽屉，自带焦点陷阱与 Esc 关闭） */
+
+/* 布局选项清单：中文名与提示语沿用 vben zh-CN 文案 */
+const LAYOUT_PRESETS: Array<{
+    mode: LayoutMode;
+    label: string;
+    tip: string;
+    Icon: (props: { className?: string }) => React.ReactNode;
+}> = [
+    { mode: "sidebar-nav", label: "垂直", tip: "侧边垂直菜单模式", Icon: SidebarNavIcon },
+    { mode: "sidebar-mixed-nav", label: "双列菜单", tip: "垂直双列菜单模式", Icon: SidebarMixedNavIcon },
+    { mode: "header-nav", label: "水平", tip: "水平菜单模式，菜单全部显示在顶部", Icon: HeaderNavIcon },
+    { mode: "header-sidebar-nav", label: "侧边导航", tip: "顶部通栏，侧边导航模式", Icon: HeaderSidebarNavIcon },
+    { mode: "mixed-nav", label: "混合垂直", tip: "垂直水平菜单共存", Icon: MixedNavIcon },
+    { mode: "header-mixed-nav", label: "混合双列", tip: "双列、水平菜单共存模式", Icon: HeaderMixedNavIcon },
+];
+
+const PREF_TABS = [
+    { value: "appearance", label: "外观" },
+    { value: "layout", label: "布局" },
+];
 
 const THEME_MODES: Array<{ value: ThemeMode; label: string; icon: string }> = [
     { value: "light", label: "浅色", icon: "sun" },
@@ -108,7 +139,9 @@ function FontSizeField() {
 }
 
 export function PreferencesDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
-    const { preferences, setThemeMode, setThemePreset, setColorWeakMode, setColorGrayMode, reset } = usePreferences();
+    const { preferences, setThemeMode, setThemePreset, setLayout, setColorWeakMode, setColorGrayMode, reset } =
+        usePreferences();
+    const [activeTab, setActiveTab] = useState("appearance");
     const modified = JSON.stringify(preferences) !== JSON.stringify(DEFAULT_PREFERENCES);
 
     return (
@@ -131,56 +164,93 @@ export function PreferencesDrawer({ open, onClose }: { open: boolean; onClose: (
                 </button>
             }
         >
-            <Block title="主题">
-                <div className="grid grid-cols-3 gap-2">
-                    {THEME_MODES.map(mode => (
-                        <button
-                            key={mode.value}
-                            type="button"
-                            aria-pressed={preferences.themeMode === mode.value}
-                            onClick={() => setThemeMode(mode.value)}
-                            className="flex flex-col cursor-pointer"
-                        >
-                            <span className={optionBox(preferences.themeMode === mode.value)}>
-                                <Icon name={mode.icon} size={20} className="text-ink" />
-                            </span>
-                            <span className="mt-2 text-center text-12 text-muted">{mode.label}</span>
-                        </button>
-                    ))}
-                </div>
-            </Block>
+            <SegmentedTabs tabs={PREF_TABS} value={activeTab} onChange={setActiveTab} className="mb-1" />
 
-            <Block title="内置主题">
-                <div className="grid grid-cols-4 gap-2">
-                    {THEME_PRESETS.map(preset => (
-                        <button
-                            key={preset.value}
-                            type="button"
-                            aria-pressed={preferences.themePreset === preset.value}
-                            onClick={() => setThemePreset(preset.value)}
-                            className="flex flex-col cursor-pointer"
-                        >
-                            <span className={optionBox(preferences.themePreset === preset.value)}>
-                                <span className="size-5 rounded-md" style={{ backgroundColor: preset.color }} />
-                            </span>
-                            <span className="mt-2 truncate text-center text-12 text-muted">{preset.label}</span>
-                        </button>
-                    ))}
-                </div>
-            </Block>
+            {activeTab === "appearance" ? (
+                <>
+                    <Block title="主题">
+                        <div className="grid grid-cols-3 gap-2">
+                            {THEME_MODES.map(mode => (
+                                <button
+                                    key={mode.value}
+                                    type="button"
+                                    aria-pressed={preferences.themeMode === mode.value}
+                                    onClick={() => setThemeMode(mode.value)}
+                                    className="flex flex-col cursor-pointer"
+                                >
+                                    <span className={optionBox(preferences.themeMode === mode.value)}>
+                                        <Icon name={mode.icon} size={20} className="text-ink" />
+                                    </span>
+                                    <span className="mt-2 text-center text-12 text-muted">{mode.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </Block>
 
-            <Block title="字体大小">
-                <FontSizeField />
-            </Block>
+                    <Block title="内置主题">
+                        <div className="grid grid-cols-4 gap-2">
+                            {THEME_PRESETS.map(preset => (
+                                <button
+                                    key={preset.value}
+                                    type="button"
+                                    aria-pressed={preferences.themePreset === preset.value}
+                                    onClick={() => setThemePreset(preset.value)}
+                                    className="flex flex-col cursor-pointer"
+                                >
+                                    <span className={optionBox(preferences.themePreset === preset.value)}>
+                                        <span className="size-5 rounded-md" style={{ backgroundColor: preset.color }} />
+                                    </span>
+                                    <span className="mt-2 truncate text-center text-12 text-muted">{preset.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </Block>
 
-            <Block title="其它">
-                <Switch checked={preferences.colorWeakMode} onCheckedChange={setColorWeakMode}>
-                    色弱模式
-                </Switch>
-                <Switch checked={preferences.colorGrayMode} onCheckedChange={setColorGrayMode}>
-                    灰色模式
-                </Switch>
-            </Block>
+                    <Block title="字体大小">
+                        <FontSizeField />
+                    </Block>
+
+                    <Block title="其它">
+                        <Switch checked={preferences.colorWeakMode} onCheckedChange={setColorWeakMode}>
+                            色弱模式
+                        </Switch>
+                        <Switch checked={preferences.colorGrayMode} onCheckedChange={setColorGrayMode}>
+                            灰色模式
+                        </Switch>
+                    </Block>
+                </>
+            ) : (
+                <Block title="布局">
+                    <TooltipProvider delayDuration={250}>
+                        <div className="grid grid-cols-2 gap-3">
+                            {LAYOUT_PRESETS.map(({ mode, label, tip, Icon: LayoutIcon }) => (
+                                <Tooltip key={mode}>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            type="button"
+                                            aria-pressed={preferences.layout === mode}
+                                            onClick={() => setLayout(mode)}
+                                            className="flex flex-col cursor-pointer"
+                                        >
+                                            <span
+                                                className={`flex h-auto w-full items-center justify-center overflow-hidden rounded-md p-1 transition-all ${
+                                                    preferences.layout === mode
+                                                        ? "ring-2 ring-primary"
+                                                        : "ring-1 ring-line hover:ring-primary/50"
+                                                }`}
+                                            >
+                                                <LayoutIcon className="h-auto w-full" />
+                                            </span>
+                                            <span className="mt-2 text-center text-12 text-muted">{label}</span>
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{tip}</TooltipContent>
+                                </Tooltip>
+                            ))}
+                        </div>
+                    </TooltipProvider>
+                </Block>
+            )}
         </Modal>
     );
 }

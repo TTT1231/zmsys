@@ -2,8 +2,10 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 import { ROLE_META, useApp, type Role } from "@/context/useApp";
 import { ContentMaximizeContext } from "@/context/useContentMaximize";
+import { usePreferences } from "@/context/usePreferences";
 import { MENU_CATALOG, menuLabelFor } from "@/data/permissions";
 import { MobileBottomNav, Sidebar, Topbar } from "@/components/layout/Shell";
+import { useLayoutFlags } from "@/components/layout/useLayoutFlags";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { GlobalWatermark } from "@/components/ui/Watermark";
 import { AppContentErrorBoundary, ErrorPage } from "@/pages/error/ErrorPage";
@@ -16,10 +18,14 @@ function resolveTitle(pathname: string, role: Role) {
     return menu ? menuLabelFor(menu, role) : "页面不存在";
 }
 
-/* 登录后各页面的共享外壳：标题同步、认证/菜单守卫、侧边栏 + 内容区 + 移动端导航 */
+/* 登录后各页面的共享外壳：标题同步、认证/菜单守卫、侧边栏 + 内容区 + 移动端导航。
+   按布局偏好渲染两种骨架（vben 式）：A 侧栏全高 + 顶栏在内容列；B 通栏顶栏 + 侧栏在下方 */
 export function AppLayout() {
     const location = useLocation();
     const { status, role, grant, user } = useApp();
+    const { preferences } = usePreferences();
+    const { sidebarForm, headerFull, headerMenu } = useLayoutFlags();
+    const showSidebar = sidebarForm !== "none";
     // 抽屉只在打开它的那个路由上可见，路由一变自动收起（兜底重定向/浏览器回退等非点击导航）
     const [drawerPath, setDrawerPath] = useState<string | null>(null);
     const [collapsed, setCollapsed] = useState(false);
@@ -41,6 +47,12 @@ export function AppLayout() {
         document.addEventListener("keydown", onKeyDown);
         return () => document.removeEventListener("keydown", onKeyDown);
     }, [maximized]);
+
+    // 切换布局模式时重置折叠态：不同形态对 collapsed 的语义不同（树形/面板收起 vs 双列收子栏）。
+    // 依赖用布局枚举而非 sidebarForm：垂直↔侧边导航同属 tree 形态，形态不变也要回到展开态
+    useEffect(() => {
+        setCollapsed(false);
+    }, [preferences.layout]);
 
     // 首屏(含登录后首次进入)不播页面进入动画,避免拖慢首次内容感知;此后路由切换播放
     const firstRender = useRef(true);
@@ -66,58 +78,84 @@ export function AppLayout() {
     if (status === "guest") return <Navigate to="/login" replace />;
     if (status === "loading") return <PageLoading routeLevel className="min-h-dvh bg-canvas" />;
 
+    const sidebarProps = {
+        collapsed,
+        open: drawerPath === location.pathname,
+        onClose: () => setDrawerPath(null),
+        maximized,
+    };
+    const topbarProps = {
+        title,
+        group: breadcrumbMenu?.group,
+        icon: breadcrumbMenu?.icon ?? (location.pathname.startsWith("/search") ? "search" : "info"),
+        routeKey: location.pathname,
+        collapsed,
+        onToggleCollapse: () => setCollapsed(value => !value),
+        onOpenDrawer: () => setDrawerPath(location.pathname),
+        maximized,
+    };
+
+    /* 内容区：两骨架共用 */
+    const mainElement = (
+        <main
+            id="mainContent"
+            className={
+                maximized
+                    ? "mx-auto flex w-full min-w-0 flex-1 flex-col overflow-hidden p-3 transition-[padding] duration-300 lg:p-4"
+                    : "mx-auto w-full min-w-0 flex-1 px-[clamp(16px,2vw,32px)] pt-6 pb-[calc(76px+env(safe-area-inset-bottom))] transition-[padding] duration-300 lg:pb-8"
+            }
+        >
+            {accessDenied ? (
+                <ErrorPage kind="forbidden" />
+            ) : (
+                <AppContentErrorBoundary>
+                    <Suspense fallback={<PageLoading routeLevel />}>
+                        {/* key 只用 pathname(不含 search):改筛选参数不重播进入动画 */}
+                        <div key={location.pathname} className={firstRender.current ? "" : "animate-page-enter"}>
+                            <Outlet />
+                        </div>
+                    </Suspense>
+                </AppContentErrorBoundary>
+            )}
+        </main>
+    );
+
     return (
         <ContentMaximizeContext.Provider value={{ maximized, toggle: toggleMaximize }}>
-            <div
-                className={maximized ? "flex h-dvh overflow-hidden" : "flex min-h-dvh"}
-                data-maximized={maximized || undefined}
-            >
-                {/* 侧边栏/顶栏最大化时收起但不卸载，宽度/高度过渡产生收起动画 */}
-                <Sidebar
-                    collapsed={collapsed}
-                    open={drawerPath === location.pathname}
-                    onClose={() => setDrawerPath(null)}
-                    maximized={maximized}
-                />
-                <div className="flex min-w-0 flex-1 flex-col">
+            {headerFull ? (
+                // 骨架 B：通栏顶栏（水平 / 侧边导航 / 混合垂直 / 混合双列），侧栏从顶栏下方开始。
+                // Sidebar 始终渲染：水平模式仅桌面隐藏（lg:hidden），移动端抽屉仍由它承载
+                <div
+                    className={maximized ? "flex h-dvh flex-col overflow-hidden" : "flex min-h-dvh flex-col"}
+                    data-maximized={maximized || undefined}
+                >
                     <Topbar
-                        title={title}
-                        group={breadcrumbMenu?.group}
-                        icon={breadcrumbMenu?.icon ?? (location.pathname.startsWith("/search") ? "search" : "info")}
-                        routeKey={location.pathname}
-                        collapsed={collapsed}
-                        onToggleCollapse={() => setCollapsed(value => !value)}
-                        onOpenDrawer={() => setDrawerPath(location.pathname)}
-                        maximized={maximized}
+                        variant="full"
+                        showMenu={headerMenu}
+                        showCollapse={showSidebar}
+                        showBrand={sidebarForm !== "mixed"}
+                        {...topbarProps}
                     />
-                    <main
-                        id="mainContent"
-                        className={
-                            maximized
-                                ? "mx-auto flex w-full min-w-0 flex-1 flex-col overflow-hidden p-3 transition-[padding] duration-300 lg:p-4"
-                                : "mx-auto w-full min-w-0 flex-1 px-[clamp(16px,2vw,32px)] pt-6 pb-[calc(76px+env(safe-area-inset-bottom))] transition-[padding] duration-300 lg:pb-8"
-                        }
-                    >
-                        {accessDenied ? (
-                            <ErrorPage kind="forbidden" />
-                        ) : (
-                            <AppContentErrorBoundary>
-                                <Suspense fallback={<PageLoading routeLevel />}>
-                                    {/* key 只用 pathname(不含 search):改筛选参数不重播进入动画 */}
-                                    <div
-                                        key={location.pathname}
-                                        className={firstRender.current ? "" : "animate-page-enter"}
-                                    >
-                                        <Outlet />
-                                    </div>
-                                </Suspense>
-                            </AppContentErrorBoundary>
-                        )}
-                    </main>
+                    <div className="flex min-w-0 flex-1">
+                        <Sidebar form={sidebarForm} belowHeader {...sidebarProps} />
+                        {mainElement}
+                    </div>
                 </div>
-                {!maximized && <MobileBottomNav onOpenDrawer={() => setDrawerPath(location.pathname)} />}
-                {user && <GlobalWatermark text={user.name} />}
-            </div>
+            ) : (
+                // 骨架 A（现状）：侧栏全高，顶栏只在内容区上方
+                <div
+                    className={maximized ? "flex h-dvh overflow-hidden" : "flex min-h-dvh"}
+                    data-maximized={maximized || undefined}
+                >
+                    <Sidebar form={sidebarForm} {...sidebarProps} />
+                    <div className="flex min-w-0 flex-1 flex-col">
+                        <Topbar {...topbarProps} />
+                        {mainElement}
+                    </div>
+                </div>
+            )}
+            {!maximized && <MobileBottomNav onOpenDrawer={() => setDrawerPath(location.pathname)} />}
+            {user && <GlobalWatermark text={user.name} />}
         </ContentMaximizeContext.Provider>
     );
 }

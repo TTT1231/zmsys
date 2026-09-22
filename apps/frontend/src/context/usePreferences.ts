@@ -6,11 +6,31 @@ import { createContext, useContext } from "react";
 export type ThemeMode = "light" | "dark" | "auto";
 export type ThemePreset = "default" | "green" | "deep-green" | "orange";
 
+/** 布局模式（vben LayoutType 子集）：仅桌面端生效，移动端固定抽屉导航 */
+export type LayoutMode =
+    | "sidebar-nav"
+    | "sidebar-mixed-nav"
+    | "header-nav"
+    | "header-sidebar-nav"
+    | "mixed-nav"
+    | "header-mixed-nav";
+
+export const LAYOUT_MODES: readonly LayoutMode[] = [
+    "sidebar-nav",
+    "sidebar-mixed-nav",
+    "header-nav",
+    "header-sidebar-nav",
+    "mixed-nav",
+    "header-mixed-nav",
+];
+
 export interface Preferences {
     /** 浅色 / 深色 / 跟随系统 */
     themeMode: ThemeMode;
     /** 内置主题：切换 --color-primary 系列设计令牌 */
     themePreset: ThemePreset;
+    /** 布局模式：垂直 / 双列菜单 / 水平 / 侧边导航 / 混合垂直 / 混合双列 */
+    layout: LayoutMode;
     /** 全局根字号 px（设计基准 14px，12–18） */
     fontSize: number;
     /** 色弱模式（html.invert-mode 滤镜） */
@@ -27,6 +47,7 @@ export const FONT_MAX = 18;
 export const DEFAULT_PREFERENCES: Preferences = {
     themeMode: "light",
     themePreset: "default",
+    layout: "sidebar-nav",
     fontSize: FONT_BASE,
     colorWeakMode: false,
     colorGrayMode: false,
@@ -56,6 +77,9 @@ function loadPreferences(): Preferences {
             themePreset: THEME_PRESETS.includes(record.themePreset as ThemePreset)
                 ? (record.themePreset as ThemePreset)
                 : DEFAULT_PREFERENCES.themePreset,
+            layout: LAYOUT_MODES.includes(record.layout as LayoutMode)
+                ? (record.layout as LayoutMode)
+                : DEFAULT_PREFERENCES.layout,
             fontSize: clampFontSize(record.fontSize),
             colorWeakMode: record.colorWeakMode === true,
             colorGrayMode: record.colorGrayMode === true,
@@ -103,6 +127,7 @@ interface PreferencesContextValue {
     isDark: boolean;
     setThemeMode: (mode: ThemeMode) => void;
     setThemePreset: (preset: ThemePreset) => void;
+    setLayout: (mode: LayoutMode) => void;
     /** 支持函数式增量（同一帧连点不丢步），入口处钳制到 12–18 */
     setFontSize: (size: number | ((prev: number) => number)) => void;
     setColorWeakMode: (enabled: boolean) => void;
