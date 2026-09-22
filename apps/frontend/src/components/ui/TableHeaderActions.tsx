@@ -18,7 +18,6 @@ export function TableHeaderActions({ children, className = "" }: TableHeaderActi
                 type="button"
                 aria-label={maximized ? "退出表格最大化" : "最大化表格"}
                 aria-pressed={maximized}
-                title={maximized ? "退出表格最大化（Esc）" : "最大化表格"}
                 onClick={toggle}
                 className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-btn border border-line bg-surface text-muted transition hover:bg-soft hover:text-ink active:scale-90 lg:flex"
             >

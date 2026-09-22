@@ -13,6 +13,7 @@ import {
     type Ref,
 } from "react";
 import { useApp } from "@/context/useApp";
+import { useContentMaximize } from "@/context/useContentMaximize";
 import { Icon } from "@/lib/icons";
 import { Modal } from "./Modal";
 import { SortTh } from "./SortTh";
@@ -98,6 +99,10 @@ function TableView({
 }: DataTableProps & { storageKey: string }) {
     const bodyRef = useRef<HTMLDivElement>(null);
     const [viewport, setViewport] = useState(0);
+    const { maximized } = useContentMaximize();
+    // 翻到尾页只剩几行时卡片高度塌陷、分页条猛地上跳；记住本会话见过的满页表高，
+    // 短页用最小高度兜底，翻页时高度保持稳定。
+    const [minBodyHeight, setMinBodyHeight] = useState(0);
     const [preferences, setPreferences] = useState(() => readPreferences(storageKey));
     const [settings, setSettings] = useState(false);
     const [activeColumn, setActiveColumn] = useState<string | null>(null);
@@ -161,6 +166,17 @@ function TableView({
             window.removeEventListener("resize", measure);
         };
     }, []);
+    // 最大化时高度由视口撑起而非内容，不参与记忆，避免退出后短页残留整屏高度。
+    useLayoutEffect(() => {
+        const element = bodyRef.current;
+        if (!element || maximized) return;
+        const height = element.scrollHeight;
+        if (height > 0) setMinBodyHeight(current => (height > current ? height : current));
+    });
+    // 密度换挡后行高整体变化，重记基准高度，避免紧凑档残留宽松档的大段空白。
+    useEffect(() => {
+        setMinBodyHeight(0);
+    }, [preferences.density]);
     useEffect(() => {
         try {
             localStorage.removeItem(storageKey.replace(":v2:", ":v1:"));
@@ -223,7 +239,11 @@ function TableView({
                     </button>
                 </div>
             </div>
-            <div ref={bodyRef} className={`managed-table-body overflow-x-auto ${scrollClassName}`}>
+            <div
+                ref={bodyRef}
+                className={`managed-table-body overflow-x-auto ${scrollClassName}`}
+                style={{ minHeight: maximized || !minBodyHeight ? undefined : minBodyHeight }}
+            >
                 <table
                     className="data-table table-fixed border-separate border-spacing-0"
                     style={{ width: totalWidth + fillWidth }}
@@ -322,7 +342,8 @@ function TableView({
                                     key: column.label,
                                     "data-pinned": pinned(column.index),
                                     "aria-label": column.label,
-                                    className: `${column.header.props.className ?? ""} managed-th ${activeColumn === column.label ? "column-highlight" : ""} ${column.header.type !== SortTh && !column.header.props.className?.includes("text-right") ? "text-left" : ""}`,
+                                    // 页面已写对齐类（left/center/right）时不再补默认左对齐，避免两类冲突
+                                    className: `${column.header.props.className ?? ""} managed-th ${activeColumn === column.label ? "column-highlight" : ""} ${column.header.type !== SortTh && !column.header.props.className?.match(/text-(left|center|right)/) ? "text-left" : ""}`,
                                     style: undefined,
                                     width: undefined,
                                 };

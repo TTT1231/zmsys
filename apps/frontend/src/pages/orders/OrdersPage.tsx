@@ -1042,7 +1042,6 @@ export function OrdersPage() {
                                     </th>
                                     <SortTh
                                         label="订单数量"
-                                        align="right"
                                         active={sort.key === "qty"}
                                         dir={sort.dir}
                                         onSort={() => applySort("qty")}
@@ -1069,7 +1068,7 @@ export function OrdersPage() {
                                         状态
                                     </th>
                                     <th
-                                        className="min-w-28 px-5 py-2.5 text-right font-semibold"
+                                        className="min-w-28 px-5 py-2.5 text-center font-semibold"
                                         style={{ width: "8%" }}
                                     >
                                         操作
@@ -1114,7 +1113,7 @@ export function OrdersPage() {
                                                     bomCode={order.bomCode}
                                                 />
                                             </td>
-                                            <td className="px-3 py-4 text-right">
+                                            <td className="px-3 py-4">
                                                 <QtyCell value={order.qty} />
                                             </td>
                                             <td className="px-3 py-4">
@@ -1150,7 +1149,7 @@ export function OrdersPage() {
                                             <td className="px-3 py-4">
                                                 <StatusBadge status={status.key} label={status.label} />
                                             </td>
-                                            <td className="min-w-28 px-5 py-4 text-right whitespace-nowrap">
+                                            <td className="min-w-28 px-5 py-4 text-center whitespace-nowrap">
                                                 <TableLink onClick={() => setDetail(order)}>查看详情</TableLink>
                                             </td>
                                         </tr>

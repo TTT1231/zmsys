@@ -714,7 +714,6 @@ export function InboundPage() {
                                     <th className="px-3 py-2.5 font-semibold">BOM 备注</th>
                                     <SortTh
                                         label="入库数量（个）"
-                                        align="right"
                                         active={sort.key === "qty"}
                                         dir={sort.dir}
                                         onSort={() => applySort("qty")}
@@ -728,7 +727,7 @@ export function InboundPage() {
                                         className="px-3"
                                     />
                                     <th className="px-3 py-2.5 font-semibold">检验登记人</th>
-                                    <th className="px-5 py-2.5 text-right font-semibold">操作</th>
+                                    <th className="px-5 py-2.5 text-center font-semibold">操作</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -756,12 +755,12 @@ export function InboundPage() {
                                             <td className="px-3 py-3 text-12.5 leading-5 text-td">
                                                 <BomRemarkText remark={bom?.remark} />
                                             </td>
-                                            <td className="px-3 py-3 text-right">
+                                            <td className="px-3 py-3">
                                                 <QtyCell value={row.qty} />
                                             </td>
                                             <td className="px-3 py-3 tnum text-13 text-td">{row.date}</td>
                                             <td className="px-3 py-3 text-13 text-td">{row.inspector}</td>
-                                            <td className="px-5 py-3 text-right">
+                                            <td className="px-5 py-3 text-center">
                                                 <button
                                                     type="button"
                                                     onClick={() => setVoucher(row)}

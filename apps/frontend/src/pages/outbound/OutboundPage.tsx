@@ -923,7 +923,6 @@ export function OutboundPage() {
                                     />
                                     <SortTh
                                         label="发货数量（个）"
-                                        align="right"
                                         active={sort.key === "qty"}
                                         dir={sort.dir}
                                         onSort={() => applySort("qty")}
@@ -938,7 +937,7 @@ export function OutboundPage() {
                                     />
                                     <th className="px-3 py-2.5 text-13 font-semibold">操作人</th>
                                     <th className="px-3 py-2.5 font-semibold">状态</th>
-                                    <th className="px-5 py-2.5 text-right font-semibold">操作</th>
+                                    <th className="px-5 py-2.5 text-center font-semibold">操作</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -979,7 +978,7 @@ export function OutboundPage() {
                                                 bomCode={row.bomCode}
                                             />
                                         </td>
-                                        <td className="px-3 py-3 text-right">
+                                        <td className="px-3 py-3">
                                             <QtyCell value={row.qty} />
                                         </td>
                                         <td className="px-3 py-3 tnum text-13 text-td">{row.date}</td>
@@ -993,7 +992,7 @@ export function OutboundPage() {
                                                 <Badge tone="pending">已登记</Badge>
                                             )}
                                         </td>
-                                        <td className="px-5 py-3 text-right">
+                                        <td className="px-5 py-3 text-center">
                                             <button
                                                 type="button"
                                                 onClick={() => setDetail(row)}

@@ -1017,7 +1017,7 @@ export function BomPage() {
                         >
                             <thead>
                                 <tr className="text-left text-12 text-muted">
-                                    <th className="px-5 py-2.5 text-right font-semibold" style={{ width: "6%" }}>
+                                    <th className="px-5 py-2.5 font-semibold" style={{ width: "6%" }}>
                                         序号
                                     </th>
                                     <SortTh
@@ -1039,7 +1039,7 @@ export function BomPage() {
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "16%" }}>
                                         备注
                                     </th>
-                                    <th className="px-5 py-2.5 text-right font-semibold" style={{ width: "10%" }}>
+                                    <th className="px-5 py-2.5 text-center font-semibold" style={{ width: "10%" }}>
                                         操作
                                     </th>
                                 </tr>
@@ -1057,7 +1057,7 @@ export function BomPage() {
                                         key={bom.code}
                                         className="border-t border-line align-top transition hover:bg-row-hover"
                                     >
-                                        <td className="px-5 py-3 tnum text-right text-13 text-muted">
+                                        <td className="px-5 py-3 tnum text-13 text-muted">
                                             {(page - 1) * pageSize + index + 1}
                                         </td>
                                         <td className="px-3 py-3">
@@ -1086,7 +1086,7 @@ export function BomPage() {
                                                 {bom.remark || "—"}
                                             </span>
                                         </td>
-                                        <td className="px-5 py-3 text-right">
+                                        <td className="px-5 py-3 text-center">
                                             <TableLink onClick={() => setDetail(bom)}>查看详情</TableLink>
                                         </td>
                                     </tr>

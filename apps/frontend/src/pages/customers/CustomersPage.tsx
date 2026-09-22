@@ -602,7 +602,6 @@ export function CustomersPage() {
                                     <th className="px-3 py-2.5 font-semibold">所在地</th>
                                     <SortTh
                                         label="累计订单"
-                                        align="right"
                                         active={sort.key === "orderCount"}
                                         dir={sort.dir}
                                         onSort={() => applySort("orderCount")}
@@ -610,7 +609,6 @@ export function CustomersPage() {
                                     />
                                     <SortTh
                                         label="待交数量"
-                                        align="right"
                                         active={sort.key === "pendingQty"}
                                         dir={sort.dir}
                                         onSort={() => applySort("pendingQty")}
@@ -624,7 +622,7 @@ export function CustomersPage() {
                                         className="px-3"
                                     />
                                     <th className="px-3 py-2.5 font-semibold">合作状态</th>
-                                    <th className="px-5 py-2.5 text-right font-semibold">操作</th>
+                                    <th className="px-5 py-2.5 text-center font-semibold">操作</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -670,8 +668,8 @@ export function CustomersPage() {
                                                 )}
                                             </span>
                                         </td>
-                                        <td className="px-3 py-3 tnum text-right text-13 text-td">{row.orderCount}</td>
-                                        <td className="px-3 py-3 tnum text-right text-13">
+                                        <td className="px-3 py-3 tnum text-13 text-td">{row.orderCount}</td>
+                                        <td className="px-3 py-3 tnum text-13">
                                             <span
                                                 className={row.pendingQty > 0 ? "font-medium text-ink" : "text-subtle"}
                                             >
@@ -684,7 +682,7 @@ export function CustomersPage() {
                                                 {row.customer.cooperation}
                                             </Badge>
                                         </td>
-                                        <td className="px-5 py-3 text-right">
+                                        <td className="px-5 py-3 text-center">
                                             <TableLink onClick={() => setDetail(row.customer)}>查看档案</TableLink>
                                         </td>
                                     </tr>
