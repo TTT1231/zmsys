@@ -19,6 +19,9 @@ const queryClient = new QueryClient({
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
         <QueryClientProvider client={queryClient}>
+            {/* 版本检测：挂在会话树外（后端不可达时同样生效），且必须位于应用树之前——
+                横幅留在文档流顶部才能推下整个应用并在滚动时吸顶 */}
+            <VersionCheck />
             <AppProvider>
                 <PreferencesProvider>
                     <ToastProvider>
@@ -26,9 +29,6 @@ createRoot(document.getElementById("root")!).render(
                     </ToastProvider>
                 </PreferencesProvider>
             </AppProvider>
-            {/* 新版本检测放在会话树之外：后端不可达/会话校验阻塞时同样生效，
-                部署重启的窗口期用户仍能收到刷新提示 */}
-            <VersionCheck />
         </QueryClientProvider>
     </StrictMode>,
 );
