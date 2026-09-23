@@ -133,7 +133,10 @@ function TableView({
               ? 150
               : /日期|数量/.test(label)
                 ? 120
-                : 100;
+                : /备注/.test(label)
+                  ? // 备注列两行内容（客户格备注行/警示备注），压缩下限高于普通列，避免窄屏压扁不可读
+                    140
+                  : 100;
         return {
             header,
             index,

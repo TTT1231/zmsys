@@ -144,7 +144,8 @@ it("操作列固定，旧偏好中的极窄操作列不会恢复，也没有拖�
 
 it("全部可调列锁定后以表格内弹性区铺满，操作列保持最右", () => {
     const callbacks = stubResizeObserver();
-    localStorage.setItem("zm-table:v2:user-a:test", JSON.stringify({ widths: { 编号: 150, 数量: 120, 备注: 100 } }));
+    // 备注列硬下限 140（两行内容列），保存值低于下限时渲染时顶到下限
+    localStorage.setItem("zm-table:v2:user-a:test", JSON.stringify({ widths: { 编号: 150, 数量: 120, 备注: 140 } }));
     const view = render(<Table />);
     const body = view.container.querySelector(".managed-table-body")!;
     Object.defineProperty(body, "clientWidth", { configurable: true, get: () => 900 });
@@ -152,7 +153,7 @@ it("全部可调列锁定后以表格内弹性区铺满，操作列保持最右"
 
     const table = screen.getByRole("table");
     expect(table).toHaveStyle({ width: "900px" });
-    expect(table.querySelector("col[data-table-fill]")).toHaveStyle({ width: "410px" });
+    expect(table.querySelector("col[data-table-fill]")).toHaveStyle({ width: "370px" });
     const operationHeader = screen.getByRole("columnheader", { name: "操作" });
     expect(operationHeader.previousElementSibling).toHaveAttribute("data-table-fill");
     expect(screen.getAllByRole("columnheader")).toHaveLength(4);

@@ -46,10 +46,7 @@ export function CustomerCell({
                 </div>
             )}
             {remarkText && (
-                <div
-                    className="remark-sub-note mt-1 truncate border-t border-dashed border-line pt-0.5 text-12 text-td"
-                    title={remarkText}
-                >
+                <div className="remark-sub-note mt-0.5 truncate text-12 text-td" title={remarkText}>
                     {remarkText}
                 </div>
             )}

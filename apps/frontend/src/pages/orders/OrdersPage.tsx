@@ -1024,7 +1024,7 @@ export function OrdersPage() {
                     ) : (
                         <DataTable
                             tableId="orders"
-                            defaultWidths={[154, 230, 100, 452, 150, 100, 120, 140, 100, 100]}
+                            defaultWidths={[154, 260, 100, 422, 150, 100, 120, 140, 100, 100]}
                             recordCount={filtered.length}
                             identityColumn={0}
                             scrollRef={tableScrollRef}
