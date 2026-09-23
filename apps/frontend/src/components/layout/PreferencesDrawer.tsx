@@ -68,7 +68,7 @@ const optionBox = (active: boolean) =>
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
     return (
         <section className="flex flex-col py-4">
-            <h3 className="mb-3 text-13 font-semibold tracking-tight text-ink">{title}</h3>
+            <h3 className="mb-3 text-14 font-semibold tracking-tight text-ink">{title}</h3>
             {children}
         </section>
     );
@@ -132,7 +132,7 @@ function FontSizeField() {
                         <Icon name="plus" size={14} />
                     </button>
                 </div>
-                <span className="text-12 whitespace-nowrap text-muted">px</span>
+                <span className="text-13 whitespace-nowrap text-muted">px</span>
             </div>
         </div>
     );
@@ -157,7 +157,7 @@ export function PreferencesDrawer({ open, onClose }: { open: boolean; onClose: (
                     type="button"
                     disabled={!modified}
                     onClick={reset}
-                    className="inline-flex min-h-10 w-full cursor-pointer items-center justify-center gap-1.5 rounded-btn border border-line text-13.5 text-muted transition hover:border-primary-border hover:text-primary-strong disabled:pointer-events-none disabled:opacity-40"
+                    className="inline-flex min-h-10 w-full cursor-pointer items-center justify-center gap-1.5 rounded-btn border border-line text-14 text-muted transition hover:border-primary-border hover:text-primary-strong disabled:pointer-events-none disabled:opacity-40"
                 >
                     <Icon name="reset" size={14} />
                     恢复默认
@@ -181,7 +181,7 @@ export function PreferencesDrawer({ open, onClose }: { open: boolean; onClose: (
                                     <span className={optionBox(preferences.themeMode === mode.value)}>
                                         <Icon name={mode.icon} size={20} className="text-ink" />
                                     </span>
-                                    <span className="mt-2 text-center text-12 text-muted">{mode.label}</span>
+                                    <span className="mt-2 text-center text-13 text-muted">{mode.label}</span>
                                 </button>
                             ))}
                         </div>
@@ -200,7 +200,7 @@ export function PreferencesDrawer({ open, onClose }: { open: boolean; onClose: (
                                     <span className={optionBox(preferences.themePreset === preset.value)}>
                                         <span className="size-5 rounded-md" style={{ backgroundColor: preset.color }} />
                                     </span>
-                                    <span className="mt-2 truncate text-center text-12 text-muted">{preset.label}</span>
+                                    <span className="mt-2 truncate text-center text-13 text-muted">{preset.label}</span>
                                 </button>
                             ))}
                         </div>
@@ -241,7 +241,7 @@ export function PreferencesDrawer({ open, onClose }: { open: boolean; onClose: (
                                             >
                                                 <LayoutIcon className="h-auto w-full" />
                                             </span>
-                                            <span className="mt-2 text-center text-12 text-muted">{label}</span>
+                                            <span className="mt-2 text-center text-13 text-muted">{label}</span>
                                         </button>
                                     </TooltipTrigger>
                                     <TooltipContent>{tip}</TooltipContent>

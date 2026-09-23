@@ -9,7 +9,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PreferencesProvider } from "@/context/PreferencesContext";
-import { usePreferences } from "@/context/usePreferences";
+import { FONT_BASE, usePreferences } from "@/context/usePreferences";
 import { PreferencesDrawer } from "@/components/layout/PreferencesDrawer";
 
 // 每次渲染后刷新为最新的 context value，供直接调用各项 setter
@@ -82,7 +82,7 @@ describe("偏好上下文", () => {
     it("字号钳制在 12–18 并换算缩放倍率", () => {
         renderApp();
         act(() => captured.current!.setFontSize(18));
-        expect(document.documentElement.style.getPropertyValue("--app-font-scale")).toBe(String(18 / 14));
+        expect(document.documentElement.style.getPropertyValue("--app-font-scale")).toBe(String(18 / FONT_BASE));
         act(() => captured.current!.setFontSize(99));
         expect(captured.current!.preferences.fontSize).toBe(18);
         act(() => captured.current!.setFontSize(1));
@@ -108,7 +108,7 @@ describe("偏好上下文", () => {
         expect(document.documentElement.classList.contains("dark")).toBe(false);
         expect(JSON.parse(localStorage.getItem("zmsys.preferences")!)).toMatchObject({
             themeMode: "light",
-            fontSize: 14,
+            fontSize: FONT_BASE,
         });
     });
 
@@ -143,7 +143,7 @@ describe("偏好上下文", () => {
         const root = document.documentElement;
         expect(root.classList.contains("dark")).toBe(true);
         expect(root.dataset.theme).toBe("orange");
-        expect(root.style.getPropertyValue("--app-font-scale")).toBe(String(17 / 14));
+        expect(root.style.getPropertyValue("--app-font-scale")).toBe(String(17 / FONT_BASE));
         expect(root.classList.contains("grayscale-mode")).toBe(true);
 
         localStorage.setItem("zmsys.preferences", "{oops");
@@ -206,7 +206,7 @@ describe("偏好设置抽屉", () => {
         const minus = screen.getByRole("button", { name: "减小字号" });
         const plus = screen.getByRole("button", { name: "增大字号" });
         await user.click(plus);
-        expect(screen.getByLabelText("字体大小")).toHaveValue("15");
+        expect(screen.getByLabelText("字体大小")).toHaveValue(String(FONT_BASE + 1));
         for (let i = 0; i < 10; i++) await user.click(plus);
         expect(plus).toBeDisabled();
         for (let i = 0; i < 10; i++) await user.click(minus);
@@ -218,11 +218,14 @@ describe("偏好设置抽屉", () => {
         renderApp();
         const { setFontSize } = captured.current!;
         act(() => {
-            setFontSize(prev => prev + 1);
-            setFontSize(prev => prev + 1);
-            setFontSize(prev => prev + 1);
+            // 向下步进避免撞上 18 的钳制上限，干扰“不丢步”断言
+            setFontSize(prev => prev - 1);
+            setFontSize(prev => prev - 1);
+            setFontSize(prev => prev - 1);
         });
-        expect(captured.current!.preferences.fontSize).toBe(17);
-        expect(document.documentElement.style.getPropertyValue("--app-font-scale")).toBe(String(17 / 14));
+        expect(captured.current!.preferences.fontSize).toBe(FONT_BASE - 3);
+        expect(document.documentElement.style.getPropertyValue("--app-font-scale")).toBe(
+            String((FONT_BASE - 3) / FONT_BASE),
+        );
     });
 });

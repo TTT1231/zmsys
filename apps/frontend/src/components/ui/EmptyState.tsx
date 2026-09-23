@@ -14,7 +14,7 @@ export function EmptyState({ description, imageSize = 160, children }: EmptyStat
     return (
         <div className="flex flex-col items-center justify-center gap-3 text-center">
             <EmptyArt size={imageSize} />
-            {description && <p className="text-13 text-muted">{description}</p>}
+            {description && <p className="text-14 text-muted">{description}</p>}
             {children}
         </div>
     );

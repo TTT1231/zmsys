@@ -139,7 +139,7 @@ export function SearchSelect({
                         className="fixed z-200 overflow-y-auto overscroll-contain rounded-input border border-line bg-surface p-1 shadow-modal"
                         onMouseDown={event => event.preventDefault()}
                     >
-                        <p role="status" className="px-3 py-2 text-12 text-muted">
+                        <p role="status" className="px-3 py-2 text-13 text-muted">
                             {results.length ? `${results.length} 个匹配结果，请选择` : `未找到匹配${label}，请调整搜索`}
                         </p>
                         <ul id={`${id}-list`} role="listbox" aria-label={`${label}搜索结果`}>
@@ -151,11 +151,11 @@ export function SearchSelect({
                                     aria-selected={index === active}
                                     onMouseMove={() => setActive(index)}
                                     onClick={() => choose(option.value)}
-                                    className={`cursor-pointer rounded-md px-3 py-2 text-13 ${index === active ? "bg-primary-soft text-primary-strong" : "text-ink hover:bg-soft"}`}
+                                    className={`cursor-pointer rounded-md px-3 py-2 text-14 ${index === active ? "bg-primary-soft text-primary-strong" : "text-ink hover:bg-soft"}`}
                                 >
                                     <div className="wrap-break-word">{option.label}</div>
                                     {!option.label.includes(option.value) && (
-                                        <div className="mt-0.5 text-12 text-muted">{option.value}</div>
+                                        <div className="mt-0.5 text-13 text-muted">{option.value}</div>
                                     )}
                                 </li>
                             ))}
@@ -164,7 +164,7 @@ export function SearchSelect({
                     document.body,
                 )}
             {error && (
-                <p id={`${id}-error`} role="alert" className="mt-1 text-13 text-danger">
+                <p id={`${id}-error`} role="alert" className="mt-1 text-14 text-danger">
                     {error}
                 </p>
             )}

@@ -79,10 +79,10 @@ export function PermissionsPage() {
                         className="relative flex min-h-18.5 flex-col justify-center overflow-hidden rounded-card border border-line/70 bg-surface/90 px-4 py-3 shadow-xs"
                     >
                         <span className="absolute top-0 bottom-0 left-0 w-0.75 bg-primary-border" />
-                        <span className="text-11.5 text-muted">
+                        <span className="text-12 text-muted">
                             {kpi.label}{" "}
                             <strong className="tnum ml-1 text-20 font-bold text-ink">{num(kpi.value)}</strong>
-                            <span className="ml-1 text-11.5 text-subtle">{kpi.unit}</span>
+                            <span className="ml-1 text-12 text-subtle">{kpi.unit}</span>
                         </span>
                     </div>
                 ))}
@@ -181,7 +181,7 @@ function AccountsTab({
                 <div className="hidden overflow-x-auto lg:block">
                     <table className="w-full min-w-180 border-collapse">
                         <thead>
-                            <tr className="bg-soft text-left text-12 text-muted">
+                            <tr className="bg-soft text-left text-13 text-muted">
                                 <th className="px-5 py-2.5 font-semibold">用户</th>
                                 <th className="px-3 py-2.5 font-semibold">角色</th>
                                 <th className="px-3 py-2.5 font-semibold">账号</th>
@@ -198,16 +198,16 @@ function AccountsTab({
                                 >
                                     <td className="px-5 py-3">
                                         <div className="flex items-center gap-2.5">
-                                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-soft text-13 font-semibold text-primary-strong">
+                                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-soft text-14 font-semibold text-primary-strong">
                                                 {user.name.slice(0, 1)}
                                             </span>
-                                            <span className="text-13 font-semibold text-ink">{user.name}</span>
+                                            <span className="text-14 font-semibold text-ink">{user.name}</span>
                                         </div>
                                     </td>
                                     <td className="px-3 py-3">
                                         <Badge tone="ready">{roleNameOf(user.role)}</Badge>
                                     </td>
-                                    <td className="px-3 py-3 tnum text-13 text-muted">{user.account}</td>
+                                    <td className="px-3 py-3 tnum text-14 text-muted">{user.account}</td>
                                     <td className="px-3 py-3">
                                         <UserActiveToggle
                                             user={user}
@@ -216,10 +216,10 @@ function AccountsTab({
                                             asSwitch
                                         />
                                     </td>
-                                    <td className="px-3 py-3 tnum text-13 text-muted">{user.last}</td>
+                                    <td className="px-3 py-3 tnum text-14 text-muted">{user.last}</td>
                                     <td className="px-5 py-3 text-right whitespace-nowrap">
                                         {user.role === "super" ? (
-                                            <span className="text-12.5 text-subtle">内置账号</span>
+                                            <span className="text-13 text-subtle">内置账号</span>
                                         ) : (
                                             <>
                                                 <TableLink onClick={() => setEditing(user)}>编辑</TableLink>
@@ -306,27 +306,27 @@ function ResetPasswordModal({ user, onClose }: { user: WbUser; onClose: () => vo
                             onClick={copyPassword}
                             aria-label="复制初始密码"
                             title="复制初始密码"
-                            className="flex min-h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-12.5 text-muted transition hover:border-primary-border hover:text-primary"
+                            className="flex min-h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-13 text-muted transition hover:border-primary-border hover:text-primary"
                         >
                             <Icon name="copy" size={13} />
                             复制
                         </button>
                     </div>
-                    <p className="text-12 text-subtle">请告知本人使用新密码登录，其当前登录已失效</p>
+                    <p className="text-13 text-subtle">请告知本人使用新密码登录，其当前登录已失效</p>
                 </div>
             ) : (
                 <div className="flex flex-col gap-3.5">
                     <div className="flex items-center gap-2.5 rounded-xl border border-line bg-soft px-3.5 py-3">
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-13.5 font-semibold text-primary-strong">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-14 font-semibold text-primary-strong">
                             {user.name.slice(0, 1)}
                         </span>
                         <div className="min-w-0">
-                            <p className="truncate text-13.5 font-semibold text-ink">{user.name}</p>
-                            <p className="tnum text-12 text-muted">{user.account}</p>
+                            <p className="truncate text-14 font-semibold text-ink">{user.name}</p>
+                            <p className="tnum text-13 text-muted">{user.account}</p>
                         </div>
                     </div>
                     <ul className="flex flex-col gap-2.5">
-                        <li className="flex items-center gap-2.5 text-13 text-td">
+                        <li className="flex items-center gap-2.5 text-14 text-td">
                             <span className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-full bg-primary-soft">
                                 <Icon name="lock" size={14} className="text-primary-strong" />
                             </span>
@@ -335,7 +335,7 @@ function ResetPasswordModal({ user, onClose }: { user: WbUser; onClose: () => vo
                                 <strong className="tnum font-semibold text-ink">{INITIAL_PASSWORD}</strong>
                             </span>
                         </li>
-                        <li className="flex items-center gap-2.5 text-13 text-td">
+                        <li className="flex items-center gap-2.5 text-14 text-td">
                             <span className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-full bg-warning-soft">
                                 <Icon name="logout" size={14} className="text-warning" />
                             </span>
@@ -477,7 +477,7 @@ function DeactivateTransferModal({
             }
         >
             <div className="flex flex-col gap-3">
-                <p className="text-13 leading-relaxed text-td">
+                <p className="text-14 leading-relaxed text-td">
                     即将停用【{user.name}（{user.account}）】，名下 {ownedCount} 个客户将移交给接任销售继续跟进。
                 </p>
                 <TransferFields
@@ -629,7 +629,7 @@ function UserDialog({
                     />
                 )}
                 {!user && (
-                    <p className="text-12 text-subtle">初始密码统一为 {INITIAL_PASSWORD}，用户可登录后按需修改。</p>
+                    <p className="text-13 text-subtle">初始密码统一为 {INITIAL_PASSWORD}，用户可登录后按需修改。</p>
                 )}
             </div>
         </Modal>
@@ -662,7 +662,7 @@ function TransferFields({
 }) {
     return (
         <div className="flex flex-col gap-3 rounded-xl border border-warning/60 bg-warning/5 p-3.5">
-            <p className="text-12.5 leading-relaxed text-td">
+            <p className="text-13 leading-relaxed text-td">
                 <Icon name="alert" size={13} className="mr-1 -mt-px inline text-warning" />
                 该销售名下仍有客户，离岗前须指定接任销售并填写移交原因。
             </p>
@@ -682,7 +682,7 @@ function TransferFields({
                     ))}
                 </SelectField>
             ) : (
-                <p className="text-12.5 text-danger">暂无其他在职销售可接任，请先启用其他销售账号。</p>
+                <p className="text-13 text-danger">暂无其他在职销售可接任，请先启用其他销售账号。</p>
             )}
             <TextArea
                 label="移交原因"
@@ -830,15 +830,15 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                     }`}
                                 >
                                     <span className="flex items-center gap-2">
-                                        <span className="text-13.5 font-semibold text-ink">{role.name}</span>
+                                        <span className="text-14 font-semibold text-ink">{role.name}</span>
                                         {role.locked && (
-                                            <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-line bg-soft px-2 py-px text-10.5 text-muted">
+                                            <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-line bg-soft px-2 py-px text-11 text-muted">
                                                 <Icon name="shield" size={11} />
                                                 内置
                                             </span>
                                         )}
                                     </span>
-                                    <span className="mt-1.5 flex items-center gap-1.5 text-11.5 text-subtle">
+                                    <span className="mt-1.5 flex items-center gap-1.5 text-12 text-subtle">
                                         <Icon name="users" size={12} />
                                         成员 {users.filter(user => user.role === role.id).length} 人 · 菜单{" "}
                                         {topMenuCount(grant)} 项
@@ -854,18 +854,18 @@ function RolesTab({ users }: { users: WbUser[] }) {
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4">
                     <div className="flex items-baseline gap-2.5">
                         <h2 className="text-15 font-semibold text-ink">{roleNameOf(activeRole)}</h2>
-                        <span className={`text-12 ${draft ? "text-warning" : "text-muted"}`}>{status}</span>
+                        <span className={`text-13 ${draft ? "text-warning" : "text-muted"}`}>{status}</span>
                     </div>
                     <div className="flex gap-2">
                         <Button
                             variant="secondary"
-                            className="min-h-8.5 px-3 text-12.5"
+                            className="min-h-8.5 px-3 text-13"
                             disabled={locked}
                             onClick={reset}
                         >
                             恢复默认
                         </Button>
-                        <Button className="min-h-8.5 px-3 text-12.5" disabled={locked || !draft} onClick={save}>
+                        <Button className="min-h-8.5 px-3 text-13" disabled={locked || !draft} onClick={save}>
                             保存授权
                         </Button>
                     </div>
@@ -874,9 +874,9 @@ function RolesTab({ users }: { users: WbUser[] }) {
                 <div className="flex flex-col gap-6 p-5">
                     <div>
                         <div className="mb-2 flex items-center justify-between">
-                            <h3 className="text-13 font-semibold text-ink">菜单权限</h3>
+                            <h3 className="text-14 font-semibold text-ink">菜单权限</h3>
                             <label
-                                className={`flex items-center gap-1.5 text-12 font-medium text-primary-strong ${locked ? "pointer-events-none opacity-50" : ""}`}
+                                className={`flex items-center gap-1.5 text-13 font-medium text-primary-strong ${locked ? "pointer-events-none opacity-50" : ""}`}
                             >
                                 <input
                                     type="checkbox"
@@ -902,7 +902,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                             onChange={event => toggleMenu(menu.key, event.target.checked)}
                                         />
                                         <Icon name={menu.icon} size={17} className="shrink-0 text-muted" />
-                                        <span className="text-13.5 text-ink">{menu.label}</span>
+                                        <span className="text-14 text-ink">{menu.label}</span>
                                     </label>
                                     {menu.children && (
                                         <div className="ml-6.5 border-l border-dashed border-line pl-1.5">
@@ -917,7 +917,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                                         checked={effective.menus.includes(child.key)}
                                                         onChange={event => toggleMenu(child.key, event.target.checked)}
                                                     />
-                                                    <span className="text-12.5 text-td">└ {child.label}</span>
+                                                    <span className="text-13 text-td">└ {child.label}</span>
                                                 </label>
                                             ))}
                                         </div>
@@ -928,8 +928,8 @@ function RolesTab({ users }: { users: WbUser[] }) {
                     </div>
 
                     <div>
-                        <h3 className="mb-1 text-13 font-semibold text-ink">操作权限（按钮 / 动作级）</h3>
-                        <p className="mb-2.5 text-11.5 leading-5 text-subtle">
+                        <h3 className="mb-1 text-14 font-semibold text-ink">操作权限（按钮 / 动作级）</h3>
+                        <p className="mb-2.5 text-12 leading-5 text-subtle">
                             灰色不可勾选项为受保护权限（如删除订单、删除 BOM、紧急撤销），仅超级管理员持有，
                             不能授权给其他角色。
                         </p>
@@ -948,10 +948,10 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                                 size={15}
                                                 className="text-muted"
                                             />
-                                            <span className="text-13 font-semibold text-ink">
+                                            <span className="text-14 font-semibold text-ink">
                                                 {MENU_CATALOG.find(menu => menu.key === menuKey)?.label ?? menuKey}
                                             </span>
-                                            {!menuOn && <span className="text-11.5 text-subtle">（菜单未授权）</span>}
+                                            {!menuOn && <span className="text-12 text-subtle">（菜单未授权）</span>}
                                         </div>
                                         <div className="flex flex-wrap gap-2">
                                             {actions.map(action => {
@@ -965,7 +965,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                                                 ? "受保护权限：仅超级管理员持有，不可授权"
                                                                 : undefined
                                                         }
-                                                        className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 text-12.5 transition ${
+                                                        className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 text-13 transition ${
                                                             isProtected
                                                                 ? "cursor-not-allowed border-line bg-soft text-subtle opacity-60"
                                                                 : "cursor-pointer " +
@@ -1001,7 +1001,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
                     </div>
 
                     <div>
-                        <h3 className="mb-1 text-13 font-semibold text-ink">
+                        <h3 className="mb-1 text-14 font-semibold text-ink">
                             该角色成员（{users.filter(user => user.role === activeRole).length}）
                         </h3>
                         {users.filter(user => user.role === activeRole).length ? (
@@ -1010,11 +1010,11 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                     .filter(user => user.role === activeRole)
                                     .map(user => (
                                         <div key={user.account} className="flex items-center gap-2.5 py-2.5">
-                                            <span className="flex h-7.5 w-7.5 items-center justify-center rounded-full bg-primary-soft text-12 font-semibold text-primary-strong">
+                                            <span className="flex h-7.5 w-7.5 items-center justify-center rounded-full bg-primary-soft text-13 font-semibold text-primary-strong">
                                                 {user.name.slice(0, 1)}
                                             </span>
-                                            <span className="text-13 font-medium text-ink">{user.name}</span>
-                                            <span className="text-11.5 text-muted">{user.account}</span>
+                                            <span className="text-14 font-medium text-ink">{user.name}</span>
+                                            <span className="text-12 text-muted">{user.account}</span>
                                             <span className="ml-auto">
                                                 <Badge tone={user.active ? "success" : "progress"}>
                                                     {user.active ? "启用" : "已停用"}
@@ -1024,7 +1024,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                     ))}
                             </div>
                         ) : (
-                            <p className="py-2 text-12.5 text-subtle">暂无成员，可在「账号管理」中分配。</p>
+                            <p className="py-2 text-13 text-subtle">暂无成员，可在「账号管理」中分配。</p>
                         )}
                     </div>
                 </div>
@@ -1047,7 +1047,7 @@ function MatrixTab() {
             <div className="overflow-x-auto">
                 <table className="w-full min-w-215 border-collapse">
                     <thead>
-                        <tr className="bg-soft text-12 text-muted">
+                        <tr className="bg-soft text-13 text-muted">
                             <th className="border border-line px-3 py-2.5 text-left font-semibold">模块 \\ 角色</th>
                             {ROLES.map(role => (
                                 <th key={role.id} className="border border-line px-3 py-2.5 text-center font-semibold">
@@ -1059,7 +1059,7 @@ function MatrixTab() {
                     <tbody>
                         {modules.map(menu => (
                             <tr key={menu.key}>
-                                <th className="border border-line bg-panel px-3 py-2 text-left text-12.5 font-semibold whitespace-nowrap text-ink">
+                                <th className="border border-line bg-panel px-3 py-2 text-left text-13 font-semibold whitespace-nowrap text-ink">
                                     {menu.label}
                                 </th>
                                 {ROLES.map(role => {
@@ -1097,7 +1097,7 @@ function MatrixTab() {
                                         return (
                                             <td
                                                 key={role.id}
-                                                className="border border-line px-3 py-2 text-center text-12 font-semibold text-success"
+                                                className="border border-line px-3 py-2 text-center text-13 font-semibold text-success"
                                             >
                                                 全部权限
                                             </td>
@@ -1206,7 +1206,7 @@ function GrantLogPanel() {
         <section className="overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
             <div className="flex items-center justify-between gap-3 border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4">
                 <h2 className="text-15 font-semibold text-ink">权限变更日志</h2>
-                {!!logs.length && <span className="text-11.5 text-subtle">最近 {logs.length} 条</span>}
+                {!!logs.length && <span className="text-12 text-subtle">最近 {logs.length} 条</span>}
             </div>
             {logs.length ? (
                 <div className="px-5 py-3">
@@ -1220,15 +1220,15 @@ function GrantLogPanel() {
                                         <span className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg bg-primary-soft">
                                             <Icon name={log.roleIcon} size={15} className="text-primary-strong" />
                                         </span>
-                                        <span className="text-13 font-semibold whitespace-nowrap text-ink">
+                                        <span className="text-14 font-semibold whitespace-nowrap text-ink">
                                             {log.role || "权限"}
                                         </span>
-                                        <span className="text-12 whitespace-nowrap text-muted">· {log.action}</span>
-                                        <span className="ml-auto shrink-0 pl-2 text-11.5 whitespace-nowrap text-subtle">
+                                        <span className="text-13 whitespace-nowrap text-muted">· {log.action}</span>
+                                        <span className="ml-auto shrink-0 pl-2 text-12 whitespace-nowrap text-subtle">
                                             {entry.user} · <span className="tnum">{entry.time}</span>
                                         </span>
                                     </div>
-                                    <p className="mt-1.5 pl-10 text-12.5 leading-relaxed text-td">
+                                    <p className="mt-1.5 pl-10 text-13 leading-relaxed text-td">
                                         {renderDetail(log.detail)}
                                     </p>
                                 </li>
@@ -1237,7 +1237,7 @@ function GrantLogPanel() {
                     </ol>
                 </div>
             ) : (
-                <p className="px-5 py-4 text-12.5 text-subtle">暂无变更记录</p>
+                <p className="px-5 py-4 text-13 text-subtle">暂无变更记录</p>
             )}
         </section>
     );

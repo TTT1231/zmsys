@@ -188,7 +188,7 @@ export function ProductProgressChart({
                     <h2 id="product-chart-title" className="text-16 font-semibold text-ink">
                         产品交付进度
                     </h2>
-                    <p className="mt-1 text-12 text-muted">
+                    <p className="mt-1 text-13 text-muted">
                         {delivery
                             ? `${periodLabel}订单 · 条形总长为需求总量，右侧为总量与交付率`
                             : "截至今日 · 各 BOM 分别计算缺口，汇总到品类"}
@@ -203,7 +203,7 @@ export function ProductProgressChart({
                             key={value}
                             aria-pressed={view === value}
                             onClick={() => setView(value)}
-                            className={`min-h-9 rounded-md px-3 text-12 font-medium ${view === value ? "bg-surface text-primary-strong shadow-xs" : "text-muted hover:text-ink"}`}
+                            className={`min-h-9 rounded-md px-3 text-13 font-medium ${view === value ? "bg-surface text-primary-strong shadow-xs" : "text-muted hover:text-ink"}`}
                         >
                             {label}
                         </button>
@@ -228,7 +228,7 @@ export function ProductProgressChart({
                 />
             </div>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
-                <div className="flex flex-wrap items-center gap-1 text-11 text-muted">
+                <div className="flex flex-wrap items-center gap-1 text-12 text-muted">
                     <span className="mr-1">查看型号</span>
                     {categories.map(row => (
                         <button
@@ -242,7 +242,7 @@ export function ProductProgressChart({
                 </div>
                 <button
                     onClick={() => onDetails()}
-                    className="flex min-h-9 items-center gap-1 text-12 font-medium text-primary-strong hover:underline"
+                    className="flex min-h-9 items-center gap-1 text-13 font-medium text-primary-strong hover:underline"
                 >
                     全部明细
                     <Icon name="chevron-right" size={14} />
@@ -336,11 +336,11 @@ export function CustomerRankingChart({
                 <div>
                     <h2 id="ranking-title" className="text-16 font-semibold text-ink">
                         客户订单排行{" "}
-                        <span className="ml-1 rounded bg-primary-soft px-1.5 py-0.5 text-10.5 text-primary-strong">
+                        <span className="ml-1 rounded bg-primary-soft px-1.5 py-0.5 text-11 text-primary-strong">
                             TOP 20
                         </span>
                     </h2>
-                    <p className="mt-1 text-12 text-muted">{periodLabel}订购规模 · 点击条形查看客户订单</p>
+                    <p className="mt-1 text-13 text-muted">{periodLabel}订购规模 · 点击条形查看客户订单</p>
                 </div>
                 <div role="group" aria-label="客户排名方式" className="flex rounded-input bg-soft p-1">
                     {(
@@ -353,7 +353,7 @@ export function CustomerRankingChart({
                             key={value}
                             aria-pressed={metric === value}
                             onClick={() => onMetric(value)}
-                            className={`min-h-9 rounded-md px-2.5 text-12 font-medium ${metric === value ? "bg-surface text-primary-strong shadow-xs" : "text-muted hover:text-ink"}`}
+                            className={`min-h-9 rounded-md px-2.5 text-13 font-medium ${metric === value ? "bg-surface text-primary-strong shadow-xs" : "text-muted hover:text-ink"}`}
                         >
                             {label}
                         </button>
@@ -377,16 +377,16 @@ export function CustomerRankingChart({
                         />
                     </div>
                 ) : (
-                    <p className="py-24 text-center text-13 text-muted">所选期间暂无客户订单</p>
+                    <p className="py-24 text-center text-14 text-muted">所选期间暂无客户订单</p>
                 )}
             </div>
-            <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-11 text-muted">
+            <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-12 text-muted">
                 <span>
                     前 {customers.length} 名 · {metric === "qty" ? "单位：个" : "单位：笔"} · 向下滚动查看更多
                 </span>
                 <button
                     onClick={onDetails}
-                    className="flex min-h-9 items-center gap-1 text-12 font-medium text-primary-strong hover:underline"
+                    className="flex min-h-9 items-center gap-1 text-13 font-medium text-primary-strong hover:underline"
                 >
                     排行明细
                     <Icon name="chevron-right" size={14} />

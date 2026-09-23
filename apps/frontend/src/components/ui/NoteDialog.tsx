@@ -19,21 +19,21 @@ export function NoteDialog({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
                     >
                         返回工作台
                     </button>
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover"
+                        className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover"
                     >
                         知道了
                     </button>
                 </>
             }
         >
-            <p className="text-13 leading-relaxed text-muted">{note?.description}</p>
+            <p className="text-14 leading-relaxed text-muted">{note?.description}</p>
         </Modal>
     );
 }

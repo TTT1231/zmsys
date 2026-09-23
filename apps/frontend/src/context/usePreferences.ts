@@ -31,7 +31,7 @@ export interface Preferences {
     themePreset: ThemePreset;
     /** 布局模式：垂直 / 双列菜单 / 水平 / 侧边导航 / 混合垂直 / 混合双列 */
     layout: LayoutMode;
-    /** 全局根字号 px（设计基准 14px，12–18） */
+    /** 全局根字号 px（设计基准 16px，12–18） */
     fontSize: number;
     /** 色弱模式（html.invert-mode 滤镜） */
     colorWeakMode: boolean;
@@ -39,8 +39,8 @@ export interface Preferences {
     colorGrayMode: boolean;
 }
 
-/** 设计基准字号：页面 rem 间距与 px 字号令牌都以它为 1 倍缩放 */
-export const FONT_BASE = 14;
+/** 设计基准字号：页面 rem 间距与 px 字号令牌都以它为 1 倍缩放（对齐 vben 默认 16px） */
+export const FONT_BASE = 16;
 export const FONT_MIN = 12;
 export const FONT_MAX = 18;
 

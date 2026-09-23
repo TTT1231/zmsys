@@ -18,21 +18,21 @@ export function RecordSummary({
     return (
         <section aria-label="数量与状态" className="rounded-card bg-soft p-3.5">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-12 text-muted">{single ? metrics[0].label : "数量（个）"}</span>
+                <span className="text-13 text-muted">{single ? metrics[0].label : "数量（个）"}</span>
                 {status}
             </div>
             <dl className="grid gap-3" style={{ gridTemplateColumns: `repeat(${metrics.length}, minmax(0, 1fr))` }}>
                 {metrics.map(metric => (
                     <div key={metric.label} className="min-w-0 border-l border-line pl-3 first:border-0 first:pl-0">
-                        <dt className={single ? "sr-only" : "text-12 text-muted"}>{metric.label}</dt>
+                        <dt className={single ? "sr-only" : "text-13 text-muted"}>{metric.label}</dt>
                         <dd className="tnum mt-1 text-22 font-semibold leading-tight text-ink wrap-anywhere">
                             {num(metric.value)}
-                            {single && <span className="ml-1.5 text-13 font-normal text-muted">个</span>}
+                            {single && <span className="ml-1.5 text-14 font-normal text-muted">个</span>}
                         </dd>
                     </div>
                 ))}
             </dl>
-            {note && <p className="mt-3 text-12 leading-5 text-muted">{note}</p>}
+            {note && <p className="mt-3 text-13 leading-5 text-muted">{note}</p>}
         </section>
     );
 }
@@ -50,7 +50,7 @@ export function RecordProduct({
         <section aria-label="详情" className="min-w-0">
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                 <h3 className="text-14 font-medium text-ink">详情</h3>
-                <p className="tnum text-12 text-muted wrap-anywhere">{bomCode}</p>
+                <p className="tnum text-13 text-muted wrap-anywhere">{bomCode}</p>
             </div>
             {bom ? (
                 <>
@@ -77,7 +77,7 @@ export function RecordFields({
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
                 {items.map(item => (
                     <div key={item.label} className={item.fullWidth ? "col-span-full min-w-0" : "min-w-0"}>
-                        <dt className="text-12 leading-5 text-muted">{item.label}</dt>
+                        <dt className="text-13 leading-5 text-muted">{item.label}</dt>
                         <dd className="tnum mt-1 whitespace-pre-wrap text-14 leading-6 text-td wrap-anywhere">
                             {item.value}
                         </dd>

@@ -221,7 +221,7 @@ function TableView({
             data-resizing={!!draftPreferences || undefined}
         >
             <div className="table-display-toolbar">
-                <span className="text-12 text-muted" role="status">
+                <span className="text-13 text-muted" role="status">
                     {draftPreferences
                         ? `正在调整「${activeColumn}」`
                         : recordCount !== undefined
@@ -425,14 +425,14 @@ function TableView({
                         <button
                             type="button"
                             onClick={() => setPreferences(emptyPreferences())}
-                            className="min-h-10 rounded-btn border border-line-strong px-4 text-13"
+                            className="min-h-10 rounded-btn border border-line-strong px-4 text-14"
                         >
                             恢复推荐设置
                         </button>
                         <button
                             type="button"
                             onClick={() => setSettings(false)}
-                            className="min-h-10 rounded-btn bg-primary px-4 text-13 text-white"
+                            className="min-h-10 rounded-btn bg-primary px-4 text-14 text-white"
                         >
                             完成
                         </button>
@@ -440,7 +440,7 @@ function TableView({
                 }
             >
                 <fieldset className="mb-5">
-                    <legend className="mb-3 text-13 font-medium">每行显示多少信息</legend>
+                    <legend className="mb-3 text-14 font-medium">每行显示多少信息</legend>
                     <div className="grid grid-cols-3 gap-2">
                         {(
                             [
@@ -451,7 +451,7 @@ function TableView({
                         ).map(([density, label]) => (
                             <label
                                 key={density}
-                                className={`flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-lg border text-13 ${preferences.density === density ? "border-primary-border bg-primary-soft text-primary-strong" : "border-line"}`}
+                                className={`flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-lg border text-14 ${preferences.density === density ? "border-primary-border bg-primary-soft text-primary-strong" : "border-line"}`}
                             >
                                 <input
                                     type="radio"
@@ -464,14 +464,14 @@ function TableView({
                         ))}
                     </div>
                 </fieldset>
-                <h3 className="mb-2 text-13 font-medium">显示哪些内容</h3>
+                <h3 className="mb-2 text-14 font-medium">显示哪些内容</h3>
                 <div className="space-y-1">
                     {columns.map(column => (
                         <div
                             key={column.label}
                             className="flex items-center justify-between gap-3 border-b border-line py-2"
                         >
-                            <label className="flex min-h-10 flex-1 cursor-pointer items-center gap-2 text-13">
+                            <label className="flex min-h-10 flex-1 cursor-pointer items-center gap-2 text-14">
                                 <input
                                     type="checkbox"
                                     checked={column.locked || !preferences.hidden.includes(column.label)}
@@ -488,7 +488,7 @@ function TableView({
                                 {column.label}
                             </label>
                             {column.fixed ? (
-                                <span className="text-12 text-muted">始终显示</span>
+                                <span className="text-13 text-muted">始终显示</span>
                             ) : (
                                 <select
                                     aria-label={`${column.label}的宽窄`}
@@ -502,7 +502,7 @@ function TableView({
                                                 widthOf(column) + (event.target.value === "wider" ? 80 : -48),
                                             );
                                     }}
-                                    className="min-h-9 rounded-md border border-line-strong bg-surface px-2 text-12"
+                                    className="min-h-9 rounded-md border border-line-strong bg-surface px-2 text-13"
                                 >
                                     <option value="recommended">推荐宽度</option>
                                     <option value="narrower">窄一些</option>

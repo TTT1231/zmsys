@@ -155,7 +155,7 @@ function ReprintModal({
                     placeholder="例如：纸张破损、内容模糊"
                     onChange={event => setReason(event.target.value)}
                 />
-                <p className="mt-2 text-12 text-muted">重打会出一张新单，旧单自动作废，以最新一联为准。</p>
+                <p className="mt-2 text-13 text-muted">重打会出一张新单，旧单自动作废，以最新一联为准。</p>
             </form>
         </Modal>
     );
@@ -217,7 +217,7 @@ function VoidOutboundModal({
                     placeholder="例如：登记了错误数量 / 选错了产品型号"
                     onChange={event => setReason(event.target.value)}
                 />
-                <p className="mt-2 text-12 text-muted">
+                <p className="mt-2 text-13 text-muted">
                     作废后这批货的数量会自动退回库存和订单；原单保留作凭证，重新登记一张正确的就行。
                 </p>
             </form>
@@ -288,7 +288,7 @@ function EmergencyVoidModal({
                     onChange={event => setReason(event.target.value)}
                 />
                 <div className="flex flex-col gap-2 rounded-btn border border-line px-3 py-2.5">
-                    <label className="flex items-start gap-2 text-13 text-ink">
+                    <label className="flex items-start gap-2 text-14 text-ink">
                         <input
                             type="checkbox"
                             checked={goodsStayed}
@@ -297,7 +297,7 @@ function EmergencyVoidModal({
                         />
                         已线下确认：货物尚未离开仓库
                     </label>
-                    <label className="flex items-start gap-2 text-13 text-ink">
+                    <label className="flex items-start gap-2 text-14 text-ink">
                         <input
                             type="checkbox"
                             checked={paperVoided}
@@ -307,7 +307,7 @@ function EmergencyVoidModal({
                         已线下确认：全部纸质单据均已作废
                     </label>
                 </div>
-                <p className="text-12 text-muted">
+                <p className="text-13 text-muted">
                     用于已打印、货还没发走时的纠错（仅超级管理员）；撤销后数量自动退回库存和订单。
                 </p>
             </form>
@@ -422,7 +422,7 @@ export function OutboundModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -430,7 +430,7 @@ export function OutboundModal({
                         type="button"
                         disabled={createOutbound.isPending || over}
                         onClick={submit}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
+                        className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
                     >
                         {createOutbound.isPending ? "正在登记…" : "确认发货"}
                     </button>
@@ -439,7 +439,7 @@ export function OutboundModal({
         >
             <div className="flex flex-col gap-5">
                 <fieldset className="rounded-panel border border-line p-4">
-                    <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">① 客户与订单</legend>
+                    <legend className="px-1.5 text-13 font-semibold text-primary-strong">① 客户与订单</legend>
                     <div className="flex flex-col gap-3">
                         <SearchSelect
                             label="客户"
@@ -471,7 +471,7 @@ export function OutboundModal({
                 </fieldset>
 
                 <fieldset className="rounded-panel border border-line p-4">
-                    <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">② 订单信息</legend>
+                    <legend className="px-1.5 text-13 font-semibold text-primary-strong">② 订单信息</legend>
                     {selectedOrder && status ? (
                         <div className="flex flex-col gap-3 rounded-xl border border-primary-border bg-primary-soft/40 px-3.5 py-3">
                             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -481,39 +481,39 @@ export function OutboundModal({
                                 <StatusBadge status={status.key} label={status.label} />
                             </div>
                             <div>
-                                <p className="text-12.5 text-td">
+                                <p className="text-13 text-td">
                                     <span className="tnum font-medium">{selectedOrder.bomCode}</span>
                                     {selectedBom ? ` · ${selectedBom.name}` : ""}
                                 </p>
                                 {selectedBom?.spec && (
-                                    <p className="mt-0.5 wrap-break-word text-11.5 text-muted">{selectedBom.spec}</p>
+                                    <p className="mt-0.5 wrap-break-word text-12 text-muted">{selectedBom.spec}</p>
                                 )}
                             </div>
                             {/* 工艺差异独立警示条：发货前要核对的差异，不能混在规格小字里 */}
                             <BomRemarkNote remark={selectedBom?.remark} />
                             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
                                 <div className="min-w-0">
-                                    <dt className="text-11.5 text-muted">订单数量</dt>
-                                    <dd className="tnum mt-0.5 text-13 font-semibold text-ink">
+                                    <dt className="text-12 text-muted">订单数量</dt>
+                                    <dd className="tnum mt-0.5 text-14 font-semibold text-ink">
                                         {num(selectedOrder.qty)} 个
                                     </dd>
                                 </div>
                                 <div className="min-w-0">
-                                    <dt className="text-11.5 text-muted">交货日期</dt>
-                                    <dd className="tnum mt-0.5 text-13 font-semibold text-ink">
+                                    <dt className="text-12 text-muted">交货日期</dt>
+                                    <dd className="tnum mt-0.5 text-14 font-semibold text-ink">
                                         {selectedOrder.deliverDate}
                                         {overdue && <span className="ml-1 font-normal text-warning">已逾期</span>}
                                     </dd>
                                 </div>
                                 <div className="min-w-0">
-                                    <dt className="text-11.5 text-muted">交付情况</dt>
-                                    <dd className="tnum mt-0.5 text-13 font-semibold text-ink">
+                                    <dt className="text-12 text-muted">交付情况</dt>
+                                    <dd className="tnum mt-0.5 text-14 font-semibold text-ink">
                                         已发 {num(shipped)} 个
                                     </dd>
                                 </div>
                                 <div className="min-w-0">
-                                    <dt className="text-11.5 text-muted">账面库存</dt>
-                                    <dd className="tnum mt-0.5 text-13 font-semibold text-ink">{num(shareStock)} 个</dd>
+                                    <dt className="text-12 text-muted">账面库存</dt>
+                                    <dd className="tnum mt-0.5 text-14 font-semibold text-ink">{num(shareStock)} 个</dd>
                                 </div>
                             </dl>
                             <div>
@@ -521,7 +521,7 @@ export function OutboundModal({
                                     value={selectedOrder.qty === 0 ? 0 : selectedOrder.outbound / selectedOrder.qty}
                                     done={remaining === 0}
                                 />
-                                <p className="mt-1.5 text-12.5 text-muted">
+                                <p className="mt-1.5 text-13 text-muted">
                                     待交 <span className="tnum font-semibold text-ink">{num(remaining)}</span> 个 ·
                                     本次最多可发{" "}
                                     <span
@@ -537,19 +537,19 @@ export function OutboundModal({
                             </div>
                         </div>
                     ) : (
-                        <p className="text-12.5 text-subtle">
+                        <p className="text-13 text-subtle">
                             选择订单后，这里会带出成品档案、订单数量、交货日期与交付情况。
                         </p>
                     )}
                 </fieldset>
 
                 <fieldset className="rounded-panel border border-line p-4">
-                    <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">③ 发货明细</legend>
+                    <legend className="px-1.5 text-13 font-semibold text-primary-strong">③ 发货明细</legend>
                     <div className="grid gap-3 sm:grid-cols-2">
                         {selectedOrder && maxShip > 0 && (
                             <button
                                 type="button"
-                                className="text-left text-13 text-primary-strong sm:col-span-2"
+                                className="text-left text-14 text-primary-strong sm:col-span-2"
                                 onClick={() => {
                                     setQty(String(maxShip));
                                     clearError("qty");
@@ -777,7 +777,7 @@ export function OutboundPage() {
                                 setPage(1);
                             }}
                             placeholder="单号 / 订单 / 客户 / BOM"
-                            className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
+                            className="w-full bg-transparent text-14 text-ink outline-none placeholder:text-subtle"
                         />
                     </label>
                     <select
@@ -787,7 +787,7 @@ export function OutboundPage() {
                             setPage(1);
                         }}
                         aria-label="按状态筛选"
-                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-13 text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
                     >
                         {["全部状态", "已登记", "已打印", "已作废"].map(option => (
                             <option key={option}>{option}</option>
@@ -800,7 +800,7 @@ export function OutboundPage() {
                             setPage(1);
                         }}
                         aria-label="按品类筛选"
-                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-13 text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
                     >
                         <option>全部品类</option>
                         {categories.map(item => (
@@ -812,7 +812,7 @@ export function OutboundPage() {
                         type="button"
                         onClick={clearFilters}
                         disabled={!filtersActive}
-                        className="min-h-10 px-1 text-13 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
+                        className="min-h-10 px-1 text-14 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
                     >
                         清空条件
                     </button>
@@ -905,7 +905,7 @@ export function OutboundPage() {
                             scrollRef={tableScrollRef}
                         >
                             <thead>
-                                <tr className="text-left text-12 text-muted">
+                                <tr className="text-left text-13 text-muted">
                                     <SortTh
                                         label="出库单号"
                                         active={sort.key === "no"}
@@ -935,7 +935,7 @@ export function OutboundPage() {
                                         onSort={() => applySort("date")}
                                         className="px-3"
                                     />
-                                    <th className="px-3 py-2.5 text-13 font-semibold">操作人</th>
+                                    <th className="px-3 py-2.5 text-14 font-semibold">操作人</th>
                                     <th className="px-3 py-2.5 font-semibold">状态</th>
                                     <th className="px-5 py-2.5 text-center font-semibold">操作</th>
                                 </tr>
@@ -958,7 +958,7 @@ export function OutboundPage() {
                                         }
                                     >
                                         <td
-                                            className={`px-5 py-3 tnum text-13 font-semibold text-td-strong${
+                                            className={`px-5 py-3 tnum text-14 font-semibold text-td-strong${
                                                 row.state === "voided" ? " line-through decoration-danger/50" : ""
                                             }`}
                                         >
@@ -981,8 +981,8 @@ export function OutboundPage() {
                                         <td className="px-3 py-3">
                                             <QtyCell value={row.qty} />
                                         </td>
-                                        <td className="px-3 py-3 tnum text-13 text-td">{row.date}</td>
-                                        <td className="px-3 py-3 text-13 text-td">{row.operator}</td>
+                                        <td className="px-3 py-3 tnum text-14 text-td">{row.date}</td>
+                                        <td className="px-3 py-3 text-14 text-td">{row.operator}</td>
                                         <td className="px-3 py-3">
                                             {row.state === "voided" ? (
                                                 <Badge tone="danger">已作废</Badge>
@@ -996,7 +996,7 @@ export function OutboundPage() {
                                             <button
                                                 type="button"
                                                 onClick={() => setDetail(row)}
-                                                className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline"
+                                                className="text-14 font-medium text-primary-strong underline-offset-2 hover:underline"
                                             >
                                                 查看详情
                                             </button>
@@ -1045,7 +1045,7 @@ export function OutboundPage() {
                                     type="button"
                                     disabled={emergencyVoidRequest.isPending}
                                     onClick={() => setEmergencyTarget(currentDetail)}
-                                    className="min-h-10 rounded-btn border border-danger/30 bg-danger-soft px-4 text-13 font-medium text-danger disabled:opacity-50"
+                                    className="min-h-10 rounded-btn border border-danger/30 bg-danger-soft px-4 text-14 font-medium text-danger disabled:opacity-50"
                                 >
                                     紧急撤销
                                 </button>

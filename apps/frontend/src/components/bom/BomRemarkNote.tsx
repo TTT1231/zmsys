@@ -12,7 +12,7 @@ export function BomRemarkNote({ remark, className = "" }: { remark?: string; cla
             className={`flex gap-2.5 rounded-btn border border-warning/40 bg-warning-soft px-3 py-2.5 ${className}`}
         >
             <Icon name="alert" size={15} className="mt-0.5 shrink-0 text-warning" />
-            <p className="min-w-0 whitespace-pre-wrap text-12.5 leading-5 text-td">
+            <p className="min-w-0 whitespace-pre-wrap text-13 leading-5 text-td">
                 BOM 备注：<span className="font-medium">{text || "—"}</span>
             </p>
         </div>

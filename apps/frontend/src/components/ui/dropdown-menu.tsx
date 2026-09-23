@@ -33,7 +33,7 @@ export function DropdownMenuItem({ className, ...props }: React.ComponentProps<t
     return (
         <DropdownMenuPrimitive.Item
             className={cn(
-                "flex min-h-10 max-lg:min-h-[44px] cursor-pointer select-none items-center gap-2.5 rounded-btn px-2.5 text-13 text-ink outline-none transition",
+                "flex min-h-10 max-lg:min-h-[44px] cursor-pointer select-none items-center gap-2.5 rounded-btn px-2.5 text-14 text-ink outline-none transition",
                 "data-highlighted:bg-soft data-highlighted:text-ink",
                 "data-disabled:pointer-events-none data-disabled:opacity-50",
                 className,
@@ -51,7 +51,7 @@ export function DropdownMenuRadioItem({
     return (
         <DropdownMenuPrimitive.RadioItem
             className={cn(
-                "relative flex min-h-10 max-lg:min-h-11 cursor-pointer select-none items-center rounded-btn py-2 pr-2.5 pl-8 text-13 text-ink outline-none transition",
+                "relative flex min-h-10 max-lg:min-h-11 cursor-pointer select-none items-center rounded-btn py-2 pr-2.5 pl-8 text-14 text-ink outline-none transition",
                 "data-highlighted:bg-soft data-highlighted:text-ink",
                 "data-[state=checked]:bg-primary-soft/70 data-[state=checked]:font-medium data-[state=checked]:text-primary-strong",
                 "data-disabled:pointer-events-none data-disabled:opacity-50",
@@ -70,7 +70,7 @@ export function DropdownMenuRadioItem({
 export function DropdownMenuLabel({ className, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Label>) {
     return (
         <DropdownMenuPrimitive.Label
-            className={cn("px-2.5 py-2 text-13 font-semibold text-ink", className)}
+            className={cn("px-2.5 py-2 text-14 font-semibold text-ink", className)}
             {...props}
         />
     );

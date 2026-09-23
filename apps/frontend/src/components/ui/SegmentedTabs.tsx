@@ -42,7 +42,7 @@ export function SegmentedTabs({ tabs, value, onChange, className }: SegmentedTab
                     aria-selected={tab.value === value}
                     onClick={() => onChange(tab.value)}
                     className={cn(
-                        "relative z-10 flex h-9 cursor-pointer items-center justify-center rounded-full text-13 font-medium whitespace-nowrap transition-colors",
+                        "relative z-10 flex h-9 cursor-pointer items-center justify-center rounded-full text-14 font-medium whitespace-nowrap transition-colors",
                         tab.value === value ? "text-primary-strong" : "text-muted hover:text-ink",
                     )}
                 >

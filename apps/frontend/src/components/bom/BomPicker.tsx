@@ -33,15 +33,15 @@ export function BomPicker({ boms, selected, onSelect, error, rowExtra }: BomPick
                     onChange={event => setKeyword(event.target.value)}
                     placeholder="BOM / 物料"
                     aria-label="搜索 BOM"
-                    className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
+                    className="w-full bg-transparent text-14 text-ink outline-none placeholder:text-subtle"
                 />
             </label>
-            <p className="text-12 text-muted" aria-live="polite">
+            <p className="text-13 text-muted" aria-live="polite">
                 共 {num(filtered.length)} 条 BOM 可选
             </p>
             <div className="flex max-h-60 flex-col gap-1.5 overflow-y-auto">
                 {filtered.length === 0 && (
-                    <p className="py-3 text-center text-12.5 text-subtle">没有匹配的 BOM，请调整关键字</p>
+                    <p className="py-3 text-center text-13 text-subtle">没有匹配的 BOM，请调整关键字</p>
                 )}
                 {filtered.map(bom => {
                     const active = selected?.code === bom.code;
@@ -56,23 +56,23 @@ export function BomPicker({ boms, selected, onSelect, error, rowExtra }: BomPick
                                 active ? "border-primary-border bg-primary-soft/50" : "border-line",
                             )}
                         >
-                            <span className="text-11.5 font-medium text-muted">{bom.name}</span>
-                            <span className="tnum ml-2 text-12.5 font-semibold text-primary-strong">{bom.code}</span>
+                            <span className="text-12 font-medium text-muted">{bom.name}</span>
+                            <span className="tnum ml-2 text-13 font-semibold text-primary-strong">{bom.code}</span>
                             {active && (
-                                <span className="ml-2 rounded-full bg-surface px-1.5 py-0.5 text-10.5 font-medium text-success">
+                                <span className="ml-2 rounded-full bg-surface px-1.5 py-0.5 text-11 font-medium text-success">
                                     已选
                                 </span>
                             )}
-                            <span className="mt-0.5 block truncate text-11.5 text-muted" title={bom.spec}>
+                            <span className="mt-0.5 block truncate text-12 text-muted" title={bom.spec}>
                                 {bom.spec}
                             </span>
-                            {extra && <span className="mt-0.5 block text-11 text-subtle">{extra}</span>}
+                            {extra && <span className="mt-0.5 block text-12 text-subtle">{extra}</span>}
                         </button>
                     );
                 })}
             </div>
             {error && (
-                <p role="alert" className="text-12 text-danger">
+                <p role="alert" className="text-13 text-danger">
                     {error}
                 </p>
             )}

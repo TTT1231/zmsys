@@ -96,12 +96,12 @@ function InboundBomPicker({
                 >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="tnum text-14 font-semibold text-primary-strong">{currentBom.code}</span>
-                        <span className="rounded-full bg-surface px-2 py-1 text-11 font-medium text-success">
+                        <span className="rounded-full bg-surface px-2 py-1 text-12 font-medium text-success">
                             已选择
                         </span>
                     </div>
-                    <p className="mt-1 text-12.5 text-td">{currentBom.name}</p>
-                    <p className="mt-1 wrap-break-word text-11.5 text-muted">{currentBom.spec}</p>
+                    <p className="mt-1 text-13 text-td">{currentBom.name}</p>
+                    <p className="mt-1 wrap-break-word text-12 text-muted">{currentBom.spec}</p>
                     {/* 工艺差异独立警示条：检验入库时需核对的差异 */}
                     <BomRemarkNote remark={currentBom.remark} className="mt-2" />
                 </div>
@@ -184,7 +184,7 @@ export function InboundModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -192,7 +192,7 @@ export function InboundModal({
                         type="button"
                         disabled={createInbound.isPending}
                         onClick={submit}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
+                        className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
                     >
                         {createInbound.isPending ? "正在登记…" : "确认入库"}
                     </button>
@@ -233,7 +233,7 @@ export function InboundModal({
                     />
                 </div>
                 {selectedBom && (
-                    <div className="rounded-xl border border-line bg-panel px-3.5 py-3 text-12.5 sm:col-span-2">
+                    <div className="rounded-xl border border-line bg-panel px-3.5 py-3 text-13 sm:col-span-2">
                         <div className="font-semibold text-ink">{selectedBom.code}</div>
                         <div className="mt-1 text-muted">{selectedBom.spec}</div>
                         <div className="tnum mt-1.5 font-medium text-primary-strong">
@@ -362,7 +362,7 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -370,7 +370,7 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
                         type="button"
                         disabled={updateInbound.isPending}
                         onClick={submit}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
+                        className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
                     >
                         {updateInbound.isPending ? "正在保存…" : "确认修正"}
                     </button>
@@ -400,8 +400,8 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
                     }}
                 />
                 <div className="rounded-btn border border-line bg-panel px-3.5 py-2.5">
-                    <p className="text-11.5 text-muted">入库日期（固定为今天）</p>
-                    <p className="tnum text-13.5 font-medium text-ink">{todayIso()}</p>
+                    <p className="text-12 text-muted">入库日期（固定为今天）</p>
+                    <p className="tnum text-14 font-medium text-ink">{todayIso()}</p>
                 </div>
                 <TextArea
                     label="备注"
@@ -420,7 +420,7 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
                         clearError("reason");
                     }}
                 />
-                <p className="text-12 text-muted sm:col-span-2">
+                <p className="text-13 text-muted sm:col-span-2">
                     今天登记的记录可以直接修改；发现还有错可以再改，也可以作废。
                 </p>
             </div>
@@ -484,7 +484,7 @@ function VoidInboundModal({
                     placeholder="例如：登记了错误数量 / 入库了错误型号"
                     onChange={event => setReason(event.target.value)}
                 />
-                <p className="mt-2 text-12 text-muted">
+                <p className="mt-2 text-13 text-muted">
                     作废后这批数量会自动退回库存；记录保留作凭证，重新登记一条正确的就行。
                 </p>
             </form>
@@ -584,7 +584,7 @@ export function InboundPage() {
                                 setPage(1);
                             }}
                             placeholder="单号 / BOM / 登记人"
-                            className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
+                            className="w-full bg-transparent text-14 text-ink outline-none placeholder:text-subtle"
                         />
                     </label>
                     <select
@@ -594,7 +594,7 @@ export function InboundPage() {
                             setPage(1);
                         }}
                         aria-label="按品类筛选"
-                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-13 text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
                     >
                         <option>全部品类</option>
                         {categories.map(item => (
@@ -606,7 +606,7 @@ export function InboundPage() {
                         type="button"
                         onClick={clearFilters}
                         disabled={!filtersActive}
-                        className="min-h-10 px-1 text-13 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
+                        className="min-h-10 px-1 text-14 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
                     >
                         清空条件
                     </button>
@@ -696,7 +696,7 @@ export function InboundPage() {
                             scrollRef={tableScrollRef}
                         >
                             <thead>
-                                <tr className="text-left text-12 text-muted">
+                                <tr className="text-left text-13 text-muted">
                                     <SortTh
                                         label="入库单号"
                                         active={sort.key === "no"}
@@ -742,7 +742,7 @@ export function InboundPage() {
                                     const bom = bomByCode(snap, row.bomCode);
                                     return (
                                         <tr key={row.no} className="border-t border-line transition hover:bg-row-hover">
-                                            <td className="px-5 py-3 tnum text-13 font-semibold text-td-strong">
+                                            <td className="px-5 py-3 tnum text-14 font-semibold text-td-strong">
                                                 {row.no}
                                             </td>
                                             <td className="px-3 py-4">
@@ -752,19 +752,19 @@ export function InboundPage() {
                                                     bomCode={row.bomCode}
                                                 />
                                             </td>
-                                            <td className="px-3 py-3 text-12.5 leading-5 text-td">
+                                            <td className="px-3 py-3 text-13 leading-5 text-td">
                                                 <BomRemarkText remark={bom?.remark} />
                                             </td>
                                             <td className="px-3 py-3">
                                                 <QtyCell value={row.qty} />
                                             </td>
-                                            <td className="px-3 py-3 tnum text-13 text-td">{row.date}</td>
-                                            <td className="px-3 py-3 text-13 text-td">{row.inspector}</td>
+                                            <td className="px-3 py-3 tnum text-14 text-td">{row.date}</td>
+                                            <td className="px-3 py-3 text-14 text-td">{row.inspector}</td>
                                             <td className="px-5 py-3 text-center">
                                                 <button
                                                     type="button"
                                                     onClick={() => setVoucher(row)}
-                                                    className="text-13 font-medium text-primary-strong underline-offset-2 hover:underline"
+                                                    className="text-14 font-medium text-primary-strong underline-offset-2 hover:underline"
                                                 >
                                                     查看凭证
                                                 </button>
@@ -805,7 +805,7 @@ export function InboundPage() {
                                 type="button"
                                 disabled={voidRequest.isPending}
                                 onClick={() => setVoidTarget(currentVoucher)}
-                                className="min-h-10 rounded-btn border border-danger/30 bg-danger-soft px-4 text-13 font-medium text-danger disabled:opacity-50"
+                                className="min-h-10 rounded-btn border border-danger/30 bg-danger-soft px-4 text-14 font-medium text-danger disabled:opacity-50"
                             >
                                 作废
                             </button>

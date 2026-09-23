@@ -11,7 +11,7 @@ import { Loader } from "./Loader";
 export function ListState({ loading, empty, children }: { loading?: boolean; empty: boolean; children: ReactNode }) {
     if (loading)
         return (
-            <p role="status" className="flex items-center justify-center gap-2.5 p-8 text-13 text-muted">
+            <p role="status" className="flex items-center justify-center gap-2.5 p-8 text-14 text-muted">
                 <Loader size={16} /> 正在加载…
             </p>
         );
@@ -42,7 +42,7 @@ export function RecordCard({
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                     <h3 className="text-14 font-semibold text-ink wrap-anywhere">{title}</h3>
-                    {subtitle && <div className="mt-1 text-12 text-muted wrap-break-word">{subtitle}</div>}
+                    {subtitle && <div className="mt-1 text-13 text-muted wrap-break-word">{subtitle}</div>}
                 </div>
                 {badge && <div className="shrink-0">{badge}</div>}
             </div>
@@ -56,9 +56,9 @@ export function RecordCard({
 export function CardField({ label, value, strong }: { label: string; value: ReactNode; strong?: boolean }) {
     return (
         <div className={`flex min-w-0 items-baseline justify-between gap-3 ${strong ? "card-metric" : ""}`}>
-            <span className="text-13 text-muted">{label}</span>
+            <span className="text-14 text-muted">{label}</span>
             <span
-                className={`min-w-0 tnum text-right wrap-anywhere ${strong ? "text-22 font-semibold text-ink" : "text-13 font-medium text-td"}`}
+                className={`min-w-0 tnum text-right wrap-anywhere ${strong ? "text-22 font-semibold text-ink" : "text-14 font-medium text-td"}`}
             >
                 {value}
             </span>

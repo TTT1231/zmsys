@@ -48,7 +48,7 @@ export function BomSpecs({ bom, layout = "detail", showIdentity = true, categori
                     {groups.map((group, index) => (
                         <li
                             key={`${group.groupKey}-${index}`}
-                            className="max-w-full rounded-md bg-soft px-2 py-1 text-13 leading-5 text-td wrap-anywhere"
+                            className="max-w-full rounded-md bg-soft px-2 py-1 text-14 leading-5 text-td wrap-anywhere"
                         >
                             <span className="text-muted">{group.groupName}：</span>
                             {group.names.join("、")}
@@ -61,7 +61,7 @@ export function BomSpecs({ bom, layout = "detail", showIdentity = true, categori
                         <div key={`${group.groupKey}-${index}`} className="min-w-0">
                             <dt
                                 className={cn(
-                                    "text-12 leading-5 wrap-anywhere",
+                                    "text-13 leading-5 wrap-anywhere",
                                     record
                                         ? "text-muted"
                                         : "w-fit max-w-full rounded-sm bg-slate-100 px-1.5 py-px font-medium text-td",
@@ -72,7 +72,7 @@ export function BomSpecs({ bom, layout = "detail", showIdentity = true, categori
                             <dd
                                 className={cn(
                                     "mt-1 whitespace-pre-wrap leading-6 text-td wrap-anywhere",
-                                    record ? "text-13" : "text-15",
+                                    record ? "text-14" : "text-15",
                                 )}
                             >
                                 {group.names.join("、")}
@@ -89,8 +89,8 @@ export function BomSpecs({ bom, layout = "detail", showIdentity = true, categori
         <div className="min-w-0 text-left">
             {showIdentity && (
                 <div className={cn("mb-3 flex flex-wrap items-center gap-2", !record && "border-b border-line pb-3")}>
-                    <span className="text-12 text-muted">品类</span>
-                    <span className="text-13 text-td">{bom.name}</span>
+                    <span className="text-13 text-muted">品类</span>
+                    <span className="text-14 text-td">{bom.name}</span>
                 </div>
             )}
             {composition.composite && (bom.items?.length ?? 0) > 0 ? (
@@ -105,14 +105,14 @@ export function BomSpecs({ bom, layout = "detail", showIdentity = true, categori
                             )}
                         >
                             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
-                                <h4 className="text-13 font-semibold text-ink">{section.title}</h4>
-                                <span className="text-12 text-muted">{section.items.length} 项物料</span>
+                                <h4 className="text-14 font-semibold text-ink">{section.title}</h4>
+                                <span className="text-13 text-muted">{section.items.length} 项物料</span>
                             </div>
-                            {section.note && <p className="mb-3 text-12 leading-5 text-muted">{section.note}</p>}
+                            {section.note && <p className="mb-3 text-13 leading-5 text-muted">{section.note}</p>}
                             {section.items.length ? (
                                 renderItems(section.items)
                             ) : (
-                                <p className="text-13 text-muted">未记录本体物料</p>
+                                <p className="text-14 text-muted">未记录本体物料</p>
                             )}
                         </section>
                     ))}

@@ -31,7 +31,7 @@ function BrandMark({ withText }: { withText: boolean }) {
             </span>
             {withText && (
                 <span className="min-w-0">
-                    <span className="block truncate text-14.5 font-semibold text-ink">众茂生产系统</span>
+                    <span className="block truncate text-15 font-semibold text-ink">众茂生产系统</span>
                 </span>
             )}
         </span>
@@ -178,7 +178,7 @@ export function MobileBottomNav({ onOpenDrawer }: { onOpenDrawer: () => void }) 
         .slice(0, 3);
 
     const itemClass = ({ isActive }: { isActive: boolean }) =>
-        `flex flex-col items-center justify-center gap-0.5 text-10.5 transition ${
+        `flex flex-col items-center justify-center gap-0.5 text-11 transition ${
             isActive ? "bg-primary-soft font-semibold text-primary-strong" : "text-muted"
         }`;
 
@@ -205,7 +205,7 @@ export function MobileBottomNav({ onOpenDrawer }: { onOpenDrawer: () => void }) 
             <button
                 type="button"
                 onClick={onOpenDrawer}
-                className="flex flex-col items-center justify-center gap-0.5 text-10.5 text-muted"
+                className="flex flex-col items-center justify-center gap-0.5 text-11 text-muted"
             >
                 <Icon name="more" size={19} />
                 更多
@@ -303,8 +303,8 @@ export function Topbar({
                         >
                             {group && (
                                 <>
-                                    <span className="text-13 text-muted">{group}</span>
-                                    <span aria-hidden="true" className="text-13 text-subtle">
+                                    <span className="text-14 text-muted">{group}</span>
+                                    <span aria-hidden="true" className="text-14 text-subtle">
                                         /
                                     </span>
                                 </>

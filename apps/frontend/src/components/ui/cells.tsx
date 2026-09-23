@@ -31,7 +31,7 @@ export function CustomerCell({
                 {nameNode}
             </div>
             {(sub || note) && (
-                <div className="customer-cell-sub tnum mt-0.5 truncate text-11.5 text-td-strong" title={subText}>
+                <div className="customer-cell-sub tnum mt-0.5 truncate text-12 text-td-strong" title={subText}>
                     {sub}
                     {note && (
                         <span className="customer-cell-note">
@@ -48,9 +48,9 @@ export function CustomerCell({
 /* 数量单元格 */
 export function QtyCell({ value, unit, danger }: { value: number; unit?: string; danger?: boolean }) {
     return (
-        <span className={`tnum text-13 font-bold ${danger ? "text-danger" : "text-ink"}`}>
+        <span className={`tnum text-14 font-bold ${danger ? "text-danger" : "text-ink"}`}>
             {num(value)}
-            {unit && <i className="ml-0.5 text-11 font-normal text-subtle not-italic">{unit}</i>}
+            {unit && <i className="ml-0.5 text-12 font-normal text-subtle not-italic">{unit}</i>}
         </span>
     );
 }
@@ -58,7 +58,7 @@ export function QtyCell({ value, unit, danger }: { value: number; unit?: string;
 /* 日期单元格（可带已逾期徽章） */
 export function DateCell({ date, overdue }: { date: string; overdue?: boolean }) {
     return (
-        <span className="tnum inline-flex flex-wrap items-center gap-1.5 text-13 text-td">
+        <span className="tnum inline-flex flex-wrap items-center gap-1.5 text-14 text-td">
             <span className="whitespace-nowrap">{date}</span>
             {overdue && <Badge tone="danger">已逾期</Badge>}
         </span>

@@ -78,7 +78,7 @@ export function BomDetailModal({
                         <button
                             type="button"
                             onClick={onDelete}
-                            className="mr-auto min-h-10 rounded-btn border border-danger/30 bg-danger-soft px-4 text-13 font-medium text-danger"
+                            className="mr-auto min-h-10 rounded-btn border border-danger/30 bg-danger-soft px-4 text-14 font-medium text-danger"
                         >
                             删除 BOM
                         </button>
@@ -94,7 +94,7 @@ export function BomDetailModal({
                 aria-label="BOM 备注"
                 className="mt-4 rounded-input border border-dashed border-line-strong bg-warning-soft/40 p-3.5"
             >
-                <h3 className="text-12 font-medium text-muted">BOM 备注</h3>
+                <h3 className="text-13 font-medium text-muted">BOM 备注</h3>
                 <p className="mt-1.5 whitespace-pre-wrap text-14 leading-6 text-td wrap-anywhere">
                     {bom.remark || "—"}
                 </p>
@@ -153,7 +153,7 @@ function DeleteBomModal({ bom, onClose }: { bom: Bom | null; onClose: () => void
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -161,7 +161,7 @@ function DeleteBomModal({ bom, onClose }: { bom: Bom | null; onClose: () => void
                         type="button"
                         disabled={deleteBom.isPending}
                         onClick={submit}
-                        className="min-h-10 rounded-btn bg-danger px-4 text-13 font-medium text-white transition hover:opacity-90 disabled:opacity-60"
+                        className="min-h-10 rounded-btn bg-danger px-4 text-14 font-medium text-white transition hover:opacity-90 disabled:opacity-60"
                     >
                         {deleteBom.isPending ? "正在删除…" : "确认删除"}
                     </button>
@@ -170,7 +170,7 @@ function DeleteBomModal({ bom, onClose }: { bom: Bom | null; onClose: () => void
         >
             <div className="flex items-start gap-3 rounded-panel border border-[#fecdca] bg-danger-soft/60 p-4">
                 <Icon name="alert" size={20} className="mt-0.5 shrink-0 text-danger" />
-                <div className="text-13 leading-6 text-td">
+                <div className="text-14 leading-6 text-td">
                     即将删除 BOM <span className="tnum font-semibold text-ink">{bom.code}</span>（{bom.name}
                     ）。该 BOM 未被任何销售订单引用。
                     <p className="mt-1 font-medium text-danger">
@@ -391,7 +391,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                         type="button"
                         onClick={() => toggleCollapse(section.id)}
                         aria-expanded={!sectionCollapsed}
-                        className="flex min-h-8 w-full items-center gap-1.5 rounded-md px-1.5 text-12.5 font-semibold text-muted transition hover:text-td"
+                        className="flex min-h-8 w-full items-center gap-1.5 rounded-md px-1.5 text-13 font-semibold text-muted transition hover:text-td"
                     >
                         <Icon name={sectionCollapsed ? "chevron-right" : "chevron-down"} size={14} />
                         {section.name}
@@ -425,12 +425,12 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                     <button
                         type="button"
                         onClick={() => toggleCollapse(node.id)}
-                        className="flex-1 cursor-pointer text-left text-12.5 font-semibold text-td"
+                        className="flex-1 cursor-pointer text-left text-13 font-semibold text-td"
                     >
                         {node.name}
                     </button>
                     {nodeCollapsed && selectedCount > 0 && (
-                        <span className="tnum shrink-0 rounded-full bg-primary-soft px-1.5 py-0.5 text-10.5 font-medium text-primary-strong">
+                        <span className="tnum shrink-0 rounded-full bg-primary-soft px-1.5 py-0.5 text-11 font-medium text-primary-strong">
                             {node.multi ? `已选 ${selectedCount}` : node.qty ? `已选 · ×${selectedQty}` : "已选"}
                         </span>
                     )}
@@ -448,16 +448,16 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                     )}
                     {!node.multi &&
                         (node.qty ? (
-                            <span className="shrink-0 rounded-full border border-[#fed7aa] bg-warning-soft px-1.5 py-0.5 text-10.5 font-medium text-[#9a3412]">
+                            <span className="shrink-0 rounded-full border border-[#fed7aa] bg-warning-soft px-1.5 py-0.5 text-11 font-medium text-[#9a3412]">
                                 单选
                             </span>
                         ) : (
-                            <span className="shrink-0 text-11 text-subtle">单选</span>
+                            <span className="shrink-0 text-12 text-subtle">单选</span>
                         ))}
                 </div>
                 {!nodeCollapsed &&
                     (node.items.length === 0 ? (
-                        <p className="border-t border-line px-3 py-1.5 text-12 text-subtle">暂无物料</p>
+                        <p className="border-t border-line px-3 py-1.5 text-13 text-subtle">暂无物料</p>
                     ) : (
                         <ul className="border-t border-line">
                             {node.items.map(item => (
@@ -470,7 +470,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                                 checked={selectedIds.has(item.id)}
                                                 onChange={() => toggleItem(node, item.id)}
                                             />
-                                            <span className="text-13 text-td wrap-anywhere">{item.name}</span>
+                                            <span className="text-14 text-td wrap-anywhere">{item.name}</span>
                                         </label>
                                         {node.qty && selectedIds.has(item.id) && (
                                             <div className="flex shrink-0 items-center gap-0.5">
@@ -478,18 +478,18 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                                     type="button"
                                                     aria-label={`${item.name} 数量减一`}
                                                     onClick={() => changeQty(item.id, -1)}
-                                                    className="grid size-5 place-items-center rounded-md border border-line-strong bg-surface text-13 leading-none text-td transition hover:border-primary-border hover:bg-primary-soft hover:text-primary"
+                                                    className="grid size-5 place-items-center rounded-md border border-line-strong bg-surface text-14 leading-none text-td transition hover:border-primary-border hover:bg-primary-soft hover:text-primary"
                                                 >
                                                     −
                                                 </button>
-                                                <span className="tnum min-w-6 text-center text-12.5 font-semibold text-td">
+                                                <span className="tnum min-w-6 text-center text-13 font-semibold text-td">
                                                     ×{quantities[item.id] ?? 1}
                                                 </span>
                                                 <button
                                                     type="button"
                                                     aria-label={`${item.name} 数量加一`}
                                                     onClick={() => changeQty(item.id, 1)}
-                                                    className="grid size-5 place-items-center rounded-md border border-line-strong bg-surface text-13 leading-none text-td transition hover:border-primary-border hover:bg-primary-soft hover:text-primary"
+                                                    className="grid size-5 place-items-center rounded-md border border-line-strong bg-surface text-14 leading-none text-td transition hover:border-primary-border hover:bg-primary-soft hover:text-primary"
                                                 >
                                                     +
                                                 </button>
@@ -517,7 +517,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                         <button
                             type="button"
                             onClick={onClose}
-                            className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
+                            className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
                         >
                             取消
                         </button>
@@ -525,7 +525,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                             type="button"
                             disabled={createBom.isPending}
                             onClick={submit}
-                            className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
+                            className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
                         >
                             {createBom.isPending ? "正在保存…" : "保存 BOM"}
                         </button>
@@ -554,7 +554,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
 
                     {(category?.childCategories?.length ?? 0) > 0 && (
                         <fieldset aria-label={childLabel} className="shrink-0">
-                            <legend className="mb-1 text-12.5 font-medium text-td">
+                            <legend className="mb-1 text-13 font-medium text-td">
                                 {childLabel}
                                 <span className="ml-1 text-danger">*</span>
                             </legend>
@@ -565,7 +565,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                         <label
                                             key={key}
                                             className={cn(
-                                                "flex min-h-11 cursor-pointer items-center gap-2 rounded-input border px-4 text-13",
+                                                "flex min-h-11 cursor-pointer items-center gap-2 rounded-input border px-4 text-14",
                                                 childCategoryKey === key
                                                     ? "border-primary bg-primary-soft text-primary-strong"
                                                     : "border-line-strong bg-surface",
@@ -591,7 +591,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                 })}
                             </div>
                             {errors.childCategory && (
-                                <p id="bom-child-error" role="alert" className="mt-1 text-12 text-danger">
+                                <p id="bom-child-error" role="alert" className="mt-1 text-13 text-danger">
                                     {errors.childCategory}
                                 </p>
                             )}
@@ -602,7 +602,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                         <div className="flex min-h-60 flex-1 items-center justify-center rounded-panel border border-dashed border-line-strong bg-panel p-8 text-center">
                             <div>
                                 <p className="text-14 font-medium text-td">配置物料</p>
-                                <p className="mt-2 text-13 text-muted">
+                                <p className="mt-2 text-14 text-muted">
                                     {category ? `请选择${childLabel}，随后配置物料` : "请选择产品品类，随后配置物料"}
                                 </p>
                             </div>
@@ -612,7 +612,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                     {category && (!category.childCategories?.length || childCategoryKey) && (
                         <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,5fr)_minmax(0,3fr)] lg:grid-rows-[minmax(0,1fr)]">
                             <fieldset className="flex min-h-0 flex-col rounded-panel border border-line bg-surface lg:overflow-hidden">
-                                <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">可选物料</legend>
+                                <legend className="px-1.5 text-13 font-semibold text-primary-strong">可选物料</legend>
                                 <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-3">
                                     {/* 本品类物料（跌倒开关：跌倒盖/跌倒底/钢球/翘板） */}
                                     {tipoverBlocks.map(({ section, groups }) => {
@@ -624,7 +624,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                                         type="button"
                                                         onClick={() => toggleCollapse(section.id)}
                                                         aria-expanded={!sectionCollapsed}
-                                                        className="flex min-h-8 w-full items-center gap-1.5 rounded-md px-1.5 text-12.5 font-semibold text-muted transition hover:text-td"
+                                                        className="flex min-h-8 w-full items-center gap-1.5 rounded-md px-1.5 text-13 font-semibold text-muted transition hover:text-td"
                                                     >
                                                         <Icon
                                                             name={sectionCollapsed ? "chevron-right" : "chevron-down"}
@@ -650,7 +650,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                                 type="button"
                                                 onClick={() => toggleCollapse("child-category-wrapper")}
                                                 aria-expanded={!collapsed.has("child-category-wrapper")}
-                                                className="flex min-h-8 w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-12.5 font-semibold text-primary-strong transition hover:text-primary-strong"
+                                                className="flex min-h-8 w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-13 font-semibold text-primary-strong transition hover:text-primary-strong"
                                             >
                                                 <Icon
                                                     name={
@@ -672,7 +672,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                 </div>
                             </fieldset>
                             <fieldset className="flex min-h-0 flex-col rounded-panel border border-line bg-panel/40 lg:overflow-hidden">
-                                <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">
+                                <legend className="px-1.5 text-13 font-semibold text-primary-strong">
                                     已选物料（{selectedRows.length}）
                                 </legend>
                                 <div
@@ -682,23 +682,23 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                     )}
                                 >
                                     {selectedRows.length === 0 ? (
-                                        <p className="text-center text-12.5 text-subtle">从左侧勾选物料</p>
+                                        <p className="text-center text-13 text-subtle">从左侧勾选物料</p>
                                     ) : (
                                         <div className="space-y-2.5">
                                             {selectedSections.map(section => (
                                                 <div key={section.groupName}>
-                                                    <p className="px-0.5 text-11.5 text-muted">{section.groupName}</p>
+                                                    <p className="px-0.5 text-12 text-muted">{section.groupName}</p>
                                                     <ul className="mt-1 space-y-1.5">
                                                         {section.rows.map(row => (
                                                             <li
                                                                 key={row.id}
                                                                 className="flex items-center gap-2 rounded-btn border border-line bg-surface px-2.5 py-1.5"
                                                             >
-                                                                <span className="min-w-0 flex-1 text-13 text-td wrap-anywhere">
+                                                                <span className="min-w-0 flex-1 text-14 text-td wrap-anywhere">
                                                                     {row.name}
                                                                 </span>
                                                                 {qtyItemIds.has(row.id) && (
-                                                                    <span className="tnum shrink-0 rounded-md bg-primary-soft px-2 py-0.5 text-12 font-semibold text-primary-strong">
+                                                                    <span className="tnum shrink-0 rounded-md bg-primary-soft px-2 py-0.5 text-13 font-semibold text-primary-strong">
                                                                         ×{quantities[row.id] ?? 1}
                                                                     </span>
                                                                 )}
@@ -723,7 +723,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                     )}
 
                     <fieldset className="shrink-0 rounded-panel border border-line bg-panel/40">
-                        <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">备注</legend>
+                        <legend className="px-1.5 text-13 font-semibold text-primary-strong">备注</legend>
                         <div className="p-2">
                             <textarea
                                 value={remark}
@@ -732,13 +732,13 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                 maxLength={500}
                                 aria-label="BOM 备注"
                                 placeholder="如：杆子白色。最多500字！！"
-                                className="min-h-10 w-full resize-y rounded-input border border-line-strong bg-surface px-3 py-1.5 text-13 leading-5 text-td outline-none transition placeholder:text-subtle focus:border-primary"
+                                className="min-h-10 w-full resize-y rounded-input border border-line-strong bg-surface px-3 py-1.5 text-14 leading-5 text-td outline-none transition placeholder:text-subtle focus:border-primary"
                             />
                         </div>
                     </fieldset>
 
                     {errors.materials && (
-                        <p role="alert" className="text-12 text-danger">
+                        <p role="alert" className="text-13 text-danger">
                             {errors.materials}
                         </p>
                     )}
@@ -754,7 +754,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                         <button
                             type="button"
                             onClick={() => setPendingChange(null)}
-                            className="min-h-10 rounded-btn border border-line-strong px-4 text-13"
+                            className="min-h-10 rounded-btn border border-line-strong px-4 text-14"
                         >
                             保留当前配置
                         </button>
@@ -767,7 +767,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                     setPendingChange(null);
                                 }
                             }}
-                            className="min-h-10 rounded-btn bg-primary px-4 text-13 text-white"
+                            className="min-h-10 rounded-btn bg-primary px-4 text-14 text-white"
                         >
                             确认切换
                         </button>
@@ -805,13 +805,13 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                 }
             >
                 <div className="flex flex-col gap-3">
-                    <p className="text-13 leading-6 text-td">
+                    <p className="text-14 leading-6 text-td">
                         已存在一模一样的 BOM，没有重复创建。直接用下面这个编号：
                     </p>
                     <p className="tnum rounded-input border border-dashed border-line-strong bg-soft px-4 py-3 text-center text-24 font-bold tracking-wide text-primary">
                         {duplicateCode}
                     </p>
-                    <p className="text-12 leading-5 text-muted">点「复制 BOM 编号」即可粘贴到销售订单。</p>
+                    <p className="text-13 leading-5 text-muted">点「复制 BOM 编号」即可粘贴到销售订单。</p>
                 </div>
             </Modal>
         </>
@@ -916,7 +916,7 @@ export function BomPage() {
                                 setPage(1);
                             }}
                             placeholder="BOM / 品类 / 型号 / 物料"
-                            className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
+                            className="w-full bg-transparent text-14 text-ink outline-none placeholder:text-subtle"
                         />
                     </label>
                     <select
@@ -925,7 +925,7 @@ export function BomPage() {
                             setCategory(event.target.value);
                             setPage(1);
                         }}
-                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-13 text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
                         aria-label="按品类筛选"
                     >
                         <option>全部品类</option>
@@ -937,7 +937,7 @@ export function BomPage() {
                         type="button"
                         onClick={clearFilters}
                         disabled={!filtersActive}
-                        className="min-h-10 px-1 text-13 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
+                        className="min-h-10 px-1 text-14 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
                     >
                         清空条件
                     </button>
@@ -1016,7 +1016,7 @@ export function BomPage() {
                             scrollRef={tableScrollRef}
                         >
                             <thead>
-                                <tr className="text-left text-12 text-muted">
+                                <tr className="text-left text-13 text-muted">
                                     <th className="px-5 py-2.5 font-semibold" style={{ width: "6%" }}>
                                         序号
                                     </th>
@@ -1057,19 +1057,19 @@ export function BomPage() {
                                         key={bom.code}
                                         className="border-t border-line align-top transition hover:bg-row-hover"
                                     >
-                                        <td className="px-5 py-3 tnum text-13 text-muted">
+                                        <td className="px-5 py-3 tnum text-14 text-muted">
                                             {(page - 1) * pageSize + index + 1}
                                         </td>
                                         <td className="px-3 py-3">
                                             <button
                                                 type="button"
                                                 onClick={() => setDetail(bom)}
-                                                className="tnum text-13 font-semibold text-primary-strong underline-offset-2 hover:underline"
+                                                className="tnum text-14 font-semibold text-primary-strong underline-offset-2 hover:underline"
                                             >
                                                 {bom.code}
                                             </button>
                                         </td>
-                                        <td className="px-3 py-3 text-13 text-td">{bom.name}</td>
+                                        <td className="px-3 py-3 text-14 text-td">{bom.name}</td>
                                         <td className="px-3 py-3">
                                             <BomCell
                                                 categories={categoriesQuery.data}
@@ -1078,7 +1078,7 @@ export function BomPage() {
                                                 showIdentity={false}
                                             />
                                         </td>
-                                        <td className="px-3 py-3 text-13 leading-5 text-td">
+                                        <td className="px-3 py-3 text-14 leading-5 text-td">
                                             <span
                                                 className="line-clamp-2 whitespace-pre-line"
                                                 title={bom.remark || undefined}

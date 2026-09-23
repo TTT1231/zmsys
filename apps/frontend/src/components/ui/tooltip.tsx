@@ -19,7 +19,7 @@ export function TooltipContent({
                 sideOffset={sideOffset}
                 className={cn(
                     /* 底/字取一对反色令牌：浅色=深底浅字，暗色=浅底深字，两种主题都是高对比 */
-                    "z-150 rounded-md bg-ink px-2.5 py-1.5 text-12 leading-none whitespace-nowrap text-canvas shadow-modal",
+                    "z-150 rounded-md bg-ink px-2.5 py-1.5 text-13 leading-none whitespace-nowrap text-canvas shadow-modal",
                     "data-[state=delayed-open]:animate-fade-in",
                     className,
                 )}
