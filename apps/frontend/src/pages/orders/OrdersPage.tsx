@@ -977,6 +977,7 @@ export function OrdersPage() {
                                             "客户",
                                             "客户编码",
                                             "BOM 编码",
+                                            "BOM 备注",
                                             "订单数量",
                                             "交货日期",
                                             "累计出库",
@@ -987,6 +988,7 @@ export function OrdersPage() {
                                             order.customer,
                                             order.customerCode,
                                             order.bomCode,
+                                            bomByCode(snap, order.bomCode)?.remark ?? "",
                                             String(order.qty),
                                             order.deliverDate,
                                             String(order.outbound),
@@ -1019,7 +1021,7 @@ export function OrdersPage() {
                     ) : (
                         <DataTable
                             tableId="orders"
-                            defaultWidths={[154, 160, 360, 130, 138, 140, 105, 120]}
+                            defaultWidths={[154, 160, 360, 150, 130, 138, 140, 105, 120]}
                             recordCount={filtered.length}
                             identityColumn={0}
                             scrollRef={tableScrollRef}
@@ -1039,6 +1041,9 @@ export function OrdersPage() {
                                     </th>
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "22%" }}>
                                         成品 / BOM
+                                    </th>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "12%" }}>
+                                        BOM 备注
                                     </th>
                                     <SortTh
                                         label="订单数量"
@@ -1078,7 +1083,7 @@ export function OrdersPage() {
                             <tbody>
                                 {pageRows.length === 0 && (
                                     <tr>
-                                        <td colSpan={8} className="px-5 py-10 text-center">
+                                        <td colSpan={9} className="px-5 py-10 text-center">
                                             <EmptyState description="没有找到匹配的订单" />
                                         </td>
                                     </tr>
@@ -1112,6 +1117,14 @@ export function OrdersPage() {
                                                     bom={bom}
                                                     bomCode={order.bomCode}
                                                 />
+                                            </td>
+                                            <td className="px-3 py-4 text-14 leading-5 text-td">
+                                                <span
+                                                    className="line-clamp-2 whitespace-pre-line"
+                                                    title={bom?.remark || undefined}
+                                                >
+                                                    {bom?.remark || "—"}
+                                                </span>
                                             </td>
                                             <td className="px-3 py-4">
                                                 <QtyCell value={order.qty} />
