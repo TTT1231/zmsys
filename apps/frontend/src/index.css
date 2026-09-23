@@ -1141,3 +1141,23 @@ button:active:not(:disabled) {
         min-height: 44px;
     }
 }
+
+/* 侧栏桌面端收起动画（vben 式）：盒子恒宽，可见宽度由占位 div 瞬变让位，
+   侧栏本体用 clip-path 从右往左裁剪（合成器动画，逐帧零布局）。
+   裁剪量 = 盒宽 - 可见宽：tree 折叠 256-76=180，group 折叠/tree 最大化 256，
+   mixed 折叠 332-76=256，mixed 最大化 332。手写类而非 Tailwind 任意值：
+   动态挂载的任意值类名 JIT 扫描不稳定。仅桌面生效，移动端走 transform 抽屉 */
+@media (min-width: 1024px) {
+    .sidebar-clip-0 {
+        clip-path: inset(0 0 0 0);
+    }
+    .sidebar-clip-180 {
+        clip-path: inset(0 180px 0 0);
+    }
+    .sidebar-clip-256 {
+        clip-path: inset(0 256px 0 0);
+    }
+    .sidebar-clip-332 {
+        clip-path: inset(0 332px 0 0);
+    }
+}

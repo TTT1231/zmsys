@@ -95,14 +95,15 @@ export function AppLayout() {
         maximized,
     };
 
-    /* 内容区：两骨架共用 */
+    /* 内容区：两骨架共用。最大化时 padding 瞬变（不参与过渡）：布局占位的让位一次完成，
+       避免表格随 padding 逐帧重排（vben 式，动画只剩侧栏裁剪与顶栏推出） */
     const mainElement = (
         <main
             id="mainContent"
             className={
                 maximized
-                    ? "mx-auto flex w-full min-w-0 flex-1 flex-col overflow-hidden p-3 transition-[padding] duration-300 lg:p-4"
-                    : "mx-auto w-full min-w-0 flex-1 px-[clamp(16px,2vw,32px)] pt-6 pb-[calc(76px+env(safe-area-inset-bottom))] transition-[padding] duration-300 lg:pb-8"
+                    ? "mx-auto flex w-full min-w-0 flex-1 flex-col overflow-hidden p-3 lg:p-4"
+                    : "mx-auto w-full min-w-0 flex-1 px-[clamp(16px,2vw,32px)] pt-6 pb-[calc(76px+env(safe-area-inset-bottom))] lg:pb-8"
             }
         >
             {accessDenied ? (

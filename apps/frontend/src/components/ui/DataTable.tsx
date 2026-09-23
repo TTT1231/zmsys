@@ -179,7 +179,15 @@ function TableView({
     useLayoutEffect(() => {
         const element = bodyRef.current;
         if (!element) return;
-        const measure = () => setViewport(current => (current === element.clientWidth ? current : element.clientWidth));
+        // 视口测量合并到 rAF：布局动画期间 RO 可能同帧多次回调，逐次 setState 会让
+        // 整表跟着逐帧重渲染（列宽重算 + 表头重测）；合并后每帧至多一次
+        let raf = 0;
+        const measure = () => {
+            cancelAnimationFrame(raf);
+            raf = requestAnimationFrame(() => {
+                setViewport(current => (current === element.clientWidth ? current : element.clientWidth));
+            });
+        };
         const onScroll = () => setScrolled(element.scrollLeft > 0);
         measure();
         onScroll();
@@ -188,6 +196,7 @@ function TableView({
         element.addEventListener("scroll", onScroll, { passive: true });
         window.addEventListener("resize", measure);
         return () => {
+            cancelAnimationFrame(raf);
             observer?.disconnect();
             element.removeEventListener("scroll", onScroll);
             window.removeEventListener("resize", measure);
