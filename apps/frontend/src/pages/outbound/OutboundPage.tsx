@@ -744,7 +744,7 @@ export function OutboundPage() {
                     ) : (
                         <DataTable
                             tableId="outbound"
-                            defaultWidths={[158, 190, 110, 100, 302, 150, 110, 110, 150, 90, 90, 100]}
+                            defaultWidths={[158, 190, 110, 100, 302, 150, 110, 110, 90, 90, 150, 100]}
                             recordCount={filtered.length}
                             identityColumn={0}
                             pinnedStart={[1, 2]}
@@ -784,9 +784,10 @@ export function OutboundPage() {
                                         onSort={() => applySort("date")}
                                         className="px-3"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold">出库备注</th>
+                                    {/* 出库备注基本不填，排到状态之后、操作列之前 */}
                                     <th className="px-3 py-2.5 text-14 font-semibold">操作人</th>
                                     <th className="px-3 py-2.5 font-semibold">状态</th>
+                                    <th className="px-3 py-2.5 font-semibold">出库备注</th>
                                     <th className="px-5 py-2.5 text-center font-semibold">操作</th>
                                 </tr>
                             </thead>
@@ -839,9 +840,6 @@ export function OutboundPage() {
                                                 <QtyCell value={row.qty} />
                                             </td>
                                             <td className="px-3 py-3 tnum text-14 text-td">{row.date}</td>
-                                            <td className="px-3 py-3">
-                                                <RemarkCell remark={row.remark} />
-                                            </td>
                                             <td className="px-3 py-3 text-14 text-td">{row.operator}</td>
                                             <td className="px-3 py-3">
                                                 {row.state === "voided" ? (
@@ -849,6 +847,9 @@ export function OutboundPage() {
                                                 ) : (
                                                     <Badge tone="pending">已登记</Badge>
                                                 )}
+                                            </td>
+                                            <td className="px-3 py-3">
+                                                <RemarkCell remark={row.remark} />
                                             </td>
                                             <td className="px-5 py-3 text-center">
                                                 <button
