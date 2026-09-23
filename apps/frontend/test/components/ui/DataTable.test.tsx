@@ -220,7 +220,7 @@ it("拖动只改变当前列，取消拖动恢复原宽", () => {
     expect(handle).toHaveAttribute("aria-valuenow", "160");
 });
 
-it("表头与表体在同一个横向滚动区，纵向不再限制高度", () => {
+it("表头与表体在同一个滚动区，组件自身不写死纵向高度（限高交给布局 CSS）", () => {
     const { container } = render(<Table />);
     const body = container.querySelector(".managed-table-body")!;
     expect(body.querySelector("thead")).not.toBeNull();
