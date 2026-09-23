@@ -30,15 +30,18 @@ export function RecordCard({
     badge,
     children,
     actions,
+    voided,
 }: {
     title: ReactNode;
     subtitle?: ReactNode;
     badge?: ReactNode;
     children?: ReactNode;
     actions?: ReactNode;
+    /** 作废记录：左竖条 + 危险底色 + 标题删除线（样式见 .record-card-voided） */
+    voided?: boolean;
 }) {
     return (
-        <article className="record-card">
+        <article className={voided ? "record-card record-card-voided" : "record-card"}>
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                     <h3 className="text-14 font-semibold text-ink wrap-anywhere">{title}</h3>

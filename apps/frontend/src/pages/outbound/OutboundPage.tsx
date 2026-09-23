@@ -868,6 +868,7 @@ export function OutboundPage() {
                                 key={row.no}
                                 title={row.no}
                                 subtitle={`${row.customer} · ${row.orderNo}`}
+                                voided={row.state === "voided"}
                                 badge={
                                     <Badge tone={row.state === "voided" ? "danger" : "progress"}>
                                         {outboundStateLabel(row)}
@@ -953,7 +954,8 @@ export function OutboundPage() {
                                         key={row.no}
                                         className={
                                             row.state === "voided"
-                                                ? "border-t border-line bg-danger-soft/60"
+                                                ? /* row-voided：底色落 td 层，避开固定列白底与全局 hover 盖色 */
+                                                  "row-voided border-t border-line"
                                                 : "border-t border-line transition hover:bg-row-hover"
                                         }
                                     >

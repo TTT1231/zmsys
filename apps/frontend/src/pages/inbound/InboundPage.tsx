@@ -662,6 +662,7 @@ export function InboundPage() {
                                     key={row.no}
                                     title={row.no}
                                     subtitle={row.date}
+                                    voided={row.status === "voided"}
                                     badge={
                                         <Badge tone={row.status === "voided" ? "danger" : "success"}>
                                             {row.status === "voided" ? "已作废" : "已入库"}
@@ -740,10 +741,33 @@ export function InboundPage() {
                                 )}
                                 {pageRows.map(row => {
                                     const bom = bomByCode(snap, row.bomCode);
+                                    const voided = row.status === "voided";
                                     return (
-                                        <tr key={row.no} className="border-t border-line transition hover:bg-row-hover">
+                                        <tr
+                                            key={row.no}
+                                            className={
+                                                voided
+                                                    ? "row-voided border-t border-line"
+                                                    : "border-t border-line transition hover:bg-row-hover"
+                                            }
+                                        >
                                             <td className="px-5 py-3 tnum text-14 font-semibold text-td-strong">
-                                                {row.no}
+                                                {/* 作废单号加删除线；内联小徽章兜底（颜色不是唯一指示器），
+                                                    紧凑账本档经 .void-flag 收纳，识别交给不占空间的底色/竖条/删除线 */}
+                                                <span className="inline-flex items-center gap-2">
+                                                    <span
+                                                        className={
+                                                            voided ? "line-through decoration-danger/50" : undefined
+                                                        }
+                                                    >
+                                                        {row.no}
+                                                    </span>
+                                                    {voided && (
+                                                        <span className="void-flag">
+                                                            <Badge tone="danger">已作废</Badge>
+                                                        </span>
+                                                    )}
+                                                </span>
                                             </td>
                                             <td className="px-3 py-4">
                                                 <BomCell
