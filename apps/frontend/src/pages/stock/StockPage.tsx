@@ -62,7 +62,7 @@ function FlowTypeTag({ type }: { type: StockFlowRow["type"] }) {
               ? "bg-danger-soft text-danger"
               : "bg-accent-soft text-accent";
     return (
-        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-13 font-medium ${tone}`}>
+        <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-0.5 text-13 font-medium ${tone}`}>
             {FLOW_TYPE_LABEL[type]}
         </span>
     );

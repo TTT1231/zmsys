@@ -115,6 +115,8 @@ function TableView({
     const [settings, setSettings] = useState(false);
     const [activeColumn, setActiveColumn] = useState<string | null>(null);
     const [draftPreferences, setDraftPreferences] = useState<Record<string, number> | null>(null);
+    // 横向滚动进行中（scrollLeft>0）才显示固定区分界（对齐 antd 固定列：未滚动时无竖线阴影）
+    const [scrolled, setScrolled] = useState(false);
     const dragRef = useRef<{
         label: string;
         start: number;
@@ -178,12 +180,16 @@ function TableView({
         const element = bodyRef.current;
         if (!element) return;
         const measure = () => setViewport(current => (current === element.clientWidth ? current : element.clientWidth));
+        const onScroll = () => setScrolled(element.scrollLeft > 0);
         measure();
+        onScroll();
         const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
         observer?.observe(element);
+        element.addEventListener("scroll", onScroll, { passive: true });
         window.addEventListener("resize", measure);
         return () => {
             observer?.disconnect();
+            element.removeEventListener("scroll", onScroll);
             window.removeEventListener("resize", measure);
         };
     }, []);
@@ -268,6 +274,7 @@ function TableView({
         <div
             className="managed-table"
             data-density={preferences.density}
+            data-scrolled={scrolled || undefined}
             data-resizing={!!draftPreferences || undefined}
         >
             <div className="table-display-toolbar">

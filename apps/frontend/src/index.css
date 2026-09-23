@@ -941,9 +941,10 @@ button:active:not(:disabled) {
 .managed-table [data-pinned="start"] {
     left: 0;
 }
-/* 多列固定时，最右 start 列承担固定区与滚动区的分界：竖线 + 右投鹰影，
-   滚动内容从固定列下穿过时有明确的层界（单列固定沿用原视觉，不加） */
-.managed-table [data-pinned-edge="start"] {
+/* 多列固定时，最右 start 列承担固定区与滚动区的分界：竖线 + 右侧投影。
+   仅在横向滚动进行中显示（data-scrolled 由 scrollLeft>0 驱动），
+   未滚动时无分界线，对齐 antd 固定列"滚动才出阴影"的体验；end 侧操作列维持原状 */
+.managed-table[data-scrolled] [data-pinned-edge="start"] {
     border-right: 1px solid var(--color-line);
     box-shadow: 6px 0 12px -10px var(--color-muted);
 }
