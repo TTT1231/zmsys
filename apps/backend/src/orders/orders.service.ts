@@ -265,13 +265,6 @@ export class OrdersService {
             if (current.lifecycleStatus === "ARCHIVED") {
                 throw new ConflictException("订单已归档，不可取消");
             }
-            const registered = await tx.outboundShipment.findFirst({
-                where: { orderId: current.id, state: "REGISTERED" },
-                select: { id: true },
-            });
-            if (registered) {
-                throw new ConflictException("存在已登记未打印的出库单，请先作废后再取消订单");
-            }
             const outbound = await this.outboundNetOf(tx, current.id);
             if (outbound >= current.qty) {
                 throw new ConflictException("订单已全部发货，没有剩余量可取消");
@@ -365,13 +358,6 @@ export class OrdersService {
                 if (outbound === 0) {
                     throw new ConflictException("订单尚未发货，无需归档；手误订单请取消或删除");
                 }
-            }
-            const registered = await tx.outboundShipment.findFirst({
-                where: { orderId: current.id, state: "REGISTERED" },
-                select: { id: true },
-            });
-            if (registered) {
-                throw new ConflictException("存在已登记未打印的出库单，请先作废或打印后再归档");
             }
 
             const updated = await tx.salesOrderTable.update({

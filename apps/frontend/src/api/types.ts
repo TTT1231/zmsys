@@ -1,4 +1,4 @@
-/* API 契约类型中心：与 docs/api/openapi.yaml、mocks/request 三方对齐 */
+/* API 契约类型中心：与 docs/openapi.yaml 保持一致 */
 import type { RoleGrant, RoleId } from "@/data/permissions";
 
 /* ---------- 业务实体（对应 db-scheme.md 各表，业务码为唯一 API key） ---------- */
@@ -153,9 +153,8 @@ export interface OutboundRow {
     time: string;
     operator: string;
     remark?: string;
-    state: "registered" | "printed" | "voided";
+    state: "registered" | "voided";
     version: number;
-    printVersion: number;
     voidReason?: string;
 }
 
@@ -170,16 +169,10 @@ export interface StockAdjustmentRow {
     relatedInboundNo?: string;
 }
 
-export interface OutboundPrintResult {
-    outbound: OutboundRow;
-    printVersion: number;
-    document: OutboundPrintDocument;
-}
-
-/** 后端已落打印日志并计算哈希的纸质单快照；前端只能据此渲染，不再自行拼接当前主数据。 */
+/** 打印文档（GET /outbound/{no}/print 响应）：后端实时组装的纸质单快照，
+ * 打印无副作用不落日志；state/voidReason 供打印件渲染作废标注 */
 export interface OutboundPrintDocument {
     no: string;
-    printVersion: number;
     orderNo: string;
     customer: string;
     customerCode: string;
@@ -189,6 +182,8 @@ export interface OutboundPrintDocument {
     date: string;
     operator: string;
     remark: string;
+    state: "registered" | "voided";
+    voidReason?: string;
     printedBy: string;
     printedAt: string;
 }
@@ -388,18 +383,6 @@ export interface CreateOutboundInput {
 export interface VoidOutboundInput {
     expectedVersion: number;
     reason: string;
-}
-
-export interface PrintOutboundInput {
-    expectedVersion: number;
-    reason?: string;
-}
-
-export interface EmergencyVoidOutboundInput {
-    expectedVersion: number;
-    reason: string;
-    goodsNotDeparted: true;
-    paperInvalidated: true;
 }
 
 export interface CreateUserInput {

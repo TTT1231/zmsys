@@ -54,9 +54,8 @@ export const detailOutbound: OutboundRow = {
     time: "09-13 10:30",
     operator: "仓库乙",
     remark: "随货附出库单，请核对型号与数量。",
-    state: "printed",
+    state: "registered",
     version: 1,
-    printVersion: 1,
 };
 export const detailSnapshot: Snapshot = {
     ...EMPTY_SNAPSHOT,

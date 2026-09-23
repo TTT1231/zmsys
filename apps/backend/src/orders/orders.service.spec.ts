@@ -486,23 +486,27 @@ describe("OrdersService.cancelOrder", () => {
         ctx = mkService(store);
     });
 
-    it("存在已登记未打印出库单 409；已全部发货 409；已取消 409", async () => {
-        store.shipments.push({ orderId: 500n, state: "REGISTERED" } as OutboundShipment);
-        await expect(
-            ctx.service.cancelOrder("ZM260912001", { expectedVersion: 1, reason: "计划变更" }, actor, ID_KEY),
-        ).rejects.toThrow(new ConflictException("存在已登记未打印的出库单，请先作废后再取消订单"));
-
-        store.shipments.pop();
+    it("已全部发货 409；已取消 409；存在已登记出库单仍可直接取消（已发数量保留）", async () => {
         store.outboundNet.set(500n, 100);
         await expect(
             ctx.service.cancelOrder("ZM260912001", { expectedVersion: 1, reason: "计划变更" }, actor, ID_KEY),
         ).rejects.toThrow(new ConflictException("订单已全部发货，没有剩余量可取消"));
 
-        store.outboundNet.delete(500n);
+        store.outboundNet.set(500n, 40);
         store.orders[0]!.lifecycleStatus = "CANCELLED" as const;
         await expect(
             ctx.service.cancelOrder("ZM260912001", { expectedVersion: 1, reason: "计划变更" }, actor, ID_KEY),
         ).rejects.toThrow(new ConflictException("订单已取消"));
+
+        store.orders[0]!.lifecycleStatus = "ACTIVE" as const;
+        store.shipments.push({ orderId: 500n, state: "REGISTERED" } as OutboundShipment);
+        const cancelled = await ctx.service.cancelOrder(
+            "ZM260912001",
+            { expectedVersion: 1, reason: "计划变更" },
+            actor,
+            ID_KEY,
+        );
+        expect(cancelled).toMatchObject({ lifecycleStatus: "cancelled", outbound: 40 });
     });
 
     it("取消成功：终态字段落库、版本 +1、写 CANCEL 日志（保留已发数量口径）", async () => {
@@ -574,23 +578,22 @@ describe("OrdersService.archiveOrder", () => {
         expect(ctx.tx.salesOrderTable.update).not.toHaveBeenCalled();
     });
 
-    it("未发货的 ACTIVE 订单不可归档 409；已归档重复归档 409；存在已登记未打印出库单 409", async () => {
+    it("未发货的 ACTIVE 订单不可归档 409；已归档重复归档 409；存在已登记出库单仍可归档", async () => {
         await expect(ctx.service.archiveOrder("ZM260912001", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
             new ConflictException("订单尚未发货，无需归档；手误订单请取消或删除"),
         );
 
-        store.outboundNet.set(500n, 40);
-        store.shipments.push({ orderId: 500n, state: "REGISTERED" } as OutboundShipment);
-        await expect(ctx.service.archiveOrder("ZM260912001", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
-            new ConflictException("存在已登记未打印的出库单，请先作废或打印后再归档"),
-        );
-
-        store.shipments.pop();
         store.orders[0]!.lifecycleStatus = "ARCHIVED" as const;
         await expect(ctx.service.archiveOrder("ZM260912001", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
             new ConflictException("订单已归档"),
         );
-        expect(store.changeLogs).toHaveLength(0);
+
+        store.orders[0]!.lifecycleStatus = "ACTIVE" as const;
+        store.outboundNet.set(500n, 40);
+        store.shipments.push({ orderId: 500n, state: "REGISTERED" } as OutboundShipment);
+        const archived = await ctx.service.archiveOrder("ZM260912001", { expectedVersion: 1 }, actor, ID_KEY);
+        expect(archived).toMatchObject({ lifecycleStatus: "archived" });
+        expect(store.changeLogs).toHaveLength(1);
     });
 
     it("归档成功：终态三要素落库（备注选填）、版本 +1、写 ARCHIVE 日志与 op_log、返回归档后订单", async () => {

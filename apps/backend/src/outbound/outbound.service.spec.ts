@@ -68,7 +68,6 @@ type ShipmentRow = OutboundShipment & {
     order: OrderRow;
     registrar: { name: string };
     ledgers: Array<{ entryType: string; remark: string }>;
-    printLogs: Array<{ printSeq: number }>;
 };
 
 const mkShipment = (overrides: Partial<ShipmentRow> = {}): ShipmentRow =>
@@ -79,11 +78,8 @@ const mkShipment = (overrides: Partial<ShipmentRow> = {}): ShipmentRow =>
         originalQty: 200,
         businessDate: new Date("2026-09-13T00:00:00Z"),
         state: "REGISTERED",
-        voidMode: null,
         voidedBy: null,
         voidReason: null,
-        goodsNotDeparted: null,
-        paperInvalidated: null,
         voidedAt: null,
         rowVersion: 1n,
         requestKey: "req-ship",
@@ -93,7 +89,6 @@ const mkShipment = (overrides: Partial<ShipmentRow> = {}): ShipmentRow =>
         order: mkOrder(),
         registrar: { name: "郭均" },
         ledgers: [{ entryType: "NORMAL", remark: "首次发货" }],
-        printLogs: [],
         ...overrides,
     }) as ShipmentRow;
 
@@ -105,7 +100,6 @@ interface Store {
     stock: Map<bigint, number>;
     outboundNet: Map<bigint, number>;
     stateLogs: unknown[];
-    printLogs: unknown[];
     opLogs: unknown[];
 }
 
@@ -116,7 +110,6 @@ const emptyStore = (): Store => ({
     stock: new Map(),
     outboundNet: new Map(),
     stateLogs: [],
-    printLogs: [],
     opLogs: [],
 });
 
@@ -221,14 +214,6 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>) => {
                 return data;
             }),
         },
-        outboundPrintLog: {
-            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
-                store.printLogs.push(data);
-                const shipment = store.shipments.find(s => s.id === data.shipmentId);
-                shipment?.printLogs.push({ printSeq: data.printSeq as number });
-                return data;
-            }),
-        },
         opLog: {
             create: vi.fn(async ({ data }: { data: unknown }) => {
                 store.opLogs.push(data);
@@ -239,7 +224,7 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>) => {
     const prisma = {
         $transaction: vi.fn(async (fn: (client: typeof tx) => Promise<unknown>) => fn(tx)),
         $queryRaw: tx.$queryRaw,
-        outboundShipment: { findMany: tx.outboundShipment.findMany },
+        outboundShipment: { findMany: tx.outboundShipment.findMany, findUnique: tx.outboundShipment.findUnique },
     } as unknown as PrismaService;
     const snowflake = { next: vi.fn(() => 9000000000000000n) } as unknown as SnowflakeGenerator;
     const idempotency = {
@@ -306,10 +291,10 @@ describe("OutboundService.createOutbound", () => {
             qty: 200,
             state: "registered",
             version: 1,
-            printVersion: 0,
             operator: "郭均",
             date: "2026-09-13",
         });
+        expect(created).not.toHaveProperty("printVersion");
         expect(store.ledgers).toHaveLength(1);
         expect(store.ledgers[0]).toMatchObject({ entryType: "NORMAL", qtyDelta: 200 });
         expect(store.stateLogs).toHaveLength(1);
@@ -319,14 +304,14 @@ describe("OutboundService.createOutbound", () => {
     });
 });
 
-describe("OutboundService.voidOutbound / emergencyVoidOutbound", () => {
-    it("仅 REGISTERED 可作废；作废追加等额冲销并引用原事件", async () => {
+describe("OutboundService.voidOutbound", () => {
+    it("已作废再作废 409；作废追加等额冲销并引用原事件", async () => {
         const store = emptyStore();
-        store.shipments.push(mkShipment({ state: "PRINTED" }));
+        store.shipments.push(mkShipment({ state: "VOIDED", rowVersion: 2n }));
         const { service } = mkService(store);
         await expect(
-            service.voidOutbound("CK26091301", { expectedVersion: 1, reason: "数量有误" }, actor, ID_KEY),
-        ).rejects.toThrow(new ConflictException("只有未打印的出库单可以由仓管作废"));
+            service.voidOutbound("CK26091301", { expectedVersion: 2, reason: "重复操作" }, actor, ID_KEY),
+        ).rejects.toThrow(new ConflictException("出库单已作废，不能重复作废"));
 
         store.shipments[0] = mkShipment();
         store.ledgers.push({
@@ -356,118 +341,69 @@ describe("OutboundService.voidOutbound / emergencyVoidOutbound", () => {
             qtyDelta: -200,
             correctionReason: "数量有误",
         });
-        expect(store.stateLogs.at(-1)).toMatchObject({ eventType: "VOID_PRE_PRINT" });
-    });
-
-    it("紧急撤销仅 PRINTED；flags 必须确认", async () => {
-        const store = emptyStore();
-        store.shipments.push(mkShipment({ state: "REGISTERED", rowVersion: 3n }));
-        const { service } = mkService(store);
-        await expect(
-            service.emergencyVoidOutbound(
-                "CK26091301",
-                { expectedVersion: 3, reason: "叫停", goodsNotDeparted: true, paperInvalidated: true },
-                actor,
-                ID_KEY,
-            ),
-        ).rejects.toThrow(new ConflictException("只有已打印出库单需要紧急撤销"));
-
-        store.shipments[0] = mkShipment({ state: "PRINTED", rowVersion: 3n });
-        await expect(
-            service.emergencyVoidOutbound(
-                "CK26091301",
-                { expectedVersion: 3, reason: "叫停", goodsNotDeparted: false, paperInvalidated: true },
-                actor,
-                ID_KEY,
-            ),
-        ).rejects.toThrow(new ConflictException("必须确认货物尚未离开且纸质单已作废"));
+        expect(store.stateLogs.at(-1)).toMatchObject({ eventType: "VOID" });
     });
 });
 
-describe("OutboundService.printOutbound", () => {
-    it("首次打印：文档快照含订单冻结规格摘要，打印日志哈希 32 字节，版本推进", async () => {
+describe("OutboundService.printOutboundDocument", () => {
+    it("纯读输出：文档含订单冻结规格摘要，不改状态不落任何日志，可重复", async () => {
         const store = emptyStore();
         store.shipments.push(mkShipment());
         const { service } = mkService(store);
-        const result = await service.printOutbound("CK26091301", { expectedVersion: 1 }, actor, ID_KEY);
-        expect(result.printVersion).toBe(1);
-        expect(result.outbound).toMatchObject({ state: "printed", version: 2, printVersion: 1 });
-        expect(result.document).toMatchObject({
+        const first = await service.printOutboundDocument("CK26091301", actor);
+        expect(first).toMatchObject({
             no: "CK26091301",
             orderNo: "ZM260913001",
             customer: "深圳市智造电子",
             bomSpec: "底座：二脚底座（无挡脚） · 支架：6.3支架：铜镀银",
             qty: 200,
             operator: "郭均",
+            remark: "首次发货",
+            state: "registered",
             printedBy: "郭均",
         });
-        expect(result.document.printedAt).toBeDefined();
-        expect(store.printLogs).toHaveLength(1);
-        const printLog = store.printLogs[0] as { documentHash: Uint8Array };
-        expect(Buffer.from(printLog.documentHash)).toHaveLength(32);
-        expect(store.stateLogs.at(-1)).toMatchObject({ eventType: "PRINT", afterVersion: 2n });
+        expect(first.printedAt).toBeDefined();
+        expect(first).not.toHaveProperty("voidReason");
+
+        const second = await service.printOutboundDocument("CK26091301", actor);
+        expect(second.no).toBe("CK26091301");
+        expect(store.shipments[0]).toMatchObject({ state: "REGISTERED", rowVersion: 1n });
+        expect(store.stateLogs).toHaveLength(0);
+        expect(store.opLogs).toHaveLength(0);
+        expect(store.ledgers).toHaveLength(0);
     });
 
-    it("已作废不能打印；重打必须填写原因；重打推进打印版本", async () => {
+    it("已作废出库可打印：文档携带作废标注与原因", async () => {
         const store = emptyStore();
-        store.shipments.push(mkShipment({ state: "VOIDED", rowVersion: 2n }));
+        store.shipments.push(mkShipment({ state: "VOIDED", rowVersion: 2n, voidReason: "登记错误" }));
         const { service } = mkService(store);
-        await expect(service.printOutbound("CK26091301", { expectedVersion: 2 }, actor, ID_KEY)).rejects.toThrow(
-            new ConflictException("已作废出库单不能打印"),
-        );
-
-        store.shipments[0] = mkShipment({ state: "PRINTED", rowVersion: 2n, printLogs: [{ printSeq: 1 }] });
-        await expect(service.printOutbound("CK26091301", { expectedVersion: 2 }, actor, ID_KEY)).rejects.toThrow(
-            new BadRequestException("重打必须填写原因"),
-        );
-
-        const reprint = await service.printOutbound(
-            "CK26091301",
-            { expectedVersion: 2, reason: "纸质单遗失" },
-            actor,
-            ID_KEY,
-        );
-        expect(reprint.printVersion).toBe(2);
-        expect(reprint.outbound).toMatchObject({ state: "printed", version: 3, printVersion: 2 });
-        expect(store.stateLogs.at(-1)).toMatchObject({ eventType: "REPRINT" });
+        const document = await service.printOutboundDocument("CK26091301", actor);
+        expect(document).toMatchObject({ state: "voided", voidReason: "登记错误" });
+        expect(store.shipments[0]).toMatchObject({ state: "VOIDED", rowVersion: 2n });
     });
 
-    it("订单已取消时禁止首次打印（已打印出库不受影响，可说明原因重打）", async () => {
+    it("订单已取消的出库单仍可打印（打印不校验订单状态）", async () => {
         const store = emptyStore();
         store.shipments.push(mkShipment({ order: mkOrder({ lifecycleStatus: "CANCELLED" }) }));
         const { service } = mkService(store);
-        await expect(service.printOutbound("CK26091301", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
-            new ConflictException("订单已取消，不能首次打印出库单"),
-        );
+        const document = await service.printOutboundDocument("CK26091301", actor);
+        expect(document).toMatchObject({ state: "registered", no: "CK26091301" });
+    });
 
-        store.shipments[0] = mkShipment({
-            state: "PRINTED",
-            rowVersion: 2n,
-            printLogs: [{ printSeq: 1 }],
-            order: mkOrder({ lifecycleStatus: "CANCELLED" }),
-        });
-        const reprint = await service.printOutbound(
-            "CK26091301",
-            { expectedVersion: 2, reason: "取消后补打留档" },
-            actor,
-            ID_KEY,
+    it("出库单不存在 404", async () => {
+        const store = emptyStore();
+        const { service } = mkService(store);
+        await expect(service.printOutboundDocument("CK99999999", actor)).rejects.toThrow(
+            new NotFoundException("出库单不存在"),
         );
-        expect(reprint.printVersion).toBe(2);
     });
 });
 
 describe("OutboundService.listOutbound", () => {
-    it("printVersion 按打印日志派生；remark 取正向事件；作废原因仅 voided 返回", async () => {
+    it("两态单头映射；remark 取正向事件；作废原因仅 voided 返回", async () => {
         const store = emptyStore();
         store.shipments.push(
             mkShipment(),
-            mkShipment({
-                id: 601n,
-                shipmentNo: "CK26091302",
-                state: "PRINTED",
-                rowVersion: 2n,
-                printLogs: [{ printSeq: 1 }, { printSeq: 2 }],
-            }),
             mkShipment({
                 id: 602n,
                 shipmentNo: "CK26091303",
@@ -478,10 +414,10 @@ describe("OutboundService.listOutbound", () => {
         );
         const { service } = mkService(store);
         const list = await service.listOutbound();
-        expect(list).toHaveLength(3);
-        expect(list[0]).toMatchObject({ no: "CK26091301", state: "registered", printVersion: 0, remark: "首次发货" });
+        expect(list).toHaveLength(2);
+        expect(list[0]).toMatchObject({ no: "CK26091301", state: "registered", remark: "首次发货" });
         expect(list[0]).not.toHaveProperty("voidReason");
-        expect(list[1]).toMatchObject({ no: "CK26091302", state: "printed", printVersion: 2 });
-        expect(list[2]).toMatchObject({ no: "CK26091303", state: "voided", voidReason: "登记错误" });
+        expect(list[0]).not.toHaveProperty("printVersion");
+        expect(list[1]).toMatchObject({ no: "CK26091303", state: "voided", voidReason: "登记错误" });
     });
 });

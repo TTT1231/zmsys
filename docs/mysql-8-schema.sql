@@ -166,9 +166,8 @@ INSERT INTO sys_permission (code, kind, menu_key, action_id, label, protected) V
     ('inbound:adjust', 'ACTION', 'inbound', 'adjust', '跨日库存调整', 1),
     ('outbound:view', 'ACTION', 'outbound', 'view', '查看台账', 0),
     ('outbound:ship', 'ACTION', 'outbound', 'ship', '登记发货', 0),
-    ('outbound:void', 'ACTION', 'outbound', 'void', '作废未打印出库', 0),
-    ('outbound:print', 'ACTION', 'outbound', 'print', '打印出库单', 0),
-    ('outbound:emergency-void', 'ACTION', 'outbound', 'emergency-void', '紧急撤销已打印出库', 1),
+    ('outbound:void', 'ACTION', 'outbound', 'void', '作废', 0),
+    ('outbound:print', 'ACTION', 'outbound', 'print', '打印', 0),
     ('permissions:view', 'ACTION', 'permissions', 'view', '查看', 1),
     ('permissions:manage', 'ACTION', 'permissions', 'manage', '用户与角色管理', 1);
 
@@ -1091,12 +1090,9 @@ CREATE TABLE outbound_shipment (
     order_id BIGINT NOT NULL,
     original_qty INT UNSIGNED NOT NULL,
     business_date DATE NOT NULL,
-    state ENUM('REGISTERED', 'PRINTED', 'VOIDED') NOT NULL DEFAULT 'REGISTERED',
-    void_mode ENUM('PRE_PRINT', 'EMERGENCY') NULL,
+    state ENUM('REGISTERED', 'VOIDED') NOT NULL DEFAULT 'REGISTERED',
     voided_by BIGINT NULL,
     void_reason VARCHAR(500) NULL,
-    goods_not_departed TINYINT UNSIGNED NULL,
-    paper_invalidated TINYINT UNSIGNED NULL,
     voided_at DATETIME(3) NULL,
     row_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
     request_key VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -1116,21 +1112,12 @@ CREATE TABLE outbound_shipment (
         ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT ck_outbound_shipment_qty CHECK (original_qty > 0),
     CONSTRAINT ck_outbound_shipment_version CHECK (row_version > 0),
-    CONSTRAINT ck_outbound_shipment_flags CHECK (
-        (goods_not_departed IS NULL OR goods_not_departed IN (0, 1))
-        AND (paper_invalidated IS NULL OR paper_invalidated IN (0, 1))
-    ),
     CONSTRAINT ck_outbound_shipment_void CHECK (
-        (state <> 'VOIDED' AND void_mode IS NULL AND voided_by IS NULL AND void_reason IS NULL
-            AND goods_not_departed IS NULL AND paper_invalidated IS NULL AND voided_at IS NULL)
+        (state = 'REGISTERED' AND voided_by IS NULL AND void_reason IS NULL AND voided_at IS NULL)
         OR
-        (state = 'VOIDED' AND void_mode = 'PRE_PRINT' AND voided_by IS NOT NULL
+        (state = 'VOIDED' AND voided_by IS NOT NULL
             AND CHAR_LENGTH(TRIM(void_reason)) BETWEEN 2 AND 500
-            AND goods_not_departed IS NULL AND paper_invalidated IS NULL AND voided_at IS NOT NULL)
-        OR
-        (state = 'VOIDED' AND void_mode = 'EMERGENCY' AND voided_by IS NOT NULL
-            AND CHAR_LENGTH(TRIM(void_reason)) BETWEEN 2 AND 500
-            AND goods_not_departed = 1 AND paper_invalidated = 1 AND voided_at IS NOT NULL)
+            AND voided_at IS NOT NULL)
     ),
     CONSTRAINT ck_outbound_shipment_request CHECK (CHAR_LENGTH(request_key) BETWEEN 8 AND 128)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -1193,34 +1180,14 @@ FROM (
 ) AS movement
 GROUP BY movement.bom_id;
 
-CREATE TABLE outbound_print_log (
-    id BIGINT NOT NULL,
-    shipment_id BIGINT NOT NULL,
-    print_seq INT UNSIGNED NOT NULL,
-    printed_by BIGINT NOT NULL,
-    reason VARCHAR(500) NOT NULL DEFAULT '',
-    document_snapshot JSON NOT NULL,
-    document_hash BINARY(32) NOT NULL,
-    request_key VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-    printed_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_outbound_print_seq (shipment_id, print_seq),
-    UNIQUE KEY uk_outbound_print_request (request_key),
-    KEY idx_outbound_print_operator_time (printed_by, printed_at DESC),
-    CONSTRAINT fk_outbound_print_shipment FOREIGN KEY (shipment_id) REFERENCES outbound_shipment (id)
-        ON DELETE RESTRICT ON UPDATE RESTRICT,
-    CONSTRAINT fk_outbound_print_operator FOREIGN KEY (printed_by) REFERENCES sys_user (id)
-        ON DELETE RESTRICT ON UPDATE RESTRICT,
-    CONSTRAINT ck_outbound_print_seq CHECK (print_seq > 0),
-    CONSTRAINT ck_outbound_print_snapshot CHECK (JSON_TYPE(document_snapshot) = 'OBJECT'),
-    CONSTRAINT ck_outbound_print_request CHECK (CHAR_LENGTH(request_key) BETWEEN 8 AND 128)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
 CREATE TABLE outbound_state_log (
     id BIGINT NOT NULL,
     shipment_id BIGINT NOT NULL,
     operator_id BIGINT NOT NULL,
-    event_type ENUM('REGISTER', 'PRINT', 'REPRINT', 'VOID_PRE_PRINT', 'VOID_EMERGENCY') NOT NULL,
+    -- PRINT/REPRINT/VOID_PRE_PRINT/VOID_EMERGENCY 为 2026-09 两态化迁移前的存量事件值，
+    -- 新代码只写 REGISTER/VOID；收缩枚举会破坏存量行与版本链，勿清理
+    event_type ENUM('REGISTER', 'PRINT', 'REPRINT', 'VOID_PRE_PRINT', 'VOID_EMERGENCY', 'VOID') NOT NULL,
+    -- PRINTED 仅为迁移前存量日志保留（单头 state 已收缩两值）
     before_state ENUM('REGISTERED', 'PRINTED', 'VOIDED') NULL,
     after_state ENUM('REGISTERED', 'PRINTED', 'VOIDED') NOT NULL,
     before_version BIGINT UNSIGNED NULL,

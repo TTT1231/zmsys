@@ -77,7 +77,7 @@ export const MENU_CATALOG: MenuNode[] = [
         icon: "log",
         group: "业务导航",
         onlyFor: ["warehouse"],
-        note: "审计记录：业务创建、订单变更、入库修正、库存调整、出库作废/打印及负责人移交均保留操作人与时间，不可删除、不可篡改。",
+        note: "审计记录：业务创建、订单变更、入库修正、库存调整、出库作废及负责人移交均保留操作人与时间，不可删除、不可篡改。",
     },
 ];
 
@@ -112,9 +112,8 @@ export const ACTION_CATALOG = {
     outbound: [
         { id: "view", label: "查看台账" },
         { id: "ship", label: "登记发货" },
-        { id: "void", label: "作废未打印出库" },
-        { id: "print", label: "打印出库单" },
-        { id: "emergency-void", label: "紧急撤销已打印出库", protected: true },
+        { id: "void", label: "作废" },
+        { id: "print", label: "打印" },
     ],
     permissions: [
         { id: "view", label: "查看", protected: true },
@@ -245,7 +244,6 @@ const ACTION_SHORT: Record<string, string> = {
     ship: "发货",
     void: "作废",
     print: "打印",
-    "emergency-void": "紧急撤销",
     manage: "管理",
 };
 

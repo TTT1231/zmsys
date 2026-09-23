@@ -22,14 +22,7 @@ import { SortTh } from "@/components/ui/SortTh";
 import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { nextSortState, type SortState } from "@/lib/tableSort";
 import { DateField, TextArea, TextField } from "@/components/ui/Field";
-import {
-    useCreateOutbound,
-    useEmergencyVoidOutbound,
-    usePrintOutbound,
-    useVoidOutbound,
-    useWbRefresh,
-    useWbSnapshot,
-} from "@/data/queries";
+import { useCreateOutbound, usePrintOutbound, useVoidOutbound, useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { PageLoading } from "@/components/ui/PageLoading";
@@ -60,12 +53,12 @@ const escapeHtml = (value: string) =>
             })[ch] ?? ch,
     );
 
-const outboundStateLabel = (row: OutboundRow) =>
-    row.state === "registered" ? "已登记" : row.state === "printed" ? "已打印" : "已作废";
+const outboundStateLabel = (row: OutboundRow) => (row.state === "registered" ? "已登记" : "已作废");
 
-/* 后端成功登记打印版本后，再向预先打开的窗口渲染单据并调起浏览器打印。 */
+/* 拿到后端实时组装的文档后，向预先打开的窗口渲染单据并调起浏览器打印；作废单带醒目标注。 */
 function renderOutboundDocument(document: OutboundPrintDocument, win: Window) {
     win.document.title = `出库单 ${document.no}`;
+    const voided = document.state === "voided";
     const items: Array<[string, string]> = [
         ["出库单号", escapeHtml(document.no)],
         ["关联订单", escapeHtml(document.orderNo)],
@@ -74,13 +67,18 @@ function renderOutboundDocument(document: OutboundPrintDocument, win: Window) {
         ["规格", escapeHtml(document.bomSpec || "—")],
         ["发货数量", escapeHtml(`${num(document.qty)} 个`)],
         ["出库日期", escapeHtml(document.date)],
-        ["打印次数", escapeHtml(`第 ${document.printVersion} 次`)],
         ["登记人", escapeHtml(document.operator)],
         ["打印人", escapeHtml(document.printedBy)],
         ["备注", escapeHtml(document.remark || "—")],
+        ...(voided ? ([["作废原因", escapeHtml(document.voidReason || "—")]] as Array<[string, string]>) : []),
     ];
     const html = `
     <div style="font-family: Inter, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; max-width: 640px; margin: 32px auto; color: #101828;">
+      ${
+          voided
+              ? `<p style="margin: 0 0 12px; font-size: 15px; font-weight: 700; color: #b42318; border: 2px solid #b42318; border-radius: 6px; padding: 6px 12px; text-align: center;">已作废 · 本单数量不计入有效出库</p>`
+              : ""
+      }
       <h1 style="margin: 0 0 4px; font-size: 20px;">出库单</h1>
       <p style="margin: 0 0 16px; font-size: 12px; color: #6e7075;">众茂生产系统 · 打印时间 ${new Date(document.printedAt).toLocaleString()}</p>
       <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
@@ -98,68 +96,6 @@ function renderOutboundDocument(document: OutboundPrintDocument, win: Window) {
     const doc = new DOMParser().parseFromString(html, "text/html");
     win.document.body.replaceChildren(...doc.body.childNodes);
     win.print();
-}
-
-function ReprintModal({
-    row,
-    pending,
-    onClose,
-    onConfirm,
-}: {
-    row: OutboundRow;
-    pending: boolean;
-    onClose: () => void;
-    onConfirm: (reason: string) => void;
-}) {
-    const [reason, setReason] = useState("");
-    const [error, setError] = useState("");
-    const formId = `reprint-${row.no}`;
-    const submit = (event: FormEvent) => {
-        event.preventDefault();
-        const value = reason.trim();
-        if (value.length < 2) {
-            setError("请填写重打原因（至少 2 个字）");
-            return;
-        }
-        setError("");
-        onConfirm(value);
-    };
-    const close = () => {
-        if (!pending) onClose();
-    };
-
-    return (
-        <Modal
-            open
-            onClose={close}
-            title="重打出库单"
-            subtitle={`${row.no} · 将重新打印（第 ${row.printVersion + 1} 次）`}
-            label="重打出库单"
-            width={440}
-            footer={
-                <>
-                    <Button variant="secondary" type="button" disabled={pending} onClick={close}>
-                        取消
-                    </Button>
-                    <Button type="submit" form={formId} disabled={pending}>
-                        {pending ? "正在打印…" : "确认重打"}
-                    </Button>
-                </>
-            }
-        >
-            <form id={formId} onSubmit={submit} aria-busy={pending}>
-                <TextArea
-                    label="重打原因"
-                    required
-                    value={reason}
-                    error={error}
-                    placeholder="例如：纸张破损、内容模糊"
-                    onChange={event => setReason(event.target.value)}
-                />
-                <p className="mt-2 text-13 text-muted">重打会出一张新单，旧单自动作废，以最新一联为准。</p>
-            </form>
-        </Modal>
-    );
 }
 
 function VoidOutboundModal({
@@ -194,8 +130,8 @@ function VoidOutboundModal({
         <Modal
             open
             onClose={close}
-            title="作废出库单"
-            subtitle={`${row.no} · 未打印`}
+            title="作废"
+            subtitle={row.no}
             label="作废出库单"
             width={440}
             footer={
@@ -220,96 +156,6 @@ function VoidOutboundModal({
                 />
                 <p className="mt-2 text-13 text-muted">
                     作废后这批货的数量会自动退回库存和订单；原单保留作凭证，重新登记一张正确的就行。
-                </p>
-            </form>
-        </Modal>
-    );
-}
-
-function EmergencyVoidModal({
-    row,
-    pending,
-    onClose,
-    onConfirm,
-}: {
-    row: OutboundRow;
-    pending: boolean;
-    onClose: () => void;
-    onConfirm: (reason: string) => void;
-}) {
-    const [reason, setReason] = useState("");
-    const [goodsStayed, setGoodsStayed] = useState(false);
-    const [paperVoided, setPaperVoided] = useState(false);
-    const [error, setError] = useState("");
-    const formId = `emergency-void-${row.no}`;
-    const submit = (event: FormEvent) => {
-        event.preventDefault();
-        const value = reason.trim();
-        if (value.length < 2) {
-            setError("请填写紧急撤销原因（至少 2 个字）");
-            return;
-        }
-        if (!goodsStayed || !paperVoided) {
-            setError("必须同时确认货物尚未离开且纸质单据已作废");
-            return;
-        }
-        setError("");
-        onConfirm(value);
-    };
-    const close = () => {
-        if (!pending) onClose();
-    };
-
-    return (
-        <Modal
-            open
-            onClose={close}
-            title="紧急撤销已打印出库单"
-            subtitle={`${row.no} · 第 ${row.printVersion} 版`}
-            label="紧急撤销出库单"
-            width={440}
-            footer={
-                <>
-                    <Button variant="secondary" type="button" disabled={pending} onClick={close}>
-                        取消
-                    </Button>
-                    <Button type="submit" form={formId} disabled={pending}>
-                        {pending ? "正在撤销…" : "确认紧急撤销"}
-                    </Button>
-                </>
-            }
-        >
-            <form id={formId} onSubmit={submit} aria-busy={pending} className="flex flex-col gap-3">
-                <TextArea
-                    label="紧急撤销原因"
-                    required
-                    value={reason}
-                    error={error}
-                    placeholder="例如：打印后发现发错型号，货物仍在仓库"
-                    onChange={event => setReason(event.target.value)}
-                />
-                <div className="flex flex-col gap-2 rounded-btn border border-line px-3 py-2.5">
-                    <label className="flex items-start gap-2 text-14 text-ink">
-                        <input
-                            type="checkbox"
-                            checked={goodsStayed}
-                            onChange={event => setGoodsStayed(event.target.checked)}
-                            className="mt-0.5"
-                        />
-                        已线下确认：货物尚未离开仓库
-                    </label>
-                    <label className="flex items-start gap-2 text-14 text-ink">
-                        <input
-                            type="checkbox"
-                            checked={paperVoided}
-                            onChange={event => setPaperVoided(event.target.checked)}
-                            className="mt-0.5"
-                        />
-                        已线下确认：全部纸质单据均已作废
-                    </label>
-                </div>
-                <p className="text-13 text-muted">
-                    用于已打印、货还没发走时的纠错（仅超级管理员）；撤销后数量自动退回库存和订单。
                 </p>
             </form>
         </Modal>
@@ -631,7 +477,7 @@ export function OutboundDetailModal({
                 <RecordSummary
                     metrics={[{ label: "发货数量", value: row.qty }]}
                     status={
-                        <Badge tone={row.state === "voided" ? "danger" : "progress"}>{outboundStateLabel(row)}</Badge>
+                        <Badge tone={row.state === "voided" ? "danger" : "pending"}>{outboundStateLabel(row)}</Badge>
                     }
                     note={row.state === "voided" ? "此记录已作废，以上数量不再计入有效出库。" : undefined}
                 />
@@ -642,7 +488,6 @@ export function OutboundDetailModal({
                         { label: "关联订单", value: row.orderNo, fullWidth: true },
                         { label: "出库日期", value: row.date },
                         { label: "操作人", value: row.operator },
-                        { label: "打印情况", value: row.printVersion ? `第 ${row.printVersion} 次打印` : "未打印" },
                         { label: "备注", value: row.remark || "—", fullWidth: true },
                         ...(row.state === "voided"
                             ? [{ label: "作废原因", value: row.voidReason || "—", fullWidth: true }]
@@ -660,7 +505,6 @@ export function OutboundPage() {
     const { refresh } = useWbRefresh();
     const printRequest = usePrintOutbound();
     const voidRequest = useVoidOutbound();
-    const emergencyVoidRequest = useEmergencyVoidOutbound();
     const toast = useToast();
     // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
     const overlay = useDelayedFlag(isFetching && !isLoading);
@@ -681,9 +525,7 @@ export function OutboundPage() {
         () => new Map(snap.orders.map(order => [order.orderNo, order.remark])),
         [snap.orders],
     );
-    const [reprintTarget, setReprintTarget] = useState<OutboundRow | null>(null);
     const [voidTarget, setVoidTarget] = useState<OutboundRow | null>(null);
-    const [emergencyTarget, setEmergencyTarget] = useState<OutboundRow | null>(null);
 
     const rows = snap.outboundLedger;
     const currentDetail = detail ? (rows.find(row => row.no === detail.no) ?? null) : null;
@@ -718,7 +560,6 @@ export function OutboundPage() {
     const canRegister = can("outbound:ship");
     const canPrint = can("outbound:print");
     const canVoid = can("outbound:void");
-    const canEmergencyVoid = can("outbound:emergency-void");
     const applySort = (key: LedgerSortKey) => setSort(current => nextSortState(current, key));
     // 排序或翻页后行序变化，滚动区回到顶部，避免误以为排错行
     const tableScrollRef = useRef<HTMLDivElement>(null);
@@ -726,8 +567,8 @@ export function OutboundPage() {
         if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
     }, [page, sort]);
 
-    const requestPrint = (row: OutboundRow, reason = "") => {
-        if (printRequest.isPending || row.state === "voided") return;
+    const requestPrint = (row: OutboundRow) => {
+        if (printRequest.isPending) return;
         const win = window.open("", "_blank", "width=760,height=640");
         if (!win) {
             toast("浏览器拦截了打印窗口，请允许本站打开新窗口后重试", true);
@@ -737,16 +578,15 @@ export function OutboundPage() {
         win.document.title = `正在生成出库单 ${row.no}`;
         win.document.body.textContent = "正在生成出库单…";
         printRequest.mutate(
-            { no: row.no, expectedVersion: row.version, reason },
+            { no: row.no },
             {
                 onError: error => {
                     win.close();
                     toast(error.message, true);
                 },
-                onSuccess: result => {
-                    setReprintTarget(null);
-                    if (!win.closed) renderOutboundDocument(result.document, win);
-                    toast(`${row.no} 已${result.printVersion > 1 ? "重新" : ""}打印`);
+                onSuccess: document => {
+                    if (!win.closed) renderOutboundDocument(document, win);
+                    toast(`${row.no} 打印单据已生成`);
                 },
             },
         );
@@ -793,7 +633,7 @@ export function OutboundPage() {
                         aria-label="按状态筛选"
                         className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
                     >
-                        {["全部状态", "已登记", "已打印", "已作废"].map(option => (
+                        {["全部状态", "已登记", "已作废"].map(option => (
                             <option key={option}>{option}</option>
                         ))}
                     </select>
@@ -874,7 +714,7 @@ export function OutboundPage() {
                                 subtitle={`${row.customer} · ${row.orderNo}`}
                                 voided={row.state === "voided"}
                                 badge={
-                                    <Badge tone={row.state === "voided" ? "danger" : "progress"}>
+                                    <Badge tone={row.state === "voided" ? "danger" : "pending"}>
                                         {outboundStateLabel(row)}
                                     </Badge>
                                 }
@@ -1006,8 +846,6 @@ export function OutboundPage() {
                                             <td className="px-3 py-3">
                                                 {row.state === "voided" ? (
                                                     <Badge tone="danger">已作废</Badge>
-                                                ) : row.state === "printed" ? (
-                                                    <Badge tone="progress">已打印</Badge>
                                                 ) : (
                                                     <Badge tone="pending">已登记</Badge>
                                                 )}
@@ -1061,45 +899,19 @@ export function OutboundPage() {
                                     作废
                                 </Button>
                             )}
-                            {canEmergencyVoid && currentDetail.state === "printed" && (
-                                <button
-                                    type="button"
-                                    disabled={emergencyVoidRequest.isPending}
-                                    onClick={() => setEmergencyTarget(currentDetail)}
-                                    className="min-h-10 rounded-btn border border-danger/30 bg-danger-soft px-4 text-14 font-medium text-danger disabled:opacity-50"
-                                >
-                                    紧急撤销
-                                </button>
-                            )}
-                            {canPrint && currentDetail.state !== "voided" && (
+                            {canPrint && (
                                 <Button
                                     icon="print"
                                     disabled={printRequest.isPending}
-                                    onClick={() =>
-                                        currentDetail.state === "printed"
-                                            ? setReprintTarget(currentDetail)
-                                            : requestPrint(currentDetail)
-                                    }
+                                    onClick={() => requestPrint(currentDetail)}
                                 >
-                                    {printRequest.isPending
-                                        ? "处理中…"
-                                        : currentDetail.state === "printed"
-                                          ? "重打"
-                                          : "打印"}
+                                    {printRequest.isPending ? "处理中…" : "打印"}
                                 </Button>
                             )}
                         </>
                     )
                 }
             />
-            {reprintTarget && (
-                <ReprintModal
-                    row={reprintTarget}
-                    pending={printRequest.isPending}
-                    onClose={() => setReprintTarget(null)}
-                    onConfirm={reason => requestPrint(reprintTarget, reason)}
-                />
-            )}
             {voidTarget && (
                 <VoidOutboundModal
                     row={voidTarget}
@@ -1113,25 +925,6 @@ export function OutboundPage() {
                                 onSuccess: updated => {
                                     setVoidTarget(null);
                                     toast(`出库单 ${updated.no} 已作废，数量已退回库存和订单`);
-                                },
-                            },
-                        )
-                    }
-                />
-            )}
-            {emergencyTarget && (
-                <EmergencyVoidModal
-                    row={emergencyTarget}
-                    pending={emergencyVoidRequest.isPending}
-                    onClose={() => setEmergencyTarget(null)}
-                    onConfirm={reason =>
-                        emergencyVoidRequest.mutate(
-                            { no: emergencyTarget.no, expectedVersion: emergencyTarget.version, reason },
-                            {
-                                onError: error => toast(error.message, true),
-                                onSuccess: updated => {
-                                    setEmergencyTarget(null);
-                                    toast(`出库单 ${updated.no} 已紧急撤销，数量已退回库存和订单`);
                                 },
                             },
                         )

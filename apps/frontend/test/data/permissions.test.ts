@@ -62,7 +62,7 @@ describe("buildDefaultGrants", () => {
         // 超级管理员：全部菜单（含 permissions 子项）与全部动作
         expect(grants.super.menus).toContain("permissions");
         expect(grants.super.menus).toContain("permissions-accounts");
-        expect(grants.super.actions.outbound).toEqual(["view", "ship", "void", "print", "emergency-void"]);
+        expect(grants.super.actions.outbound).toEqual(["view", "ship", "void", "print"]);
         expect(grants.super.actions.permissions).toEqual(["view", "manage"]);
         // 管理员：出入库只读 + 打印，无用户权限
         expect(grants.admin.menus).not.toContain("permissions");

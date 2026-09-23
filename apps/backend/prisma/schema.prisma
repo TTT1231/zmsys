@@ -73,17 +73,17 @@ enum InboundChangeEventType {
   VOID
 }
 
-/// outbound_shipment.state / outbound_state_log.before|after_state 共用
+/// outbound_shipment.state：两态（打印为纯输出动作，不再是状态）
 enum OutboundShipmentState {
   REGISTERED
-  PRINTED
   VOIDED
 }
 
-/// outbound_shipment.void_mode：打印前作废 vs 紧急撤销（已打印）
-enum OutboundVoidMode {
-  PRE_PRINT
-  EMERGENCY
+/// outbound_state_log.before|after_state：PRINTED 仅为迁移前存量日志保留，代码不再写入
+enum OutboundStateLogState {
+  REGISTERED
+  PRINTED
+  VOIDED
 }
 
 /// outbound_ledger.entry_type：正常发货 vs 冲销
@@ -92,13 +92,15 @@ enum OutboundEntryType {
   CORRECTION
 }
 
-/// outbound_state_log.event_type
+/// outbound_state_log.event_type：PRINT/REPRINT/VOID_PRE_PRINT/VOID_EMERGENCY 为存量历史值，
+/// 新代码只写 REGISTER/VOID，勿清理（收缩枚举会炸存量行）
 enum OutboundStateEventType {
   REGISTER
   PRINT
   REPRINT
   VOID_PRE_PRINT
   VOID_EMERGENCY
+  VOID
 }
 
 /// material_group.kind：分区（纯展示树节点，不挂物料）与分组（可选物料叶子）
@@ -169,7 +171,6 @@ model SysUser {
   registeredShipments   OutboundShipment[]     @relation("OutboundRegistrar")
   voidedShipments       OutboundShipment[]     @relation("OutboundVoider")
   outboundLedgerEntries OutboundLedger[]       @relation("OutboundLedgerOperator")
-  printedOutboundLogs   OutboundPrintLog[]     @relation("OutboundPrinter")
   outboundStateLogs     OutboundStateLog[]     @relation("OutboundStateOperator")
   opLogs                OpLog[]                @relation("OpLogOperator")
 
@@ -577,7 +578,7 @@ model StockAdjustment {
   @@map("stock_adjustment")
 }
 
-/// 出库单：REGISTERED→PRINTED 单向；作废分打印前/紧急撤销两态，紧急撤销要求货未走+纸已废
+/// 出库单：REGISTERED/VOIDED 两态；打印为无副作用纯输出（不落日志不改状态），作废是唯一逆向入口
 model OutboundShipment {
   id                 BigInt               @id
   shipmentNo         String               @unique(map: "uk_outbound_shipment_no") @map("shipment_no") @db.VarChar(28)
@@ -585,11 +586,8 @@ model OutboundShipment {
   originalQty        Int                  @map("original_qty") @db.UnsignedInt
   businessDate       DateTime             @map("business_date") @db.Date
   state              OutboundShipmentState @default(REGISTERED)
-  voidMode           OutboundVoidMode?    @map("void_mode")
   voidedBy           BigInt?              @map("voided_by")
   voidReason         String?              @map("void_reason") @db.VarChar(500)
-  goodsNotDeparted   Boolean?             @map("goods_not_departed")
-  paperInvalidated   Boolean?             @map("paper_invalidated")
   voidedAt           DateTime?            @map("voided_at") @db.DateTime(3)
   rowVersion         BigInt               @default(1) @map("row_version") @db.UnsignedBigInt
   requestKey         String               @unique(map: "uk_outbound_shipment_request") @map("request_key") @db.VarChar(128)
@@ -600,7 +598,6 @@ model OutboundShipment {
   registrar          SysUser           @relation("OutboundRegistrar", fields: [registeredBy], references: [id])
   voider             SysUser?          @relation("OutboundVoider", fields: [voidedBy], references: [id])
   ledgers            OutboundLedger[]
-  printLogs          OutboundPrintLog[]
   stateLogs          OutboundStateLog[]
 
   @@index([orderId, state, businessDate, id], map: "idx_outbound_shipment_order_state_date")
@@ -631,33 +628,14 @@ model OutboundLedger {
   @@map("outbound_ledger")
 }
 
-/// 打印记录：document_hash 锁定单据快照，(shipment_id, print_seq) 支持重打编号
-model OutboundPrintLog {
-  id                BigInt   @id
-  shipmentId        BigInt   @map("shipment_id")
-  printSeq          Int      @map("print_seq") @db.UnsignedInt
-  printedBy         BigInt   @map("printed_by")
-  reason            String   @default("") @db.VarChar(500)
-  documentSnapshot  Json     @map("document_snapshot")
-  documentHash      Bytes    @map("document_hash") @db.Binary(32)
-  requestKey        String   @unique(map: "uk_outbound_print_request") @map("request_key") @db.VarChar(128)
-  printedAt         DateTime @map("printed_at") @db.DateTime(3)
-  shipment          OutboundShipment @relation(fields: [shipmentId], references: [id])
-  printer           SysUser          @relation("OutboundPrinter", fields: [printedBy], references: [id])
-
-  @@unique([shipmentId, printSeq], map: "uk_outbound_print_seq")
-  @@index([printedBy, printedAt(sort: Desc)], map: "idx_outbound_print_operator_time")
-  @@map("outbound_print_log")
-}
-
-/// 出库状态机日志：REGISTER 起版，PRINT/REPRINT/VOID 各自 +1 版本
+/// 出库状态机日志：REGISTER 起版，VOID +1 版本（PRINT/REPRINT 等为迁移前存量事件）
 model OutboundStateLog {
   id             BigInt                 @id
   shipmentId     BigInt                 @map("shipment_id")
   operatorId     BigInt                 @map("operator_id")
   eventType      OutboundStateEventType @map("event_type")
-  beforeState    OutboundShipmentState? @map("before_state")
-  afterState     OutboundShipmentState  @map("after_state")
+  beforeState    OutboundStateLogState? @map("before_state")
+  afterState     OutboundStateLogState  @map("after_state")
   beforeVersion  BigInt?                @map("before_version") @db.UnsignedBigInt
   afterVersion   BigInt                 @map("after_version") @db.UnsignedBigInt
   reason         String                 @default("") @db.VarChar(500)

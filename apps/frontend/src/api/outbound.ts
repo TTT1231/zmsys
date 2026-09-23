@@ -1,11 +1,4 @@
-import type {
-    CreateOutboundInput,
-    EmergencyVoidOutboundInput,
-    OutboundPrintResult,
-    OutboundRow,
-    PrintOutboundInput,
-    VoidOutboundInput,
-} from "./types";
+import type { CreateOutboundInput, OutboundPrintDocument, OutboundRow, VoidOutboundInput } from "./types";
 import { requestClient } from "@/http";
 import { idempotencyConfig } from "./idempotency";
 
@@ -21,10 +14,7 @@ export function voidOutbound(no: string, input: VoidOutboundInput): Promise<Outb
     return requestClient.post<OutboundRow>(`/outbound/${no}/void`, input, idempotencyConfig());
 }
 
-export function printOutboundDocument(no: string, input: PrintOutboundInput): Promise<OutboundPrintResult> {
-    return requestClient.post<OutboundPrintResult>(`/outbound/${no}/print`, input, idempotencyConfig());
-}
-
-export function emergencyVoidOutbound(no: string, input: EmergencyVoidOutboundInput): Promise<OutboundRow> {
-    return requestClient.post<OutboundRow>(`/outbound/${no}/emergency-void`, input, idempotencyConfig());
+/** 打印文档为纯读输出：任意状态可打、可重复，无需幂等头 */
+export function printOutboundDocument(no: string): Promise<OutboundPrintDocument> {
+    return requestClient.get<OutboundPrintDocument>(`/outbound/${no}/print`);
 }

@@ -49,7 +49,6 @@ export const PERMISSIONS = {
     OUTBOUND_SHIP: "outbound:ship",
     OUTBOUND_VOID: "outbound:void",
     OUTBOUND_PRINT: "outbound:print",
-    OUTBOUND_EMERGENCY_VOID: "outbound:emergency-void", // 受保护
 
     // ---- 用户与权限（受保护，仅 super）----
     PERMISSIONS_VIEW: "permissions:view",
