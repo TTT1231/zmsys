@@ -241,7 +241,7 @@ paths:
             tags: [customers]
             operationId: listCustomers
             summary: 客户档案列表
-            description: 权限 `customers:view`，仅 super/admin/sales。手机号只返回掩码；合作状态按近 6 个日历月的活动订单派生。
+            description: 权限 `customers:view`，仅 super/admin/sales。手机号只返回掩码；合作状态按近 6 个日历月的活动订单派生。完整手机号仅 GET /customers/{code}/phone 提供。
             responses:
                 "200":
                     description: 成功
@@ -272,6 +272,21 @@ paths:
                 "409": { $ref: "#/components/responses/Conflict" }
 
     /customers/{code}:
+        get:
+            tags: [customers]
+            operationId: revealCustomerPhone
+            summary: 获取客户完整手机号
+            description: 权限 `customers:view`，且仅超级管理员或客户当前负责人（销售）可获取，其余角色 403。完整手机号只用于复制场景，不随列表/详情返回，页面展示一律掩码。
+            parameters:
+                - $ref: "#/components/parameters/CustomerCode"
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/CustomerPhoneEnvelope" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
         put:
             tags: [customers]
             operationId: updateCustomer
@@ -1155,6 +1170,12 @@ components:
                 name: { type: string }
                 account: { type: string }
 
+        CustomerPhone:
+            type: object
+            required: [phone]
+            properties:
+                phone: { type: string, pattern: "^1[0-9]{10}$", description: 完整手机号，仅超管或客户当前负责人可获取 }
+
         BomCatalogNode:
             type: object
             required: [id, parentId, kind, name, key, multi, qty, items]
@@ -1452,6 +1473,11 @@ components:
                 - $ref: "#/components/schemas/Envelope"
                 - type: object
                   properties: { code: { const: 0 }, data: { type: array, items: { $ref: "#/components/schemas/CustomerOwnerOption" } }, message: { const: ok } }
+        CustomerPhoneEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/CustomerPhone" }, message: { const: ok } }
         BomEnvelope:
             allOf:
                 - $ref: "#/components/schemas/Envelope"

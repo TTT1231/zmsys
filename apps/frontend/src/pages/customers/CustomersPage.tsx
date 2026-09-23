@@ -1,9 +1,10 @@
 import { regionText, cleanAddressPart } from "@/lib/address";
+import { copyText } from "@/lib/clipboard";
 import { DataTable } from "@/components/ui/DataTable";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
@@ -25,6 +26,7 @@ import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { EMPTY_SNAPSHOT, orderStatusOf, remainingOf } from "@/data/views";
 import { useToast } from "@/components/ui/toastContexts";
+import { fetchCustomerPhone } from "@/api";
 import type { Customer, Snapshot } from "@/api";
 
 const AVATAR_TONES = [
@@ -33,6 +35,30 @@ const AVATAR_TONES = [
     "bg-purple-100 text-purple-700",
     "bg-accent-soft text-accent",
 ];
+
+/* 完整手机号复制入口：超管可见于全部客户，销售仅本人负责的客户；后端同规则独立校验 */
+function CopyPhoneButton({ customer }: { customer: Customer }) {
+    const { user } = useApp();
+    const toast = useToast();
+    if (!user || (user.role !== "super" && user.account !== customer.ownerAccount)) return null;
+    return (
+        <button
+            type="button"
+            onClick={async () => {
+                try {
+                    const { phone } = await fetchCustomerPhone(customer.code);
+                    if (await copyText(phone)) toast("已复制完整手机号");
+                } catch (error) {
+                    toast(error instanceof Error && error.message ? error.message : "复制失败，请重试", true);
+                }
+            }}
+            aria-label={`复制客户 ${customer.code} 的完整手机号`}
+            className="flex min-h-7 min-w-7 items-center justify-center rounded-md text-muted transition hover:bg-primary-soft hover:text-primary"
+        >
+            <Icon name="copy" size={14} />
+        </button>
+    );
+}
 
 /* 可排序列：最近下单（日期）/ 累计订单 / 待交数量；桌面表头与移动端排序下拉共用 */
 type CustomerSortKey = "lastOrderDate" | "orderCount" | "pendingQty";
@@ -297,15 +323,23 @@ export function CustomerDetailModal({
                         </div>
                     </div>
                     <div className="flex flex-col gap-2 text-13">
-                        {[
-                            ["客户联系人", customer.contact],
-                            ["客户联系电话", customer.phone],
-                            ["所在地区", regionText(customer) || "未填写"],
-                            ["详细地址", cleanAddressPart(customer.address) || "未填写"],
-                            ["付款方式", customer.payTerms || "—"],
-                            ["客户负责人", customer.owner],
-                            ["待交付数量", `${pendingQty.toLocaleString("zh-CN")} 个`],
-                        ].map(([label, value]) => (
+                        {(
+                            [
+                                ["客户联系人", customer.contact],
+                                [
+                                    "客户联系电话",
+                                    <span className="inline-flex items-center gap-0.5">
+                                        <span className="tnum">{customer.phone}</span>
+                                        <CopyPhoneButton customer={customer} />
+                                    </span>,
+                                ],
+                                ["所在地区", regionText(customer) || "未填写"],
+                                ["详细地址", cleanAddressPart(customer.address) || "未填写"],
+                                ["付款方式", customer.payTerms || "—"],
+                                ["客户负责人", customer.owner],
+                                ["待交付数量", `${pendingQty.toLocaleString("zh-CN")} 个`],
+                            ] as Array<[string, ReactNode]>
+                        ).map(([label, value]) => (
                             <div
                                 key={label}
                                 className="flex items-center justify-between gap-4 border-b border-line/70 pb-1.5"
@@ -654,7 +688,10 @@ export function CustomersPage() {
                                         </td>
                                         <td className="px-3 py-3 text-13 text-td">{row.customer.contact}</td>
                                         <td className="px-3 py-3">
-                                            <span className="tnum text-13 text-td">{row.customer.phone}</span>
+                                            <span className="inline-flex items-center gap-0.5">
+                                                <span className="tnum text-13 text-td">{row.customer.phone}</span>
+                                                <CopyPhoneButton customer={row.customer} />
+                                            </span>
                                         </td>
                                         <td className="px-3 py-3">
                                             <span className="flex items-center gap-1.5 text-13 text-td">

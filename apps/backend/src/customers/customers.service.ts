@@ -1,4 +1,10 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+    BadRequestException,
+    ConflictException,
+    ForbiddenException,
+    Injectable,
+    NotFoundException,
+} from "@nestjs/common";
 import { Prisma } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { TransactionRunner } from "../prisma/transaction.runner";
@@ -12,7 +18,7 @@ import { recordOpLog } from "../domain/op-log";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
 import type { AuthUser } from "../common/types/auth-user";
 import type { CustomTable, SysUser } from "../generated/prisma/client";
-import type { Customer, CustomerOwnerOption } from "./types";
+import type { Customer, CustomerOwnerOption, CustomerPhone } from "./types";
 import type { CreateCustomerDto } from "./dto/create-customer.dto";
 import type { UpdateCustomerDto } from "./dto/update-customer.dto";
 
@@ -65,6 +71,24 @@ export class CustomersService {
             orderBy: { account: "asc" },
             select: { name: true, account: true },
         });
+    }
+
+    /**
+     * 完整手机号（db-scheme.md §4.1：普通响应只回掩码，完整号仅此口子）：
+     * 超管可取任意客户，销售仅限自己负责的客户（负责人只有 sales/super，其余角色天然不匹配）。
+     */
+    async revealPhone(code: string, actor: AuthUser): Promise<CustomerPhone> {
+        const row = await this.prisma.customTable.findUnique({
+            where: { customerCode: code },
+            select: { contactPhone: true, ownerId: true },
+        });
+        if (!row) {
+            throw new NotFoundException("客户不存在");
+        }
+        if (!actor.isSuper && row.ownerId !== BigInt(actor.id)) {
+            throw new ForbiddenException("只有超级管理员或客户负责人可获取完整手机号");
+        }
+        return { phone: row.contactPhone };
     }
 
     /**
