@@ -1024,7 +1024,7 @@ export function OrdersPage() {
                     ) : (
                         <DataTable
                             tableId="orders"
-                            defaultWidths={[154, 260, 100, 422, 150, 100, 120, 140, 100, 100]}
+                            defaultWidths={[154, 260, 100, 397, 150, 100, 120, 140, 125, 100]}
                             recordCount={filtered.length}
                             identityColumn={0}
                             pinnedStart={[0, 1]}
