@@ -81,13 +81,13 @@ function renderOutboundDocument(document: OutboundPrintDocument, win: Window) {
     const html = `
     <div style="font-family: Inter, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; max-width: 640px; margin: 32px auto; color: #101828;">
       <h1 style="margin: 0 0 4px; font-size: 20px;">出库单</h1>
-      <p style="margin: 0 0 16px; font-size: 12px; color: #667085;">众茂生产系统 · 打印时间 ${new Date(document.printedAt).toLocaleString()}</p>
+      <p style="margin: 0 0 16px; font-size: 12px; color: #6e7075;">众茂生产系统 · 打印时间 ${new Date(document.printedAt).toLocaleString()}</p>
       <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
         ${items
             .map(
                 ([label, value]) => `
               <tr>
-                <td style="width: 96px; padding: 8px 10px; border: 1px solid #e4e7ec; background: #f8fafc; color: #667085;">${label}</td>
+                <td style="width: 96px; padding: 8px 10px; border: 1px solid #e4e7ec; background: #f8fafc; color: #6e7075;">${label}</td>
                 <td style="padding: 8px 10px; border: 1px solid #e4e7ec;">${value}</td>
               </tr>`,
             )

@@ -53,7 +53,7 @@ const THEME_MODES: Array<{ value: ThemeMode; label: string; icon: string }> = [
 
 /* 色板取各预设浅色模式的主色（与 index.css 的 [data-theme] 令牌一致） */
 const THEME_PRESETS: Array<{ value: ThemePreset; label: string; color: string }> = [
-    { value: "default", label: "默认", color: "#4f46e5" },
+    { value: "default", label: "默认", color: "#006be6" },
     { value: "green", label: "浅绿色", color: "hsl(161 90% 43%)" },
     { value: "deep-green", label: "深绿色", color: "hsl(181 84% 32%)" },
     { value: "orange", label: "橘黄色", color: "hsl(18 89% 40%)" },

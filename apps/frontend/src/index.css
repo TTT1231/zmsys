@@ -151,8 +151,9 @@
     --color-danger-soft: #fef3f2;
 
     --color-ink: #101828;
-    --color-muted: #667085;
-    --color-subtle: #667085;
+    /* 次要灰字 / 表格文字对齐 vben（muted-foreground #6e7075、foreground #32373c），去掉石板蓝调 */
+    --color-muted: #6e7075;
+    --color-subtle: #6e7075;
     --color-line: #e4e7ec;
     --color-line-strong: #d0d5dd;
     --color-surface: #ffffff;
@@ -161,8 +162,8 @@
     --color-sidebar: #ffffff;
     --color-sidebar-soft: #f5f7fb;
 
-    --color-td: #344054;
-    --color-td-strong: #475467;
+    --color-td: #32373c;
+    --color-td-strong: #454c54;
     --color-row-hover: #f8f9ff;
     --color-soft: #f8fafc;
     --color-panel: #fcfcfd;

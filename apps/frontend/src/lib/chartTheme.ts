@@ -57,14 +57,14 @@ export interface ChartPalette {
 
 export function chartPalette(): ChartPalette {
     return {
-        muted: tokenColor("--color-muted", "#667085"),
+        muted: tokenColor("--color-muted", "#6e7075"),
         soft: tokenColor("--color-soft", "#f8fafc"),
         line: tokenColor("--color-line", "#e4e7ec"),
-        td: tokenColor("--color-td", "#344054"),
-        tdStrong: tokenColor("--color-td-strong", "#475467"),
-        primary: resolveToken("--color-primary", "#4f46e5"),
+        td: tokenColor("--color-td", "#32373c"),
+        tdStrong: tokenColor("--color-td-strong", "#454c54"),
+        primary: resolveToken("--color-primary", "#006be6"),
         primaryMid: resolveColor("color-mix(in srgb, var(--color-primary) 45%, white)"),
-        primaryBorder: tokenColor("--color-primary-border", "#c7d2fe"),
+        primaryBorder: tokenColor("--color-primary-border", "#bfdaf9"),
         warning: tokenColor("--color-warning", "#92400e"),
     };
 }
