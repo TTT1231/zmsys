@@ -4,12 +4,26 @@ import type { AuthUser } from "../common/types/auth-user";
 import type { Tx } from "../prisma/transaction.runner";
 
 /**
- * op_log 同事务审计（db-scheme.md §7）：至少覆盖登记发货、新建客户、新建订单，
- * 与业务行同事务提交；快照保存操作时的姓名与角色（用户改名/改角色后历史展示不变）。
- * uk(action, target_id) 保证一个目标每个动作只记一次——重放/重试路径撞唯一键静默跳过。
+ * op_log 同事务审计（db-scheme.md §7）：覆盖审计清单——订单创建/删除、客户创建/更新、
+ * BOM 创建/删除、出入库创建/作废/删除、发货、归档；与业务行同事务提交；快照保存操作时的
+ * 姓名与角色（用户改名/改角色后历史展示不变）。update_customer 允许同目标多条
+ * （普通索引 idx(action, target_id)），重复记录由幂等层防重放兜底。
  */
 
-export type OpLogAction = "ship" | "create_customer" | "create_order" | "delete_bom" | "delete_order" | "archive_order";
+export type OpLogAction =
+    | "ship"
+    | "create_customer"
+    | "create_order"
+    | "delete_bom"
+    | "delete_order"
+    | "archive_order"
+    | "create_inbound"
+    | "void_inbound"
+    | "delete_inbound"
+    | "void_outbound"
+    | "delete_outbound"
+    | "create_bom"
+    | "update_customer";
 
 export interface RecordOpLogParams {
     action: OpLogAction;
@@ -27,26 +41,18 @@ export async function recordOpLog(
     operator: Pick<AuthUser, "id" | "name" | "role">,
     params: RecordOpLogParams,
 ): Promise<void> {
-    try {
-        await tx.opLog.create({
-            data: {
-                id: snowflake.next(),
-                operatorId: BigInt(operator.id),
-                operatorNameSnapshot: operator.name,
-                operatorRoleSnapshot: operator.role,
-                action: params.action,
-                targetType: params.targetType,
-                targetId: params.targetId,
-                targetCode: params.targetCode,
-                detailJson: params.detail,
-                createdAt: params.now,
-            },
-        });
-    } catch (error) {
-        // uk(action, target_id)：该目标该动作已记录（重试/幂等重放路径），静默跳过
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-            return;
-        }
-        throw error;
-    }
+    await tx.opLog.create({
+        data: {
+            id: snowflake.next(),
+            operatorId: BigInt(operator.id),
+            operatorNameSnapshot: operator.name,
+            operatorRoleSnapshot: operator.role,
+            action: params.action,
+            targetType: params.targetType,
+            targetId: params.targetId,
+            targetCode: params.targetCode,
+            detailJson: params.detail,
+            createdAt: params.now,
+        },
+    });
 }

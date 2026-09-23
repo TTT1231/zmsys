@@ -15,6 +15,7 @@ import { OrdersModule } from "./orders/orders.module";
 import { BomsModule } from "./boms/boms.module";
 import { InboundModule } from "./inbound/inbound.module";
 import { OutboundModule } from "./outbound/outbound.module";
+import { MaintenanceModule } from "./maintenance/maintenance.module";
 import { HealthModule } from "./health/health.module";
 import { WorkbenchModule } from "./workbench/workbench.module";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
@@ -39,6 +40,7 @@ import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
         BomsModule,
         InboundModule,
         OutboundModule,
+        MaintenanceModule,
         HealthModule,
         WorkbenchModule,
     ],

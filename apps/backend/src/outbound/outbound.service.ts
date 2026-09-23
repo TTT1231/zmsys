@@ -15,10 +15,12 @@ import type { AuthUser } from "../common/types/auth-user";
 import type { OutboundShipment } from "../generated/prisma/client";
 import type { OutboundPrintDocument, OutboundRow } from "./types";
 import type { CreateOutboundDto } from "./dto/create-outbound.dto";
+import type { DeleteOutboundDto } from "./dto/delete-outbound.dto";
 
 /** api_idempotency 的 operation_key，与前端 mock 同粒度 */
 const CREATE_OPERATION_KEY = "outbound:create";
 const voidOperationKeyOf = (no: string): string => `outbound:void:${no}`;
+const deleteOperationKeyOf = (no: string): string => `outbound:delete:${no}`;
 
 /** 单头 + 响应映射与打印文档必需的关联（规格摘要取订单冻结快照，不读目录） */
 type ShipmentRow = OutboundShipment & {
@@ -59,9 +61,10 @@ export class OutboundService {
         private readonly sequence: BusinessSequenceService,
     ) {}
 
-    /** 出库单列表（契约 outbound:view）：返回 registered/voided 单头，新单在前 */
+    /** 出库单列表（契约 outbound:view）：返回 registered/voided 单头，已删除行不返回，新单在前 */
     async listOutbound(): Promise<OutboundRow[]> {
         const rows = await this.prisma.outboundShipment.findMany({
+            where: { deletedAt: null },
             orderBy: [{ registeredAt: "desc" }, { id: "desc" }],
             include: SHIPMENT_INCLUDE,
         });
@@ -245,6 +248,14 @@ export class OutboundService {
                 operationKey,
                 key,
             });
+            await recordOpLog(tx, this.snowflake, actor, {
+                action: "void_outbound",
+                targetType: "outbound",
+                targetId: current.id,
+                targetCode: shipmentNo,
+                detail: { ...this.shipmentSnapshot(current), reason: dto.reason },
+                now,
+            });
 
             const row = await tx.outboundShipment.findUnique({ where: { id: current.id }, include: SHIPMENT_INCLUDE });
             const outbound = this.toOutboundRow(row!);
@@ -256,6 +267,91 @@ export class OutboundService {
             });
             return outbound;
         });
+    }
+
+    /**
+     * 删除已作废的出库单（契约 outbound:delete，幂等）：软删除——单头打 deleted_at
+     * 标记，列表不再返回；7 天后悔期后由 maintenance 定时物理清理（连带状态日志与
+     * NORMAL+CORRECTION 数量流水同删，零和冲销对不改变任何统计）。仅 VOIDED 可删
+     * （作废时已追加冲销、订单已发量已恢复）；不写状态日志、不递增 rowVersion——
+     * 删除是可见性管理非业务变更；op_log 记 delete_outbound 与删除前快照（含作废
+     * 原因，物理清理后审计仍可独立还原）。
+     */
+    async deleteOutbound(
+        shipmentNo: string,
+        dto: DeleteOutboundDto,
+        actor: AuthUser,
+        idempotencyKey: string | undefined,
+    ): Promise<null> {
+        const operationKey = deleteOperationKeyOf(shipmentNo);
+        const key = this.idempotency.requireKey(idempotencyKey);
+        const requestHash = this.idempotency.digest({ method: "POST", pathParams: { shipmentNo }, body: dto });
+
+        return this.txRunner.run(async (tx: Tx) => {
+            const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
+                actorId: BigInt(actor.id),
+                operationKey,
+                key,
+                requestHash,
+            });
+            // 删除的契约响应恒为 data:null，重放无需读快照，直接归一返回
+            if (replay) {
+                return null;
+            }
+            if (placeholderId === null) {
+                throw new Error("幂等占位缺失");
+            }
+
+            const now = new Date();
+            const current = await this.lockShipmentForWrite(tx, shipmentNo);
+            if (current.rowVersion !== BigInt(dto.expectedVersion)) {
+                throw new ConflictException("出库单已被其他人处理，请刷新后重试");
+            }
+            if (current.state !== "VOIDED") {
+                throw new ConflictException("仅已作废的出库单可删除，请先作废");
+            }
+            if (current.deletedAt !== null) {
+                throw new ConflictException("该出库单已删除");
+            }
+
+            await tx.outboundShipment.update({
+                where: { id: current.id },
+                data: { deletedAt: now },
+            });
+            await recordOpLog(tx, this.snowflake, actor, {
+                action: "delete_outbound",
+                targetType: "outbound",
+                targetId: current.id,
+                targetCode: shipmentNo,
+                detail: {
+                    ...this.shipmentSnapshot(current),
+                    voidReason: current.voidReason,
+                    deletedBy: actor.name,
+                },
+                now,
+            });
+            await this.idempotency.complete(tx, {
+                id: placeholderId,
+                httpStatus: 200,
+                responseBody: { deleted: true, shipmentNo },
+                resource: { type: "outbound", code: shipmentNo },
+            });
+            return null;
+        });
+    }
+
+    /** 单头业务快照（op_log 审计用：作废/删除动作冻结操作时形态） */
+    private shipmentSnapshot(row: ShipmentRow) {
+        return {
+            no: row.shipmentNo,
+            orderNo: row.order.orderNo,
+            customer: row.order.customerNameSnapshot,
+            bomCode: row.order.bom.bomCode,
+            qty: row.originalQty,
+            date: formatDateColumn(row.businessDate),
+            state: row.state === "VOIDED" ? "voided" : "registered",
+            version: Number(row.rowVersion),
+        };
     }
 
     /**

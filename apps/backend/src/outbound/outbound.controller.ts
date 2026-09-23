@@ -5,6 +5,7 @@ import { PERMISSIONS } from "../constants";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { CreateOutboundDto } from "./dto/create-outbound.dto";
 import { VoidOutboundDto } from "./dto/void-outbound.dto";
+import { DeleteOutboundDto } from "./dto/delete-outbound.dto";
 import type { AuthUser } from "../common/types/auth-user";
 import type { OutboundPrintDocument, OutboundRow } from "./types";
 
@@ -40,6 +41,18 @@ export class OutboundController {
         @Headers("idempotency-key") idempotencyKey: string | undefined,
     ): Promise<OutboundRow> {
         return this.outboundService.voidOutbound(no, dto, actor, idempotencyKey);
+    }
+
+    @Post(":no/delete")
+    @Permissions([PERMISSIONS.OUTBOUND_DELETE], "无权删除出库单")
+    @HttpCode(HttpStatus.OK)
+    async deleteOutbound(
+        @Param("no") no: string,
+        @Body() dto: DeleteOutboundDto,
+        @CurrentUser() actor: AuthUser,
+        @Headers("idempotency-key") idempotencyKey: string | undefined,
+    ): Promise<null> {
+        return this.outboundService.deleteOutbound(no, dto, actor, idempotencyKey);
     }
 
     /** 打印文档为纯读输出：任意状态可打、可重复，不落日志不改状态 */

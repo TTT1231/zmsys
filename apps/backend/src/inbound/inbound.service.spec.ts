@@ -58,6 +58,7 @@ const mkEntry = (overrides: Partial<LedgerRow> = {}): LedgerRow =>
         updatedBy: 1n,
         createdAt: new Date(),
         updatedAt: new Date(),
+        deletedAt: null,
         bom: { bomCode: "ZMKW0001" },
         operator: { name: "郭均" },
         updater: { name: "郭均" },
@@ -77,6 +78,7 @@ interface Store {
     /** 视图口径的 BOM 库存（bom_id → qty） */
     stock: Map<bigint, number>;
     changeLogs: unknown[];
+    opLogs: unknown[];
 }
 
 const emptyStore = (): Store => ({
@@ -85,6 +87,7 @@ const emptyStore = (): Store => ({
     adjustments: [],
     stock: new Map(),
     changeLogs: [],
+    opLogs: [],
 });
 
 const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>) => {
@@ -117,7 +120,13 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>) => {
                 async ({ where }: { where: { entryNo: string } }) =>
                     store.entries.find(e => e.entryNo === where.entryNo) ?? null,
             ),
-            findMany: vi.fn(async () => store.entries),
+            // 调整单关联与删除校验走 findFirst（entryNo + 未删除过滤）
+            findFirst: vi.fn(
+                async ({ where }: { where: { entryNo: string; deletedAt: null } }) =>
+                    store.entries.find(e => e.entryNo === where.entryNo && e.deletedAt === null) ?? null,
+            ),
+            // 契约口径：已软删除行不出现在台账列表
+            findMany: vi.fn(async () => store.entries.filter(e => e.deletedAt === null)),
             create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
                 const created = mkEntry({
                     id: 600n,
@@ -147,9 +156,31 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>) => {
                 store.changeLogs.push(data);
                 return data;
             }),
+            // 删除快照捞作废原因：按事件倒序取第一条 VOID 的 reason
+            findFirst: vi.fn(
+                async ({
+                    where,
+                }: {
+                    where: { inboundId: bigint; eventType: string };
+                }): Promise<{ reason: string } | null> => {
+                    const logs = store.changeLogs as Array<{
+                        inboundId: bigint;
+                        eventType: string;
+                        reason: string;
+                    }>;
+                    const matched = logs.filter(
+                        log => log.inboundId === where.inboundId && log.eventType === where.eventType,
+                    );
+                    return matched.length ? matched[matched.length - 1]! : null;
+                },
+            ),
         },
         stockAdjustment: {
             findMany: vi.fn(async () => store.adjustments),
+            count: vi.fn(
+                async ({ where }: { where: { relatedInboundId: bigint } }) =>
+                    store.adjustments.filter(a => a.relatedInboundId === where.relatedInboundId).length,
+            ),
             create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
                 const created = {
                     id: 700n,
@@ -169,6 +200,12 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>) => {
                 };
                 store.adjustments.push(created);
                 return created;
+            }),
+        },
+        opLog: {
+            create: vi.fn(async ({ data }: { data: unknown }) => {
+                store.opLogs.push(data);
+                return data;
             }),
         },
     };
@@ -219,6 +256,8 @@ describe("InboundService.listInbound", () => {
                 updater: { name: "管理员" },
             }),
             mkEntry({ id: 502n, entryNo: "RK26091303", status: "VOIDED" }),
+            // 已软删除行不出现在台账列表（deleteInbound 打标后）
+            mkEntry({ id: 503n, entryNo: "RK26091304", status: "VOIDED", deletedAt: new Date() }),
         );
         const { service } = mkService(store);
         const list = await service.listInbound();
@@ -325,6 +364,82 @@ describe("InboundService.voidInbound", () => {
             reason: "整批退回",
             requestKey: "a".repeat(64),
         });
+        // 审计清单：作废动作进 op_log（含 before/after 快照与原因）
+        expect(store.opLogs).toHaveLength(1);
+        expect(store.opLogs[0]).toMatchObject({ action: "void_inbound", targetCode: "RK26091301" });
+    });
+
+    it("跨天作废矩阵：仓管跨天 409；持 void-any-day 跨天成功；持权跨天库存不足仍 409", async () => {
+        const store = emptyStore();
+        store.entries.push(mkEntry({ createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) }));
+        store.stock.set(10n, 250);
+        const { service } = mkService(store);
+
+        const warehouseActor = { ...actor, role: "warehouse" as const, isSuper: false };
+        await expect(
+            service.voidInbound("RK26091301", { expectedVersion: 1, reason: "跨天作废" }, warehouseActor, ID_KEY),
+        ).rejects.toThrow(new ConflictException("只能作废北京时间当天录入的入库记录，跨日作废需超级管理员"));
+
+        const crossDayActor = {
+            ...actor,
+            role: "warehouse" as const,
+            isSuper: false,
+            permissions: new Set(["inbound:void-any-day"]),
+        };
+        // 一致性校验不因跨天权限放开：库存不足仍拒绝
+        store.stock.set(10n, 100);
+        await expect(
+            service.voidInbound("RK26091301", { expectedVersion: 1, reason: "跨天作废" }, crossDayActor, ID_KEY),
+        ).rejects.toThrow(new ConflictException("作废后库存将小于 0，请先核对相关出库记录"));
+
+        store.stock.set(10n, 250);
+        const voided = await service.voidInbound(
+            "RK26091301",
+            { expectedVersion: 1, reason: "跨天作废" },
+            crossDayActor,
+            ID_KEY,
+        );
+        expect(voided).toMatchObject({ status: "voided" });
+    });
+});
+
+describe("InboundService.deleteInbound", () => {
+    it("非作废 409；已删除 409；被库存调整单引用 409", async () => {
+        const store = emptyStore();
+        store.entries.push(mkEntry()); // ACTIVE：必须先作废再删除
+        const { service } = mkService(store);
+        await expect(service.deleteInbound("RK26091301", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException("仅已作废的入库记录可删除，请先作废"),
+        );
+
+        store.entries[0] = mkEntry({ status: "VOIDED", deletedAt: new Date() });
+        await expect(service.deleteInbound("RK26091301", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException("该入库记录已删除"),
+        );
+
+        store.entries[0] = mkEntry({ status: "VOIDED" });
+        store.adjustments.push({ id: 701n, relatedInboundId: 500n } as Store["adjustments"][number]);
+        await expect(service.deleteInbound("RK26091301", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException("存在关联的库存调整单，不可删除"),
+        );
+    });
+
+    it("成功：打标不动版本与变更日志，op_log 快照冻结作废原因，列表不再返回", async () => {
+        const store = emptyStore();
+        store.entries.push(mkEntry({ status: "VOIDED", rowVersion: 2n }));
+        store.changeLogs.push({ inboundId: 500n, eventType: "VOID", reason: "整批退回" });
+        const { service } = mkService(store);
+
+        await expect(service.deleteInbound("RK26091301", { expectedVersion: 2 }, actor, ID_KEY)).resolves.toBeNull();
+
+        expect(store.entries[0]!.deletedAt).toBeInstanceOf(Date);
+        // 删除是可见性管理非业务变更：版本链止于 VOID，不递增 rowVersion、不写变更日志
+        expect(store.entries[0]!.rowVersion).toBe(2n);
+        expect(store.changeLogs).toHaveLength(1);
+        expect(store.opLogs).toHaveLength(1);
+        expect(store.opLogs[0]).toMatchObject({ action: "delete_inbound", targetCode: "RK26091301" });
+        expect((store.opLogs[0] as { detailJson: { voidReason: string } }).detailJson.voidReason).toBe("整批退回");
+        expect(await service.listInbound()).toHaveLength(0);
     });
 });
 
@@ -350,7 +465,7 @@ describe("InboundService.createStockAdjustment", () => {
         expect(created.time).toMatch(/^\d{2}-\d{2} \d{2}:\d{2}$/);
     });
 
-    it("关联入库单不存在 404；BOM 不一致 409；一致时回填 relatedInboundNo", async () => {
+    it("关联入库单不存在或已删除 404；BOM 不一致 409；一致时回填 relatedInboundNo", async () => {
         const store = emptyStore();
         store.entries.push(mkEntry({ entryNo: "RK26091301", bomId: 10n }));
         store.boms.push(mkBom({ id: 11n, bomCode: "ZMKW0002" }));
@@ -358,7 +473,13 @@ describe("InboundService.createStockAdjustment", () => {
 
         await expect(
             service.createStockAdjustment(input({ relatedInboundNo: "RK99999999" }), actor, ID_KEY),
-        ).rejects.toThrow(new NotFoundException("关联入库单不存在"));
+        ).rejects.toThrow(new NotFoundException("关联入库单不存在或已删除"));
+
+        // 已软删除的入库单不可再被新调整单关联（否则清理任务会因引用永久跳过该行）
+        store.entries.push(mkEntry({ id: 504n, entryNo: "RK26091309", status: "VOIDED", deletedAt: new Date() }));
+        await expect(
+            service.createStockAdjustment(input({ relatedInboundNo: "RK26091309" }), actor, ID_KEY),
+        ).rejects.toThrow(new NotFoundException("关联入库单不存在或已删除"));
 
         await expect(
             service.createStockAdjustment(

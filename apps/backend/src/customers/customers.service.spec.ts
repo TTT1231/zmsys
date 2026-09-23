@@ -492,6 +492,12 @@ describe("CustomersService.updateCustomer", () => {
         expect(store.customers[0].contactPhone).toBe("13900002222");
         expect(store.ownerHistories).toHaveLength(1);
         expect(store.ownerHistories[0]).toMatchObject({ fromOwnerId: 200n, toOwnerId: 201n });
+        // 审计清单：编辑动作留变更字段前后值；手机号只记"是否变更"不落明文
+        expect(store.opLogs).toHaveLength(1);
+        expect(store.opLogs[0]).toMatchObject({ action: "update_customer", targetCode: "CUS-0900" });
+        const detail = (store.opLogs[0] as { detailJson: { phoneChanged: boolean; ownerChanged: unknown } }).detailJson;
+        expect(detail.phoneChanged).toBe(true);
+        expect(detail.ownerChanged).toMatchObject({ from: expect.any(String), to: "新销售" });
     });
 
     it("负责人未变化不写移交历史；负责人不存在 404", async () => {

@@ -365,6 +365,10 @@ export interface VoidInboundInput {
     reason: string;
 }
 
+export interface DeleteInboundInput {
+    expectedVersion: number;
+}
+
 export interface CreateStockAdjustmentInput {
     bomCode: string;
     qtyDelta: number;
@@ -383,6 +387,10 @@ export interface CreateOutboundInput {
 export interface VoidOutboundInput {
     expectedVersion: number;
     reason: string;
+}
+
+export interface DeleteOutboundInput {
+    expectedVersion: number;
 }
 
 export interface CreateUserInput {

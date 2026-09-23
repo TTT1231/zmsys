@@ -6,6 +6,7 @@ import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { CreateInboundDto } from "./dto/create-inbound.dto";
 import { UpdateInboundDto } from "./dto/update-inbound.dto";
 import { VoidResourceDto } from "./dto/void-resource.dto";
+import { DeleteInboundDto } from "./dto/delete-inbound.dto";
 import { CreateStockAdjustmentDto } from "./dto/create-stock-adjustment.dto";
 import type { AuthUser } from "../common/types/auth-user";
 import type { InboundRow, StockAdjustmentRow } from "./types";
@@ -52,6 +53,18 @@ export class InboundController {
         @Headers("idempotency-key") idempotencyKey: string | undefined,
     ): Promise<InboundRow> {
         return this.inboundService.voidInbound(no, dto, actor, idempotencyKey);
+    }
+
+    @Post("inbound/:no/delete")
+    @Permissions([PERMISSIONS.INBOUND_DELETE], "无权删除入库记录")
+    @HttpCode(HttpStatus.OK)
+    async deleteInbound(
+        @Param("no") no: string,
+        @Body() dto: DeleteInboundDto,
+        @CurrentUser() actor: AuthUser,
+        @Headers("idempotency-key") idempotencyKey: string | undefined,
+    ): Promise<null> {
+        return this.inboundService.deleteInbound(no, dto, actor, idempotencyKey);
     }
 
     @Get("stock-adjustments")

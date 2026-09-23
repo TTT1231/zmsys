@@ -12,6 +12,7 @@ import { configureApp } from "../src/main";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { SnowflakeGenerator } from "../src/common/snowflake";
 import { materialSetHash } from "../src/common/bom-spec";
+import { LedgerPurgeService } from "../src/maintenance/ledger-purge.service";
 
 const RUN = Date.now().toString(36);
 const accountOf = (name: string): string => `qa_${name}_${RUN}`;
@@ -604,5 +605,240 @@ describe("成品出入库 (e2e)", () => {
                 expect.objectContaining({ qty: 6, state: "registered" }),
             ]),
         );
+    });
+
+    it("删除已作废入库：sales 403、ACTIVE 409、删除归一 null 且幂等、软删除标记 + op_log 快照、列表不再返回、调整单关联已删除单 404", async () => {
+        // 新入库 → 作废 → 删除（仓管全链路）
+        const created = await post("/api/inbound", warehouseToken, inboundInput(BOM_CODE, 7), `e2e-led-${RUN}-dely-in`);
+        expect(created.statusCode).toBe(200);
+        const inNo = created.json().data.no;
+        const voided = await post(
+            `/api/inbound/${inNo}/void`,
+            warehouseToken,
+            { expectedVersion: 1, reason: "录错了走删除链" },
+            `e2e-led-${RUN}-dely-void`,
+        );
+        expect(voided.statusCode).toBe(200);
+        const voidVersion = voided.json().data.version;
+
+        const salesToken = await login(accountOf("sales02"));
+        const denied = await post(
+            `/api/inbound/${inNo}/delete`,
+            salesToken,
+            { expectedVersion: voidVersion },
+            `e2e-led-${RUN}-dely-denied`,
+        );
+        expect(denied.statusCode).toBe(403);
+        expect(denied.json().message).toBe("无权删除入库记录");
+
+        // ACTIVE 单必须先作废
+        const active = await post("/api/inbound", warehouseToken, inboundInput(BOM_CODE, 3), `e2e-led-${RUN}-dely-act`);
+        const notVoided = await post(
+            `/api/inbound/${active.json().data.no}/delete`,
+            warehouseToken,
+            { expectedVersion: 1 },
+            `e2e-led-${RUN}-dely-nv`,
+        );
+        expect(notVoided.statusCode).toBe(409);
+        expect(notVoided.json().message).toBe("仅已作废的入库记录可删除，请先作废");
+
+        const del = await post(
+            `/api/inbound/${inNo}/delete`,
+            warehouseToken,
+            { expectedVersion: voidVersion },
+            `e2e-led-${RUN}-dely-in1`,
+        );
+        expect(del.statusCode).toBe(200);
+        expect(del.json().data).toBeNull();
+        // 重放归一 null（删除契约响应恒 null）
+        const replay = await post(
+            `/api/inbound/${inNo}/delete`,
+            warehouseToken,
+            { expectedVersion: voidVersion },
+            `e2e-led-${RUN}-dely-in1`,
+        );
+        expect(replay.statusCode).toBe(200);
+        expect(replay.json().data).toBeNull();
+
+        // 列表不再返回；数据库行保留软删除标记；op_log 冻结快照（含作废原因）
+        const list = await app.inject({ method: "GET", url: "/api/inbound", headers: authHeaders(superToken) });
+        expect(list.json().data.some((row: { no: string }) => row.no === inNo)).toBe(false);
+        const dbRow = await prisma.inboundLedger.findUnique({ where: { entryNo: inNo } });
+        expect(dbRow).not.toBeNull();
+        expect(dbRow!.deletedAt).not.toBeNull();
+        const opLog = await prisma.opLog.findFirst({ where: { action: "delete_inbound", targetCode: inNo } });
+        expect(opLog).not.toBeNull();
+        expect(opLog!.detailJson).toMatchObject({ no: inNo, voidReason: "录错了走删除链" });
+
+        // 已删除单不可再被新调整单关联（否则清理任务会因引用永久跳过该行）
+        const linkDeleted = await post(
+            "/api/stock-adjustments",
+            superToken,
+            { bomCode: BOM_CODE, qtyDelta: 1, date: today(), reason: "关联已删除单", relatedInboundNo: inNo },
+            `e2e-led-${RUN}-dely-link`,
+        );
+        expect(linkDeleted.statusCode).toBe(404);
+        expect(linkDeleted.json().message).toBe("关联入库单不存在或已删除");
+
+        // 被调整单引用的已作废入库不可删（物理清理 FK 安全的前置保证）
+        const linked = await post("/api/inbound", warehouseToken, inboundInput(BOM_CODE, 5), `e2e-led-${RUN}-dely-lk`);
+        const linkedVoid = await post(
+            `/api/inbound/${linked.json().data.no}/void`,
+            warehouseToken,
+            { expectedVersion: 1, reason: "被调整单引用" },
+            `e2e-led-${RUN}-dely-lkv`,
+        );
+        const adj = await post(
+            "/api/stock-adjustments",
+            superToken,
+            {
+                bomCode: BOM_CODE,
+                qtyDelta: 1,
+                date: today(),
+                reason: "引用后禁止删除",
+                relatedInboundNo: linked.json().data.no,
+            },
+            `e2e-led-${RUN}-dely-adj`,
+        );
+        expect(adj.statusCode).toBe(200);
+        const blocked = await post(
+            `/api/inbound/${linked.json().data.no}/delete`,
+            warehouseToken,
+            { expectedVersion: linkedVoid.json().data.version },
+            `e2e-led-${RUN}-dely-blk`,
+        );
+        expect(blocked.statusCode).toBe(409);
+        expect(blocked.json().message).toBe("存在关联的库存调整单，不可删除");
+    });
+
+    it("删除已作废出库 + 物理清理：订单已发恢复、清理后行与子日志消失而 op_log 仍在、订单删除放行、软删除行挡 BOM 删除直至清理", async () => {
+        // 先补库存：前面用例已把共享库存池消耗到低位，发货 40 需要可发量充足
+        const stockIn = await post(
+            "/api/inbound",
+            warehouseToken,
+            inboundInput(BOM_CODE, 200),
+            `e2e-led-${RUN}-delo-stock`,
+        );
+        expect(stockIn.statusCode).toBe(200);
+
+        // 新订单 40 件 → 发货 40 → 作废（订单已发恢复 0）→ 删除 → 物理清理 → 订单删除放行（明示规则）
+        // 交货日期早于其他用例的订单（§6.2 按交货日期升序分配共享库存池），保证补的库存先分给本单
+        const orderRes = await post(
+            "/api/orders",
+            superToken,
+            {
+                customerCode,
+                bomCode: BOM_CODE,
+                qty: 40,
+                deliverDate: "2026-09-30",
+                orderDate: today(),
+                remark: `e2e 删除链订单 ${RUN}`,
+            },
+            `e2e-led-${RUN}-delo-order`,
+        );
+        expect(orderRes.statusCode).toBe(200);
+        const deloOrderNo = orderRes.json().data.orderNo;
+
+        const shipRes = await post(
+            "/api/outbound",
+            warehouseToken,
+            outboundInput(deloOrderNo, 40),
+            `e2e-led-${RUN}-delo-ship`,
+        );
+        expect(shipRes.statusCode).toBe(200);
+        const shipNo = shipRes.json().data.no;
+        expect(await outboundOfOrder(deloOrderNo)).toBe(40);
+
+        const shipVoid = await post(
+            `/api/outbound/${shipNo}/void`,
+            warehouseToken,
+            { expectedVersion: 1, reason: "发货作废后删除" },
+            `e2e-led-${RUN}-delo-void`,
+        );
+        expect(shipVoid.statusCode).toBe(200);
+        expect(await outboundOfOrder(deloOrderNo)).toBe(0);
+
+        const shipDel = await post(
+            `/api/outbound/${shipNo}/delete`,
+            warehouseToken,
+            { expectedVersion: shipVoid.json().data.version },
+            `e2e-led-${RUN}-delo-del`,
+        );
+        expect(shipDel.statusCode).toBe(200);
+        expect(shipDel.json().data).toBeNull();
+        const outList = await app.inject({ method: "GET", url: "/api/outbound", headers: authHeaders(superToken) });
+        expect(outList.json().data.some((row: { no: string }) => row.no === shipNo)).toBe(false);
+
+        // 软删除行存在时 deleteBom 仍被流水校验挡住（与 FK RESTRICT 口径一致）
+        const chainBom = await prisma.bomTable.findFirst({ where: { bomCode: { not: BOM_CODE } } });
+        const chainIn = await post(
+            "/api/inbound",
+            warehouseToken,
+            inboundInput(chainBom!.bomCode, 2),
+            `e2e-led-${RUN}-delo-cin`,
+        );
+        expect(chainIn.statusCode).toBe(200);
+        const chainVoid = await post(
+            `/api/inbound/${chainIn.json().data.no}/void`,
+            warehouseToken,
+            { expectedVersion: 1, reason: "BOM 恢复链验证" },
+            `e2e-led-${RUN}-delo-cv`,
+        );
+        expect(chainVoid.statusCode).toBe(200);
+        await post(
+            `/api/inbound/${chainIn.json().data.no}/delete`,
+            warehouseToken,
+            { expectedVersion: chainVoid.json().data.version },
+            `e2e-led-${RUN}-delo-cd`,
+        );
+        const bomBlocked = await post(
+            `/api/boms/${chainBom!.bomCode}/delete`,
+            superToken,
+            {},
+            `e2e-led-${RUN}-delo-bomblk`,
+        );
+        expect(bomBlocked.statusCode).toBe(409);
+        expect(bomBlocked.json().message).toBe("BOM 已有入库或库存调整流水，不可删除");
+
+        // 物理清理（cutoff 传未来时刻 = 全部到期）：行与子日志同清、op_log 快照仍在
+        const shipmentRow = await prisma.outboundShipment.findUnique({ where: { shipmentNo: shipNo } });
+        expect(shipmentRow).not.toBeNull();
+        expect(await prisma.outboundLedger.count({ where: { shipmentId: shipmentRow!.id } })).toBe(2); // NORMAL + CORRECTION
+        expect(await prisma.outboundStateLog.count({ where: { shipmentId: shipmentRow!.id } })).toBeGreaterThanOrEqual(
+            2,
+        );
+
+        const purgeService = app.get(LedgerPurgeService);
+        const counts = await purgeService.purge(new Date(Date.now() + 60_000));
+        expect(counts.inbound).toBeGreaterThanOrEqual(2);
+        expect(counts.outbound).toBeGreaterThanOrEqual(1);
+        expect(await prisma.outboundShipment.findUnique({ where: { shipmentNo: shipNo } })).toBeNull();
+        expect(await prisma.outboundLedger.count({ where: { shipmentId: shipmentRow!.id } })).toBe(0);
+        expect(await prisma.outboundStateLog.count({ where: { shipmentId: shipmentRow!.id } })).toBe(0);
+        expect(await prisma.inboundLedger.findUnique({ where: { entryNo: chainIn.json().data.no } })).toBeNull();
+        expect(
+            await prisma.opLog.findFirst({ where: { action: "delete_outbound", targetCode: shipNo } }),
+        ).not.toBeNull();
+        // 清理不改变订单已发（净额零和）
+        expect(await outboundOfOrder(deloOrderNo)).toBe(0);
+
+        // 出库全部"作废→删除→清理"后订单删除放行：净发货为零且过后悔期（roles.md 明示规则）
+        const orderDel = await post(
+            `/api/orders/${deloOrderNo}/delete`,
+            superToken,
+            { expectedVersion: 1 },
+            `e2e-led-${RUN}-delo-odel`,
+        );
+        expect(orderDel.statusCode).toBe(200);
+        expect(orderDel.json().data).toBeNull();
+
+        // 清理后 BOM 的入库流水消失，删除放行——"入库→作废→删除→删 BOM"恢复链走通
+        const bomDel = await post(
+            `/api/boms/${chainBom!.bomCode}/delete`,
+            superToken,
+            {},
+            `e2e-led-${RUN}-delo-bomdel`,
+        );
+        expect(bomDel.statusCode).toBe(200);
     });
 });

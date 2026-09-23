@@ -163,11 +163,14 @@ INSERT INTO sys_permission (code, kind, menu_key, action_id, label, protected) V
     ('inbound:view', 'ACTION', 'inbound', 'view', '查看台账', 0),
     ('inbound:register', 'ACTION', 'inbound', 'register', '检验入库', 0),
     ('inbound:edit', 'ACTION', 'inbound', 'edit', '当天修正或作废', 0),
+    ('inbound:delete', 'ACTION', 'inbound', 'delete', '删除入库记录', 0),
     ('inbound:adjust', 'ACTION', 'inbound', 'adjust', '跨日库存调整', 1),
+    ('inbound:void-any-day', 'ACTION', 'inbound', 'void-any-day', '跨天作废入库', 1),
     ('outbound:view', 'ACTION', 'outbound', 'view', '查看台账', 0),
     ('outbound:ship', 'ACTION', 'outbound', 'ship', '登记发货', 0),
     ('outbound:void', 'ACTION', 'outbound', 'void', '作废', 0),
     ('outbound:print', 'ACTION', 'outbound', 'print', '打印', 0),
+    ('outbound:delete', 'ACTION', 'outbound', 'delete', '删除出库记录', 0),
     ('permissions:view', 'ACTION', 'permissions', 'view', '查看', 1),
     ('permissions:manage', 'ACTION', 'permissions', 'manage', '用户与角色管理', 1);
 
@@ -225,9 +228,11 @@ INSERT INTO sys_grant (role_code, permission_code, grant_source, granted_by) VAL
     ('warehouse', 'inbound:view', 'BOOTSTRAP', NULL),
     ('warehouse', 'inbound:register', 'BOOTSTRAP', NULL),
     ('warehouse', 'inbound:edit', 'BOOTSTRAP', NULL),
+    ('warehouse', 'inbound:delete', 'BOOTSTRAP', NULL),
     ('warehouse', 'outbound:view', 'BOOTSTRAP', NULL),
     ('warehouse', 'outbound:ship', 'BOOTSTRAP', NULL),
     ('warehouse', 'outbound:void', 'BOOTSTRAP', NULL),
+    ('warehouse', 'outbound:delete', 'BOOTSTRAP', NULL),
     ('sales', 'menu:workbench', 'BOOTSTRAP', NULL),
     ('sales', 'menu:orders', 'BOOTSTRAP', NULL),
     ('sales', 'menu:customers', 'BOOTSTRAP', NULL),
@@ -1008,10 +1013,12 @@ CREATE TABLE inbound_ledger (
     updated_by BIGINT NOT NULL,
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    deleted_at DATETIME(3) NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_inbound_entry_no (entry_no),
     UNIQUE KEY uk_inbound_request (request_key),
     KEY idx_inbound_bom_status_date (bom_id, status, business_date, id),
+    KEY idx_inbound_deleted (deleted_at),
     CONSTRAINT fk_inbound_bom FOREIGN KEY (bom_id) REFERENCES bom_table (id)
         ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT fk_inbound_operator FOREIGN KEY (operator_id) REFERENCES sys_user (id)
@@ -1094,6 +1101,7 @@ CREATE TABLE outbound_shipment (
     voided_by BIGINT NULL,
     void_reason VARCHAR(500) NULL,
     voided_at DATETIME(3) NULL,
+    deleted_at DATETIME(3) NULL,
     row_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
     request_key VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     registered_by BIGINT NOT NULL,
@@ -1104,6 +1112,7 @@ CREATE TABLE outbound_shipment (
     UNIQUE KEY uk_outbound_shipment_request (request_key),
     KEY idx_outbound_shipment_order_state_date (order_id, state, business_date, id),
     KEY idx_outbound_shipment_state_time (state, registered_at),
+    KEY idx_outbound_deleted (deleted_at),
     CONSTRAINT fk_outbound_shipment_order FOREIGN KEY (order_id) REFERENCES sales_order_table (id)
         ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT fk_outbound_shipment_registrar FOREIGN KEY (registered_by) REFERENCES sys_user (id)
@@ -1219,14 +1228,20 @@ CREATE TABLE op_log (
     operator_id BIGINT NOT NULL,
     operator_name_snapshot VARCHAR(64) NOT NULL,
     operator_role_snapshot VARCHAR(32) NOT NULL,
-    action ENUM('ship', 'create_customer', 'create_order', 'delete_order', 'delete_bom', 'archive_order') NOT NULL,
+    action ENUM(
+        'ship', 'create_customer', 'create_order', 'delete_order', 'delete_bom', 'archive_order',
+        'create_inbound', 'void_inbound', 'delete_inbound',
+        'void_outbound', 'delete_outbound',
+        'create_bom', 'update_customer'
+    ) NOT NULL,
     target_type VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     target_id BIGINT NOT NULL,
     target_code VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     detail_json JSON NOT NULL,
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),
-    UNIQUE KEY uk_op_log_action_target (action, target_id),
+    -- update_customer 同目标可多条：普通索引，防重由幂等层承担
+    KEY idx_op_log_action_target (action, target_id),
     KEY idx_op_log_time (created_at DESC),
     KEY idx_op_log_operator_time (operator_id, created_at DESC),
     CONSTRAINT fk_op_log_operator FOREIGN KEY (operator_id) REFERENCES sys_user (id)
@@ -1241,6 +1256,10 @@ CREATE TABLE op_log (
 --    bom_table / bom_item 的 DELETE 仅授予 BOM 删除专用服务：仅超级管理员、无任何销售订单
 --    引用且无入库/调整流水，事务内先清理 bom_item 再删档案行并写 op_log(delete_bom) 快照
 --    （见 db-scheme.md 5.2）。
--- 2. inbound_ledger 仅由带当天窗口、版本检查和审计日志的业务事务 UPDATE；不授予 DELETE。
--- 3. 不授予 stock_adjustment / outbound_ledger / 各日志表的 UPDATE 或 DELETE。
+-- 2. inbound_ledger / outbound_shipment 仅由带状态校验、版本检查和审计日志的业务事务
+--    UPDATE（含软删除打 deleted_at 标记）；不授予人工 DELETE。inbound_ledger /
+--    outbound_shipment / inbound_change_log / outbound_state_log / outbound_ledger 的 DELETE
+--    仅授予台账清理专用服务（maintenance）：仅处理 deleted_at 超过 7 天保留期的已作废单，
+--    分批事务内连带子行同删，删除动作本身已在 op_log 留全量快照（见 db-scheme.md §7.1）。
+-- 3. 不授予 stock_adjustment / 各日志表的 UPDATE 或 DELETE。
 -- 4. 仅迁移账号拥有 ALTER / DROP / REFERENCES。

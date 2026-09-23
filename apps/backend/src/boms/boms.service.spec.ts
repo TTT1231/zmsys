@@ -720,6 +720,9 @@ describe("BomsService", () => {
                 { materialId: "3008", groupKey: "spring", groupName: "弹簧", name: "0.5", quantity: 1 },
             ]);
             expect(written.createdBoms[0]).toMatchObject({ bomCode: "XK2011", unit: "个", categoryId: 1001n });
+            // 审计清单：建档动作留档案快照（与 delete_bom 的详存风格一致）
+            expect(written.opLogs).toHaveLength(1);
+            expect(written.opLogs[0]).toMatchObject({ action: "create_bom", targetCode: "XK2011" });
             expect(
                 Buffer.compare(
                     written.createdBoms[0]!.specHash as Buffer,

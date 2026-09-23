@@ -30,6 +30,7 @@ vi.mock("@/data/queries", () => ({
     useCreateInbound: () => ({ mutate: vi.fn(), isPending: false }),
     useUpdateInbound: () => ({ mutate: vi.fn(), isPending: false }),
     useVoidInbound: () => ({ mutate: vi.fn(), isPending: false }),
+    useDeleteInbound: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 afterEach(cleanup);
 
