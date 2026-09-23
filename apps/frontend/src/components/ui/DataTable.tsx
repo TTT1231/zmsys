@@ -196,6 +196,8 @@ function TableView({
             const label = th.getAttribute("aria-label");
             if (!label) return;
             const range = document.createRange();
+            // jsdom 的 Range 未实现几何接口，测不了就走 90 兜底
+            if (typeof range.getBoundingClientRect !== "function") return;
             let left = Number.POSITIVE_INFINITY;
             let right = Number.NEGATIVE_INFINITY;
             for (const node of Array.from(th.childNodes)) {
