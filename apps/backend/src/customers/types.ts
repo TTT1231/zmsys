@@ -22,3 +22,8 @@ export interface CustomerOwnerOption {
     name: string;
     account: string;
 }
+
+/** 契约 CustomerPhone：完整手机号，仅超管或客户当前负责人可获取（页面展示一律用 Customer.phone 掩码） */
+export interface CustomerPhone {
+    phone: string;
+}

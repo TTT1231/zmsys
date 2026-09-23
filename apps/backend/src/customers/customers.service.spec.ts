@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from "@nestjs/common";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CustomersService } from "./customers.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -316,6 +316,50 @@ describe("CustomersService.listOwnerOptions", () => {
             { name: "销售一", account: "sales01" },
             { name: "超级管理员", account: "super01" },
         ]);
+    });
+});
+
+describe("CustomersService.revealPhone", () => {
+    const salesActor = (id: string, account: string) =>
+        ({
+            id,
+            account,
+            name: "销售",
+            role: "sales",
+            isSuper: false,
+            rowVersion: 1,
+            permissions: new Set<string>(),
+        }) as const;
+
+    it("超管可取任意客户的完整手机号", async () => {
+        const store: Store = {
+            users: new Map(),
+            customers: [mkCustomer(900n, 200n)],
+            orders: [],
+            ownerHistories: [],
+            opLogs: [],
+        };
+        const { service } = mkService(store);
+        await expect(service.revealPhone("CUS-0900", actor)).resolves.toEqual({ phone: "13800001111" });
+    });
+
+    it("销售可取本人负责客户；他人客户与未知客户分别 403/404", async () => {
+        const store: Store = {
+            users: new Map(),
+            customers: [mkCustomer(900n, 200n)],
+            orders: [],
+            ownerHistories: [],
+            opLogs: [],
+        };
+        const { service } = mkService(store);
+        const owner = salesActor("200", "sales200");
+        await expect(service.revealPhone("CUS-0900", owner)).resolves.toEqual({ phone: "13800001111" });
+
+        const stranger = salesActor("201", "sales201");
+        await expect(service.revealPhone("CUS-0900", stranger)).rejects.toThrow(
+            new ForbiddenException("只有超级管理员或客户负责人可获取完整手机号"),
+        );
+        await expect(service.revealPhone("CUS-9999", actor)).rejects.toThrow(new NotFoundException("客户不存在"));
     });
 });
 

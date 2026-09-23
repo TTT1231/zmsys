@@ -127,6 +127,11 @@ export interface Customer {
     created: string;
 }
 
+/** 完整手机号（仅超管或客户当前负责人可获取；页面展示一律用 Customer.phone 掩码） */
+export interface CustomerPhone {
+    phone: string;
+}
+
 export interface InboundRow {
     no: string;
     bomCode: string;

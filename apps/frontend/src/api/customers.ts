@@ -1,9 +1,14 @@
-import type { CreateCustomerInput, Customer, UpdateCustomerInput } from "./types";
+import type { CreateCustomerInput, Customer, CustomerPhone, UpdateCustomerInput } from "./types";
 import { requestClient } from "@/http";
 import { idempotencyConfig } from "./idempotency";
 
 export function fetchCustomers(): Promise<Customer[]> {
     return requestClient.get<Customer[]>("/customers");
+}
+
+/** 获取完整手机号（仅超管或客户当前负责人；复制场景专用，取号后不回显） */
+export function fetchCustomerPhone(code: string): Promise<CustomerPhone> {
+    return requestClient.get<CustomerPhone>(`/customers/${code}/phone`);
 }
 
 export function createCustomer(input: CreateCustomerInput): Promise<Customer> {

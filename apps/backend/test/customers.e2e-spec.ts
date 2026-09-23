@@ -199,4 +199,61 @@ describe("客户档案 (e2e)", () => {
         expect(histories).toHaveLength(beforeCount + 1);
         expect(histories[0]).toMatchObject({ reason: "编辑客户档案变更负责人" });
     });
+
+    it("完整手机号：超管任意客户可取；销售仅本人负责客户，他人客户与管理员 403；未知客户 404", async () => {
+        const mine = (await createCustomer(salesAccount, `e2e-cust-${RUN}-phone-mine`)).json().data;
+        const otherSales = accountOf("sales03");
+        await createUser(otherSales, "sales");
+        const theirs = (await createCustomer(otherSales, `e2e-cust-${RUN}-phone-theirs`)).json().data;
+
+        // 超管不受归属限制
+        const bySuper = await app.inject({
+            method: "GET",
+            url: `/api/customers/${theirs.code}/phone`,
+            headers: authHeaders(superToken),
+        });
+        expect(bySuper.statusCode).toBe(200);
+        expect(bySuper.json()).toEqual({ code: 0, data: { phone: "13800001111" }, message: "ok" });
+
+        // 销售取自己负责的客户
+        const byOwner = await app.inject({
+            method: "GET",
+            url: `/api/customers/${mine.code}/phone`,
+            headers: authHeaders(salesToken),
+        });
+        expect(byOwner.statusCode).toBe(200);
+        expect(byOwner.json().data).toEqual({ phone: "13800001111" });
+
+        // 销售取他人负责的客户
+        const byStranger = await app.inject({
+            method: "GET",
+            url: `/api/customers/${theirs.code}/phone`,
+            headers: authHeaders(salesToken),
+        });
+        expect(byStranger.statusCode).toBe(403);
+        expect(byStranger.json()).toEqual({
+            code: 403,
+            data: null,
+            message: "只有超级管理员或客户负责人可获取完整手机号",
+        });
+
+        // 管理员有 customers:view 但永远不是负责人
+        await createUser(accountOf("admin01"), "admin");
+        const byAdmin = await app.inject({
+            method: "GET",
+            url: `/api/customers/${mine.code}/phone`,
+            headers: authHeaders(await login(accountOf("admin01"))),
+        });
+        expect(byAdmin.statusCode).toBe(403);
+        expect(byAdmin.json().message).toBe("只有超级管理员或客户负责人可获取完整手机号");
+
+        // 未知客户
+        const missing = await app.inject({
+            method: "GET",
+            url: "/api/customers/CUS-999999/phone",
+            headers: authHeaders(superToken),
+        });
+        expect(missing.statusCode).toBe(404);
+        expect(missing.json().message).toBe("客户不存在");
+    });
 });
