@@ -12,6 +12,7 @@ import { Button, TableLink } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { BomCell } from "@/components/bom/BomCell";
+import { RemarkCell } from "@/components/ui/RemarkCell";
 import { BomSpecs } from "@/components/bom/BomSpecs";
 import { BomRemarkNote } from "@/components/bom/BomRemarkNote";
 import { useBomCategories, useBomRefresh, useBomStockLedger, useBomStocks, useBoms } from "@/data/queries";
@@ -443,10 +444,8 @@ export function StockPage() {
                                                 showName={false}
                                             />
                                         </td>
-                                        <td className="px-3 py-3 text-14">
-                                            <span className="block truncate" title={row.remark || undefined}>
-                                                <BomRemarkText remark={row.remark} />
-                                            </span>
+                                        <td className="px-3 py-3">
+                                            <RemarkCell remark={row.remark} variant="warning" />
                                         </td>
                                         <td
                                             className={`tnum px-3 py-3 text-14 font-semibold ${row.stock === 0 ? "text-muted" : "text-ink"}`}

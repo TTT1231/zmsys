@@ -4,6 +4,7 @@ import { SearchSelect } from "@/components/ui/SearchSelect";
 import { ListState, OrderTaskCard } from "@/components/ui/MobileList";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BomCell } from "@/components/bom/BomCell";
+import { RemarkCell } from "@/components/ui/RemarkCell";
 import { RecordFields, RecordProduct, RecordSummary } from "@/components/business/RecordDetails";
 import { OutboundModal } from "@/pages/outbound/OutboundPage";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -1023,7 +1024,7 @@ export function OrdersPage() {
                     ) : (
                         <DataTable
                             tableId="orders"
-                            defaultWidths={[154, 160, 360, 150, 150, 130, 138, 140, 105, 120]}
+                            defaultWidths={[154, 230, 100, 452, 150, 100, 120, 140, 100, 100]}
                             recordCount={filtered.length}
                             identityColumn={0}
                             scrollRef={tableScrollRef}
@@ -1038,17 +1039,17 @@ export function OrdersPage() {
                                         className="px-5"
                                         width="14%"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "16%" }}>
-                                        客户
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "14%" }}>
+                                        客户 / 备注
                                     </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "22%" }}>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "8%" }}>
+                                        客户编码
+                                    </th>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "24%" }}>
                                         成品 / BOM
                                     </th>
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "12%" }}>
                                         BOM 备注
-                                    </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "12%" }}>
-                                        订单备注
                                     </th>
                                     <SortTh
                                         label="订单数量"
@@ -1114,8 +1115,9 @@ export function OrdersPage() {
                                                 </button>
                                             </td>
                                             <td className="px-3 py-4">
-                                                <CustomerCell name={order.customer} note={order.customerCode} />
+                                                <CustomerCell name={order.customer} remark={order.remark} />
                                             </td>
+                                            <td className="px-3 py-4 tnum text-12 text-muted">{order.customerCode}</td>
                                             <td className="px-3 py-4">
                                                 <BomCell
                                                     categories={snap.bomCategories}
@@ -1123,36 +1125,8 @@ export function OrdersPage() {
                                                     bomCode={order.bomCode}
                                                 />
                                             </td>
-                                            <td className="px-3 py-4 text-14 leading-5 text-td">
-                                                {/* 与详情弹窗 BomRemarkNote 同语义：warning 图标 + 加粗正文；
-                                                    不搬黄底容器，避免逐行警示盒稀释信号、抬高表格行高 */}
-                                                {bom?.remark ? (
-                                                    <span className="flex items-start gap-1.5" title={bom.remark}>
-                                                        <Icon
-                                                            name="alert"
-                                                            size={14}
-                                                            className="mt-0.5 shrink-0 text-warning"
-                                                        />
-                                                        <span className="line-clamp-2 whitespace-pre-line font-medium">
-                                                            {bom.remark}
-                                                        </span>
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-subtle">—</span>
-                                                )}
-                                            </td>
-                                            <td className="px-3 py-4 text-14 leading-5 text-td">
-                                                {/* 订单备注为普通文本：不套 BOM 备注的警示图标语义，仅截断两行 + 悬停全文 */}
-                                                {order.remark ? (
-                                                    <span
-                                                        className="line-clamp-2 whitespace-pre-line"
-                                                        title={order.remark}
-                                                    >
-                                                        {order.remark}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-subtle">—</span>
-                                                )}
+                                            <td className="px-3 py-4">
+                                                <RemarkCell remark={bom?.remark} variant="warning" />
                                             </td>
                                             <td className="px-3 py-4">
                                                 <QtyCell value={order.qty} />

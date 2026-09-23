@@ -1,4 +1,5 @@
 import { BomCell } from "@/components/bom/BomCell";
+import { RemarkCell } from "@/components/ui/RemarkCell";
 import { DataTable } from "@/components/ui/DataTable";
 import { SortTh } from "@/components/ui/SortTh";
 import { nextSortState, type SortState } from "@/lib/tableSort";
@@ -952,7 +953,7 @@ export function BomPage() {
                                 onClick={() =>
                                     downloadCsv(
                                         "BOM",
-                                        ["序号", "BOM编码", "品类", "物料构成", "备注"],
+                                        ["序号", "BOM编码", "品类", "物料构成", "BOM 备注"],
                                         pageRows.map((bom, index) => [
                                             String((page - 1) * pageSize + index + 1),
                                             bom.code,
@@ -1037,7 +1038,7 @@ export function BomPage() {
                                     </th>
                                     <th className="px-3 py-2.5 font-semibold">物料构成</th>
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "16%" }}>
-                                        备注
+                                        BOM 备注
                                     </th>
                                     <th className="px-5 py-2.5 text-center font-semibold" style={{ width: "10%" }}>
                                         操作
@@ -1078,13 +1079,8 @@ export function BomPage() {
                                                 showIdentity={false}
                                             />
                                         </td>
-                                        <td className="px-3 py-3 text-14 leading-5 text-td">
-                                            <span
-                                                className="line-clamp-2 whitespace-pre-line"
-                                                title={bom.remark || undefined}
-                                            >
-                                                {bom.remark || "—"}
-                                            </span>
+                                        <td className="px-3 py-3">
+                                            <RemarkCell remark={bom.remark} variant="warning" />
                                         </td>
                                         <td className="px-5 py-3 text-center">
                                             <TableLink onClick={() => setDetail(bom)}>查看详情</TableLink>

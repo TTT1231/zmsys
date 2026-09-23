@@ -28,6 +28,7 @@ import { todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/toastContexts";
 
 import { BomCell } from "@/components/bom/BomCell";
+import { RemarkCell } from "@/components/ui/RemarkCell";
 import { BomPicker } from "@/components/bom/BomPicker";
 import { BomRemarkNote } from "@/components/bom/BomRemarkNote";
 import type { InboundRow, Snapshot } from "@/api";
@@ -691,7 +692,7 @@ export function InboundPage() {
                     ) : (
                         <DataTable
                             tableId="inbound"
-                            defaultWidths={[166, 370, 190, 132, 138, 130, 120]}
+                            defaultWidths={[166, 370, 150, 132, 138, 130, 120]}
                             recordCount={filtered.length}
                             identityColumn={0}
                             scrollRef={tableScrollRef}
@@ -776,8 +777,8 @@ export function InboundPage() {
                                                     bomCode={row.bomCode}
                                                 />
                                             </td>
-                                            <td className="px-3 py-3 text-13 leading-5 text-td">
-                                                <BomRemarkText remark={bom?.remark} />
+                                            <td className="px-3 py-3">
+                                                <RemarkCell remark={bom?.remark} variant="warning" />
                                             </td>
                                             <td className="px-3 py-3">
                                                 <QtyCell value={row.qty} />

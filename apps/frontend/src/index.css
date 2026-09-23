@@ -164,6 +164,8 @@
 
     --color-td: #32373c;
     --color-td-strong: #454c54;
+    /* 空值占位（RemarkCell 的"—"）：比 muted/subtle 再退一档，让有内容的备注行更跳 */
+    --color-placeholder: #98a2b3;
     --color-row-hover: #f8f9ff;
     --color-soft: #f8fafc;
     --color-panel: #fcfcfd;
@@ -847,11 +849,19 @@ button:active:not(:disabled) {
 .managed-table[data-density="compact"] .data-table .line-clamp-2 {
     -webkit-line-clamp: 1;
 }
-/* 收纳：物料摘要、微动组件行、客户编码、已发明细文字行、装饰头像。
+/* RemarkCell 备注格（.remark-clamp）在紧凑账本档从 line-clamp 退回 block 单行：
+   行高由 td 的 nowrap + ellipsis 统一压平，警示识别靠橙色/字重，全文走 title/详情弹窗。 */
+.managed-table[data-density="compact"] .data-table .remark-clamp {
+    display: block;
+    white-space: nowrap;
+    -webkit-line-clamp: unset;
+}
+/* 收纳：物料摘要、微动组件行、客户编码、客户格备注行、已发明细文字行、装饰头像。
    编码类信息悬浮 title / 详情弹窗可达，不丢出口。 */
 .managed-table[data-density="compact"] .bom-summary,
 .managed-table[data-density="compact"] .bom-composite,
 .managed-table[data-density="compact"] .customer-cell-note,
+.managed-table[data-density="compact"] .remark-sub-note,
 .managed-table[data-density="compact"] .delivery-shipped,
 .managed-table[data-density="compact"] .customer-avatar {
     display: none;
@@ -898,6 +908,10 @@ button:active:not(:disabled) {
 .managed-table[data-density="roomy"] .data-table td {
     padding-top: 20px;
     padding-bottom: 20px;
+}
+/* 备注格宽松档放宽到三行（专属类：不波及 BomCell 等其它 line-clamp-2 两行截断）。 */
+.managed-table[data-density="roomy"] .data-table .remark-clamp {
+    -webkit-line-clamp: 3;
 }
 /* 表头随密度阶梯缩放，消除紧凑档“表头比数据行还高”的倒挂。 */
 .managed-table[data-density="compact"] .managed-th {
@@ -961,6 +975,12 @@ button:active:not(:disabled) {
 .managed-table tr.row-voided td[data-pinned="start"] {
     box-shadow: inset 3px 0 0 var(--color-danger);
     color: var(--color-td-strong);
+}
+/* 作废行内的警示备注随行降级：灰字去字重、内容保留——警示语义仅对未作废单据生效，
+   作废原因常写在备注里，必须保持可读。 */
+.managed-table tr.row-voided .remark-cell.text-warning {
+    color: var(--color-muted);
+    font-weight: 400;
 }
 .managed-table[data-resizing] {
     user-select: none;

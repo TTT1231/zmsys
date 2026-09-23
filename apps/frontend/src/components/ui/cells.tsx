@@ -1,16 +1,19 @@
 import { num } from "@/lib/format";
 import { Badge, TableLink } from "@/components/ui/Badge";
 
-/* 表格单元格：客户/单号双行；note 是低频编码（如客户编码），紧凑档随 customer-cell-note 隐藏 */
+/* 表格单元格：客户/单号双行；note 是低频编码（如客户编码），紧凑档随 customer-cell-note 隐藏；
+   remark 是订单备注行（虚线分隔的正文小字），紧凑档随 remark-sub-note 隐藏（全文走 title/详情） */
 export function CustomerCell({
     name,
     sub,
     note,
+    remark,
     onClick,
 }: {
     name: string;
     sub?: string;
     note?: string;
+    remark?: string;
     onClick?: () => void;
 }) {
     const nameNode = onClick ? (
@@ -25,6 +28,7 @@ export function CustomerCell({
         <span className="font-medium text-ink">{name}</span>
     );
     const subText = [sub, note].filter(Boolean).join(" · ");
+    const remarkText = remark?.trim();
     return (
         <div className="customer-cell min-w-0">
             <div className="truncate" title={name}>
@@ -39,6 +43,14 @@ export function CustomerCell({
                             {note}
                         </span>
                     )}
+                </div>
+            )}
+            {remarkText && (
+                <div
+                    className="remark-sub-note mt-1 truncate border-t border-dashed border-line pt-0.5 text-12 text-td"
+                    title={remarkText}
+                >
+                    {remarkText}
                 </div>
             )}
         </div>
