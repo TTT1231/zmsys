@@ -1119,12 +1119,22 @@ export function OrdersPage() {
                                                 />
                                             </td>
                                             <td className="px-3 py-4 text-14 leading-5 text-td">
-                                                <span
-                                                    className="line-clamp-2 whitespace-pre-line"
-                                                    title={bom?.remark || undefined}
-                                                >
-                                                    {bom?.remark || "—"}
-                                                </span>
+                                                {/* 与详情弹窗 BomRemarkNote 同语义：warning 图标 + 加粗正文；
+                                                    不搬黄底容器，避免逐行警示盒稀释信号、抬高表格行高 */}
+                                                {bom?.remark ? (
+                                                    <span className="flex items-start gap-1.5" title={bom.remark}>
+                                                        <Icon
+                                                            name="alert"
+                                                            size={14}
+                                                            className="mt-0.5 shrink-0 text-warning"
+                                                        />
+                                                        <span className="line-clamp-2 whitespace-pre-line font-medium">
+                                                            {bom.remark}
+                                                        </span>
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-subtle">—</span>
+                                                )}
                                             </td>
                                             <td className="px-3 py-4">
                                                 <QtyCell value={order.qty} />
