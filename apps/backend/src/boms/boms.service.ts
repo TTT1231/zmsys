@@ -139,7 +139,7 @@ export class BomsService {
 
     /**
      * BOM 出入库流水（契约 bom:view）：入库/调整/出库三台账按 v_bom_stock 同一
-     * 口径合并（有效入库 + 全量调整 − 出库事件，作废出库经反向事件自动冲销），
+     * 口径合并（有效入库 + 全量调整 − 未删除出库事件，作废出库经反向事件自动冲销），
      * 业务日升序返回并逐笔累计结余，结余与 v_bom_stock 恒等；同日内按操作时间
      * 排序（单号字母序会把出库排在先发生的入库前，结余出现与可发量校验矛盾
      * 的负数中间值）；BOM 不存在 404。
@@ -185,7 +185,7 @@ export class BomsService {
                 JOIN outbound_shipment AS s ON s.id = e.shipment_id
                 JOIN sales_order_table AS o ON o.id = s.order_id
                 JOIN sys_user AS u ON u.id = e.operator_id
-                WHERE o.bom_id = ${bom.id}
+                WHERE o.bom_id = ${bom.id} AND s.deleted_at IS NULL
             ) AS flow
             ORDER BY flow.biz_date ASC, flow.created_at ASC, flow.no ASC
         `;

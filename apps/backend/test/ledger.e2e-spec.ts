@@ -739,12 +739,8 @@ describe("成品出入库 (e2e)", () => {
         expect(orderRes.statusCode).toBe(200);
         const deloOrderNo = orderRes.json().data.orderNo;
 
-        const shipRes = await post(
-            "/api/outbound",
-            warehouseToken,
-            outboundInput(deloOrderNo, 40),
-            `e2e-led-${RUN}-delo-ship`,
-        );
+        const shipInput = outboundInput(deloOrderNo, 40);
+        const shipRes = await post("/api/outbound", warehouseToken, shipInput, `e2e-led-${RUN}-delo-ship`);
         expect(shipRes.statusCode).toBe(200);
         const shipNo = shipRes.json().data.no;
         expect(await outboundOfOrder(deloOrderNo)).toBe(40);
@@ -757,6 +753,15 @@ describe("成品出入库 (e2e)", () => {
         );
         expect(shipVoid.statusCode).toBe(200);
         expect(await outboundOfOrder(deloOrderNo)).toBe(0);
+        const stockLedgerBefore = await app.inject({
+            method: "GET",
+            url: `/api/bom-stocks/${BOM_CODE}/ledger`,
+            headers: authHeaders(superToken),
+        });
+        expect(stockLedgerBefore.statusCode).toBe(200);
+        expect(stockLedgerBefore.json().data.flows.filter((flow: { no: string }) => flow.no === shipNo)).toHaveLength(
+            2,
+        );
 
         const shipDel = await post(
             `/api/outbound/${shipNo}/delete`,
@@ -768,6 +773,19 @@ describe("成品出入库 (e2e)", () => {
         expect(shipDel.json().data).toBeNull();
         const outList = await app.inject({ method: "GET", url: "/api/outbound", headers: authHeaders(superToken) });
         expect(outList.json().data.some((row: { no: string }) => row.no === shipNo)).toBe(false);
+        const printDeleted = await app.inject({
+            method: "GET",
+            url: `/api/outbound/${shipNo}/print`,
+            headers: authHeaders(superToken),
+        });
+        expect(printDeleted.statusCode).toBe(404);
+        const stockLedgerAfter = await app.inject({
+            method: "GET",
+            url: `/api/bom-stocks/${BOM_CODE}/ledger`,
+            headers: authHeaders(superToken),
+        });
+        expect(stockLedgerAfter.statusCode).toBe(200);
+        expect(stockLedgerAfter.json().data.flows.some((flow: { no: string }) => flow.no === shipNo)).toBe(false);
 
         // 软删除行存在时 deleteBom 仍被流水校验挡住（与 FK RESTRICT 口径一致）
         const chainBom = await prisma.bomTable.findFirst({ where: { bomCode: { not: BOM_CODE } } });
@@ -816,9 +834,13 @@ describe("成品出入库 (e2e)", () => {
         expect(await prisma.outboundLedger.count({ where: { shipmentId: shipmentRow!.id } })).toBe(0);
         expect(await prisma.outboundStateLog.count({ where: { shipmentId: shipmentRow!.id } })).toBe(0);
         expect(await prisma.inboundLedger.findUnique({ where: { entryNo: chainIn.json().data.no } })).toBeNull();
-        expect(
-            await prisma.opLog.findFirst({ where: { action: "delete_outbound", targetCode: shipNo } }),
-        ).not.toBeNull();
+        const deleteLog = await prisma.opLog.findFirst({ where: { action: "delete_outbound", targetCode: shipNo } });
+        expect(deleteLog?.detailJson).toMatchObject({
+            no: shipNo,
+            remark: shipInput.remark,
+            state: "voided",
+            voidReason: "发货作废后删除",
+        });
         // 清理不改变订单已发（净额零和）
         expect(await outboundOfOrder(deloOrderNo)).toBe(0);
 

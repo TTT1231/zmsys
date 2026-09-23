@@ -302,6 +302,7 @@ describe("OutboundService.createOutbound", () => {
         expect(store.stateLogs[0]).toMatchObject({ eventType: "REGISTER", afterVersion: 1n });
         expect(store.opLogs).toHaveLength(1);
         expect(store.opLogs[0]).toMatchObject({ action: "ship", targetCode: "CK26091301" });
+        expect((store.opLogs[0] as { detailJson: { remark: string } }).detailJson.remark).toBe("首次发货");
     });
 });
 
@@ -378,7 +379,13 @@ describe("OutboundService.deleteOutbound", () => {
         expect(store.stateLogs).toHaveLength(0);
         expect(store.opLogs).toHaveLength(1);
         expect(store.opLogs[0]).toMatchObject({ action: "delete_outbound", targetCode: "CK26091301" });
-        expect((store.opLogs[0] as { detailJson: { voidReason: string } }).detailJson.voidReason).toBe("数量有误");
+        expect((store.opLogs[0] as { detailJson: object }).detailJson).toMatchObject({
+            customerCode: "CUS-0900",
+            registeredBy: "郭均",
+            remark: "首次发货",
+            state: "voided",
+            voidReason: "数量有误",
+        });
         // 列表过滤已删除单
         expect(await service.listOutbound()).toHaveLength(0);
     });
@@ -433,6 +440,15 @@ describe("OutboundService.printOutboundDocument", () => {
         const store = emptyStore();
         const { service } = mkService(store);
         await expect(service.printOutboundDocument("CK99999999", actor)).rejects.toThrow(
+            new NotFoundException("出库单不存在"),
+        );
+    });
+
+    it("已软删除出库单不可再通过单号打印", async () => {
+        const store = emptyStore();
+        store.shipments.push(mkShipment({ state: "VOIDED", deletedAt: new Date() }));
+        const { service } = mkService(store);
+        await expect(service.printOutboundDocument("CK26091301", actor)).rejects.toThrow(
             new NotFoundException("出库单不存在"),
         );
     });

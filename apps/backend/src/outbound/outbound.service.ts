@@ -176,7 +176,7 @@ export class OutboundService {
                 targetType: "outbound",
                 targetId: shipmentId,
                 targetCode: shipmentNo,
-                detail: { orderNo: order.orderNo, qty: dto.qty },
+                detail: { orderNo: order.orderNo, qty: dto.qty, remark: dto.remark },
                 now,
             });
 
@@ -340,22 +340,26 @@ export class OutboundService {
         });
     }
 
-    /** 单头业务快照（op_log 审计用：作废/删除动作冻结操作时形态） */
+    /** 单头业务快照：物理清理数量流水后仍能独立还原出库内容 */
     private shipmentSnapshot(row: ShipmentRow) {
         return {
             no: row.shipmentNo,
             orderNo: row.order.orderNo,
             customer: row.order.customerNameSnapshot,
+            customerCode: row.order.customer.customerCode,
             bomCode: row.order.bom.bomCode,
             qty: row.originalQty,
             date: formatDateColumn(row.businessDate),
+            registeredAt: row.registeredAt.toISOString(),
+            registeredBy: row.registrar.name,
+            remark: this.normalRemarkOf(row),
             state: row.state === "VOIDED" ? "voided" : "registered",
             version: Number(row.rowVersion),
         };
     }
 
     /**
-     * 打印出库单文档（契约 outbound:print，纯读）：任意状态（含已作废）可打、可重复，
+     * 打印出库单文档（契约 outbound:print，纯读）：未删除的任意状态（含已作废）可打、可重复，
      * 实时组装不落日志不改单头状态；printedBy/printedAt 反映本次输出时点。
      * 文档快照源：订单冻结快照（不读当前客户/BOM 主数据与物料目录，防漂移），
      * state/voidReason 来自单头，供打印件渲染作废标注。
@@ -365,7 +369,7 @@ export class OutboundService {
             where: { shipmentNo },
             include: SHIPMENT_INCLUDE,
         });
-        if (!current) {
+        if (!current || current.deletedAt !== null) {
             throw new NotFoundException("出库单不存在");
         }
         const voided = current.state === "VOIDED";

@@ -408,7 +408,7 @@ paths:
             tags: [boms]
             operationId: getBomStockLedger
             summary: BOM 出入库流水与逐笔结余
-            description: 权限 `bom:view`。入库（ACTIVE）/库存调整/出库三台账按 v_bom_stock 同一口径合并为按业务日升序的流水，`balance` 为该笔完成后余量，`stockQty` 与末笔 `balance` 及 v_bom_stock 恒等；作废入库不计、作废出库经反向事件自动冲销。BOM 不存在返回 404；存在但无流水返回空 flows 与 stockQty 0。
+            description: 权限 `bom:view`。入库（ACTIVE）/库存调整/未软删除的出库三台账按 v_bom_stock 同一净额口径合并为按业务日升序的流水，`balance` 为该笔完成后余量，`stockQty` 与末笔 `balance` 及 v_bom_stock 恒等；作废入库不计、作废出库经反向事件自动冲销，已软删除出库单的零和流水不展示。BOM 不存在返回 404；存在但无流水返回空 flows 与 stockQty 0。
             parameters:
                 - $ref: "#/components/parameters/BomCode"
             responses:
@@ -625,7 +625,7 @@ paths:
             tags: [outbound]
             operationId: deleteOutbound
             summary: 删除已作废的出库单（软删除）
-            description: 权限 `outbound:delete`，默认 warehouse/super（非受保护，super 可按需授予其他角色）。仅 VOIDED 状态可删（作废时已追加冲销、订单已发量已恢复）。软删除：单头打 `deleted_at` 标记、列表不再返回，不递增 row_version、不写状态日志；`op_log` 记 delete_outbound 与删除前快照（含作废原因）。7 天保留期后由 maintenance 定时物理清理（连带状态日志与 NORMAL+CORRECTION 数量流水同删，零和不改变统计）。
+            description: 权限 `outbound:delete`，默认 warehouse/super（非受保护，super 可按需授予其他角色）。仅 VOIDED 状态可删（作废时已追加冲销、订单已发量已恢复）。软删除：单头打 `deleted_at` 标记、出库列表与 BOM 库存流水不再返回，打印接口按单号查询也返回 404；不递增 row_version、不写状态日志。`op_log` 记 delete_outbound 与删除前快照（含原始发货备注、登记人/时点及作废原因）。7 天保留期后由 maintenance 定时物理清理（连带状态日志与 NORMAL+CORRECTION 数量流水同删，零和不改变统计）。
             parameters:
                 - $ref: "#/components/parameters/OutboundNo"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -646,7 +646,7 @@ paths:
             tags: [outbound]
             operationId: printOutboundDocument
             summary: 获取出库单打印文档
-            description: 权限 `outbound:print`，默认 admin/super。纯读输出：任意状态（含已作废）可打、可重复，不需要原因与版本，不落日志、不改单头状态。文档按订单冻结快照实时组装，state/voidReason 取单头当前值（作废单打印件渲染作废标注），printedBy/printedAt 为本次输出人与时点。
+            description: 权限 `outbound:print`，默认 admin/super。纯读输出：未软删除的任意状态（含已作废）可打、可重复；已软删除的出库单返回 404。不需要原因与版本，不落日志、不改单头状态。文档按订单冻结快照实时组装，state/voidReason 取单头当前值（作废单打印件渲染作废标注），printedBy/printedAt 为本次输出人与时点。
             parameters:
                 - $ref: "#/components/parameters/OutboundNo"
             responses:
