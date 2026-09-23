@@ -877,6 +877,17 @@ export function BomPage() {
         [usageQuery.data?.inboundLedger, usageQuery.data?.outboundLedger],
     );
     const usageLoaded = usageQuery.data !== undefined;
+    const unusedCodes = useMemo(
+        () =>
+            new Set(
+                usageLoaded
+                    ? boms
+                          .filter(bom => !referencedCodes.has(bom.code) && !ledgerCodes.has(bom.code))
+                          .map(bom => bom.code)
+                    : [],
+            ),
+        [boms, usageLoaded, referencedCodes, ledgerCodes],
+    );
     const referencesLoaded = usageLoaded && stocksQuery.data !== undefined;
     const deletable = (bom: Bom) =>
         referencesLoaded &&
@@ -888,11 +899,7 @@ export function BomPage() {
         const kw = keyword.trim().toLowerCase();
         return boms
             .filter(bom => category === "全部品类" || bom.name === category)
-            .filter(
-                bom =>
-                    statusFilter !== "未使用" ||
-                    (usageLoaded && !referencedCodes.has(bom.code) && !ledgerCodes.has(bom.code)),
-            )
+            .filter(bom => statusFilter !== "未使用" || unusedCodes.has(bom.code))
             .filter(
                 bom =>
                     !kw ||
@@ -902,7 +909,7 @@ export function BomPage() {
                         .toLowerCase()
                         .includes(kw),
             );
-    }, [boms, keyword, category, statusFilter, usageLoaded, referencedCodes, ledgerCodes]);
+    }, [boms, keyword, category, statusFilter, unusedCodes]);
 
     const sorted = useMemo(() => {
         if (!sort) return filtered;
@@ -929,7 +936,7 @@ export function BomPage() {
         setPage(1);
     };
     const filtersActive = !!keyword.trim() || category !== "全部品类" || statusFilter !== "全部状态";
-    // 未使用视图沿用作废单的弱化底色：整表都是无引用档案，视觉语义一致
+    // 每条未使用的 BOM 都沿用弱化底色，与当前筛选状态无关
     return (
         <div className="flex flex-col gap-5">
             <h1 className="sr-only">物料与 BOM</h1>
@@ -1114,7 +1121,7 @@ export function BomPage() {
                                     <tr
                                         key={bom.code}
                                         className={
-                                            showUnused
+                                            unusedCodes.has(bom.code)
                                                 ? "row-voided border-t border-line align-top"
                                                 : "border-t border-line align-top transition hover:bg-row-hover"
                                         }

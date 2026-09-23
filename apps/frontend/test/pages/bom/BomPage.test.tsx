@@ -4,10 +4,11 @@
    点击后需二次确认，确认才发起删除请求、取消不发起。
    使用状态筛选「未使用」= 无销售订单与成品出入库引用，行沿用作废单弱化样式。 */
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, expect, it, vi } from "vitest";
 import { BomPage } from "@/pages/bom/BomPage";
+import type { Bom } from "@/api";
 import { detailBom } from "../../fixtures/recordDetails";
 
 /* can() 经 ref 切换角色权限：默认 staff 无任何写权限 */
@@ -20,6 +21,7 @@ vi.mock("@/lib/clipboard", () => ({ copyText }));
 /* 用例间替换库存余量/使用关系返回值：工厂被提升到模块顶部，须经 ref 惰性读取；
    usageRef 只给页面实际消费的字段（orders + 出入库台账），undefined = 引用未加载 */
 const stocksRef = vi.hoisted(() => ({ current: undefined as Record<string, number> | undefined }));
+const bomsRef = vi.hoisted(() => ({ current: undefined as Bom[] | undefined }));
 const usageRef = vi.hoisted(() => ({
     current: undefined as
         | {
@@ -32,7 +34,7 @@ const usageRef = vi.hoisted(() => ({
 const usageErrorRef = vi.hoisted(() => ({ current: false }));
 const deleteMutate = vi.hoisted(() => vi.fn());
 vi.mock("@/data/queries", () => ({
-    useBoms: () => ({ data: [detailBom], isLoading: false, isFetching: false }),
+    useBoms: () => ({ data: bomsRef.current ?? [detailBom], isLoading: false, isFetching: false }),
     useBomCategories: () => ({ data: [], isLoading: false, isFetching: false }),
     useBomStocks: () => ({ data: stocksRef.current, isLoading: false, isFetching: false }),
     useBomUsage: () => ({
@@ -55,6 +57,7 @@ const renderPage = () =>
 afterEach(() => {
     cleanup();
     stocksRef.current = undefined;
+    bomsRef.current = undefined;
     usageRef.current = undefined;
     usageErrorRef.current = false;
     authRef.current = { can: () => false };
@@ -83,6 +86,24 @@ it("库存余量已加载时移动卡片显示数量，未加载时降级为占�
     // 库存与备注两个卡片字段都降级为占位符
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
     expect(screen.queryByText("200 个")).not.toBeInTheDocument();
+});
+
+it("全部状态下按每条 BOM 的使用关系标注未使用行，筛选后保留同样的标注", () => {
+    const usedBom = { ...detailBom, code: "KQ011" };
+    bomsRef.current = [detailBom, usedBom];
+    usageRef.current = { orders: [{ bomCode: usedBom.code }], inboundLedger: [], outboundLedger: [] };
+    renderPage();
+
+    const table = screen.getByRole("table");
+    expect(screen.getByRole("combobox", { name: "按使用状态筛选" })).toHaveValue("全部状态");
+    expect(within(table).getByRole("button", { name: detailBom.code }).closest("tr")).toHaveClass("row-voided");
+    expect(within(table).getByRole("button", { name: usedBom.code }).closest("tr")).not.toHaveClass("row-voided");
+
+    fireEvent.change(screen.getByRole("combobox", { name: "按使用状态筛选" }), {
+        target: { value: "未使用" },
+    });
+    expect(within(table).getByRole("button", { name: detailBom.code }).closest("tr")).toHaveClass("row-voided");
+    expect(within(table).queryByRole("button", { name: usedBom.code })).not.toBeInTheDocument();
 });
 
 it("未使用筛选排除订单和成品台账引用，库存余量未加载不影响筛选", () => {
@@ -115,6 +136,7 @@ it("未使用筛选排除订单和成品台账引用，库存余量未加载不�
 
 it("使用关系未加载或加载失败时不误报为未使用", () => {
     const { unmount } = renderPage();
+    expect(screen.getByRole("table").querySelector("tbody tr.row-voided")).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole("combobox", { name: "按使用状态筛选" }), {
         target: { value: "未使用" },
     });
