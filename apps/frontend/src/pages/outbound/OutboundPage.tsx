@@ -906,7 +906,7 @@ export function OutboundPage() {
                     ) : (
                         <DataTable
                             tableId="outbound"
-                            defaultWidths={[158, 190, 110, 100, 302, 150, 110, 110, 150, 90, 90, 90]}
+                            defaultWidths={[158, 190, 110, 100, 302, 150, 110, 110, 150, 90, 90, 100]}
                             recordCount={filtered.length}
                             identityColumn={0}
                             pinnedStart={[1, 2]}
