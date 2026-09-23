@@ -647,8 +647,8 @@ export function OrderDetailModal({
                                 <span className="text-13 leading-5 text-muted wrap-anywhere">
                                     {row.date} · {row.operator}
                                 </span>
-                                <Badge tone={row.state === "voided" ? "danger" : "progress"}>
-                                    {row.state === "voided" ? "已作废" : row.state === "printed" ? "已打印" : "已登记"}
+                                <Badge tone={row.state === "voided" ? "danger" : "pending"}>
+                                    {row.state === "voided" ? "已作废" : "已登记"}
                                 </Badge>
                             </div>
                         ))}

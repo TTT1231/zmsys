@@ -129,7 +129,6 @@ describe("销售订单 (e2e)", () => {
             where: { shipmentNo },
             data: {
                 state: "VOIDED",
-                voidMode: "PRE_PRINT",
                 voidedBy: superUser!.id,
                 voidReason: "e2e 构造作废",
                 voidedAt: now,
@@ -354,7 +353,7 @@ describe("销售订单 (e2e)", () => {
         expect(logs.some(log => log.eventType === "UPDATE")).toBe(true);
     });
 
-    it("有效出库净额拦截：正向出库未作废时不可取消、新数量不得低于净额；作废冲销后净额归零", async () => {
+    it("有效出库净额拦截：新数量不得低于净额；作废冲销后净额归零", async () => {
         const order = await prisma.salesOrderTable.findUnique({ where: { orderNo } });
         const shipmentNo = `CKE2E${RUN}`;
         const eventId = await seedRegisteredShipment(order!.id, shipmentNo, 30);
@@ -363,16 +362,6 @@ describe("销售订单 (e2e)", () => {
         const list = await app.inject({ method: "GET", url: "/api/orders", headers: authHeaders(superToken) });
         const mine = list.json().data.find((item: { orderNo: string }) => item.orderNo === orderNo);
         expect(mine.outbound).toBe(30);
-
-        // 存在已登记未打印出库 → 取消 409
-        const blockedCancel = await app.inject({
-            method: "POST",
-            url: `/api/orders/${orderNo}/cancel`,
-            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-cancel-blocked` },
-            payload: { expectedVersion: 2, reason: "存在未打印出库" },
-        });
-        expect(blockedCancel.statusCode).toBe(409);
-        expect(blockedCancel.json().message).toContain("先作废");
 
         // 新数量低于净额 → 409
         const lowQty = await app.inject({
@@ -390,7 +379,11 @@ describe("销售订单 (e2e)", () => {
         expect(voided.outbound).toBe(0);
     });
 
-    it("取消成功：终态字段、CANCEL 日志与原因；重放幂等；已取消再取消 409；取消后不可编辑", async () => {
+    it("取消成功：挂未作废出库单仍可直接取消（已发保留）；终态字段、CANCEL 日志与原因；重放幂等；已取消再取消 409", async () => {
+        // 存在未作废出库单时取消直接放行，已发数量口径保留
+        const order = await prisma.salesOrderTable.findUnique({ where: { orderNo } });
+        await seedRegisteredShipment(order!.id, `CKE2EC${RUN}`, 10);
+
         const key = `e2e-ord-${RUN}-cancel`;
         const cancelled = await app.inject({
             method: "POST",
@@ -402,6 +395,7 @@ describe("销售订单 (e2e)", () => {
         expect(cancelled.json().data).toMatchObject({
             lifecycleStatus: "cancelled",
             version: 3,
+            outbound: 10,
             cancelReason: "客户计划变更",
             cancelledBy: "郭均",
         });
@@ -450,7 +444,7 @@ describe("销售订单 (e2e)", () => {
         expect(me.cooperation).toBe("合作中");
     });
 
-    it("归档：非超管 403；未发货 409；存在未打印出库 409；打印后归档成功且归档后全锁定", async () => {
+    it("归档：非超管 403；未发货 409；带未作废出库单仍可归档（保留已发口径）且归档后全锁定", async () => {
         const created = await createOrder(superToken, orderInput(customerCode), `e2e-ord-${RUN}-arc1`);
         expect(created.statusCode).toBe(200);
         const target = created.json().data as { orderNo: string; version: number };
@@ -475,24 +469,12 @@ describe("销售订单 (e2e)", () => {
         expect(unshipped.statusCode).toBe(409);
         expect(unshipped.json().message).toContain("尚未发货");
 
-        // 存在已登记未打印出库 → 409，提示先作废或打印
-        const shipmentNo = `CKE2EA${RUN}`;
+        // 存在未作废出库单直接归档（保留已发 30 口径）
         await seedRegisteredShipment(
             (await prisma.salesOrderTable.findUnique({ where: { orderNo: target.orderNo } }))!.id,
-            shipmentNo,
+            `CKE2EA${RUN}`,
             30,
         );
-        const blocked = await app.inject({
-            method: "POST",
-            url: `/api/orders/${target.orderNo}/archive`,
-            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-arc-blocked` },
-            payload: { expectedVersion: target.version },
-        });
-        expect(blocked.statusCode).toBe(409);
-        expect(blocked.json().message).toContain("先作废或打印");
-
-        // 出库单转已打印 → 允许归档（保留已发 30 口径）
-        await prisma.outboundShipment.update({ where: { shipmentNo }, data: { state: "PRINTED" } });
         const key = `e2e-ord-${RUN}-arc-ok`;
         const archived = await app.inject({
             method: "POST",

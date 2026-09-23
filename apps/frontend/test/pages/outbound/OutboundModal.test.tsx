@@ -17,7 +17,6 @@ vi.mock("@/data/queries", () => ({
     useCreateOutbound: () => ({ mutate, isPending: false }),
     useVoidOutbound: () => ({ mutate: vi.fn(), isPending: false }),
     usePrintOutbound: () => ({ mutate: vi.fn(), isPending: false }),
-    useEmergencyVoidOutbound: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 /* 同一 BOM 库存池 200 个：首单（交期早）剩余 100 全部可发，后单分到剩余 100 */

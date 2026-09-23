@@ -930,8 +930,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
                     <div>
                         <h3 className="mb-1 text-14 font-semibold text-ink">操作权限（按钮 / 动作级）</h3>
                         <p className="mb-2.5 text-12 leading-5 text-subtle">
-                            灰色不可勾选项为受保护权限（如删除订单、删除 BOM、紧急撤销），仅超级管理员持有，
-                            不能授权给其他角色。
+                            灰色不可勾选项为受保护权限（如删除订单、删除 BOM），仅超级管理员持有， 不能授权给其他角色。
                         </p>
                         <div className="rounded-xl border border-line bg-[#fdfdff] px-4 py-1">
                             {Object.entries(ACTION_CATALOG).map(([menuKey, actions]) => {

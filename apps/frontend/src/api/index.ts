@@ -12,13 +12,7 @@ export {
     fetchStockAdjustments,
     createStockAdjustment,
 } from "./inbound";
-export {
-    fetchOutboundLedger,
-    createOutbound,
-    voidOutbound,
-    printOutboundDocument,
-    emergencyVoidOutbound,
-} from "./outbound";
+export { fetchOutboundLedger, createOutbound, voidOutbound, printOutboundDocument } from "./outbound";
 export {
     fetchUsers,
     fetchCustomerOwnerOptions,

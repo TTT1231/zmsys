@@ -5,12 +5,10 @@ import { PERMISSIONS } from "../constants";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { CreateOutboundDto } from "./dto/create-outbound.dto";
 import { VoidOutboundDto } from "./dto/void-outbound.dto";
-import { PrintOutboundDto } from "./dto/print-outbound.dto";
-import { EmergencyVoidOutboundDto } from "./dto/emergency-void-outbound.dto";
 import type { AuthUser } from "../common/types/auth-user";
-import type { OutboundPrintResult, OutboundRow } from "./types";
+import type { OutboundPrintDocument, OutboundRow } from "./types";
 
-/** 成品出库（openapi outbound tag）：登记 → 打印放行；作废只追加冲销流水 */
+/** 成品出库（openapi outbound tag）：登记 → 需要时打印纸质单；作废只追加冲销流水 */
 @Controller("outbound")
 export class OutboundController {
     constructor(private readonly outboundService: OutboundService) {}
@@ -33,7 +31,7 @@ export class OutboundController {
     }
 
     @Post(":no/void")
-    @Permissions([PERMISSIONS.OUTBOUND_VOID], "无权作废未打印出库")
+    @Permissions([PERMISSIONS.OUTBOUND_VOID], "无权作废出库单")
     @HttpCode(HttpStatus.OK)
     async voidOutbound(
         @Param("no") no: string,
@@ -44,27 +42,13 @@ export class OutboundController {
         return this.outboundService.voidOutbound(no, dto, actor, idempotencyKey);
     }
 
-    @Post(":no/print")
+    /** 打印文档为纯读输出：任意状态可打、可重复，不落日志不改状态 */
+    @Get(":no/print")
     @Permissions([PERMISSIONS.OUTBOUND_PRINT], "无权打印出库单")
-    @HttpCode(HttpStatus.OK)
-    async printOutbound(
+    async printOutboundDocument(
         @Param("no") no: string,
-        @Body() dto: PrintOutboundDto,
         @CurrentUser() actor: AuthUser,
-        @Headers("idempotency-key") idempotencyKey: string | undefined,
-    ): Promise<OutboundPrintResult> {
-        return this.outboundService.printOutbound(no, dto, actor, idempotencyKey);
-    }
-
-    @Post(":no/emergency-void")
-    @Permissions([PERMISSIONS.OUTBOUND_EMERGENCY_VOID], "只有超级管理员可以紧急撤销")
-    @HttpCode(HttpStatus.OK)
-    async emergencyVoidOutbound(
-        @Param("no") no: string,
-        @Body() dto: EmergencyVoidOutboundDto,
-        @CurrentUser() actor: AuthUser,
-        @Headers("idempotency-key") idempotencyKey: string | undefined,
-    ): Promise<OutboundRow> {
-        return this.outboundService.emergencyVoidOutbound(no, dto, actor, idempotencyKey);
+    ): Promise<OutboundPrintDocument> {
+        return this.outboundService.printOutboundDocument(no, actor);
     }
 }

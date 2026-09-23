@@ -1,5 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { createHash } from "node:crypto";
+import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { TransactionRunner } from "../prisma/transaction.runner";
@@ -14,16 +13,14 @@ import { recordOpLog } from "../domain/op-log";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
 import type { AuthUser } from "../common/types/auth-user";
 import type { OutboundShipment } from "../generated/prisma/client";
-import type { OutboundPrintDocument, OutboundPrintResult, OutboundRow } from "./types";
+import type { OutboundPrintDocument, OutboundRow } from "./types";
 import type { CreateOutboundDto } from "./dto/create-outbound.dto";
 
 /** api_idempotency 的 operation_key，与前端 mock 同粒度 */
 const CREATE_OPERATION_KEY = "outbound:create";
 const voidOperationKeyOf = (no: string): string => `outbound:void:${no}`;
-const printOperationKeyOf = (no: string): string => `outbound:print:${no}`;
-const emergencyVoidOperationKeyOf = (no: string): string => `outbound:emergency-void:${no}`;
 
-/** 单头 + 响应映射与打印快照必需的关联（规格摘要取订单冻结快照，不读目录） */
+/** 单头 + 响应映射与打印文档必需的关联（规格摘要取订单冻结快照，不读目录） */
 type ShipmentRow = OutboundShipment & {
     order: {
         orderNo: string;
@@ -35,7 +32,6 @@ type ShipmentRow = OutboundShipment & {
     };
     registrar: { name: string };
     ledgers: Array<{ entryType: string; remark: string }>;
-    printLogs: Array<{ printSeq: number }>;
 };
 
 const SHIPMENT_INCLUDE = {
@@ -51,7 +47,6 @@ const SHIPMENT_INCLUDE = {
     },
     registrar: { select: { name: true } },
     ledgers: { select: { entryType: true, remark: true } },
-    printLogs: { select: { printSeq: true } },
 } satisfies Prisma.OutboundShipmentInclude;
 
 @Injectable()
@@ -64,7 +59,7 @@ export class OutboundService {
         private readonly sequence: BusinessSequenceService,
     ) {}
 
-    /** 出库单列表（契约 outbound:view）：返回 registered/printed/voided 单头，新单在前 */
+    /** 出库单列表（契约 outbound:view）：返回 registered/voided 单头，新单在前 */
     async listOutbound(): Promise<OutboundRow[]> {
         const rows = await this.prisma.outboundShipment.findMany({
             orderBy: [{ registeredAt: "desc" }, { id: "desc" }],
@@ -195,8 +190,8 @@ export class OutboundService {
     }
 
     /**
-     * 作废未打印出库（契约 outbound:void，幂等）：仅 REGISTERED 可作废；追加等额
-     * 负向冲销流水（引用原正向事件，原事件永不改删）并将单头置 VOIDED/PRE_PRINT，
+     * 作废出库（契约 outbound:void，幂等）：仅 REGISTERED 可作废（已作废 409）；追加等额
+     * 负向冲销流水（引用原正向事件，原事件永不改删）并将单头置 VOIDED，
      * 库存与订单已发量随之恢复。
      */
     async voidOutbound(
@@ -229,7 +224,7 @@ export class OutboundService {
                 throw new ConflictException("出库单已被其他人处理，请刷新后重试");
             }
             if (current.state !== "REGISTERED") {
-                throw new ConflictException("只有未打印的出库单可以由仓管作废");
+                throw new ConflictException("出库单已作废，不能重复作废");
             }
             await this.appendCorrection(tx, current, dto.reason, actor, now);
 
@@ -237,14 +232,13 @@ export class OutboundService {
                 where: { id: current.id },
                 data: {
                     state: "VOIDED",
-                    voidMode: "PRE_PRINT",
                     voidedBy: BigInt(actor.id),
                     voidReason: dto.reason,
                     voidedAt: now,
                     rowVersion: { increment: 1 },
                 },
             });
-            await this.writeStateLog(tx, current, "VOID_PRE_PRINT", "REGISTERED", "VOIDED", updated.rowVersion, {
+            await this.writeStateLog(tx, current, updated.rowVersion, {
                 reason: dto.reason,
                 actor,
                 now,
@@ -265,194 +259,36 @@ export class OutboundService {
     }
 
     /**
-     * 正式打印并安排发货（契约 outbound:print，幂等）：打印是系统正式放行点。
-     * 首次打印 REGISTERED→PRINTED 且订单未取消；重打生成下一打印版本且必须说明
-     * 原因（订单后来取消剩余量不影响历史已打印出库的重打）。写不可变打印日志
-     * （版本、文档快照与 SHA-256 哈希），返回与日志完全一致的文档快照。
+     * 打印出库单文档（契约 outbound:print，纯读）：任意状态（含已作废）可打、可重复，
+     * 实时组装不落日志不改单头状态；printedBy/printedAt 反映本次输出时点。
+     * 文档快照源：订单冻结快照（不读当前客户/BOM 主数据与物料目录，防漂移），
+     * state/voidReason 来自单头，供打印件渲染作废标注。
      */
-    async printOutbound(
-        shipmentNo: string,
-        dto: { expectedVersion: number; reason?: string },
-        actor: AuthUser,
-        idempotencyKey: string | undefined,
-    ): Promise<OutboundPrintResult> {
-        const operationKey = printOperationKeyOf(shipmentNo);
-        const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: "POST", pathParams: { shipmentNo }, body: dto });
-
-        return this.txRunner.run(async (tx: Tx) => {
-            const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
-                actorId: BigInt(actor.id),
-                operationKey,
-                key,
-                requestHash,
-            });
-            if (replay) {
-                return replay.body as unknown as OutboundPrintResult;
-            }
-            if (placeholderId === null) {
-                throw new Error("幂等占位缺失");
-            }
-
-            const now = new Date();
-            const current = await this.lockShipmentForWrite(tx, shipmentNo);
-            if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException("出库单已被其他人处理，请刷新后重试");
-            }
-            if (current.state === "VOIDED") {
-                throw new ConflictException("已作废出库单不能打印");
-            }
-            if (current.state === "REGISTERED" && current.order.lifecycleStatus === "CANCELLED") {
-                throw new ConflictException("订单已取消，不能首次打印出库单");
-            }
-            const reprint = current.state === "PRINTED";
-            if (reprint && !dto.reason) {
-                throw new BadRequestException("重打必须填写原因");
-            }
-
-            const printVersion = this.printVersionOf(current) + 1;
-            // 文档快照源：订单冻结快照（不读当前客户/BOM 主数据与物料目录，防漂移）
-            const document: OutboundPrintDocument = {
-                no: current.shipmentNo,
-                printVersion,
-                orderNo: current.order.orderNo,
-                customer: current.order.customerNameSnapshot,
-                customerCode: current.order.customer.customerCode,
-                bomCode: current.order.bom.bomCode,
-                bomSpec: bomSpecOf(current.order.bomSpecSnapshot),
-                qty: current.originalQty,
-                date: formatDateColumn(current.businessDate),
-                operator: current.registrar.name,
-                remark: this.normalRemarkOf(current),
-                printedBy: actor.name,
-                printedAt: now.toISOString(),
-            };
-            const documentHash = createHash("sha256").update(JSON.stringify(document), "utf8").digest();
-
-            await tx.outboundPrintLog.create({
-                data: {
-                    id: this.snowflake.next(),
-                    shipmentId: current.id,
-                    printSeq: printVersion,
-                    printedBy: BigInt(actor.id),
-                    reason: dto.reason ?? "",
-                    documentSnapshot: document as unknown as Prisma.InputJsonValue,
-                    documentHash,
-                    requestKey: this.idempotency.requestKey(BigInt(actor.id), operationKey, key),
-                    printedAt: now,
-                },
-            });
-            const updated = await tx.outboundShipment.update({
-                where: { id: current.id },
-                data: { state: "PRINTED", rowVersion: { increment: 1 } },
-            });
-            await this.writeStateLog(
-                tx,
-                current,
-                reprint ? "REPRINT" : "PRINT",
-                current.state,
-                "PRINTED",
-                updated.rowVersion,
-                {
-                    reason: dto.reason ?? "",
-                    actor,
-                    now,
-                    operationKey,
-                    key,
-                    detail: { printVersion },
-                },
-            );
-
-            const row = await tx.outboundShipment.findUnique({ where: { id: current.id }, include: SHIPMENT_INCLUDE });
-            const result: OutboundPrintResult = {
-                outbound: this.toOutboundRow(row!),
-                printVersion,
-                document,
-            };
-            await this.idempotency.complete(tx, {
-                id: placeholderId,
-                httpStatus: 200,
-                responseBody: result as unknown as Prisma.InputJsonValue,
-                resource: { type: "outbound", code: shipmentNo },
-            });
-            return result;
+    async printOutboundDocument(shipmentNo: string, actor: AuthUser): Promise<OutboundPrintDocument> {
+        const current = await this.prisma.outboundShipment.findUnique({
+            where: { shipmentNo },
+            include: SHIPMENT_INCLUDE,
         });
-    }
-
-    /**
-     * 紧急撤销已打印出库（受保护权限 outbound:emergency-void，幂等）：必须确认
-     * 货物尚未离开且纸质单已作废；追加负向冲销、单头置 VOIDED/EMERGENCY。
-     * 货物已离开后只能走销售退货，原出库事实永久保留。
-     */
-    async emergencyVoidOutbound(
-        shipmentNo: string,
-        dto: { expectedVersion: number; reason: string; goodsNotDeparted: boolean; paperInvalidated: boolean },
-        actor: AuthUser,
-        idempotencyKey: string | undefined,
-    ): Promise<OutboundRow> {
-        const operationKey = emergencyVoidOperationKeyOf(shipmentNo);
-        const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: "POST", pathParams: { shipmentNo }, body: dto });
-
-        return this.txRunner.run(async (tx: Tx) => {
-            const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
-                actorId: BigInt(actor.id),
-                operationKey,
-                key,
-                requestHash,
-            });
-            if (replay) {
-                return replay.body as unknown as OutboundRow;
-            }
-            if (placeholderId === null) {
-                throw new Error("幂等占位缺失");
-            }
-
-            const now = new Date();
-            const current = await this.lockShipmentForWrite(tx, shipmentNo);
-            if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException("出库单已被其他人处理，请刷新后重试");
-            }
-            if (current.state !== "PRINTED") {
-                throw new ConflictException("只有已打印出库单需要紧急撤销");
-            }
-            if (!dto.goodsNotDeparted || !dto.paperInvalidated) {
-                throw new ConflictException("必须确认货物尚未离开且纸质单已作废");
-            }
-            await this.appendCorrection(tx, current, dto.reason, actor, now);
-
-            const updated = await tx.outboundShipment.update({
-                where: { id: current.id },
-                data: {
-                    state: "VOIDED",
-                    voidMode: "EMERGENCY",
-                    voidedBy: BigInt(actor.id),
-                    voidReason: dto.reason,
-                    goodsNotDeparted: true,
-                    paperInvalidated: true,
-                    voidedAt: now,
-                    rowVersion: { increment: 1 },
-                },
-            });
-            await this.writeStateLog(tx, current, "VOID_EMERGENCY", "PRINTED", "VOIDED", updated.rowVersion, {
-                reason: dto.reason,
-                actor,
-                now,
-                operationKey,
-                key,
-                detail: { goodsNotDeparted: true, paperInvalidated: true },
-            });
-
-            const row = await tx.outboundShipment.findUnique({ where: { id: current.id }, include: SHIPMENT_INCLUDE });
-            const outbound = this.toOutboundRow(row!);
-            await this.idempotency.complete(tx, {
-                id: placeholderId,
-                httpStatus: 200,
-                responseBody: outbound as unknown as Prisma.InputJsonValue,
-                resource: { type: "outbound", code: shipmentNo },
-            });
-            return outbound;
-        });
+        if (!current) {
+            throw new NotFoundException("出库单不存在");
+        }
+        const voided = current.state === "VOIDED";
+        return {
+            no: current.shipmentNo,
+            orderNo: current.order.orderNo,
+            customer: current.order.customerNameSnapshot,
+            customerCode: current.order.customer.customerCode,
+            bomCode: current.order.bom.bomCode,
+            bomSpec: bomSpecOf(current.order.bomSpecSnapshot),
+            qty: current.originalQty,
+            date: formatDateColumn(current.businessDate),
+            operator: current.registrar.name,
+            remark: this.normalRemarkOf(current),
+            state: voided ? "voided" : "registered",
+            ...(voided ? { voidReason: current.voidReason ?? "" } : {}),
+            printedBy: actor.name,
+            printedAt: new Date().toISOString(),
+        };
     }
 
     /** 追加等额负向冲销流水（引用原正向事件；原事件永不更新或删除） */
@@ -492,7 +328,7 @@ export class OutboundService {
     }
 
     /**
-     * 按契约锁序锁定单头（db-scheme.md §2/§7.4）：BOM → 订单 → 出库单头。
+     * 按契约锁序锁定单头（db-scheme.md §2）：BOM → 订单 → 出库单头。
      * 先无锁读定位 orderId/bomId，再按固定顺序锁定，锁定读返回最新已提交行。
      */
     private async lockShipmentForWrite(tx: Tx, shipmentNo: string): Promise<ShipmentRow> {
@@ -517,13 +353,10 @@ export class OutboundService {
         return row;
     }
 
-    /** 状态机日志（不可变）：before/after 状态与版本同事务落库 */
+    /** 作废状态机日志（不可变）：REGISTERED→VOIDED 与版本同事务落库 */
     private async writeStateLog(
         tx: Tx,
         current: ShipmentRow,
-        eventType: "VOID_PRE_PRINT" | "PRINT" | "REPRINT" | "VOID_EMERGENCY",
-        beforeState: string,
-        afterState: "REGISTERED" | "PRINTED" | "VOIDED",
         afterVersion: bigint,
         params: {
             reason: string;
@@ -531,7 +364,6 @@ export class OutboundService {
             now: Date;
             operationKey: string;
             key: string;
-            detail?: Record<string, unknown>;
         },
     ): Promise<void> {
         await tx.outboundStateLog.create({
@@ -539,22 +371,17 @@ export class OutboundService {
                 id: this.snowflake.next(),
                 shipmentId: current.id,
                 operatorId: BigInt(params.actor.id),
-                eventType,
-                beforeState: beforeState as ShipmentRow["state"],
-                afterState,
+                eventType: "VOID",
+                beforeState: "REGISTERED",
+                afterState: "VOIDED",
                 beforeVersion: current.rowVersion,
                 afterVersion,
                 reason: params.reason,
                 requestKey: this.idempotency.requestKey(BigInt(params.actor.id), params.operationKey, params.key),
-                detailJson: (params.detail ?? {}) as Prisma.InputJsonValue,
+                detailJson: {} as Prisma.InputJsonValue,
                 createdAt: params.now,
             },
         });
-    }
-
-    /** 当前打印版本（0 表示未打印；展示层推导 SUPERSEDED 不回写日志） */
-    private printVersionOf(row: ShipmentRow): number {
-        return row.printLogs.reduce((max, log) => Math.max(max, log.printSeq), 0);
     }
 
     /** 单头备注取正向数量事件的备注（数量事件不可变，随单头展示） */
@@ -562,7 +389,7 @@ export class OutboundService {
         return row.ledgers.find(event => event.entryType === "NORMAL")?.remark ?? "";
     }
 
-    /** 契约 OutboundRow 映射：customer 为下单时快照；state/printVersion/voidReason 按单头与日志派生 */
+    /** 契约 OutboundRow 映射：customer 为下单时快照；state/voidReason 按单头派生 */
     private toOutboundRow(row: ShipmentRow): OutboundRow {
         const voided = row.state === "VOIDED";
         return {
@@ -576,9 +403,8 @@ export class OutboundService {
             time: formatBeijingStamp(row.registeredAt),
             operator: row.registrar.name,
             remark: this.normalRemarkOf(row),
-            state: row.state === "REGISTERED" ? "registered" : row.state === "PRINTED" ? "printed" : "voided",
+            state: voided ? "voided" : "registered",
             version: Number(row.rowVersion),
-            printVersion: this.printVersionOf(row),
             ...(voided ? { voidReason: row.voidReason ?? "" } : {}),
         };
     }

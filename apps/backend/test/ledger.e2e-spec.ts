@@ -1,7 +1,7 @@
 /**
  * 成品出入库集成测试：真实 HTTP 管线 + 真实测试库（*_test 种子数据）。
  * 覆盖用户核心场景：销售订单 600 件 → 入库 200 → 发货 200 → 订单累计已发 200；
- * 以及 §6.2 可发量拦截、§7.1 当天修正/作废窗口、库存调整、打印与紧急撤销。
+ * 以及 §6.2 可发量拦截、§7.1 当天修正/作废窗口、库存调整、打印文档输出与作废。
  * 运行前置：pnpm test:db:reset。
  */
 import "./db-guard";
@@ -50,7 +50,7 @@ describe("成品出入库 (e2e)", () => {
     let orderNo: string;
     let inboundNo: string;
     let firstShipmentNo: string;
-    let secondShipmentNoForEmergency: string;
+    let secondShipmentNo: string;
 
     const login = async (account: string): Promise<string> => {
         const res = await app.inject({
@@ -265,7 +265,6 @@ describe("成品出入库 (e2e)", () => {
             qty: 200,
             state: "registered",
             version: 1,
-            printVersion: 0,
             operator: warehouseName,
             date: today(),
         });
@@ -328,7 +327,7 @@ describe("成品出入库 (e2e)", () => {
         });
     });
 
-    it("修正后库存可再发 100：累计已发 300；打印后不可普通作废", async () => {
+    it("修正后库存可再发 100：累计已发 300；打印文档为纯读输出（权限、可重复、不改状态）", async () => {
         const shipped = await post(
             "/api/outbound",
             warehouseToken,
@@ -336,65 +335,51 @@ describe("成品出入库 (e2e)", () => {
             `e2e-led-${RUN}-ship100`,
         );
         expect(shipped.statusCode).toBe(200);
-        const secondShipmentNo = shipped.json().data.no;
+        secondShipmentNo = shipped.json().data.no;
         expect(await outboundOfOrder(orderNo)).toBe(300);
 
-        // 首次打印：REGISTERED → PRINTED，文档快照与规格摘要
-        const printed = await post(
-            `/api/outbound/${secondShipmentNo}/print`,
-            superToken,
-            { expectedVersion: 1 },
-            `e2e-led-${RUN}-print1`,
-        );
+        // 仓管无 outbound:print 权限 → 403
+        const denied = await app.inject({
+            method: "GET",
+            url: `/api/outbound/${secondShipmentNo}/print`,
+            headers: authHeaders(warehouseToken),
+        });
+        expect(denied.statusCode).toBe(403);
+
+        // super GET 打印文档：订单冻结规格摘要，无幂等头无请求体
+        const printed = await app.inject({
+            method: "GET",
+            url: `/api/outbound/${secondShipmentNo}/print`,
+            headers: authHeaders(superToken),
+        });
         expect(printed.statusCode).toBe(200);
-        const result = printed.json().data;
-        expect(result.printVersion).toBe(1);
-        expect(result.outbound).toMatchObject({ no: secondShipmentNo, state: "printed", version: 2, printVersion: 1 });
-        expect(result.document).toMatchObject({
+        const document = printed.json().data;
+        expect(document).toMatchObject({
             no: secondShipmentNo,
             orderNo,
             qty: 100,
+            state: "registered",
             printedBy: "郭均",
             bomSpec: expect.stringContaining("底座：二脚底座（无挡脚）"),
         });
+        expect(document.printedAt).toBeDefined();
+        expect(document).not.toHaveProperty("printVersion");
 
-        // 已打印出库不可普通作废
-        const voidPrinted = await post(
-            `/api/outbound/${secondShipmentNo}/void`,
-            warehouseToken,
-            { expectedVersion: 2, reason: "打印后作废" },
-            `e2e-led-${RUN}-vp`,
-        );
-        expect(voidPrinted.statusCode).toBe(409);
-        expect(voidPrinted.json().message).toBe("只有未打印的出库单可以由仓管作废");
-
-        // 重打必须填写原因
-        const reprintNoReason = await post(
-            `/api/outbound/${secondShipmentNo}/print`,
-            superToken,
-            { expectedVersion: 2 },
-            `e2e-led-${RUN}-print2a`,
-        );
-        expect(reprintNoReason.statusCode).toBe(400);
-
-        const reprint = await post(
-            `/api/outbound/${secondShipmentNo}/print`,
-            superToken,
-            { expectedVersion: 2, reason: "纸质单遗失重打" },
-            `e2e-led-${RUN}-print2b`,
-        );
-        expect(reprint.statusCode).toBe(200);
-        expect(reprint.json().data.printVersion).toBe(2);
-        expect(reprint.json().data.outbound).toMatchObject({ state: "printed", version: 3, printVersion: 2 });
-
-        const printLogs = await prisma.outboundPrintLog.findMany({
-            where: { shipment: { shipmentNo: secondShipmentNo } },
-            orderBy: { printSeq: "asc" },
+        // 可重复打印：再次 GET 200，且不落任何日志、单头状态与版本不变
+        const again = await app.inject({
+            method: "GET",
+            url: `/api/outbound/${secondShipmentNo}/print`,
+            headers: authHeaders(superToken),
         });
-        expect(printLogs).toHaveLength(2);
-        expect(printLogs[0]!.reason).toBe("");
-        expect(printLogs[1]!.reason).toBe("纸质单遗失重打");
-        secondShipmentNoForEmergency = secondShipmentNo;
+        expect(again.statusCode).toBe(200);
+        const stored = await prisma.outboundShipment.findUnique({
+            where: { shipmentNo: secondShipmentNo },
+        });
+        expect(stored).toMatchObject({ state: "REGISTERED", rowVersion: 1n });
+        const stateLogs = await prisma.outboundStateLog.findMany({
+            where: { shipment: { shipmentNo: secondShipmentNo } },
+        });
+        expect(stateLogs.map(log => log.eventType)).toEqual(["REGISTER"]);
     });
 
     it("出库作废（未打印）：追加冲销后累计已发回落、库存恢复；作废幂等重放", async () => {
@@ -428,38 +413,26 @@ describe("成品出入库 (e2e)", () => {
         expect(replay.json().data).toEqual(voided.json().data);
     });
 
-    it("紧急撤销（仅 super）：PRINTED → VOIDED，累计已发归零、冲销落库", async () => {
-        const denied = await post(
-            `/api/outbound/${secondShipmentNoForEmergency}/emergency-void`,
+    it("第二张出库普通作废（任意已登记单可作废）：累计已发归零、冲销落库", async () => {
+        const voided = await post(
+            `/api/outbound/${secondShipmentNo}/void`,
             warehouseToken,
-            { expectedVersion: 3, reason: "仓管无权", goodsNotDeparted: true, paperInvalidated: true },
-            `e2e-led-${RUN}-ev-denied`,
+            { expectedVersion: 1, reason: "客户叫停发货" },
+            `e2e-led-${RUN}-void2`,
         );
-        expect(denied.statusCode).toBe(403);
-
-        const emergency = await post(
-            `/api/outbound/${secondShipmentNoForEmergency}/emergency-void`,
-            superToken,
-            { expectedVersion: 3, reason: "货物未离开，客户叫停", goodsNotDeparted: true, paperInvalidated: true },
-            `e2e-led-${RUN}-ev`,
-        );
-        expect(emergency.statusCode).toBe(200);
-        expect(emergency.json().data).toMatchObject({ state: "voided", version: 4 });
+        expect(voided.statusCode).toBe(200);
+        expect(voided.json().data).toMatchObject({ state: "voided", version: 2 });
         expect(await outboundOfOrder(orderNo)).toBe(0);
 
-        const stored = await prisma.outboundShipment.findUnique({
-            where: { shipmentNo: secondShipmentNoForEmergency },
-        });
-        expect(stored).toMatchObject({ voidMode: "EMERGENCY", goodsNotDeparted: true, paperInvalidated: true });
         const stateLogs = await prisma.outboundStateLog.findMany({
-            where: { shipment: { shipmentNo: secondShipmentNoForEmergency } },
+            where: { shipment: { shipmentNo: secondShipmentNo } },
             orderBy: { createdAt: "asc" },
         });
-        expect(stateLogs.map(log => log.eventType)).toEqual(["REGISTER", "PRINT", "REPRINT", "VOID_EMERGENCY"]);
+        expect(stateLogs.map(log => log.eventType)).toEqual(["REGISTER", "VOID"]);
     });
 
     it("入库作废：库存非负拦截与成功作废；已作废不可再改；跨天记录不可修正/作废", async () => {
-        // 紧急撤销后池 = 305（300 入库 + 5 幂等，出库全部冲销）；先发 6 件
+        // 出库全部作废后池 = 305（300 入库 + 5 幂等，出库全部冲销）；先发 6 件
         // 让池 299 < 300，作废 300 的入库行才会越界
         const drain = await post("/api/outbound", warehouseToken, outboundInput(orderNo, 6), `e2e-led-${RUN}-drain`);
         expect(drain.statusCode).toBe(200);
@@ -627,7 +600,7 @@ describe("成品出入库 (e2e)", () => {
         expect(shipped).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({ no: firstShipmentNo, state: "voided", voidReason: "登记数量有误" }),
-                expect.objectContaining({ no: secondShipmentNoForEmergency, state: "voided", printVersion: 2 }),
+                expect.objectContaining({ no: secondShipmentNo, state: "voided", voidReason: "客户叫停发货" }),
                 expect.objectContaining({ qty: 6, state: "registered" }),
             ]),
         );

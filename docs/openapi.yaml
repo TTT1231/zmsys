@@ -3,7 +3,7 @@ info:
     title: 众茂生产系统 API
     version: 0.2.0
     description: |
-        后端实现基线。修改接口时必须同步 `src/api/types.ts`、`mocks/request/` 与本文件。
+        后端实现基线。修改接口时必须同步 `src/api/types.ts` 与本文件。
 
         ## 鉴权与授权
         - 登录以账号和密码换取 JWT。JWT 本身不存数据库，后端用密钥验证签名、有效期、签发者和受众。
@@ -14,10 +14,10 @@ info:
 
         ## 数据一致性
         - 响应统一为 `{code, data, message}`；成功 `code=0`，失败 code 与 HTTP 4xx/5xx 一致。
-        - 创建、取消、删除、作废、库存调整及打印类 POST 必须携带 `Idempotency-Key`。同一用户、操作和 key 的相同请求重放原成功响应；请求体不同返回 409。
+        - 创建、取消、删除、作废与库存调整类 POST 必须携带 `Idempotency-Key`。同一用户、操作和 key 的相同请求重放原成功响应；请求体不同返回 409。
         - 可变资源使用 `expectedVersion` 做乐观锁；版本或并发业务状态冲突返回 409。
         - 业务编码由后端通过 `biz_sequence` 事务取号，禁止使用 `MAX(code)+1`。
-        - 库存 = 有效入库合计 + 库存调整合计 - 有效出库净额。出库登记、作废、打印与订单取消按固定顺序加行锁并在一个事务提交。
+        - 库存 = 有效入库合计 + 库存调整合计 - 有效出库净额。出库登记、作废与订单取消按固定顺序加行锁并在一个事务提交；打印为纯读输出无副作用。
         - 业务日期使用 `yyyy-MM-dd`；系统时间使用带时区 ISO 8601，数据库保存 UTC。
         - 工作台数据由 `/workbench/overview` 聚合端点统一供给（订单/台账契约当前无分页，仍返回完整计算窗口）；后续启用服务端分页时，不能以分页局部数据在派生侧计算全局库存。
 servers:
@@ -38,7 +38,7 @@ tags:
     - name: inbound
       description: 成品入库、当天修正和库存调整
     - name: outbound
-      description: 出库登记、打印、作废与紧急撤销
+      description: 出库登记、作废与打印文档输出
     - name: users
       description: 系统用户与离岗移交
     - name: roles
@@ -170,7 +170,7 @@ paths:
             tags: [orders]
             operationId: cancelOrder
             summary: 取消全部剩余未发数量
-            description: 权限 `orders:cancel`。保留已打印发货数量；若存在已登记未打印的出库单，必须先作废。已全部发货的订单没有剩余量可取消。取消后不再参与欠量、合作状态或库存分配。
+            description: 权限 `orders:cancel`。保留已发数量；存在未作废出库单时直接放行（已发口径不变）。已全部发货的订单没有剩余量可取消。取消后不再参与欠量、合作状态或库存分配。
             parameters:
                 - $ref: "#/components/parameters/OrderNo"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -195,7 +195,7 @@ paths:
             tags: [orders]
             operationId: archiveOrder
             summary: 归档订单（终态）
-            description: 受保护权限 `orders:archive`，仅 super。收尾已完成、部分发货或已取消的订单使其退出活跃视图：归档后订单从销售订单页移入归档订单页，仅供查询，不可修改/取消/删除，剩余欠量（若有）不再安排交付。未发货的 ACTIVE 订单不可归档（手误单走取消/删除）；存在已登记未打印的出库单必须先作废或打印。归档为最终终态，不可恢复；归档人、归档时间与备注（选填）随行落库并写 change_log ARCHIVE 事件与 op_log 供审计。幂等（Idempotency-Key）。
+            description: 受保护权限 `orders:archive`，仅 super。收尾已完成、部分发货或已取消的订单使其退出活跃视图：归档后订单从销售订单页移入归档订单页，仅供查询，不可修改/取消/删除，剩余欠量（若有）不再安排交付。未发货的 ACTIVE 订单不可归档（手误单走取消/删除）；存在未作废出库单时归档直接放行，已发数量保留。归档为最终终态，不可恢复；归档人、归档时间与备注（选填）随行落库并写 change_log ARCHIVE 事件与 op_log 供审计。幂等（Idempotency-Key）。
             parameters:
                 - $ref: "#/components/parameters/OrderNo"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -544,7 +544,7 @@ paths:
             tags: [outbound]
             operationId: listOutbound
             summary: 出库单列表
-            description: 权限 `outbound:view`。返回 registered/printed/voided 单头；原数量事件和冲销事件不被改删。
+            description: 权限 `outbound:view`。返回 registered/voided 单头；原数量事件和冲销事件不被改删。
             responses:
                 "200":
                     description: 成功
@@ -578,8 +578,8 @@ paths:
         post:
             tags: [outbound]
             operationId: voidOutbound
-            summary: 作废未打印出库
-            description: 权限 `outbound:void`，默认 warehouse/super。仅 REGISTERED 可操作；追加等额负向冲销并恢复订单已发量和库存。
+            summary: 作废出库单
+            description: 权限 `outbound:void`，默认 warehouse/super。唯一逆向操作：仅 REGISTERED 可作废（已作废 409）；追加等额负向冲销并恢复订单已发量和库存。
             parameters:
                 - $ref: "#/components/parameters/OutboundNo"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -600,54 +600,21 @@ paths:
                 "409": { $ref: "#/components/responses/Conflict" }
 
     /outbound/{no}/print:
-        post:
+        get:
             tags: [outbound]
-            operationId: printOutbound
-            summary: 正式打印并安排发货
-            description: 权限 `outbound:print`，默认 admin/super。首次打印把 REGISTERED 置为 PRINTED；重打生成下一打印版本且必须说明原因。订单后来取消剩余量不影响历史已打印出库的重打。打印就是系统正式放行点，不另设司机或签字确认状态。
+            operationId: printOutboundDocument
+            summary: 获取出库单打印文档
+            description: 权限 `outbound:print`，默认 admin/super。纯读输出：任意状态（含已作废）可打、可重复，不需要原因与版本，不落日志、不改单头状态。文档按订单冻结快照实时组装，state/voidReason 取单头当前值（作废单打印件渲染作废标注），printedBy/printedAt 为本次输出人与时点。
             parameters:
                 - $ref: "#/components/parameters/OutboundNo"
-                - $ref: "#/components/parameters/IdempotencyKey"
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema: { $ref: "#/components/schemas/PrintOutboundInput" }
             responses:
                 "200":
-                    description: 返回已落库的打印版本、出库状态及与服务端审计日志完全一致的文档快照；客户端只据此渲染。
+                    description: 打印文档；客户端只据此渲染，不能再用当前主数据重新拼单。
                     content:
                         application/json:
                             schema: { $ref: "#/components/schemas/OutboundPrintEnvelope" }
-                "400": { $ref: "#/components/responses/BadRequest" }
                 "403": { $ref: "#/components/responses/Forbidden" }
                 "404": { $ref: "#/components/responses/NotFound" }
-                "409": { $ref: "#/components/responses/Conflict" }
-
-    /outbound/{no}/emergency-void:
-        post:
-            tags: [outbound]
-            operationId: emergencyVoidOutbound
-            summary: 紧急撤销已打印出库
-            description: 受保护权限 `outbound:emergency-void`，仅 super。必须确认货物尚未离开且全部纸质单已作废；货物已离开后只能走销售退货。
-            parameters:
-                - $ref: "#/components/parameters/OutboundNo"
-                - $ref: "#/components/parameters/IdempotencyKey"
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema: { $ref: "#/components/schemas/EmergencyVoidOutboundInput" }
-            responses:
-                "200":
-                    description: 成功
-                    content:
-                        application/json:
-                            schema: { $ref: "#/components/schemas/OutboundEnvelope" }
-                "400": { $ref: "#/components/responses/BadRequest" }
-                "403": { $ref: "#/components/responses/Forbidden" }
-                "404": { $ref: "#/components/responses/NotFound" }
-                "409": { $ref: "#/components/responses/Conflict" }
 
     /users:
         get:
@@ -1330,7 +1297,7 @@ components:
 
         OutboundRow:
             type: object
-            required: [no, orderNo, customer, customerCode, bomCode, qty, date, time, operator, state, version, printVersion]
+            required: [no, orderNo, customer, customerCode, bomCode, qty, date, time, operator, state, version]
             properties:
                 no: { type: string }
                 orderNo: { type: string }
@@ -1342,9 +1309,8 @@ components:
                 time: { type: string }
                 operator: { type: string }
                 remark: { type: string }
-                state: { type: string, enum: [registered, printed, voided] }
+                state: { type: string, enum: [registered, voided] }
                 version: { type: integer, minimum: 1 }
-                printVersion: { type: integer, minimum: 0 }
                 voidReason: { type: string }
 
         CreateOutboundInput:
@@ -1357,38 +1323,11 @@ components:
                 date: { type: string, format: date }
                 remark: { type: string, maxLength: 500 }
 
-        PrintOutboundInput:
-            type: object
-            additionalProperties: false
-            required: [expectedVersion]
-            properties:
-                expectedVersion: { type: integer, minimum: 1 }
-                reason: { type: string, maxLength: 500, description: 首次打印可空；重打至少 2 字 }
-
-        EmergencyVoidOutboundInput:
-            type: object
-            additionalProperties: false
-            required: [expectedVersion, reason, goodsNotDeparted, paperInvalidated]
-            properties:
-                expectedVersion: { type: integer, minimum: 1 }
-                reason: { type: string, minLength: 2, maxLength: 500 }
-                goodsNotDeparted: { type: boolean, const: true }
-                paperInvalidated: { type: boolean, const: true }
-
-        OutboundPrintResult:
-            type: object
-            required: [outbound, printVersion, document]
-            properties:
-                outbound: { $ref: "#/components/schemas/OutboundRow" }
-                printVersion: { type: integer, minimum: 1 }
-                document: { $ref: "#/components/schemas/OutboundPrintDocument" }
-
         OutboundPrintDocument:
             type: object
-            required: [no, printVersion, orderNo, customer, customerCode, bomCode, bomSpec, qty, date, operator, remark, printedBy, printedAt]
+            required: [no, orderNo, customer, customerCode, bomCode, bomSpec, qty, date, operator, remark, state, printedBy, printedAt]
             properties:
                 no: { type: string }
-                printVersion: { type: integer, minimum: 1 }
                 orderNo: { type: string }
                 customer: { type: string }
                 customerCode: { type: string }
@@ -1398,6 +1337,11 @@ components:
                 date: { type: string, format: date }
                 operator: { type: string, description: 出库登记人 }
                 remark: { type: string }
+                state:
+                    type: string
+                    enum: [registered, voided]
+                    description: 单头当前状态；voided 时打印件渲染作废标注
+                voidReason: { type: string, description: 仅 voided 时出现 }
                 printedBy: { type: string }
                 printedAt: { type: string, format: date-time }
 
@@ -1561,7 +1505,7 @@ components:
             allOf:
                 - $ref: "#/components/schemas/Envelope"
                 - type: object
-                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/OutboundPrintResult" }, message: { const: ok } }
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/OutboundPrintDocument" }, message: { const: ok } }
         UserEnvelope:
             allOf:
                 - $ref: "#/components/schemas/Envelope"
