@@ -21,6 +21,14 @@ function stubResizeObserver() {
     vi.stubGlobal("ResizeObserver", FakeObserver);
     return callbacks;
 }
+/** 视口测量合并进 rAF（防逐帧重渲染）：断言前需等排队的帧落地 */
+const flushFrames = async (frames = 1) => {
+    for (let i = 0; i < frames; i += 1) {
+        await act(async () => {
+            await new Promise(resolve => requestAnimationFrame(() => resolve(null)));
+        });
+    }
+};
 beforeEach(() => {
     localStorage.clear();
     auth.account = "user-a";
@@ -142,7 +150,7 @@ it("操作列固定，旧偏好中的极窄操作列不会恢复，也没有拖�
     expect(screen.getByRole("dialog")).not.toHaveTextContent("px");
 });
 
-it("全部可调列锁定后以表格内弹性区铺满，操作列保持最右", () => {
+it("全部可调列锁定后以表格内弹性区铺满，操作列保持最右", async () => {
     const callbacks = stubResizeObserver();
     // 备注列硬下限 140（两行内容列），保存值低于下限时渲染时顶到下限
     localStorage.setItem("zm-table:v2:user-a:test", JSON.stringify({ widths: { 编号: 150, 数量: 120, 备注: 140 } }));
@@ -150,6 +158,7 @@ it("全部可调列锁定后以表格内弹性区铺满，操作列保持最右"
     const body = view.container.querySelector(".managed-table-body")!;
     Object.defineProperty(body, "clientWidth", { configurable: true, get: () => 900 });
     act(() => callbacks.at(-1)!());
+    await flushFrames();
 
     const table = screen.getByRole("table");
     expect(table).toHaveStyle({ width: "900px" });
@@ -165,7 +174,7 @@ it("全部可调列锁定后以表格内弹性区铺满，操作列保持最右"
     expect(screen.getByRole("cell", { name: "暂无数据" })).toHaveAttribute("colspan", "5");
 });
 
-it("紧凑档宽内容列收紧到 220，剩余宽度整体交给弹性区", () => {
+it("紧凑档宽内容列收紧到 220，剩余宽度整体交给弹性区", async () => {
     const callbacks = stubResizeObserver();
     localStorage.setItem("zm-table:v2:user-a:test", JSON.stringify({ density: "compact" }));
     const view = render(
@@ -191,6 +200,7 @@ it("紧凑档宽内容列收紧到 220，剩余宽度整体交给弹性区", () 
     const body = view.container.querySelector(".managed-table-body")!;
     Object.defineProperty(body, "clientWidth", { configurable: true, get: () => 900 });
     act(() => callbacks.at(-1)!());
+    await flushFrames();
     expect(screen.getByRole("separator", { name: "调整BOM 编码列宽" })).toHaveAttribute("aria-valuenow", "220");
     expect(screen.getByRole("separator", { name: "调整BOM 备注列宽" })).toHaveAttribute("aria-valuenow", "220");
     // 剩余 900-560=340 不再分给内容列，集中为操作列前的弹性区
@@ -239,7 +249,7 @@ it("聚焦列边界时高亮整列，取消拖动清除高亮", () => {
     expect(screen.getByRole("cell", { name: "300" })).not.toHaveClass("column-highlight");
 });
 
-it("ResizeObserver 回调的宽度与槽位不变时不重渲染，阻断滚动条临界抖动", () => {
+it("ResizeObserver 回调的宽度与槽位不变时不重渲染，阻断滚动条临界抖动", async () => {
     const callbacks = stubResizeObserver();
     const counter = { renders: 0 };
     const countRender = () => {
@@ -280,9 +290,11 @@ it("ResizeObserver 回调的宽度与槽位不变时不重渲染，阻断滚动�
     act(() => callbacks.at(-1)!());
     act(() => callbacks.at(-1)!());
     act(() => callbacks.at(-1)!());
-    // 宽度只变化一次：重复回调不再渲染，滚动条出现/消失不再来回拉扯列宽
+    await flushFrames();
+    // 宽度只变化一次：重复回调合并进同一帧，滚动条出现/消失不再来回拉扯列宽
     expect(counter.renders).toBe(2);
     setSize(760, 760);
     act(() => callbacks.at(-1)!());
+    await flushFrames();
     expect(counter.renders).toBe(3);
 });
