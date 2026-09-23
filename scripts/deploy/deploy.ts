@@ -185,8 +185,8 @@ tar -xzf - -C ${REMOTE_DIR} && echo UPLOAD_OK`;
     }
     console.log("      上传完成");
 
-    console.log("      等待 20s（规避 ssh 连接频率限制）...");
-    await sleep(20000);
+    console.log("      等待 10s（规避 ssh 连接频率限制）...");
+    await sleep(10000);
 
     console.log("[4/4] 远端执行：迁移检测 → 装配构建 → 起栈 → 健康检查");
     // 经 stdin 送入（bash -s），绕开三层引号转义；构建/起栈输出直出终端
