@@ -42,7 +42,7 @@ interface SidebarProps {
     collapsed: boolean;
     open: boolean;
     onClose: () => void;
-    /** 内容最大化时桌面端宽度过渡到 0（不卸载以保留收起/展开动画） */
+    /** 内容最大化时桌面端 clip-path 裁剪到 0（不卸载以保留收起/展开动画） */
     maximized?: boolean;
     /** 侧栏形态（useLayoutFlags 派生）：tree / mixed / group / none */
     form: SidebarForm;
@@ -80,28 +80,32 @@ export function Sidebar({ collapsed, open, onClose, maximized = false, form, bel
         return () => document.removeEventListener("keydown", onKeyDown);
     }, [open, onClose]);
 
-    // 桌面端宽度：树形按折叠态、双列 fit 由内部两列决定、group 面板定宽、最大化一律归零
-    const desktopWidth = maximized
-        ? "lg:w-0 lg:border-r-0 lg:shadow-none"
-        : form === "mixed"
-          ? "lg:w-fit"
-          : form === "group"
-            ? collapsed
-                ? "lg:w-0 lg:border-r-0 lg:shadow-none"
-                : "lg:w-64"
-            : collapsed
-              ? "lg:w-19"
-              : "lg:w-64";
+    /* 桌面端（vben 式动画）：aside 盒子恒宽（布局不参与动画），可见宽度变化拆成两半——
+       前置占位 div 瞬变到位（内容区一次重排），aside 用 clip-path 过渡逐帧裁剪（合成器动画，
+       零布局）。mixed 盒 = 图标轨 76 + 子面板 256 = 332，其余形态盒 256。
+       折叠可见宽：树形/双列留图标轨 76，group 面板全收；最大化一律归零。
+       裁剪类是手写 CSS（index.css），类名值必须完整出现以便逐状态选择 */
+    const boxWidth = form === "mixed" ? 332 : 256;
+    const visibleWidth = maximized ? 0 : collapsed ? (form === "group" ? 0 : 76) : boxWidth;
+    const clipLg = `sidebar-clip-${boxWidth - visibleWidth}`;
+    const placeholderWidth = form === "none" ? 0 : visibleWidth;
 
     return (
         <>
+            {form !== "none" && (
+                <div
+                    aria-hidden="true"
+                    className="hidden shrink-0 lg:block"
+                    style={{ width: `${placeholderWidth}px` }}
+                />
+            )}
             <aside
                 id="mainNavigation"
                 aria-label="主导航"
                 inert={!desktop && !open}
-                className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden border-r border-line bg-sidebar transition-[width,transform] duration-300 ${
-                    belowHeader ? "lg:sticky lg:top-16 lg:h-[calc(100dvh-4rem)]" : "lg:sticky lg:top-0 lg:h-dvh"
-                } ${desktopWidth} w-[min(82vw,300px)] shadow-[8px_0_30px_rgba(16,24,40,.08)] lg:shadow-[8px_0_30px_rgba(16,24,40,.08)] ${
+                className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden border-r border-line bg-sidebar transition-[clip-path,transform] duration-300 ease-out ${clipLg} ${
+                    belowHeader ? "lg:top-16 lg:h-[calc(100dvh-4rem)]" : "lg:top-0 lg:h-dvh"
+                } ${form === "mixed" ? "lg:w-fit" : "lg:w-64"} w-[min(82vw,300px)] shadow-[8px_0_30px_rgba(16,24,40,.08)] lg:shadow-[8px_0_30px_rgba(16,24,40,.08)] ${
                     open ? "translate-x-0" : "-translate-x-[103%] lg:translate-x-0"
                 } ${form === "none" ? "lg:hidden" : ""}`}
             >
@@ -138,11 +142,8 @@ export function Sidebar({ collapsed, open, onClose, maximized = false, form, bel
                                 variant="panel"
                             />
                         </div>
-                        <div
-                            className={`min-w-0 overflow-hidden transition-[width] duration-300 ease-out ${
-                                maximized || collapsed ? "w-0" : "w-64"
-                            }`}
-                        >
+                        {/* 面板恒宽：折叠/最大化的收起由 aside 的 clip-path 统一裁剪 */}
+                        <div className="w-64 min-w-0 overflow-hidden">
                             <MenuPanel section={panelSection} />
                         </div>
                     </div>
@@ -259,8 +260,11 @@ export function Topbar({
 
     return (
         <>
+            {/* 最大化收起（vben fullContent 同款）：高度瞬变归零、不参与过渡——
+                vben 的 sticky 头部同样如此（hidden 态只动画 transform，maximize 时高度直接归零）。
+                sticky 会把负 margin clamp 回 top 约束，margin 过渡方案对 sticky 头部无效 */}
             <header
-                className={`sticky top-0 z-30 flex items-center justify-between gap-4 overflow-hidden border-line bg-surface/88 px-4 backdrop-blur-[18px] saturate-150 transition-[height] duration-300 sm:px-6 ${maximized ? "h-0 border-b-0" : "h-16 border-b"}`}
+                className={`sticky top-0 z-30 flex items-center justify-between gap-4 overflow-hidden border-line bg-surface/88 px-4 backdrop-blur-[18px] saturate-150 sm:px-6 ${maximized ? "h-0 border-b-0" : "h-16 border-b"}`}
             >
                 <div className={`flex min-w-0 flex-1 items-center gap-3 ${maximized ? "pointer-events-none" : ""}`}>
                     {variant === "full" && showBrand && <BrandMark withText />}
