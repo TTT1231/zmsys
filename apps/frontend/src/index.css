@@ -927,7 +927,9 @@ button:active:not(:disabled) {
 }
 .managed-table .data-table .managed-th {
     height: 44px;
-    position: relative;
+    /* 不写 position：thead th 的 sticky（见 .data-table thead th）必须保留——
+       relative 特异性更高会把中段表头的纵向吸附打掉（固定列表头有 own sticky 规则不受影响）；
+       sticky 同样是 absolute 子元素（列宽手柄 .column-resizer）的定位基准，无需 relative */
     padding-right: 18px;
     white-space: nowrap;
     border-top: 1px solid var(--color-line);
@@ -1036,6 +1038,46 @@ button:active:not(:disabled) {
 }
 .managed-table-body {
     scrollbar-width: thin;
+}
+/* 列表页桌面态（页面含 .managed-table）：与最大化同一套高度下传链（见下方
+   [data-maximized] 块），让 .managed-table-body 成为纵向滚动容器——thead 的
+   sticky top:0 只对"最近滚动容器"生效，普通模式过去靠整页滚动，吸附被
+   overflow-x 容器挡住，表头会跟页面一起滚走。仅 lg 生效，移动端仍是卡片流；
+   main 保留 overflow-y:auto 作极矮视口兜底（内容放不下时 main 自己滚，不裁内容）。 */
+@media (min-width: 1024px) {
+    /* 高度约束必须从布局根锁起：min-h-dvh 只保证下限，内容会把根撑到视口外，
+       flex 链逐层 min-height:0 也就无从收缩（与最大化 h-dvh + overflow-hidden 同理） */
+    #root:has(.managed-table) > div.flex.min-h-dvh {
+        height: 100dvh;
+        overflow: hidden;
+    }
+    #mainContent:has(.managed-table) {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+        flex-direction: column;
+        overflow-y: auto;
+    }
+    #mainContent:has(.managed-table) > div,
+    #mainContent:has(.managed-table) > div > div,
+    #mainContent:has(.managed-table) section:has(.managed-table),
+    #mainContent:has(.managed-table) section:has(.managed-table) > div:has(.managed-table) {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+        flex-direction: column;
+    }
+    #mainContent:has(.managed-table) .managed-table {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+        flex-direction: column;
+    }
+    #mainContent:has(.managed-table) .managed-table-body {
+        flex: 1;
+        min-height: 192px; /* 极矮视口下限：不足时 main 兜底滚动，表体不塌到 0 */
+        overflow-y: auto;
+    }
 }
 /* 内容最大化（vben 式，表格卡片按钮触发，AppLayout 根节点打 data-maximized）：
    main 已在 maximized 分支改为 flex 列 + overflow-hidden，这里把高度沿
