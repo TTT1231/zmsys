@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router";
 import { Icon } from "@/lib/icons";
 import { useApp } from "@/context/useApp";
-import { usePreferences } from "@/context/usePreferences";
+import { FONT_BASE, usePreferences } from "@/context/usePreferences";
 import { buildNavSections, findActiveGroup, type NavSection } from "@/data/permissions";
 import { useWbRefresh } from "@/data/queries";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -84,11 +84,14 @@ export function Sidebar({ collapsed, open, onClose, maximized = false, form, bel
        前置占位 div 瞬变到位（内容区一次重排），aside 用 clip-path 过渡逐帧裁剪（合成器动画，
        零布局）。mixed 盒 = 图标轨 76 + 子面板 256 = 332，其余形态盒 256。
        折叠可见宽：树形/双列留图标轨 76，group 面板全收；最大化一律归零。
+       宽度均按 FONT_BASE=16 的设计 px 计，实际渲染为 rem（根字号随偏好缩放，见 index.css）。
        裁剪类是手写 CSS（index.css），类名值必须完整出现以便逐状态选择 */
     const boxWidth = form === "mixed" ? 332 : 256;
     const visibleWidth = maximized ? 0 : collapsed ? (form === "group" ? 0 : 76) : boxWidth;
     const clipLg = `sidebar-clip-${boxWidth - visibleWidth}`;
     const placeholderWidth = form === "none" ? 0 : visibleWidth;
+    // 占位与 aside 盒宽同为 rem 基（FONT_BASE 是根字号设计基准），字号偏好缩放时同倍变化
+    const placeholderRem = placeholderWidth / FONT_BASE;
 
     return (
         <>
@@ -96,7 +99,7 @@ export function Sidebar({ collapsed, open, onClose, maximized = false, form, bel
                 <div
                     aria-hidden="true"
                     className="hidden shrink-0 lg:block"
-                    style={{ width: `${placeholderWidth}px` }}
+                    style={{ width: `${placeholderRem}rem` }}
                 />
             )}
             <aside
@@ -111,10 +114,12 @@ export function Sidebar({ collapsed, open, onClose, maximized = false, form, bel
             >
                 {!desktop || form === "tree" ? (
                     // 移动端抽屉 / 桌面树形：logo + 完整二级菜单（树形折叠态换图标轨弹出）。
-                    // 通栏顶栏模式下 logo 只在顶栏，侧栏不重复
+                    // 通栏顶栏模式下 logo 只在顶栏，侧栏不重复。
+                    // 折叠态盒子仍全宽（clip-path 动画），内容必须收进左缘 76px 裁剪可见区，
+                    // 否则随盒子拉伸居中后被整个裁掉（表现为折叠后菜单空白）
                     <>
                         {!belowHeader && (
-                            <div className="relative px-4 pt-5 pb-4">
+                            <div className={`relative px-4 pt-5 pb-4 ${collapsed && desktop ? "w-19 shrink-0" : ""}`}>
                                 <div
                                     className={`flex items-center gap-3 ${collapsed && desktop ? "justify-center" : ""}`}
                                 >
@@ -123,7 +128,9 @@ export function Sidebar({ collapsed, open, onClose, maximized = false, form, bel
                             </div>
                         )}
                         {collapsed && desktop ? (
-                            <MenuRail sections={sections} activeGroup={activeGroup?.group} variant="popup" />
+                            <div className="w-19 shrink-0">
+                                <MenuRail sections={sections} activeGroup={activeGroup?.group} variant="popup" />
+                            </div>
                         ) : (
                             <SidebarMenu sections={sections} onNavigate={desktop ? undefined : onClose} />
                         )}
