@@ -1,7 +1,7 @@
 // 可排序列表头：aria-sort 语义 + 方向指示（未激活淡显、激活后主题色），排序状态由页面持有
 import { Icon } from "@/lib/icons";
 import type { SortDir } from "@/lib/tableSort";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 export function SortTh({
     label,
@@ -12,7 +12,9 @@ export function SortTh({
     width,
     className = "",
     resizeControl,
+    style,
     "data-pinned": pinned,
+    "data-pinned-edge": pinnedEdge,
 }: {
     label: string;
     active: boolean;
@@ -22,16 +24,20 @@ export function SortTh({
     width?: string;
     className?: string;
     resizeControl?: ReactNode;
+    /** DataTable 传入的 sticky 偏移等定位样式；width 由本组件语义管理，其余原样透传 */
+    style?: CSSProperties;
     "data-pinned"?: string;
+    "data-pinned-edge"?: string;
 }) {
     return (
         <th
             role="columnheader"
             aria-label={label}
             data-pinned={pinned}
+            data-pinned-edge={pinnedEdge}
             aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
             className={`py-2.5 text-13 font-semibold ${align === "right" ? "text-right" : "text-left"} ${className}`}
-            style={width ? { width } : undefined}
+            style={{ ...style, ...(width ? { width } : undefined) }}
         >
             <button
                 type="button"
