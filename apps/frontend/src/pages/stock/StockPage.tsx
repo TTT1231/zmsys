@@ -194,13 +194,22 @@ function StockLedgerModal({
                                             <td className="px-3.5 py-3.5">
                                                 <FlowTypeTag type={flow.type} />
                                             </td>
-                                            <td className="tnum px-3 py-3.5 text-14 font-medium text-td">
-                                                {flow.no}
-                                                {flow.type === "out" && flow.customer && (
-                                                    <span className="mt-0.5 block text-13 font-medium text-ink">
-                                                        {flow.customer}
+                                            <td className="px-3 py-3.5">
+                                                {/* 单号 + 客户同行（baseline 对齐）：出库行不再两行堆叠抬高行高；
+                                                    超长客户名截断，全文走 title */}
+                                                <span className="flex min-w-0 items-baseline gap-2">
+                                                    <span className="tnum shrink-0 text-14 font-medium text-td">
+                                                        {flow.no}
                                                     </span>
-                                                )}
+                                                    {flow.type === "out" && flow.customer && (
+                                                        <span
+                                                            className="min-w-0 truncate text-13 text-muted"
+                                                            title={flow.customer}
+                                                        >
+                                                            {flow.customer}
+                                                        </span>
+                                                    )}
+                                                </span>
                                             </td>
                                             <td className="tnum px-3 py-3.5 text-14 text-muted">{flow.date}</td>
                                             <td
