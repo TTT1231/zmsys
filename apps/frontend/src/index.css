@@ -941,6 +941,12 @@ button:active:not(:disabled) {
 .managed-table [data-pinned="start"] {
     left: 0;
 }
+/* 多列固定时，最右 start 列承担固定区与滚动区的分界：竖线 + 右投鹰影，
+   滚动内容从固定列下穿过时有明确的层界（单列固定沿用原视觉，不加） */
+.managed-table [data-pinned-edge="start"] {
+    border-right: 1px solid var(--color-line);
+    box-shadow: 6px 0 12px -10px var(--color-muted);
+}
 .managed-table [data-pinned="end"] {
     right: 0;
     border-left: 1px solid var(--color-line);

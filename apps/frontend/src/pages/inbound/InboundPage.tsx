@@ -695,6 +695,7 @@ export function InboundPage() {
                             defaultWidths={[166, 370, 150, 132, 138, 130, 120]}
                             recordCount={filtered.length}
                             identityColumn={0}
+                            pinnedStart={[0, 1, 2]}
                             scrollRef={tableScrollRef}
                         >
                             <thead>

@@ -1027,6 +1027,7 @@ export function OrdersPage() {
                             defaultWidths={[154, 260, 100, 422, 150, 100, 120, 140, 100, 100]}
                             recordCount={filtered.length}
                             identityColumn={0}
+                            pinnedStart={[0, 1]}
                             scrollRef={tableScrollRef}
                         >
                             <thead>

@@ -909,6 +909,7 @@ export function OutboundPage() {
                             defaultWidths={[158, 190, 110, 100, 302, 150, 110, 110, 150, 90, 90, 90]}
                             recordCount={filtered.length}
                             identityColumn={0}
+                            pinnedStart={[1, 2]}
                             scrollRef={tableScrollRef}
                         >
                             <thead>

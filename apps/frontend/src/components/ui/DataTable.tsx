@@ -40,6 +40,9 @@ interface DataTableProps {
     tableId: string;
     defaultWidths: number[];
     identityColumn?: number;
+    /** 横向滚动时左侧固定的原始列索引（按从左到右）；缺省固定 identityColumn 一列。
+     *  固定列不可在显示设置中隐藏，sticky 偏移按列宽累计（见 startOffsets）。 */
+    pinnedStart?: number[];
     recordCount?: number;
     scrollRef?: Ref<HTMLDivElement>;
     scrollClassName?: string;
@@ -92,6 +95,7 @@ function TableView({
     children,
     defaultWidths,
     identityColumn = 0,
+    pinnedStart,
     recordCount,
     scrollRef,
     scrollClassName = "",
@@ -122,6 +126,9 @@ function TableView({
     // 且不再吸收视口剩余宽度（fitTableWidths stretch:false），富余集中到操作列前的弹性区；
     // 手动拖拽与显示设置的调宽不受限（max 仍 800），标准/宽松档行为不变。
     const compact = preferences.density === "compact";
+    // 左侧固定列集合：pinnedStart 优先，缺省固定 identity 列；固定列随 identity 一起锁定不可隐藏
+    const startSet = new Set(pinnedStart ?? [identityColumn]);
+    const lastStartIndex = Math.max(...startSet);
     const columns = headers.map((header, index) => {
         const label = header.props.label ?? labelOf(header.props.children);
         const width = defaultWidths[index] ?? 160;
@@ -147,7 +154,7 @@ function TableView({
             max: 800,
             grow: wide,
             fixed: index === headers.length - 1,
-            locked: index === identityColumn || index === headers.length - 1,
+            locked: startSet.has(index) || index === headers.length - 1,
         };
     });
     const visible = columns.filter(column => column.locked || !preferences.hidden.includes(column.label));
@@ -161,7 +168,17 @@ function TableView({
     const hasFillColumn = fillWidth > 0;
     const renderedColumnCount = visible.length + (hasFillColumn ? 1 : 0);
     const pinned = (index: number) =>
-        index === identityColumn ? "start" : index === headers.length - 1 ? "end" : undefined;
+        startSet.has(index) ? "start" : index === headers.length - 1 ? "end" : undefined;
+    // 多个 start 固定列的 sticky 偏移 = 前面固定列宽度之和（CSS 只给 left:0，多列会重叠）；
+    // 依赖 widthOf，拖拽调宽 / 视口变化时随渲染重算
+    const startOffsets = new Map<number, number>();
+    let startAcc = 0;
+    for (const index of [...startSet].sort((a, b) => a - b)) {
+        const column = columns.find(item => item.index === index);
+        if (!column) continue;
+        startOffsets.set(index, startAcc);
+        startAcc += widthOf(column);
+    }
     useImperativeHandle(scrollRef, () => bodyRef.current!, []);
     useLayoutEffect(() => {
         const element = bodyRef.current;
@@ -351,10 +368,15 @@ function TableView({
                                 const shared = {
                                     key: column.label,
                                     "data-pinned": pinned(column.index),
+                                    // 最右一个 start 固定列承担固定区右边界（多列固定时与滚动区划界）
+                                    "data-pinned-edge":
+                                        column.index === lastStartIndex && startSet.size > 1 ? "start" : undefined,
                                     "aria-label": column.label,
                                     // 页面已写对齐类（left/center/right）时不再补默认左对齐，避免两类冲突
                                     className: `${column.header.props.className ?? ""} managed-th ${activeColumn === column.label ? "column-highlight" : ""} ${column.header.type !== SortTh && !column.header.props.className?.match(/text-(left|center|right)/) ? "text-left" : ""}`,
-                                    style: undefined,
+                                    style: startOffsets.has(column.index)
+                                        ? { left: startOffsets.get(column.index) }
+                                        : undefined,
                                     width: undefined,
                                 };
                                 const renderedHeader =
@@ -396,8 +418,15 @@ function TableView({
                                             if (!column) return [];
                                             const renderedCell = cloneElement(cell, {
                                                 key: column.label,
-                                                "data-pinned": pinned(index),
+                                                "data-pinned": pinned(column.index),
+                                                "data-pinned-edge":
+                                                    column.index === lastStartIndex && startSet.size > 1
+                                                        ? "start"
+                                                        : undefined,
                                                 className: `${cell.props.className ?? ""} ${activeColumn === column.label ? "column-highlight" : ""}`,
+                                                style: startOffsets.has(column.index)
+                                                    ? { ...cell.props.style, left: startOffsets.get(column.index) }
+                                                    : cell.props.style,
                                             } as CellProps);
                                             return hasFillColumn && !spansColumns && column.index === headers.length - 1
                                                 ? [
