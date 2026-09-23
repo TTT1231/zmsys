@@ -28,7 +28,7 @@ const STATUS_LABELS: Record<StatusKey, string> = {
 export function StatusBadge({ status, label }: { status: StatusKey; label?: string }) {
     return (
         <span
-            className={`table-badge inline-flex items-center rounded-full border px-2.5 py-0.75 text-12 font-medium whitespace-nowrap ${STATUS_STYLES[status]}`}
+            className={`table-badge inline-flex items-center rounded-full border px-2.5 py-0.75 text-13 font-medium whitespace-nowrap ${STATUS_STYLES[status]}`}
         >
             {label || STATUS_LABELS[status]}
         </span>
@@ -38,7 +38,7 @@ export function StatusBadge({ status, label }: { status: StatusKey; label?: stri
 export function Badge({ tone = "progress", children }: { tone?: string; children: ReactNode }) {
     return (
         <span
-            className={`table-badge inline-flex items-center rounded-full border px-2.5 py-0.75 text-12 font-medium whitespace-nowrap ${STATUS_STYLES[tone] || STATUS_STYLES.progress}`}
+            className={`table-badge inline-flex items-center rounded-full border px-2.5 py-0.75 text-13 font-medium whitespace-nowrap ${STATUS_STYLES[tone] || STATUS_STYLES.progress}`}
         >
             {children}
         </span>
@@ -53,7 +53,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export function Button({ variant = "primary", icon, children, className = "", ...rest }: ButtonProps) {
     const base =
-        "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-btn px-4 text-13 font-medium transition disabled:cursor-not-allowed disabled:opacity-60";
+        "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-btn px-4 text-14 font-medium transition disabled:cursor-not-allowed disabled:opacity-60";
     const styles =
         variant === "primary"
             ? "bg-primary text-white hover:bg-primary-hover"
@@ -72,7 +72,7 @@ export function TableLink({ children, onClick }: { children: ReactNode; onClick?
         <button
             type="button"
             onClick={onClick}
-            className="text-13 font-medium text-primary-strong underline-offset-2 transition hover:underline"
+            className="text-14 font-medium text-primary-strong underline-offset-2 transition hover:underline"
         >
             {children}
         </button>

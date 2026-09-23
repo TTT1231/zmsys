@@ -18,7 +18,7 @@ export function MobileSortSelect<K extends string>({
                 onChange({ key: key as K, dir: dir === "desc" ? "desc" : "asc" });
             }}
             aria-label="排序列表"
-            className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-13 text-ink lg:hidden"
+            className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink lg:hidden"
         >
             {columns.flatMap(({ key, label }) => [
                 <option key={`${key}:asc`} value={`${key}:asc`}>

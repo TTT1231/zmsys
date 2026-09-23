@@ -138,14 +138,14 @@ export function Modal({
             >
                 <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-4">
                     <div>
-                        <div className="text-11 font-semibold tracking-[0.08em] text-primary-strong" hidden={!label}>
+                        <div className="text-12 font-semibold tracking-[0.08em] text-primary-strong" hidden={!label}>
                             {label}
                         </div>
                         <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                             <h2 className="text-17 font-semibold text-ink">{title}</h2>
                             {titleExtra}
                         </div>
-                        {subtitle && <p className="mt-0.5 text-12.5 text-muted">{subtitle}</p>}
+                        {subtitle && <p className="mt-0.5 text-13 text-muted">{subtitle}</p>}
                     </div>
                     <button
                         type="button"

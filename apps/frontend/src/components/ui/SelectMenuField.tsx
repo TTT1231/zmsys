@@ -36,7 +36,7 @@ export function SelectMenuField({
 
     return (
         <div className="min-w-0">
-            <span id={labelId} className="mb-1 block text-12.5 font-medium text-td">
+            <span id={labelId} className="mb-1 block text-13 font-medium text-td">
                 {label}
                 {required && <span className="ml-0.5 text-danger">*</span>}
             </span>
@@ -48,7 +48,7 @@ export function SelectMenuField({
                         aria-required={required}
                         aria-invalid={!!error}
                         aria-describedby={error ? errorId : undefined}
-                        className="group flex min-h-10 w-full cursor-pointer items-center justify-between gap-3 rounded-input border border-line-strong bg-surface px-3 py-2 text-left text-13 text-ink transition hover:border-primary-border focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+                        className="group flex min-h-10 w-full cursor-pointer items-center justify-between gap-3 rounded-input border border-line-strong bg-surface px-3 py-2 text-left text-14 text-ink transition hover:border-primary-border focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
                     >
                         <span className={selectedLabel ? "truncate" : "truncate text-subtle"}>
                             {selectedLabel ?? placeholder}
@@ -79,7 +79,7 @@ export function SelectMenuField({
                 </DropdownMenuContent>
             </DropdownMenu>
             {error && (
-                <span id={errorId} role="alert" className="mt-1 block text-12 text-danger">
+                <span id={errorId} role="alert" className="mt-1 block text-13 text-danger">
                     {error}
                 </span>
             )}

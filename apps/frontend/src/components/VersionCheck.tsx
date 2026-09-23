@@ -118,7 +118,7 @@ export function VersionCheck() {
                             reload();
                         }
                     }}
-                    className="sticky top-0 z-140 flex h-11 cursor-pointer items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 px-12 text-13 font-medium text-white hover:brightness-110"
+                    className="sticky top-0 z-140 flex h-11 cursor-pointer items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 px-12 text-14 font-medium text-white hover:brightness-110"
                 >
                     <Icon name="refresh" size={15} />
                     <span>新版本可用</span>
@@ -139,16 +139,16 @@ export function VersionCheck() {
                             <div className="mx-auto mb-3.5 grid size-14 place-items-center rounded-full bg-primary-soft text-primary">
                                 <Icon name="refresh" size={26} />
                             </div>
-                            <h2 id="version-check-title" className="text-16.5 font-semibold text-ink">
+                            <h2 id="version-check-title" className="text-17 font-semibold text-ink">
                                 新版本可用
                             </h2>
-                            <p className="mx-auto mt-1.5 max-w-[30ch] text-12.5 text-muted">点击刷新以获取最新版本</p>
+                            <p className="mx-auto mt-1.5 max-w-[30ch] text-13 text-muted">点击刷新以获取最新版本</p>
                             <div className="mt-5.5 flex justify-center gap-2.5">
                                 <button
                                     type="button"
                                     ref={cancelBtnRef}
                                     onClick={cancel}
-                                    className="inline-flex min-h-9.5 min-w-24 items-center justify-center rounded-btn border border-line bg-surface px-4 text-13 font-medium text-ink hover:bg-primary-soft hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary/40"
+                                    className="inline-flex min-h-9.5 min-w-24 items-center justify-center rounded-btn border border-line bg-surface px-4 text-14 font-medium text-ink hover:bg-primary-soft hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary/40"
                                 >
                                     取消
                                 </button>
@@ -156,7 +156,7 @@ export function VersionCheck() {
                                     type="button"
                                     ref={refreshBtnRef}
                                     onClick={reload}
-                                    className="inline-flex min-h-9.5 min-w-24 items-center justify-center gap-1.5 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary/40"
+                                    className="inline-flex min-h-9.5 min-w-24 items-center justify-center gap-1.5 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary/40"
                                 >
                                     <Icon name="refresh" size={14} />
                                     刷新

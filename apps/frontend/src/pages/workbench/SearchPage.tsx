@@ -110,7 +110,7 @@ export function SearchPage() {
                             );
                         })}
                     </div>
-                    <p role="status" className="text-13 text-muted">
+                    <p role="status" className="text-14 text-muted">
                         找到 {count} 条{count > limit ? `，当前显示 ${limit} 条` : ""}
                     </p>
                     <div className="grid gap-3 lg:grid-cols-2">

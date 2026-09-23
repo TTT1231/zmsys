@@ -2,11 +2,11 @@ import type { EChartsOption } from "echarts";
 import type { TrendRow } from "@/api";
 
 const INK = "#101828";
-const AXIS_LABEL = "#667085";
+const AXIS_LABEL = "#6e7075";
 const AXIS_LINE = "#e4e7ec";
 const SPLIT_LINE = "#eef2f6";
-const REMAINING_COLOR = "#4f46e5";
-const NEUTRAL_COLOR = "#667085";
+const REMAINING_COLOR = "#006be6";
+const NEUTRAL_COLOR = "#6e7075";
 
 const fmt = (value: number) => value.toLocaleString("zh-CN");
 

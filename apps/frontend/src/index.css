@@ -131,15 +131,16 @@
 }
 
 @theme {
+    /* 对齐 vben：不内置 web font，Windows 上按 Segoe UI + 微软雅黑回退渲染（与 vben 一致） */
     --font-sans:
-        Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei",
-        sans-serif;
+        ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 
-    --color-primary: #4f46e5;
-    --color-primary-hover: #4338ca;
-    --color-primary-strong: #3730a3;
-    --color-primary-soft: #eef2ff;
-    --color-primary-border: #c7d2fe;
+    /* 主色五件套 = vben default 预设（hsl 212 100% 45%）经 theme-colors 生成的 100/200/500/600/700 档 */
+    --color-primary: hsl(212 100% 45%);
+    --color-primary-hover: hsl(212 100% 40.6%);
+    --color-primary-strong: hsl(212 100% 27.1%);
+    --color-primary-soft: hsl(213.9 85.2% 94.7%);
+    --color-primary-border: hsl(212.1 82.9% 86.3%);
     --color-accent: #0284c7;
     --color-accent-soft: #e0f2fe;
     --color-success: #047857;
@@ -150,8 +151,9 @@
     --color-danger-soft: #fef3f2;
 
     --color-ink: #101828;
-    --color-muted: #667085;
-    --color-subtle: #667085;
+    /* 次要灰字 / 表格文字对齐 vben（muted-foreground #6e7075、foreground #32373c），去掉石板蓝调 */
+    --color-muted: #6e7075;
+    --color-subtle: #6e7075;
     --color-line: #e4e7ec;
     --color-line-strong: #d0d5dd;
     --color-surface: #ffffff;
@@ -160,8 +162,8 @@
     --color-sidebar: #ffffff;
     --color-sidebar-soft: #f5f7fb;
 
-    --color-td: #344054;
-    --color-td-strong: #475467;
+    --color-td: #32373c;
+    --color-td-strong: #454c54;
     --color-row-hover: #f8f9ff;
     --color-soft: #f8fafc;
     --color-panel: #fcfcfd;
@@ -182,6 +184,7 @@
     --shadow-glow: 0 6px 18px color-mix(in srgb, var(--color-primary) 45%, transparent);
 
     /* 字号：数字类名 = 设计稿 px 值（text-13 即 13px；不设 --line-height 对，保持继承 1.5）。
+       只保留整数档：半像素字号（12.5/13.5…）在 1x 屏上必然发虚，已全站取整迁移。
        偏好设置的“字体大小”通过 --app-font-scale 统一缩放字号与 rem 间距（见 html 根字号） */
     --text-11: calc(11px * var(--app-font-scale, 1));
     --text-12: calc(12px * var(--app-font-scale, 1));
@@ -193,16 +196,10 @@
     --text-20: calc(20px * var(--app-font-scale, 1));
     --text-22: calc(22px * var(--app-font-scale, 1));
     --text-24: calc(24px * var(--app-font-scale, 1));
+    --text-26: calc(26px * var(--app-font-scale, 1));
     --text-30: calc(30px * var(--app-font-scale, 1));
     /* 错误页主视觉代号数字（404/403/500） */
     --text-88: calc(88px * var(--app-font-scale, 1));
-
-    /* 半像素字号（类名带点，如 text-12.5 = 12.5px） */
-    --text-10\.5: calc(10.5px * var(--app-font-scale, 1));
-    --text-11\.5: calc(11.5px * var(--app-font-scale, 1));
-    --text-12\.5: calc(12.5px * var(--app-font-scale, 1));
-    --text-13\.5: calc(13.5px * var(--app-font-scale, 1));
-    --text-14\.5: calc(14.5px * var(--app-font-scale, 1));
 
     /* 过渡动画：遮罩 / 下拉 / tooltip 淡入 */
     --animate-fade-in: fade-in 0.18s ease-out;
@@ -334,13 +331,16 @@
 }
 
 /* ── 暗色模式（vben 式）：<html class="dark"> 重声明语义令牌。
+   基底对齐 vben dark.css 默认预设：中性石墨（背景 #1b1e21 / 深底 #131619），
+   文字与边框同走中性灰，不再带蓝调。
    工具类引用的是 var(--color-*)，变量在 html 上被覆盖后全站自动换色，无需改动组件类名 ── */
 html.dark {
-    --color-primary: #6366f1;
-    --color-primary-hover: #7c7ff5;
-    --color-primary-strong: #a5b0fb;
-    --color-primary-soft: rgba(99, 102, 241, 0.16);
-    --color-primary-border: rgba(129, 140, 248, 0.38);
+    /* 主色沿用浅色档（vben 暗色不换主色）；hover/strong 在暗色下提亮保证可读 */
+    --color-primary: hsl(212 100% 45%);
+    --color-primary-hover: hsl(212 100% 58%);
+    --color-primary-strong: hsl(212 100% 72%);
+    --color-primary-soft: hsl(212 100% 45% / 0.16);
+    --color-primary-border: hsl(212 100% 62% / 0.38);
 
     --color-accent: #38bdf8;
     --color-accent-soft: rgba(56, 189, 248, 0.14);
@@ -351,22 +351,22 @@ html.dark {
     --color-danger: #f87171;
     --color-danger-soft: rgba(248, 113, 113, 0.14);
 
-    --color-ink: #e6eaf2;
-    --color-muted: #9aa6ba;
-    --color-subtle: #9aa6ba;
-    --color-line: #2a3244;
-    --color-line-strong: #3a4557;
-    --color-surface: #171d29;
-    --color-canvas: #10141d;
-    --color-sidebar: #10141d;
-    --color-sidebar-soft: #1d2432;
+    --color-ink: #f2f2f2;
+    --color-muted: #a3a4a7;
+    --color-subtle: #a3a4a7;
+    --color-line: #36373b;
+    --color-line-strong: #46484c;
+    --color-surface: #1b1e21;
+    --color-canvas: #131619;
+    --color-sidebar: #1b1e21;
+    --color-sidebar-soft: #2e3033;
 
-    --color-td: #c3cbdb;
-    --color-td-strong: #d4dbe8;
-    --color-row-hover: #1f2736;
-    --color-soft: #1c2431;
-    --color-panel: #1a2130;
-    --color-scrim: rgba(4, 7, 12, 0.62);
+    --color-td: #c9cacd;
+    --color-td-strong: #d8d9db;
+    --color-row-hover: #26282c;
+    --color-soft: #272729;
+    --color-panel: #222428;
+    --color-scrim: rgba(0, 0, 0, 0.55);
 
     color-scheme: dark;
 }
@@ -401,29 +401,76 @@ html.dark {
     --color-row-hover: hsl(24 60% 98%);
 }
 
-/* 预设在暗色下的变体：主色提亮一档保对比，soft/border 用半透明叠在深色面上 */
+/* 预设在暗色下的变体（对齐 vben dark.css 的 [data-theme] 块）：
+   背景切暖黑（背景 #0c0a09 / 卡片 #110e0c），主色沿用浅色档、hover/strong 提亮保对比，
+   soft/border 用半透明叠在深色面上 */
 html.dark[data-theme="green"] {
-    --color-primary: hsl(160 84% 52%);
-    --color-primary-hover: hsl(160 88% 60%);
-    --color-primary-strong: hsl(160 80% 70%);
-    --color-primary-soft: hsl(160 84% 52% / 0.16);
-    --color-primary-border: hsl(160 84% 60% / 0.38);
+    --color-primary: hsl(161 90% 43%);
+    --color-primary-hover: hsl(161 90% 52%);
+    --color-primary-strong: hsl(161 88% 66%);
+    --color-primary-soft: hsl(161 90% 43% / 0.16);
+    --color-primary-border: hsl(161 90% 52% / 0.38);
+
+    --color-ink: #f2f2f2;
+    --color-muted: #a3a4a7;
+    --color-subtle: #a3a4a7;
+    --color-line: #272729;
+    --color-line-strong: #3a3b3e;
+    --color-surface: #110e0c;
+    --color-canvas: #0c0a09;
+    --color-sidebar: #0c0a09;
+    --color-sidebar-soft: #292524;
+    --color-td: #c9cacd;
+    --color-td-strong: #d8d9db;
+    --color-row-hover: #221e1c;
+    --color-soft: #262626;
+    --color-panel: #161210;
 }
 
 html.dark[data-theme="deep-green"] {
-    --color-primary: hsl(181 80% 48%);
-    --color-primary-hover: hsl(181 84% 56%);
-    --color-primary-strong: hsl(181 76% 66%);
-    --color-primary-soft: hsl(181 80% 48% / 0.16);
-    --color-primary-border: hsl(181 80% 56% / 0.38);
+    --color-primary: hsl(181 84% 32%);
+    --color-primary-hover: hsl(181 80% 42%);
+    --color-primary-strong: hsl(181 76% 60%);
+    --color-primary-soft: hsl(181 84% 32% / 0.16);
+    --color-primary-border: hsl(181 80% 42% / 0.38);
+
+    --color-ink: #f2f2f2;
+    --color-muted: #a3a4a7;
+    --color-subtle: #a3a4a7;
+    --color-line: #272729;
+    --color-line-strong: #3a3b3e;
+    --color-surface: #110e0c;
+    --color-canvas: #0c0a09;
+    --color-sidebar: #0c0a09;
+    --color-sidebar-soft: #292524;
+    --color-td: #c9cacd;
+    --color-td-strong: #d8d9db;
+    --color-row-hover: #221e1c;
+    --color-soft: #262626;
+    --color-panel: #161210;
 }
 
 html.dark[data-theme="orange"] {
-    --color-primary: hsl(18 92% 56%);
-    --color-primary-hover: hsl(18 96% 64%);
-    --color-primary-strong: hsl(24 90% 70%);
-    --color-primary-soft: hsl(18 92% 56% / 0.16);
-    --color-primary-border: hsl(18 92% 62% / 0.38);
+    --color-primary: hsl(18 89% 40%);
+    --color-primary-hover: hsl(18 90% 50%);
+    --color-primary-strong: hsl(20 90% 66%);
+    --color-primary-soft: hsl(18 89% 40% / 0.16);
+    --color-primary-border: hsl(18 90% 50% / 0.38);
+
+    --color-ink: #faf9f2;
+    --color-muted: #a8a49e;
+    --color-subtle: #a8a49e;
+    --color-line: #292524;
+    --color-line-strong: #3b3632;
+    --color-surface: #110e0c;
+    --color-canvas: #0c0a09;
+    --color-sidebar: #0c0a09;
+    --color-sidebar-soft: #2a2522;
+    --color-td: #cfcbc5;
+    --color-td-strong: #dcd8d1;
+    --color-row-hover: #241f1c;
+    --color-soft: #282320;
+    --color-panel: #181310;
 }
 
 /* ── 色弱 / 灰色模式（vben 式整页滤镜）──。
@@ -677,8 +724,8 @@ button:active:not(:disabled) {
 @layer base {
     html {
         /* 根字号随偏好设置缩放（--app-font-scale 由 usePreferences 写入）：
-           rem 间距与上方 calc 化的 px 字号令牌同倍缩放，整站等比放大缩小 */
-        font-size: calc(14px * var(--app-font-scale, 1));
+           基准对齐 vben（16px），rem 间距与上方 calc 化的 px 字号令牌同倍缩放，整站等比放大缩小 */
+        font-size: calc(16px * var(--app-font-scale, 1));
         /* 浅色下的原生控件 / 滚动条配色（html.dark 内对应声明 dark） */
         color-scheme: light;
         /* 滚动条槽位常驻：弹窗锁 body 滚动时内容宽度不变，表格不因列宽重排而抖动 */

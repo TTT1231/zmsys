@@ -93,7 +93,7 @@ export function LoginPage() {
                     </span>
                     <div className="leading-tight">
                         <div className="text-17 font-semibold text-white">众茂生产系统</div>
-                        <div className="text-12 text-indigo-100">订单驱动的成品仓库管理</div>
+                        <div className="text-13 text-indigo-100">订单驱动的成品仓库管理</div>
                     </div>
                 </div>
 
@@ -115,12 +115,12 @@ export function LoginPage() {
                     <div className="rounded-panel border border-line bg-surface p-6 shadow-modal sm:p-8 lg:shadow-card">
                         <div className="mb-7">
                             <h2 className="text-22 font-semibold text-ink">欢迎回来</h2>
-                            <p className="mt-1 text-13 text-muted">登录您的账号以继续</p>
+                            <p className="mt-1 text-14 text-muted">登录您的账号以继续</p>
                         </div>
 
                         <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
                             <div className="block">
-                                <label htmlFor="login-account" className="mb-1.5 block text-13 font-medium text-ink">
+                                <label htmlFor="login-account" className="mb-1.5 block text-14 font-medium text-ink">
                                     账号
                                 </label>
                                 <div className="group relative">
@@ -147,14 +147,14 @@ export function LoginPage() {
                                     />
                                 </div>
                                 {accountError && (
-                                    <p id="login-account-error" className="mt-1.5 text-12.5 leading-5 text-danger">
+                                    <p id="login-account-error" className="mt-1.5 text-13 leading-5 text-danger">
                                         {accountError}
                                     </p>
                                 )}
                             </div>
 
                             <div className="block">
-                                <label htmlFor="login-password" className="mb-1.5 block text-13 font-medium text-ink">
+                                <label htmlFor="login-password" className="mb-1.5 block text-14 font-medium text-ink">
                                     密码
                                 </label>
                                 <div className="group relative">
@@ -192,7 +192,7 @@ export function LoginPage() {
                                     </button>
                                 </div>
                                 {passwordError && (
-                                    <p id="login-password-error" className="mt-1.5 text-12.5 leading-5 text-danger">
+                                    <p id="login-password-error" className="mt-1.5 text-13 leading-5 text-danger">
                                         {passwordError}
                                     </p>
                                 )}

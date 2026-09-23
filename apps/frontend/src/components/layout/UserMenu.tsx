@@ -45,20 +45,20 @@ export function UserMenu() {
                     className="flex shrink-0 items-center gap-2.5 rounded-btn px-1.5 py-1 transition hover:bg-soft"
                     aria-label="用户菜单"
                 >
-                    <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-[var(--color-primary)] to-[var(--color-primary-strong)] text-13 font-semibold text-white">
+                    <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-[var(--color-primary)] to-[var(--color-primary-strong)] text-14 font-semibold text-white">
                         {user?.name.slice(0, 1) ?? "?"}
                         <span className="absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full border-2 border-surface bg-success" />
                     </span>
                     <span className="hidden text-left leading-tight sm:block">
-                        <span className="block text-12.5 font-semibold text-ink">{user?.name ?? "未登录"}</span>
-                        <span className="block text-11 text-muted">{ROLE_META[role].roleName}</span>
+                        <span className="block text-13 font-semibold text-ink">{user?.name ?? "未登录"}</span>
+                        <span className="block text-12 text-muted">{ROLE_META[role].roleName}</span>
                     </span>
                     <Icon name="chevron-down" size={14} className="text-muted" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-60">
                     <DropdownMenuLabel className="pb-1">
                         <span className="block text-14 font-semibold text-ink">{user?.name ?? "未登录"}</span>
-                        <span className="mt-0.5 block text-12 font-normal text-muted">{ROLE_META[role].roleName}</span>
+                        <span className="mt-0.5 block text-13 font-normal text-muted">{ROLE_META[role].roleName}</span>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onSelect={() => setProfileOpen(true)}>
@@ -94,7 +94,7 @@ export function UserMenu() {
                     </>
                 }
             >
-                <p className="text-13.5 text-td">确定要退出当前账号吗？</p>
+                <p className="text-14 text-td">确定要退出当前账号吗？</p>
             </Modal>
         </>
     );

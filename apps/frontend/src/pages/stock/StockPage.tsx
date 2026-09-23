@@ -61,7 +61,7 @@ function FlowTypeTag({ type }: { type: StockFlowRow["type"] }) {
               ? "bg-danger-soft text-danger"
               : "bg-accent-soft text-accent";
     return (
-        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-12 font-medium ${tone}`}>
+        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-13 font-medium ${tone}`}>
             {FLOW_TYPE_LABEL[type]}
         </span>
     );
@@ -113,7 +113,7 @@ function StockLedgerModal({
             <div className="flex flex-col gap-4">
                 {/* 区块 1+2：BOM 详情（同入库凭证 record 版式）+ 备注警示条 */}
                 <section aria-label="BOM 详情" className="min-w-0">
-                    <h3 className="mb-2 text-13 font-semibold text-ink">BOM 详情</h3>
+                    <h3 className="mb-2 text-14 font-semibold text-ink">BOM 详情</h3>
                     <BomSpecs bom={bom} layout="record" categories={categories} />
                     <BomRemarkNote remark={bom.remark} className="mt-3" />
                 </section>
@@ -123,20 +123,20 @@ function StockLedgerModal({
                 >
                     {/* 零值不带符号：-(0) 的负零经 toLocaleString 会渲染成 "-0"，拼出 "−-0" */}
                     <div className="rounded-btn border border-line bg-panel px-4.5 py-3.5">
-                        <p className="text-13 text-muted">累计入库</p>
+                        <p className="text-14 text-muted">累计入库</p>
                         <p className="tnum mt-1 text-26 font-bold text-success">
                             {totalIn === 0 ? "0" : `+${num(totalIn)}`}
                         </p>
                     </div>
                     <div className="rounded-btn border border-line bg-panel px-4.5 py-3.5">
-                        <p className="text-13 text-muted">累计出库</p>
+                        <p className="text-14 text-muted">累计出库</p>
                         <p className="tnum mt-1 text-26 font-bold text-danger">
                             {totalOut === 0 ? "0" : `−${num(Math.abs(totalOut))}`}
                         </p>
                     </div>
                     {totalAdjust !== 0 && (
                         <div className="rounded-btn border border-line bg-panel px-4.5 py-3.5">
-                            <p className="text-13 text-muted">库存调整</p>
+                            <p className="text-14 text-muted">库存调整</p>
                             <p className="tnum mt-1 text-26 font-bold text-accent">
                                 {totalAdjust > 0 ? "+" : "−"}
                                 {num(Math.abs(totalAdjust))}
@@ -144,7 +144,7 @@ function StockLedgerModal({
                         </div>
                     )}
                     <div className="rounded-btn border border-primary-border bg-primary-soft px-4.5 py-3.5">
-                        <p className="text-13 text-muted">当前库存</p>
+                        <p className="text-14 text-muted">当前库存</p>
                         <p className="tnum mt-1 text-26 font-bold text-primary-strong">{num(ledger?.stockQty ?? 0)}</p>
                     </div>
                 </div>
@@ -158,11 +158,11 @@ function StockLedgerModal({
                     /* max-h + 内部滚动：流水多时不撑高弹窗，表头吸附在滚动区顶部；
                        窄屏横向滚动，列宽不被挤压 */
                     <section aria-label="库存流水" className="min-w-0">
-                        <h3 className="mb-2 text-13 font-semibold text-ink">库存流水</h3>
+                        <h3 className="mb-2 text-14 font-semibold text-ink">库存流水</h3>
                         <div className="max-h-120 overflow-auto rounded-xl border border-line">
                             <table className="w-full min-w-[780px] table-fixed border-separate border-spacing-0">
                                 <thead>
-                                    <tr className="sticky top-0 z-1 bg-soft text-left text-12.5 font-semibold text-muted shadow-[inset_0_-1px_0_var(--color-line-strong)]">
+                                    <tr className="sticky top-0 z-1 bg-soft text-left text-13 font-semibold text-muted shadow-[inset_0_-1px_0_var(--color-line-strong)]">
                                         <th className="px-3.5 py-2.5" style={{ width: "72px" }}>
                                             类型
                                         </th>
@@ -196,7 +196,7 @@ function StockLedgerModal({
                                             <td className="tnum px-3 py-3.5 text-14 font-medium text-td">
                                                 {flow.no}
                                                 {flow.type === "out" && flow.customer && (
-                                                    <span className="mt-0.5 block text-12.5 font-medium text-ink">
+                                                    <span className="mt-0.5 block text-13 font-medium text-ink">
                                                         {flow.customer}
                                                     </span>
                                                 )}
@@ -212,7 +212,7 @@ function StockLedgerModal({
                                                 {num(flow.balance)}
                                             </td>
                                             <td className="px-3 py-3.5 text-14 text-td">{flow.operator}</td>
-                                            <td className="px-3.5 py-3.5 text-13 text-muted">{flow.remark || "—"}</td>
+                                            <td className="px-3.5 py-3.5 text-14 text-muted">{flow.remark || "—"}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -304,7 +304,7 @@ export function StockPage() {
                                 setPage(1);
                             }}
                             placeholder="BOM 编码 / 品类 / 备注"
-                            className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
+                            className="w-full bg-transparent text-14 text-ink outline-none placeholder:text-subtle"
                         />
                     </label>
                     <select
@@ -313,7 +313,7 @@ export function StockPage() {
                             setCategory(event.target.value);
                             setPage(1);
                         }}
-                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-13 text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
                         aria-label="按品类筛选"
                     >
                         <option>全部品类</option>
@@ -325,7 +325,7 @@ export function StockPage() {
                         type="button"
                         onClick={clearFilters}
                         disabled={!filtersActive}
-                        className="min-h-10 px-1 text-13 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
+                        className="min-h-10 px-1 text-14 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
                     >
                         清空条件
                     </button>
@@ -390,7 +390,7 @@ export function StockPage() {
                             scrollRef={tableScrollRef}
                         >
                             <thead>
-                                <tr className="text-left text-12 text-muted">
+                                <tr className="text-left text-13 text-muted">
                                     <th className="px-5 py-2.5 font-semibold">序号</th>
                                     <th className="px-3 py-2.5 font-semibold">品类</th>
                                     <SortTh
@@ -431,10 +431,10 @@ export function StockPage() {
                                 )}
                                 {pageRows.map((row, index) => (
                                     <tr key={row.code} className="border-t border-line transition hover:bg-row-hover">
-                                        <td className="tnum px-5 py-3 text-13 text-muted">
+                                        <td className="tnum px-5 py-3 text-14 text-muted">
                                             {(page - 1) * pageSize + index + 1}
                                         </td>
-                                        <td className="px-3 py-3 text-13 text-td">{row.name}</td>
+                                        <td className="px-3 py-3 text-14 text-td">{row.name}</td>
                                         <td className="px-3 py-4">
                                             <BomCell
                                                 categories={categoriesQuery.data}
@@ -443,13 +443,13 @@ export function StockPage() {
                                                 showName={false}
                                             />
                                         </td>
-                                        <td className="px-3 py-3 text-13">
+                                        <td className="px-3 py-3 text-14">
                                             <span className="block truncate" title={row.remark || undefined}>
                                                 <BomRemarkText remark={row.remark} />
                                             </span>
                                         </td>
                                         <td
-                                            className={`tnum px-3 py-3 text-13 font-semibold ${row.stock === 0 ? "text-muted" : "text-ink"}`}
+                                            className={`tnum px-3 py-3 text-14 font-semibold ${row.stock === 0 ? "text-muted" : "text-ink"}`}
                                         >
                                             {num(row.stock)}
                                         </td>

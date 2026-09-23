@@ -35,7 +35,7 @@ type Detail =
     | { kind: "risk"; risk: "overdue" | "upcoming" };
 const percent = (done: number, total: number) => (total ? Math.round((done / total) * 100) : 0);
 const tableClass =
-    "w-full min-w-150 text-left text-12 [&_th]:bg-soft [&_th]:p-3 [&_th]:font-medium [&_th]:text-muted [&_td]:border-b [&_td]:border-line/70 [&_td]:p-3 [&_td]:tabular-nums";
+    "w-full min-w-150 text-left text-14 [&_th]:bg-soft [&_th]:p-3 [&_th]:font-medium [&_th]:text-muted [&_td]:border-b [&_td]:border-line/70 [&_td]:p-3 [&_td]:tabular-nums";
 
 function Metric({
     title,
@@ -57,7 +57,7 @@ function Metric({
             className={`rounded-panel border p-4 shadow-card sm:p-5 ${featured ? "border-primary-border bg-linear-to-br from-primary-soft via-surface to-surface" : "border-line bg-surface"}`}
         >
             <div className="flex items-center justify-between">
-                <h2 className="text-13 font-medium text-td-strong">{title}</h2>
+                <h2 className="text-14 font-medium text-td-strong">{title}</h2>
                 {/* 图标芯片统一主色族：featured 实底、其余浅底，避免「一张实底 + 三张灰线性」的风格漂移 */}
                 <span
                     className={`hidden h-9 w-9 items-center justify-center rounded-xl sm:flex ${featured ? "bg-primary text-white" : "bg-primary-soft text-primary-strong"}`}
@@ -69,9 +69,9 @@ function Metric({
                 <span className="text-22 leading-tight font-semibold tracking-tight tabular-nums text-ink sm:text-30">
                     {num(value)}
                 </span>
-                <span className="text-12 text-muted">{unit}</span>
+                <span className="text-14 text-muted">{unit}</span>
             </p>
-            <div className="mt-4 border-t border-line/70 pt-3 text-12 text-muted">{children}</div>
+            <div className="mt-4 border-t border-line/70 pt-3 text-14 text-muted">{children}</div>
         </section>
     );
 }
@@ -144,14 +144,14 @@ function OwnerWorkbench() {
                 eyebrow="BUSINESS OVERVIEW"
                 title="经营总览"
                 actions={
-                    <span className="flex items-center gap-1.5 text-12 text-muted">
+                    <span className="flex items-center gap-1.5 text-14 text-muted">
                         <Icon name="calendar" size={15} />
                         截至 {data.asOf}
                     </span>
                 }
             />
             <div className="flex flex-wrap items-center gap-3">
-                <span className="text-12 font-medium text-td">订单统计周期</span>
+                <span className="text-14 font-medium text-td">订单统计周期</span>
                 <div
                     className="inline-flex rounded-btn border border-line bg-surface p-1"
                     role="group"
@@ -167,7 +167,7 @@ function OwnerWorkbench() {
                             key={value}
                             aria-pressed={period === value}
                             onClick={() => setPeriod(value)}
-                            className={`min-h-9 rounded-md px-4 text-12 font-medium transition ${period === value ? "bg-primary-soft text-primary-strong" : "text-muted hover:bg-soft hover:text-ink"}`}
+                            className={`min-h-9 rounded-md px-4 text-14 font-medium transition ${period === value ? "bg-primary-soft text-primary-strong" : "text-muted hover:bg-soft hover:text-ink"}`}
                         >
                             {label}
                         </button>
@@ -195,7 +195,7 @@ function OwnerWorkbench() {
                         onChange={event => setCustomEnd(event.target.value)}
                     />
                     {!validRange && (
-                        <span role="alert" className="text-12 text-danger">
+                        <span role="alert" className="text-14 text-danger">
                             请选择不晚于今天的有效日期范围
                         </span>
                     )}
@@ -227,11 +227,11 @@ function OwnerWorkbench() {
             >
                 <div className="flex items-center gap-2 text-warning">
                     <Icon name="alert" size={18} />
-                    <h2 className="text-13 font-semibold">交付风险</h2>
+                    <h2 className="text-14 font-semibold">交付风险</h2>
                 </div>
                 <button
                     onClick={() => setDetail({ kind: "risk", risk: "overdue" })}
-                    className="flex min-h-10 items-center gap-2 text-13 text-td hover:text-danger"
+                    className="flex min-h-10 items-center gap-2 text-14 text-td hover:text-danger"
                 >
                     已逾期未发完
                     <span className="rounded-md bg-surface px-2 py-0.5 font-semibold tabular-nums text-danger">
@@ -242,7 +242,7 @@ function OwnerWorkbench() {
                 <span className="hidden h-5 w-px bg-warning/30 sm:block" />
                 <button
                     onClick={() => setDetail({ kind: "risk", risk: "upcoming" })}
-                    className="flex min-h-10 items-center gap-2 text-13 text-td hover:text-warning"
+                    className="flex min-h-10 items-center gap-2 text-14 text-td hover:text-warning"
                 >
                     未来 7 天到期且缺货
                     <span className="rounded-md bg-surface px-2 py-0.5 font-semibold tabular-nums text-warning">
@@ -275,7 +275,7 @@ function OwnerWorkbench() {
                 footer={
                     detail?.kind === "orders" ? (
                         <button
-                            className="flex min-h-10 items-center gap-1.5 text-13 font-medium text-primary-strong hover:underline"
+                            className="flex min-h-10 items-center gap-1.5 text-14 font-medium text-primary-strong hover:underline"
                             onClick={() => setDetail(detail.back)}
                         >
                             <Icon name="chevron-left" size={16} />
@@ -337,8 +337,8 @@ function OwnerWorkbench() {
                                                         >
                                                             {product.category} / {product.model}
                                                         </button>
-                                                        <p className="text-11 text-muted">{product.code}</p>
-                                                        <p className="mt-1 text-11 text-muted">{product.spec}</p>
+                                                        <p className="text-13 text-muted">{product.code}</p>
+                                                        <p className="mt-1 text-13 text-muted">{product.spec}</p>
                                                     </td>
                                                     <td>{num(product.qty)}</td>
                                                     <td>{num(product.shipped)}</td>
@@ -358,7 +358,7 @@ function OwnerWorkbench() {
                                 </tbody>
                             </table>
                         </div>
-                        <p className="mt-4 text-12 text-muted">
+                        <p className="mt-4 text-14 text-muted">
                             点击型号查看订单。当前库存与缺口始终统计全部有效订单，不同 BOM 的库存不可互抵。
                         </p>
                     </>
@@ -425,11 +425,11 @@ function OwnerWorkbench() {
                                             <span className="font-medium text-ink">{order.no}</span>
                                             {order.cancelled && <span className="ml-2 text-warning">已取消</span>}
                                             {order.archived && <span className="ml-2 text-subtle">已归档</span>}
-                                            <p className="mt-1 text-11 text-muted">{order.customer}</p>
+                                            <p className="mt-1 text-13 text-muted">{order.customer}</p>
                                         </td>
                                         <td>
                                             {productName(order.bomCode)}
-                                            <p className="mt-1 text-11 text-muted">{order.due}</p>
+                                            <p className="mt-1 text-13 text-muted">{order.due}</p>
                                         </td>
                                         <td>{num(demandQty(order))}</td>
                                         <td>{num(order.shipped)}</td>
@@ -468,7 +468,7 @@ function OwnerWorkbench() {
                                             <tr key={order.no}>
                                                 <td>
                                                     <span className="font-medium text-ink">{order.no}</span>
-                                                    <p className="mt-1 text-11 text-muted">{order.customer}</p>
+                                                    <p className="mt-1 text-13 text-muted">{order.customer}</p>
                                                 </td>
                                                 <td>{productName(order.bomCode)}</td>
                                                 <td
@@ -490,7 +490,7 @@ function OwnerWorkbench() {
                                 </tbody>
                             </table>
                         </div>
-                        <p className="mt-4 text-12 text-muted">
+                        <p className="mt-4 text-14 text-muted">
                             共享库存按交期依次分配，缺口不重复使用库存；逾期订单即使库存充足，仍保留提醒。
                         </p>
                     </>
@@ -506,7 +506,7 @@ export function WorkbenchPage() {
     return (
         <section className="rounded-panel border border-dashed border-line-strong bg-surface px-6 py-16 text-center shadow-card">
             <h2 className="text-17 font-semibold text-ink">工作台建设中</h2>
-            <p className="mx-auto mt-2 max-w-105 text-13 leading-relaxed text-muted">
+            <p className="mx-auto mt-2 max-w-105 text-14 leading-relaxed text-muted">
                 按角色定制的待办、收发与趋势概览将在此统一提供。期间可从左侧菜单进入销售订单、成品出入库等页面处理业务。
             </p>
         </section>

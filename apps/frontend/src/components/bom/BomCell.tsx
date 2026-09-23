@@ -32,33 +32,33 @@ export function BomCell({
                             type="button"
                             onClick={() => setOpen(true)}
                             aria-label={`查看 ${bomCode} 的规格与物料`}
-                            className="shrink-0 tnum text-13 font-semibold whitespace-nowrap text-primary-strong underline-offset-2 hover:underline"
+                            className="shrink-0 tnum text-14 font-semibold whitespace-nowrap text-primary-strong underline-offset-2 hover:underline"
                         >
                             {bomCode}
                         </button>
                     ) : (
-                        <span className="tnum text-13 font-medium whitespace-nowrap text-td">{bomCode}</span>
+                        <span className="tnum text-14 font-medium whitespace-nowrap text-td">{bomCode}</span>
                     )}
                     {bom && showName && (
-                        <span className="truncate text-12 text-muted" title={bom.name}>
+                        <span className="truncate text-13 text-muted" title={bom.name}>
                             {bom.name}
                         </span>
                     )}
                 </div>
             )}
             {composition?.composite && (
-                <p className="bom-composite mt-1 text-12 font-medium text-primary-strong">
+                <p className="bom-composite mt-1 text-13 font-medium text-primary-strong">
                     微动组件：{composition.series}
                 </p>
             )}
-            <p className="bom-summary mt-1 text-12 leading-5 text-muted" title={summary}>
+            <p className="bom-summary mt-1 text-13 leading-5 text-muted" title={summary}>
                 {summary}
             </p>
             {!!bom?.items?.length && (
                 <button
                     type="button"
                     onClick={() => setOpen(true)}
-                    className="bom-material-trigger mt-1 w-fit text-12 text-primary-strong underline-offset-2 hover:underline"
+                    className="bom-material-trigger mt-1 w-fit text-13 text-primary-strong underline-offset-2 hover:underline"
                 >
                     查看物料（{bom.items.length}）
                 </button>

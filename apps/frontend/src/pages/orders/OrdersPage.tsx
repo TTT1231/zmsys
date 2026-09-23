@@ -148,7 +148,7 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -156,7 +156,7 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
                         type="button"
                         disabled={createOrder.isPending}
                         onClick={submit}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
+                        className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
                     >
                         {createOrder.isPending ? "正在提交…" : "提交订单"}
                     </button>
@@ -165,7 +165,7 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
         >
             <div className="flex flex-col gap-5">
                 <fieldset className="rounded-panel border border-line p-4">
-                    <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">① 客户与交付</legend>
+                    <legend className="px-1.5 text-13 font-semibold text-primary-strong">① 客户与交付</legend>
                     <div className="grid gap-3 sm:grid-cols-2">
                         <SearchSelect
                             label="客户"
@@ -214,7 +214,7 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
                 </fieldset>
 
                 <fieldset className="rounded-panel border border-line p-4">
-                    <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">② BOM 编码</legend>
+                    <legend className="px-1.5 text-13 font-semibold text-primary-strong">② BOM 编码</legend>
                     <div className="flex flex-col gap-3">
                         <TextField
                             label="BOM 编码"
@@ -226,7 +226,7 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
                         />
                         {/* 输入即反馈：命中回显成品档案即完成选择；失配仅中性提示，提交时才拦截报错 */}
                         {bomCode.trim() && !matchedBom && (
-                            <p className="text-12 text-muted" aria-live="polite">
+                            <p className="text-13 text-muted" aria-live="polite">
                                 未找到编码「{bomCode.trim()}」对应的 BOM，请到「物料与BOM」核对
                             </p>
                         )}
@@ -239,19 +239,19 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
                                     <span className="tnum text-14 font-semibold text-primary-strong">
                                         {matchedBom.code}
                                     </span>
-                                    <span className="rounded-full bg-surface px-2 py-1 text-11 font-medium text-success">
+                                    <span className="rounded-full bg-surface px-2 py-1 text-12 font-medium text-success">
                                         已匹配
                                     </span>
                                 </div>
-                                <p className="mt-1 text-12.5 text-td">{matchedBom.name}</p>
-                                <p className="mt-1 wrap-break-word text-11.5 text-muted">{matchedBom.spec}</p>
+                                <p className="mt-1 text-13 text-td">{matchedBom.name}</p>
+                                <p className="mt-1 wrap-break-word text-12 text-muted">{matchedBom.spec}</p>
                             </div>
                         )}
                     </div>
                 </fieldset>
 
                 <fieldset className="rounded-panel border border-line p-4">
-                    <legend className="px-1.5 text-12.5 font-semibold text-primary-strong">③ 订单备注</legend>
+                    <legend className="px-1.5 text-13 font-semibold text-primary-strong">③ 订单备注</legend>
                     <TextArea
                         label="备注"
                         placeholder="选填"
@@ -372,7 +372,7 @@ function EditOrderModal({
                         <button
                             type="button"
                             onClick={() => setConfirmArchive(true)}
-                            className="mr-auto min-h-10 rounded-btn px-2 text-13 font-medium text-muted transition hover:bg-soft hover:text-td-strong"
+                            className="mr-auto min-h-10 rounded-btn px-2 text-14 font-medium text-muted transition hover:bg-soft hover:text-td-strong"
                         >
                             归档订单
                         </button>
@@ -381,7 +381,7 @@ function EditOrderModal({
                         <button
                             type="button"
                             onClick={() => setConfirmDelete(true)}
-                            className={`${canArchive ? "" : "mr-auto"} min-h-10 rounded-btn px-2 text-13 font-medium text-danger transition hover:bg-danger-soft`}
+                            className={`${canArchive ? "" : "mr-auto"} min-h-10 rounded-btn px-2 text-14 font-medium text-danger transition hover:bg-danger-soft`}
                         >
                             删除订单
                         </button>
@@ -389,7 +389,7 @@ function EditOrderModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -397,7 +397,7 @@ function EditOrderModal({
                         type="button"
                         disabled={updateOrder.isPending || (locked && !remarkDirty)}
                         onClick={submit}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
+                        className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
                     >
                         {updateOrder.isPending ? "正在提交…" : "保存修改"}
                     </button>
@@ -427,12 +427,12 @@ function EditOrderModal({
                         <TextArea label="订单备注" value={remark} onChange={event => setRemark(event.target.value)} />
                     </div>
                     {locked && (
-                        <p className="text-12 text-subtle sm:col-span-2">
+                        <p className="text-13 text-subtle sm:col-span-2">
                             该订单累计已发 {order.outbound} 个，数量与交货日期不可修改，仅可修改备注。
                         </p>
                     )}
                     {canDelete && (
-                        <p className="text-12 text-subtle sm:col-span-2">
+                        <p className="text-13 text-subtle sm:col-span-2">
                             该订单一件未发，可由超级管理员删除；删除前需二次确认。
                         </p>
                     )}
@@ -451,7 +451,7 @@ function EditOrderModal({
                             <button
                                 type="button"
                                 onClick={() => setConfirmDelete(false)}
-                                className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
+                                className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
                             >
                                 取消
                             </button>
@@ -459,7 +459,7 @@ function EditOrderModal({
                                 type="button"
                                 disabled={deleteOrder.isPending}
                                 onClick={submitDelete}
-                                className="min-h-10 rounded-btn bg-danger px-4 text-13 font-medium text-white transition hover:opacity-90 disabled:opacity-60"
+                                className="min-h-10 rounded-btn bg-danger px-4 text-14 font-medium text-white transition hover:opacity-90 disabled:opacity-60"
                             >
                                 {deleteOrder.isPending ? "正在删除…" : "确认删除"}
                             </button>
@@ -468,7 +468,7 @@ function EditOrderModal({
                 >
                     <div className="flex items-start gap-3 rounded-panel border border-[#fecdca] bg-danger-soft/60 p-4">
                         <Icon name="alert" size={20} className="mt-0.5 shrink-0 text-danger" />
-                        <div className="text-13 leading-6 text-td">
+                        <div className="text-14 leading-6 text-td">
                             即将删除订单 <span className="tnum font-semibold text-ink">{order.orderNo}</span>（
                             {order.customer} · {num(order.qty)} 个）。该订单累计已发 0 个。
                             <p className="mt-1 font-medium text-danger">
@@ -491,7 +491,7 @@ function EditOrderModal({
                             <button
                                 type="button"
                                 onClick={() => setConfirmArchive(false)}
-                                className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
+                                className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
                             >
                                 取消
                             </button>
@@ -499,7 +499,7 @@ function EditOrderModal({
                                 type="button"
                                 disabled={archiveOrder.isPending}
                                 onClick={submitArchive}
-                                className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
+                                className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
                             >
                                 {archiveOrder.isPending ? "正在归档…" : "确认归档"}
                             </button>
@@ -509,7 +509,7 @@ function EditOrderModal({
                     <div className="flex flex-col gap-3">
                         <div className="flex items-start gap-3 rounded-panel border border-line bg-soft p-4">
                             <Icon name="archive" size={20} className="mt-0.5 shrink-0 text-muted" />
-                            <div className="text-13 leading-6 text-td">
+                            <div className="text-14 leading-6 text-td">
                                 即将归档订单 <span className="tnum font-semibold text-ink">{order.orderNo}</span>（
                                 {order.customer} · 订单 {num(order.qty)} 个 · 已发 {num(order.outbound)} 个）。
                                 {cancelled && <p>该订单已取消，归档后保留取消语境。</p>}
@@ -578,7 +578,7 @@ export function OrderDetailModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink"
+                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink"
                     >
                         关闭
                     </button>
@@ -635,15 +635,15 @@ export function OrderDetailModal({
                         发货记录（{shipments.length}）
                     </summary>
                     <div className="mt-1 flex flex-col gap-2">
-                        {shipments.length === 0 && <p className="text-12 text-subtle">暂无发货记录。</p>}
+                        {shipments.length === 0 && <p className="text-13 text-subtle">暂无发货记录。</p>}
                         {shipments.map(row => (
                             <div
                                 key={row.no}
-                                className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 rounded-input bg-soft p-3 text-13"
+                                className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 rounded-input bg-soft p-3 text-14"
                             >
                                 <span className="tnum text-ink wrap-anywhere">{row.no}</span>
                                 <QtyCell value={row.qty} unit="个" />
-                                <span className="text-12 leading-5 text-muted wrap-anywhere">
+                                <span className="text-13 leading-5 text-muted wrap-anywhere">
                                     {row.date} · {row.operator}
                                 </span>
                                 <Badge tone={row.state === "voided" ? "danger" : "progress"}>
@@ -832,7 +832,7 @@ export function OrdersPage() {
                                 setPage(1);
                             }}
                             placeholder="客户名 / 订单号 / BOM"
-                            className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
+                            className="w-full bg-transparent text-14 text-ink outline-none placeholder:text-subtle"
                         />
                     </label>
                     <select
@@ -842,7 +842,7 @@ export function OrdersPage() {
                             setPage(1);
                         }}
                         aria-label="按状态筛选"
-                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-13 text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
                     >
                         {STATUS_OPTIONS.map(option => (
                             <option key={option}>{option}</option>
@@ -855,7 +855,7 @@ export function OrdersPage() {
                             setPage(1);
                         }}
                         aria-label="按品类筛选"
-                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-13 text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
                     >
                         <option>全部品类</option>
                         {categories.map(item => (
@@ -865,7 +865,7 @@ export function OrdersPage() {
                     <MobileSortSelect columns={ORDER_SORT_COLUMNS} value={sort} onChange={setSort} />
                     <details className="relative">
                         <summary
-                            className={`flex h-10 list-none items-center gap-1.5 rounded-btn px-3 text-13 transition ${
+                            className={`flex h-10 list-none items-center gap-1.5 rounded-btn px-3 text-14 transition ${
                                 dateFilterActive
                                     ? "bg-primary-soft text-primary-strong"
                                     : "text-ink hover:text-primary-strong"
@@ -905,7 +905,7 @@ export function OrdersPage() {
                                                 setDateEnd(item.end);
                                                 setPage(1);
                                             }}
-                                            className={`min-h-8 rounded-full border px-3 text-12.5 font-medium transition ${
+                                            className={`min-h-8 rounded-full border px-3 text-13 font-medium transition ${
                                                 active
                                                     ? "border-primary-border bg-primary-soft text-primary-strong"
                                                     : "border-line-strong bg-surface text-muted hover:text-primary-strong"
@@ -924,7 +924,7 @@ export function OrdersPage() {
                                         setDateStart(event.target.value);
                                         setPage(1);
                                     }}
-                                    className="w-full rounded-input border border-line-strong px-2.5 py-2 text-13"
+                                    className="w-full rounded-input border border-line-strong px-2.5 py-2 text-14"
                                 />
                             </Field>
                             <Field label="结束">
@@ -935,7 +935,7 @@ export function OrdersPage() {
                                         setDateEnd(event.target.value);
                                         setPage(1);
                                     }}
-                                    className="w-full rounded-input border border-line-strong px-2.5 py-2 text-13"
+                                    className="w-full rounded-input border border-line-strong px-2.5 py-2 text-14"
                                 />
                             </Field>
                             <div className="flex gap-2">
@@ -957,7 +957,7 @@ export function OrdersPage() {
                         type="button"
                         onClick={clearFilters}
                         disabled={!filtersActive}
-                        className="min-h-10 px-1 text-13 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
+                        className="min-h-10 px-1 text-14 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
                     >
                         清空条件
                     </button>
@@ -1025,7 +1025,7 @@ export function OrdersPage() {
                             scrollRef={tableScrollRef}
                         >
                             <thead>
-                                <tr className="text-12 text-muted">
+                                <tr className="text-13 text-muted">
                                     <SortTh
                                         label="销售订单号"
                                         active={sort.key === "orderNo"}
@@ -1098,7 +1098,7 @@ export function OrdersPage() {
                                                 <button
                                                     type="button"
                                                     onClick={() => setDetail(order)}
-                                                    className="tnum text-13 font-semibold text-td-strong underline-offset-2 hover:text-primary-strong hover:underline"
+                                                    className="tnum text-14 font-semibold text-td-strong underline-offset-2 hover:text-primary-strong hover:underline"
                                                 >
                                                     {order.orderNo}
                                                 </button>
@@ -1123,7 +1123,7 @@ export function OrdersPage() {
                                                 />
                                             </td>
                                             <td className="delivery-cell px-3 py-4">
-                                                <div className="text-12.5 text-muted">
+                                                <div className="text-13 text-muted">
                                                     {cancelled ? (
                                                         "已停止交付"
                                                     ) : done ? (
@@ -1134,7 +1134,7 @@ export function OrdersPage() {
                                                         </>
                                                     )}
                                                 </div>
-                                                <div className="delivery-shipped tnum mt-0.5 text-11.5 text-muted">
+                                                <div className="delivery-shipped tnum mt-0.5 text-12 text-muted">
                                                     已发 {num(order.outbound)} / {num(order.qty)}
                                                 </div>
                                                 {!cancelled && (

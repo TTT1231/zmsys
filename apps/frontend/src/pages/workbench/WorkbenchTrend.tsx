@@ -9,7 +9,7 @@ import { addDays } from "@/lib/date";
 import { num } from "@/lib/format";
 
 export const workbenchSelectClass =
-    "min-h-10 rounded-input border border-line bg-surface px-3 text-12 text-td outline-none focus:border-primary focus:ring-2 focus:ring-primary/15";
+    "min-h-10 rounded-input border border-line bg-surface px-3 text-13 text-td outline-none focus:border-primary focus:ring-2 focus:ring-primary/15";
 
 export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
     const { preferences } = usePreferences();
@@ -113,7 +113,7 @@ export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
                     <h2 id="trend-title" className="text-16 font-semibold text-ink">
                         成品出入库趋势
                     </h2>
-                    <p className="mt-1 text-12 text-muted">跟踪入库与出库的变化节奏</p>
+                    <p className="mt-1 text-13 text-muted">跟踪入库与出库的变化节奏</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                     <select
@@ -165,33 +165,33 @@ export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
             )}
             <div className="mt-5 flex items-center gap-7 border-b border-line pb-4">
                 <div>
-                    <div className="flex items-center gap-2 text-12 text-muted">
+                    <div className="flex items-center gap-2 text-13 text-muted">
                         <span className="h-2 w-2 rounded-full bg-primary" />
                         期间入库
                     </div>
                     <p className="mt-1 text-22 font-semibold tabular-nums text-ink">
                         {num(inbound)}
-                        <span className="ml-1.5 text-12 font-normal text-muted">{data.unit}</span>
+                        <span className="ml-1.5 text-13 font-normal text-muted">{data.unit}</span>
                     </p>
                 </div>
                 <div>
-                    <div className="flex items-center gap-2 text-12 text-muted">
+                    <div className="flex items-center gap-2 text-13 text-muted">
                         <span className="h-2 w-2 rounded-full bg-teal-600" />
                         期间出库
                     </div>
                     <p className="mt-1 text-22 font-semibold tabular-nums text-ink">
                         {num(outbound)}
-                        <span className="ml-1.5 text-12 font-normal text-muted">{data.unit}</span>
+                        <span className="ml-1.5 text-13 font-normal text-muted">{data.unit}</span>
                     </p>
                 </div>
             </div>
             {!valid ? (
-                <p role="alert" className="py-20 text-center text-13 text-danger">
+                <p role="alert" className="py-20 text-center text-14 text-danger">
                     请选择有效的日期范围，最长支持近三年。
                 </p>
             ) : showTable ? (
                 <div className="mt-4 h-65 overflow-auto rounded-input border border-line">
-                    <table className="w-full text-right text-12">
+                    <table className="w-full text-right text-13">
                         <caption className="sr-only">成品出入库趋势数据</caption>
                         <thead className="sticky top-0 bg-soft">
                             <tr>
@@ -212,7 +212,7 @@ export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
                     </table>
                 </div>
             ) : inbound + outbound === 0 ? (
-                <p className="py-24 text-center text-13 text-muted">所选期间暂无成品出入库记录</p>
+                <p className="py-24 text-center text-14 text-muted">所选期间暂无成品出入库记录</p>
             ) : (
                 <div
                     role="img"
@@ -221,12 +221,12 @@ export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
                     <EChart option={option} height={276} />
                 </div>
             )}
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-11 text-muted">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-12 text-muted">
                 <span>
                     {start} — {end} · 按{monthly ? "月" : "日"}汇总
                 </span>
                 <button
-                    className="min-h-9 text-12 font-medium text-primary-strong hover:underline"
+                    className="min-h-9 text-13 font-medium text-primary-strong hover:underline"
                     onClick={() => setShowTable(value => !value)}
                 >
                     {showTable ? "查看趋势图" : "查看数据表"}

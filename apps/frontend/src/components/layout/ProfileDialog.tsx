@@ -84,19 +84,19 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
                 </span>
                 <div className="min-w-0">
                     <div className="truncate text-15 font-semibold text-ink">{user?.name ?? "未登录"}</div>
-                    <div className="text-12 text-muted">{ROLE_META[role].roleName}</div>
+                    <div className="text-13 text-muted">{ROLE_META[role].roleName}</div>
                 </div>
             </div>
             <dl className="mt-3 divide-y divide-dashed divide-line rounded-card border border-line bg-panel">
                 {roRows.map(([key, value]) => (
-                    <div key={key} className="flex items-center justify-between gap-4 px-4 py-2.5 text-13">
+                    <div key={key} className="flex items-center justify-between gap-4 px-4 py-2.5 text-14">
                         <dt className="text-muted">{key}</dt>
                         <dd className="font-medium text-ink">{value}</dd>
                     </div>
                 ))}
             </dl>
             <div className="mt-4 border-t border-dashed border-line pt-4">
-                <p className="text-12.5 font-semibold text-ink">修改密码</p>
+                <p className="text-13 font-semibold text-ink">修改密码</p>
                 <div className="mt-2 flex flex-col gap-2.5">
                     <TextField
                         label="旧密码"

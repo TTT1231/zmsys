@@ -132,7 +132,7 @@ export function ArchivedOrdersPage() {
                                 setPage(1);
                             }}
                             placeholder="客户名 / 订单号 / BOM / 归档人"
-                            className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
+                            className="w-full bg-transparent text-14 text-ink outline-none placeholder:text-subtle"
                         />
                     </label>
                     <select
@@ -142,7 +142,7 @@ export function ArchivedOrdersPage() {
                             setPage(1);
                         }}
                         aria-label="按归档前状态筛选"
-                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-13 text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
                     >
                         {STATUS_OPTIONS.map(option => (
                             <option key={option}>{option}</option>
@@ -151,7 +151,7 @@ export function ArchivedOrdersPage() {
                     <MobileSortSelect columns={SORT_COLUMNS} value={sort} onChange={setSort} />
                     <details className="relative">
                         <summary
-                            className={`flex h-10 list-none items-center gap-1.5 rounded-btn px-3 text-13 transition ${
+                            className={`flex h-10 list-none items-center gap-1.5 rounded-btn px-3 text-14 transition ${
                                 dateFilterActive
                                     ? "bg-primary-soft text-primary-strong"
                                     : "text-ink hover:text-primary-strong"
@@ -185,7 +185,7 @@ export function ArchivedOrdersPage() {
                                         setDateStart(event.target.value);
                                         setPage(1);
                                     }}
-                                    className="w-full rounded-input border border-line-strong px-2.5 py-2 text-13"
+                                    className="w-full rounded-input border border-line-strong px-2.5 py-2 text-14"
                                 />
                             </Field>
                             <Field label="结束">
@@ -196,7 +196,7 @@ export function ArchivedOrdersPage() {
                                         setDateEnd(event.target.value);
                                         setPage(1);
                                     }}
-                                    className="w-full rounded-input border border-line-strong px-2.5 py-2 text-13"
+                                    className="w-full rounded-input border border-line-strong px-2.5 py-2 text-14"
                                 />
                             </Field>
                             <div className="flex gap-2">
@@ -208,7 +208,7 @@ export function ArchivedOrdersPage() {
                                             setDateEnd("");
                                             setPage(1);
                                         }}
-                                        className="min-h-10 flex-1 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
+                                        className="min-h-10 flex-1 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
                                     >
                                         清除
                                     </button>
@@ -216,7 +216,7 @@ export function ArchivedOrdersPage() {
                                 <button
                                     type="button"
                                     onClick={event => event.currentTarget.closest("details")?.removeAttribute("open")}
-                                    className="min-h-10 flex-1 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover"
+                                    className="min-h-10 flex-1 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover"
                                 >
                                     完成筛选
                                 </button>
@@ -227,11 +227,11 @@ export function ArchivedOrdersPage() {
                         type="button"
                         onClick={clearFilters}
                         disabled={!filtersActive}
-                        className="min-h-10 px-1 text-13 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
+                        className="min-h-10 px-1 text-14 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
                     >
                         清空条件
                     </button>
-                    <span className="ml-auto text-12.5 text-muted">共 {num(filtered.length)} 条归档</span>
+                    <span className="ml-auto text-13 text-muted">共 {num(filtered.length)} 条归档</span>
                     <TableHeaderActions>
                         <ToolbarMore>
                             <Button variant="secondary" icon="refresh" onClick={refresh}>
@@ -302,7 +302,7 @@ export function ArchivedOrdersPage() {
                             scrollRef={tableScrollRef}
                         >
                             <thead>
-                                <tr className="text-12 text-muted">
+                                <tr className="text-13 text-muted">
                                     <SortTh
                                         label="销售订单号"
                                         active={sort.key === "orderNo"}
@@ -375,7 +375,7 @@ export function ArchivedOrdersPage() {
                                                 <button
                                                     type="button"
                                                     onClick={() => setDetail(order)}
-                                                    className="tnum text-13 font-semibold text-td-strong underline-offset-2 hover:text-primary-strong hover:underline"
+                                                    className="tnum text-14 font-semibold text-td-strong underline-offset-2 hover:text-primary-strong hover:underline"
                                                 >
                                                     {order.orderNo}
                                                 </button>
@@ -397,20 +397,20 @@ export function ArchivedOrdersPage() {
                                                 <DateCell date={order.deliverDate} />
                                             </td>
                                             <td className="px-3 py-4">
-                                                <div className="text-12.5 text-muted">
+                                                <div className="text-13 text-muted">
                                                     已发 {num(order.outbound)} / {num(order.qty)}
                                                 </div>
                                                 {order.outbound < order.qty && (
-                                                    <div className="mt-0.5 text-11.5 text-subtle">
+                                                    <div className="mt-0.5 text-12 text-subtle">
                                                         {order.cancelledAt ? "取消时关闭欠量" : "归档时关闭欠量"}
                                                     </div>
                                                 )}
                                             </td>
                                             <td className="px-3 py-4">
-                                                <div className="text-12.5 text-muted">
+                                                <div className="text-13 text-muted">
                                                     {order.archivedAt ? datetimeOf(order.archivedAt) : "—"}
                                                 </div>
-                                                <div className="mt-0.5 text-11.5 text-subtle">
+                                                <div className="mt-0.5 text-12 text-subtle">
                                                     {order.archivedBy || "—"}
                                                 </div>
                                             </td>

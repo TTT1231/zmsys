@@ -132,7 +132,7 @@ function CustomerFormModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
+                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
                     >
                         取消
                     </button>
@@ -140,7 +140,7 @@ function CustomerFormModal({
                         type="button"
                         disabled={pending}
                         onClick={submit}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
+                        className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
                     >
                         {pending ? "正在提交…" : "保存档案"}
                     </button>
@@ -249,7 +249,7 @@ export function CustomerDetailModal({
                             <button
                                 type="button"
                                 onClick={() => onEdit(customer)}
-                                className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-13 font-medium text-ink hover:border-primary-border"
+                                className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
                             >
                                 编辑档案
                             </button>
@@ -257,7 +257,7 @@ export function CustomerDetailModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="min-h-10 rounded-btn bg-primary px-4 text-13 font-medium text-white hover:bg-primary-hover"
+                            className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover"
                         >
                             关闭
                         </button>
@@ -273,7 +273,7 @@ export function CustomerDetailModal({
                         </span>
                         <div className="min-w-0 flex-1">
                             <div className="text-14 font-semibold text-ink">{customer.name}</div>
-                            <div className="tnum text-12 text-muted">
+                            <div className="tnum text-13 text-muted">
                                 {customer.code} · 建档 {customer.created}
                             </div>
                         </div>
@@ -283,20 +283,20 @@ export function CustomerDetailModal({
                     </div>
                     <div className="grid grid-cols-2 gap-2.5">
                         <div className="rounded-xl border border-line px-3 py-2.5 text-center">
-                            <div className="text-11.5 text-muted">累计订单</div>
+                            <div className="text-12 text-muted">累计订单</div>
                             <div className="tnum text-20 font-bold text-ink">
-                                {orders.length} <i className="text-12 font-normal text-subtle not-italic">单</i>
+                                {orders.length} <i className="text-13 font-normal text-subtle not-italic">单</i>
                             </div>
                         </div>
                         <div className="rounded-xl border border-line px-3 py-2.5 text-center">
-                            <div className="text-11.5 text-muted">已完成订单</div>
+                            <div className="text-12 text-muted">已完成订单</div>
                             <div className="tnum text-20 font-bold text-success">
                                 {orders.filter(order => order.outbound >= order.qty).length}
-                                <i className="ml-1 text-12 font-normal not-italic">单</i>
+                                <i className="ml-1 text-13 font-normal not-italic">单</i>
                             </div>
                         </div>
                     </div>
-                    <div className="flex flex-col gap-2 text-13">
+                    <div className="flex flex-col gap-2 text-14">
                         {[
                             ["客户联系人", customer.contact],
                             ["客户联系电话", customer.phone],
@@ -316,9 +316,9 @@ export function CustomerDetailModal({
                         ))}
                     </div>
                     <div>
-                        <div className="mb-2 text-12.5 font-semibold text-ink">最近订单</div>
+                        <div className="mb-2 text-13 font-semibold text-ink">最近订单</div>
                         <ol className="flex flex-col gap-2.5 border-l border-line pl-4">
-                            {timeline.length === 0 && <li className="text-12.5 text-subtle">暂无订单记录。</li>}
+                            {timeline.length === 0 && <li className="text-13 text-subtle">暂无订单记录。</li>}
                             {timeline.map(order => {
                                 const cancelled = order.lifecycleStatus === "cancelled";
                                 const archived = order.lifecycleStatus === "archived";
@@ -338,18 +338,18 @@ export function CustomerDetailModal({
                                         >
                                             <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                                                 <span
-                                                    className={`tnum text-12.5 font-semibold underline-offset-2 group-hover:underline ${
+                                                    className={`tnum text-13 font-semibold underline-offset-2 group-hover:underline ${
                                                         inactive ? "text-td-strong" : "text-primary-strong"
                                                     }`}
                                                 >
                                                     {order.orderNo}
                                                 </span>
-                                                <span className="text-12.5 text-muted">
+                                                <span className="text-13 text-muted">
                                                     · {order.qty.toLocaleString("zh-CN")} 个
                                                 </span>
                                                 <StatusBadge status={status.key} />
                                             </span>
-                                            <span className="tnum text-11.5 text-muted">{order.orderDate}</span>
+                                            <span className="tnum text-12 text-muted">{order.orderDate}</span>
                                         </button>
                                     </li>
                                 );
@@ -365,7 +365,7 @@ export function CustomerDetailModal({
                                         search: `?q=${encodeURIComponent(customer.name)}`,
                                     });
                                 }}
-                                className="mt-3 inline-flex min-h-9 items-center gap-1 text-12.5 font-medium text-primary-strong transition hover:underline"
+                                className="mt-3 inline-flex min-h-9 items-center gap-1 text-13 font-medium text-primary-strong transition hover:underline"
                             >
                                 查看全部 {orders.length} 笔订单
                                 <Icon name="chevron-right" size={14} />
@@ -483,7 +483,7 @@ export function CustomersPage() {
                                 setPage(1);
                             }}
                             placeholder="公司名 / BOM"
-                            className="w-full bg-transparent text-13 text-ink outline-none placeholder:text-subtle"
+                            className="w-full bg-transparent text-14 text-ink outline-none placeholder:text-subtle"
                         />
                     </label>
                     <select
@@ -493,7 +493,7 @@ export function CustomersPage() {
                             setPage(1);
                         }}
                         aria-label="按合作状态筛选"
-                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-13 text-ink"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
                     >
                         {["全部状态", "合作中", "待跟进"].map(option => (
                             <option key={option}>{option}</option>
@@ -504,7 +504,7 @@ export function CustomersPage() {
                         type="button"
                         onClick={clearFilters}
                         disabled={!filtersActive}
-                        className="min-h-10 px-1 text-13 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
+                        className="min-h-10 px-1 text-14 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
                     >
                         清空条件
                     </button>
@@ -595,7 +595,7 @@ export function CustomersPage() {
                             scrollRef={tableScrollRef}
                         >
                             <thead>
-                                <tr className="text-left text-12 text-muted">
+                                <tr className="text-left text-13 text-muted">
                                     <th className="px-5 py-2.5 font-semibold">客户信息</th>
                                     <th className="px-3 py-2.5 font-semibold">客户联系人</th>
                                     <th className="px-3 py-2.5 font-semibold">电话</th>
@@ -641,7 +641,7 @@ export function CustomersPage() {
                                         <td className="px-5 py-3">
                                             <div className="flex items-center gap-2.5">
                                                 <span
-                                                    className={`customer-avatar flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-13 font-semibold ${AVATAR_TONES[index % AVATAR_TONES.length]}`}
+                                                    className={`customer-avatar flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-14 font-semibold ${AVATAR_TONES[index % AVATAR_TONES.length]}`}
                                                 >
                                                     {row.customer.name.slice(0, 1)}
                                                 </span>
@@ -652,12 +652,12 @@ export function CustomersPage() {
                                                 />
                                             </div>
                                         </td>
-                                        <td className="px-3 py-3 text-13 text-td">{row.customer.contact}</td>
+                                        <td className="px-3 py-3 text-14 text-td">{row.customer.contact}</td>
                                         <td className="px-3 py-3">
-                                            <span className="tnum text-13 text-td">{row.customer.phone}</span>
+                                            <span className="tnum text-14 text-td">{row.customer.phone}</span>
                                         </td>
                                         <td className="px-3 py-3">
-                                            <span className="flex items-center gap-1.5 text-13 text-td">
+                                            <span className="flex items-center gap-1.5 text-14 text-td">
                                                 {regionText(row.customer) ? (
                                                     <>
                                                         <Icon name="location" size={14} className="text-subtle" />
@@ -668,15 +668,15 @@ export function CustomersPage() {
                                                 )}
                                             </span>
                                         </td>
-                                        <td className="px-3 py-3 tnum text-13 text-td">{row.orderCount}</td>
-                                        <td className="px-3 py-3 tnum text-13">
+                                        <td className="px-3 py-3 tnum text-14 text-td">{row.orderCount}</td>
+                                        <td className="px-3 py-3 tnum text-14">
                                             <span
                                                 className={row.pendingQty > 0 ? "font-medium text-ink" : "text-subtle"}
                                             >
                                                 {num(row.pendingQty)}
                                             </span>
                                         </td>
-                                        <td className="px-3 py-3 tnum text-13 text-td">{row.lastOrderDate}</td>
+                                        <td className="px-3 py-3 tnum text-14 text-td">{row.lastOrderDate}</td>
                                         <td className="px-3 py-3">
                                             <Badge tone={row.customer.cooperation === "合作中" ? "done" : "pending"}>
                                                 {row.customer.cooperation}

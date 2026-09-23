@@ -26,7 +26,7 @@ export function PageLoading({ label = "加载中…", className = "", routeLevel
         <div
             role="status"
             aria-label={label}
-            className={`flex min-h-40 flex-col items-center justify-center gap-3 py-16 text-13 text-muted ${className}`}
+            className={`flex min-h-40 flex-col items-center justify-center gap-3 py-16 text-14 text-muted ${className}`}
         >
             {/* 全局/页面级加载用大尺寸(对齐 vben 48px 量级),与表格内小 loader 分级 */}
             <Loader size={44} />

@@ -30,7 +30,7 @@ export function SortTh({
             aria-label={label}
             data-pinned={pinned}
             aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
-            className={`py-2.5 text-12 font-semibold ${align === "right" ? "text-right" : "text-left"} ${className}`}
+            className={`py-2.5 text-13 font-semibold ${align === "right" ? "text-right" : "text-left"} ${className}`}
             style={width ? { width } : undefined}
         >
             <button
