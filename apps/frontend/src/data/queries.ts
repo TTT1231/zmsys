@@ -13,7 +13,9 @@ import {
     createStockAdjustment,
     createUser,
     deleteBom,
+    deleteInbound,
     deleteOrder as deleteOrderReq,
+    deleteOutbound,
     fetchBomCategories,
     fetchBoms,
     fetchBomStocks,
@@ -239,12 +241,24 @@ export const useVoidInbound = () =>
     useWbMutation((input: { no: string; expectedVersion: number; reason: string }) =>
         voidInbound(input.no, { expectedVersion: input.expectedVersion, reason: input.reason }),
     );
+/** 删除已作废入库（软删除，仅已作废记录可删） */
+export const useDeleteInbound = () =>
+    useWbMutation((input: { no: string; expectedVersion: number }) => {
+        const { no, ...body } = input;
+        return deleteInbound(no, body);
+    });
 export const useCreateStockAdjustment = () => useWbMutation(createStockAdjustment);
 export const useCreateOutbound = () => useWbMutation(createOutbound);
 export const useVoidOutbound = () =>
     useWbMutation((input: { no: string; expectedVersion: number; reason: string }) =>
         voidOutbound(input.no, { expectedVersion: input.expectedVersion, reason: input.reason }),
     );
+/** 删除已作废出库单（软删除，仅已作废单可删） */
+export const useDeleteOutbound = () =>
+    useWbMutation((input: { no: string; expectedVersion: number }) => {
+        const { no, ...body } = input;
+        return deleteOutbound(no, body);
+    });
 /** 打印为纯读输出：裸 useMutation 仅驱动 pending 态，成功后不失效任何查询缓存 */
 export const usePrintOutbound = () =>
     useMutation({ mutationFn: (input: { no: string }) => printOutboundDocument(input.no) });

@@ -109,7 +109,8 @@ enum MaterialGroupKind {
   GROUP
 }
 
-/// op_log.action：业务里程碑动作，一个 (action, target_id) 只记一次（uk 兜底）
+/// op_log.action：业务里程碑动作（审计清单：订单创建/删除、客户创建/更新、BOM 创建/删除、
+/// 出入库创建/作废/删除、发货、归档）；普通索引（update_customer 同目标可多条，防重由幂等层承担）
 enum OpLogAction {
   ship
   create_customer
@@ -117,6 +118,13 @@ enum OpLogAction {
   delete_bom
   delete_order
   archive_order
+  create_inbound
+  void_inbound
+  delete_inbound
+  void_outbound
+  delete_outbound
+  create_bom
+  update_customer
 }
 
 /// 固定角色目录；grant_version 是整组授权的乐观锁版本
@@ -523,6 +531,7 @@ model InboundLedger {
   updatedBy     BigInt         @map("updated_by")
   createdAt     DateTime       @map("created_at") @db.DateTime(3)
   updatedAt     DateTime       @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt     DateTime?      @map("deleted_at") @db.DateTime(3)
   bom               BomTable            @relation(fields: [bomId], references: [id])
   operator          SysUser             @relation("InboundOperator", fields: [operatorId], references: [id])
   updater           SysUser             @relation("InboundUpdater", fields: [updatedBy], references: [id])
@@ -530,6 +539,7 @@ model InboundLedger {
   relatedAdjustments StockAdjustment[]
 
   @@index([bomId, status, businessDate, id], map: "idx_inbound_bom_status_date")
+  @@index([deletedAt], map: "idx_inbound_deleted")
   @@map("inbound_ledger")
 }
 
@@ -589,6 +599,7 @@ model OutboundShipment {
   voidedBy           BigInt?              @map("voided_by")
   voidReason         String?              @map("void_reason") @db.VarChar(500)
   voidedAt           DateTime?            @map("voided_at") @db.DateTime(3)
+  deletedAt          DateTime?            @map("deleted_at") @db.DateTime(3)
   rowVersion         BigInt               @default(1) @map("row_version") @db.UnsignedBigInt
   requestKey         String               @unique(map: "uk_outbound_shipment_request") @map("request_key") @db.VarChar(128)
   registeredBy       BigInt               @map("registered_by")
@@ -602,6 +613,7 @@ model OutboundShipment {
 
   @@index([orderId, state, businessDate, id], map: "idx_outbound_shipment_order_state_date")
   @@index([state, registeredAt], map: "idx_outbound_shipment_state_time")
+  @@index([deletedAt], map: "idx_outbound_deleted")
   @@map("outbound_shipment")
 }
 
@@ -664,7 +676,7 @@ model OpLog {
   createdAt            DateTime    @map("created_at") @db.DateTime(3)
   operator             SysUser     @relation("OpLogOperator", fields: [operatorId], references: [id])
 
-  @@unique([action, targetId], map: "uk_op_log_action_target")
+  @@index([action, targetId], map: "idx_op_log_action_target")
   @@index([createdAt(sort: Desc)], map: "idx_op_log_time")
   @@index([operatorId, createdAt(sort: Desc)], map: "idx_op_log_operator_time")
   @@map("op_log")

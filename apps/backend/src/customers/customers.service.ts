@@ -216,6 +216,41 @@ export class CustomersService {
                 });
             }
 
+            // 审计清单：编辑动作留变更字段前后值（同目标可多条）；手机号受保护，
+            // 只记"是否变更"不落明文（db-scheme.md §4 手机号按归属受限）
+            await recordOpLog(tx, this.snowflake, actor, {
+                action: "update_customer",
+                targetType: "customer",
+                targetId: current.id,
+                targetCode: code,
+                detail: {
+                    before: {
+                        name: current.name,
+                        contactPerson: current.contactPerson,
+                        province: current.province,
+                        city: current.city,
+                        district: current.district,
+                        town: current.town,
+                        address: current.address,
+                        payTerms: current.payTerms,
+                    },
+                    after: {
+                        name: updated.name,
+                        contactPerson: updated.contactPerson,
+                        province: updated.province,
+                        city: updated.city,
+                        district: updated.district,
+                        town: updated.town,
+                        address: updated.address,
+                        payTerms: updated.payTerms,
+                    },
+                    phoneChanged: (dto.phone ? dto.phone : current.contactPhone) !== current.contactPhone,
+                    ownerChanged:
+                        ownerId !== current.ownerId ? { from: current.owner.name, to: updated.owner.name } : null,
+                },
+                now,
+            });
+
             const cooperating = await tx.salesOrderTable.findFirst({
                 where: {
                     customerId: current.id,

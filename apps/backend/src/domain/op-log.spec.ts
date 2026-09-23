@@ -43,19 +43,19 @@ describe("recordOpLog（同事务里程碑审计）", () => {
         });
     });
 
-    it("uk(action, target_id) 冲突（该目标已记录过）静默跳过", async () => {
+    it("同目标同动作可多条写入（update_customer 场景，防重由幂等层承担）", async () => {
         const { tx, create } = createTx();
-        create.mockRejectedValue(prismaKnownError("P2002"));
-        await expect(
-            recordOpLog(tx, snowflake, operator, {
-                action: "ship",
-                targetType: "outbound_shipment",
-                targetId: 600n,
-                targetCode: "CK26091201",
-                detail: {},
-                now,
-            }),
-        ).resolves.toBeUndefined();
+        const params = {
+            action: "update_customer" as const,
+            targetType: "customer",
+            targetId: 600n,
+            targetCode: "KH001",
+            detail: { after: { name: "新名称" } },
+            now,
+        };
+        await recordOpLog(tx, snowflake, operator, params);
+        await recordOpLog(tx, snowflake, operator, { ...params, detail: { after: { name: "再次更名" } } });
+        expect(create).toHaveBeenCalledTimes(2);
     });
 
     it("其他数据库错误原样抛出", async () => {

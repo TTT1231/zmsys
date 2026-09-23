@@ -22,7 +22,14 @@ import { SortTh } from "@/components/ui/SortTh";
 import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { nextSortState, type SortState } from "@/lib/tableSort";
 import { DateField, TextArea, TextField } from "@/components/ui/Field";
-import { useCreateOutbound, usePrintOutbound, useVoidOutbound, useWbRefresh, useWbSnapshot } from "@/data/queries";
+import {
+    useCreateOutbound,
+    useDeleteOutbound,
+    usePrintOutbound,
+    useVoidOutbound,
+    useWbRefresh,
+    useWbSnapshot,
+} from "@/data/queries";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { PageLoading } from "@/components/ui/PageLoading";
@@ -442,6 +449,60 @@ export function OutboundModal({
     );
 }
 
+/** 删除已作废出库单的二次确认：软删除（7 天后悔期后系统物理清理），动作记入系统日志 */
+function DeleteOutboundModal({
+    row,
+    pending,
+    onClose,
+    onConfirm,
+}: {
+    row: OutboundRow;
+    pending: boolean;
+    onClose: () => void;
+    onConfirm: () => void;
+}) {
+    return (
+        <Modal
+            open
+            onClose={onClose}
+            label="危险操作"
+            title="删除出库单"
+            subtitle={`${row.no} · 已作废`}
+            width={440}
+            footer={
+                <>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
+                    >
+                        取消
+                    </button>
+                    <button
+                        type="button"
+                        disabled={pending}
+                        onClick={onConfirm}
+                        className="min-h-10 rounded-btn bg-danger px-4 text-14 font-medium text-white transition hover:opacity-90 disabled:opacity-60"
+                    >
+                        {pending ? "正在删除…" : "确认删除"}
+                    </button>
+                </>
+            }
+        >
+            <div className="flex items-start gap-3 rounded-panel border border-[#fecdca] bg-danger-soft/60 p-4">
+                <Icon name="alert" size={20} className="mt-0.5 shrink-0 text-danger" />
+                <div className="text-14 leading-6 text-td">
+                    即将删除已作废的出库单 <span className="tnum font-semibold text-ink">{row.no}</span>（{row.orderNo}{" "}
+                    · {num(row.qty)} 个）。
+                    <p className="mt-1 font-medium text-danger">
+                        删除后该出库单将从台账列表移除，7 天后系统自动彻底清除；操作将记入系统日志。
+                    </p>
+                </div>
+            </div>
+        </Modal>
+    );
+}
+
 export function OutboundDetailModal({
     row,
     snap,
@@ -505,6 +566,7 @@ export function OutboundPage() {
     const { refresh } = useWbRefresh();
     const printRequest = usePrintOutbound();
     const voidRequest = useVoidOutbound();
+    const deleteRequest = useDeleteOutbound();
     const toast = useToast();
     // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
     const overlay = useDelayedFlag(isFetching && !isLoading);
@@ -526,6 +588,7 @@ export function OutboundPage() {
         [snap.orders],
     );
     const [voidTarget, setVoidTarget] = useState<OutboundRow | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<OutboundRow | null>(null);
 
     const rows = snap.outboundLedger;
     const currentDetail = detail ? (rows.find(row => row.no === detail.no) ?? null) : null;
@@ -560,6 +623,7 @@ export function OutboundPage() {
     const canRegister = can("outbound:ship");
     const canPrint = can("outbound:print");
     const canVoid = can("outbound:void");
+    const canDeleteVoided = can("outbound:delete");
     const applySort = (key: LedgerSortKey) => setSort(current => nextSortState(current, key));
     // 排序或翻页后行序变化，滚动区回到顶部，避免误以为排错行
     const tableScrollRef = useRef<HTMLDivElement>(null);
@@ -908,6 +972,16 @@ export function OutboundPage() {
                                     {printRequest.isPending ? "处理中…" : "打印"}
                                 </Button>
                             )}
+                            {/* 已作废单的清理入口：软删除（7 天后悔期），仅持有删除权限者可见 */}
+                            {canDeleteVoided && currentDetail.state === "voided" && (
+                                <Button
+                                    variant="secondary"
+                                    disabled={deleteRequest.isPending}
+                                    onClick={() => setDeleteTarget(currentDetail)}
+                                >
+                                    删除
+                                </Button>
+                            )}
                         </>
                     )
                 }
@@ -925,6 +999,26 @@ export function OutboundPage() {
                                 onSuccess: updated => {
                                     setVoidTarget(null);
                                     toast(`出库单 ${updated.no} 已作废，数量已退回库存和订单`);
+                                },
+                            },
+                        )
+                    }
+                />
+            )}
+            {deleteTarget && (
+                <DeleteOutboundModal
+                    row={deleteTarget}
+                    pending={deleteRequest.isPending}
+                    onClose={() => setDeleteTarget(null)}
+                    onConfirm={() =>
+                        deleteRequest.mutate(
+                            { no: deleteTarget.no, expectedVersion: deleteTarget.version },
+                            {
+                                onError: error => toast(error.message, true),
+                                onSuccess: () => {
+                                    setDeleteTarget(null);
+                                    setDetail(null);
+                                    toast(`出库单 ${deleteTarget.no} 已删除`);
                                 },
                             },
                         )

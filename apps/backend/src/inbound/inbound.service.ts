@@ -9,6 +9,7 @@ import { formatDateColumn, formatBeijingStamp, toDateColumn } from "../common/da
 import { beijingDayWindow } from "../common/beijing-day";
 import { lockRowsById } from "../domain/concurrency";
 import { getStockQty } from "../domain/inventory";
+import { recordOpLog } from "../domain/op-log";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
 import type { AuthUser } from "../common/types/auth-user";
 import type { InboundLedger, StockAdjustment } from "../generated/prisma/client";
@@ -16,11 +17,13 @@ import type { InboundRow, StockAdjustmentRow } from "./types";
 import type { CreateInboundDto } from "./dto/create-inbound.dto";
 import type { UpdateInboundDto } from "./dto/update-inbound.dto";
 import type { CreateStockAdjustmentDto } from "./dto/create-stock-adjustment.dto";
+import type { DeleteInboundDto } from "./dto/delete-inbound.dto";
 
 /** api_idempotency 的 operation_key，与前端 mock 同粒度 */
 const CREATE_OPERATION_KEY = "inbound:create";
 const ADJUST_OPERATION_KEY = "stock-adjustments:create";
 const voidOperationKeyOf = (no: string): string => `inbound:void:${no}`;
+const deleteOperationKeyOf = (no: string): string => `inbound:delete:${no}`;
 
 /** 入库行 + 响应映射必需的关联 */
 type InboundLedgerRow = InboundLedger & {
@@ -46,9 +49,10 @@ export class InboundService {
         private readonly sequence: BusinessSequenceService,
     ) {}
 
-    /** 入库台账（契约 inbound:view）：含 active/voided 便于审计，新记录在前 */
+    /** 入库台账（契约 inbound:view）：含 active/voided 便于审计，已删除行不返回，新记录在前 */
     async listInbound(): Promise<InboundRow[]> {
         const rows = await this.prisma.inboundLedger.findMany({
+            where: { deletedAt: null },
             orderBy: [{ createdAt: "desc" }, { id: "desc" }],
             include: {
                 bom: { select: { bomCode: true } },
@@ -112,6 +116,14 @@ export class InboundService {
             });
 
             const row = this.toInboundRow(created);
+            await recordOpLog(tx, this.snowflake, actor, {
+                action: "create_inbound",
+                targetType: "inbound",
+                targetId: created.id,
+                targetCode: entryNo,
+                detail: this.entrySnapshot(created),
+                now,
+            });
             await this.idempotency.complete(tx, {
                 id: placeholderId,
                 httpStatus: 200,
@@ -132,7 +144,7 @@ export class InboundService {
         return this.txRunner.run(async (tx: Tx) => {
             const now = new Date();
             const current = await this.lockEntryForWrite(tx, entryNo, dto.bomCode);
-            this.assertEditableToday(current, "修正");
+            this.assertEditableToday(current, "修正", actor);
             if (current.rowVersion !== BigInt(dto.expectedVersion)) {
                 throw new ConflictException("入库记录已被其他人修改，请刷新后重试");
             }
@@ -217,7 +229,7 @@ export class InboundService {
 
             const now = new Date();
             const current = await this.lockEntryForWrite(tx, entryNo);
-            this.assertEditableToday(current, "作废");
+            this.assertEditableToday(current, "作废", actor);
             if (current.rowVersion !== BigInt(dto.expectedVersion)) {
                 throw new ConflictException("入库记录已被其他人修改，请刷新后重试");
             }
@@ -255,6 +267,14 @@ export class InboundService {
                     createdAt: now,
                 },
             });
+            await recordOpLog(tx, this.snowflake, actor, {
+                action: "void_inbound",
+                targetType: "inbound",
+                targetId: current.id,
+                targetCode: entryNo,
+                detail: { before: this.entrySnapshot(current), after: this.entrySnapshot(updated), reason: dto.reason },
+                now,
+            });
 
             const row = this.toInboundRow(updated);
             await this.idempotency.complete(tx, {
@@ -265,6 +285,91 @@ export class InboundService {
             });
             return row;
         });
+    }
+
+    /**
+     * 删除已作废的入库（契约 inbound:delete，幂等）：软删除——行打 deleted_at 标记，
+     * 列表不再返回；7 天后悔期后由 maintenance 定时物理清理（连带变更日志同删）。
+     * 仅 VOIDED 可删（作废时库存已扣回，直接删 ACTIVE 单会破坏库存）；被库存调整单
+     * 引用的单 409（保证物理清理 FK 安全）；不写变更日志、不递增 rowVersion——删除
+     * 是可见性管理非业务变更，版本链止于 VOID；op_log 记 delete_inbound 与删除前
+     * 快照（含作废原因，物理清理后审计仍可独立还原）。
+     */
+    async deleteInbound(
+        entryNo: string,
+        dto: DeleteInboundDto,
+        actor: AuthUser,
+        idempotencyKey: string | undefined,
+    ): Promise<null> {
+        const operationKey = deleteOperationKeyOf(entryNo);
+        const key = this.idempotency.requireKey(idempotencyKey);
+        const requestHash = this.idempotency.digest({ method: "POST", pathParams: { entryNo }, body: dto });
+
+        return this.txRunner.run(async (tx: Tx) => {
+            const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
+                actorId: BigInt(actor.id),
+                operationKey,
+                key,
+                requestHash,
+            });
+            // 删除的契约响应恒为 data:null，重放无需读快照，直接归一返回
+            if (replay) {
+                return null;
+            }
+            if (placeholderId === null) {
+                throw new Error("幂等占位缺失");
+            }
+
+            const now = new Date();
+            const current = await this.lockEntryForWrite(tx, entryNo);
+            if (current.rowVersion !== BigInt(dto.expectedVersion)) {
+                throw new ConflictException("入库记录已被其他人修改，请刷新后重试");
+            }
+            if (current.status !== "VOIDED") {
+                throw new ConflictException("仅已作废的入库记录可删除，请先作废");
+            }
+            if (current.deletedAt !== null) {
+                throw new ConflictException("该入库记录已删除");
+            }
+            const adjustmentRefs = await tx.stockAdjustment.count({ where: { relatedInboundId: current.id } });
+            if (adjustmentRefs > 0) {
+                throw new ConflictException("存在关联的库存调整单，不可删除");
+            }
+
+            await tx.inboundLedger.update({
+                where: { id: current.id },
+                data: { deletedAt: now },
+            });
+            await recordOpLog(tx, this.snowflake, actor, {
+                action: "delete_inbound",
+                targetType: "inbound",
+                targetId: current.id,
+                targetCode: entryNo,
+                detail: {
+                    ...this.entrySnapshot(current),
+                    voidReason: await this.lastVoidReasonOf(tx, current.id),
+                    deletedBy: actor.name,
+                },
+                now,
+            });
+            await this.idempotency.complete(tx, {
+                id: placeholderId,
+                httpStatus: 200,
+                responseBody: { deleted: true, entryNo },
+                resource: { type: "inbound", code: entryNo },
+            });
+            return null;
+        });
+    }
+
+    /** 该单最后一条 VOID 变更日志的原因（删除快照冻结作废原因，清理后仍可审计） */
+    private async lastVoidReasonOf(tx: Tx, inboundId: bigint): Promise<string | null> {
+        const log = await tx.inboundChangeLog.findFirst({
+            where: { inboundId, eventType: "VOID" },
+            orderBy: { createdAt: "desc" },
+            select: { reason: true },
+        });
+        return log?.reason ?? null;
     }
 
     /** 不可变库存调整列表（契约 inbound:view） */
@@ -310,12 +415,13 @@ export class InboundService {
             const bom = await this.lockBomByCode(tx, dto.bomCode);
             let relatedInboundId: bigint | null = null;
             if (dto.relatedInboundNo) {
-                const related = await tx.inboundLedger.findUnique({
-                    where: { entryNo: dto.relatedInboundNo },
+                // 已软删除的入库单不可再被新调整单关联——否则清理任务会因引用永久跳过该行
+                const related = await tx.inboundLedger.findFirst({
+                    where: { entryNo: dto.relatedInboundNo, deletedAt: null },
                     select: { id: true, bomId: true },
                 });
                 if (!related) {
-                    throw new NotFoundException("关联入库单不存在");
+                    throw new NotFoundException("关联入库单不存在或已删除");
                 }
                 if (related.bomId !== bom.id) {
                     throw new ConflictException("库存调整与关联入库单的 BOM 必须一致");
@@ -410,19 +516,32 @@ export class InboundService {
         return row;
     }
 
-    /** 当天窗口与状态校验：created_at 落在北京自然日内才可修正/作废（db-scheme.md §7.1） */
-    private assertEditableToday(row: InboundLedgerRow, action: string): void {
-        const { start, nextStart } = beijingDayWindow();
-        if (row.createdAt < start || row.createdAt >= nextStart) {
-            throw new ConflictException(`只能${action}北京时间当天录入的入库记录`);
-        }
+    /**
+     * 当天窗口与状态校验：created_at 落在北京自然日内才可修正/作废（db-scheme.md §7.1）。
+     * 例外：持 inbound:void-any-day（或超管）可作废任意天数的记录——跨天修正仍走库存调整，
+     * 不放开；库存非负校验对跨天作废同样生效（数据一致性不得绕过）。
+     */
+    private assertEditableToday(row: InboundLedgerRow, action: string, actor: AuthUser): void {
         if (row.status === "VOIDED") {
             throw new ConflictException("已作废入库记录不可再次修改");
         }
+        const { start, nextStart } = beijingDayWindow();
+        if (row.createdAt >= start && row.createdAt < nextStart) {
+            return;
+        }
+        const mayCrossDay = action === "作废" && (actor.isSuper || actor.permissions.has("inbound:void-any-day"));
+        if (mayCrossDay) {
+            return;
+        }
+        throw new ConflictException(
+            action === "作废"
+                ? "只能作废北京时间当天录入的入库记录，跨日作废需超级管理员"
+                : `只能${action}北京时间当天录入的入库记录`,
+        );
     }
 
     /** 变更日志快照：行内业务字段（before/after 同构，便于审计比对） */
-    private entrySnapshot(row: InboundLedgerRow): Prisma.InputJsonValue {
+    private entrySnapshot(row: InboundLedgerRow) {
         return {
             no: row.entryNo,
             bomCode: row.bom.bomCode,

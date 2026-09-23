@@ -1,6 +1,7 @@
 import type {
     CreateInboundInput,
     CreateStockAdjustmentInput,
+    DeleteInboundInput,
     InboundRow,
     StockAdjustmentRow,
     UpdateInboundInput,
@@ -23,6 +24,11 @@ export function updateInbound(no: string, input: UpdateInboundInput): Promise<In
 
 export function voidInbound(no: string, input: VoidInboundInput): Promise<InboundRow> {
     return requestClient.post<InboundRow>(`/inbound/${no}/void`, input, idempotencyConfig());
+}
+
+/** 删除已作废入库（软删除）：响应恒为 data:null，列表刷新由 useWbMutation 失效驱动 */
+export function deleteInbound(no: string, input: DeleteInboundInput): Promise<null> {
+    return requestClient.post<null>(`/inbound/${no}/delete`, input, idempotencyConfig());
 }
 
 export function fetchStockAdjustments(): Promise<StockAdjustmentRow[]> {

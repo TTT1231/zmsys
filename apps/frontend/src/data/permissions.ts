@@ -107,13 +107,16 @@ export const ACTION_CATALOG = {
         { id: "view", label: "查看台账" },
         { id: "register", label: "检验入库" },
         { id: "edit", label: "当天修正/作废" },
+        { id: "delete", label: "删除入库记录" },
         { id: "adjust", label: "跨日库存调整", protected: true },
+        { id: "void-any-day", label: "跨天作废入库", protected: true },
     ],
     outbound: [
         { id: "view", label: "查看台账" },
         { id: "ship", label: "登记发货" },
         { id: "void", label: "作废" },
         { id: "print", label: "打印" },
+        { id: "delete", label: "删除出库记录" },
     ],
     permissions: [
         { id: "view", label: "查看", protected: true },
@@ -185,8 +188,9 @@ export function buildDefaultGrants(): GrantMap {
             actions: {
                 orders: ["view"],
                 bom: ["view"],
-                inbound: ["view", "register", "edit"],
-                outbound: ["view", "ship", "void"],
+                // 删除已作废记录：默认授予仓管（非受保护，超管可按需授予其他角色）
+                inbound: ["view", "register", "edit", "delete"],
+                outbound: ["view", "ship", "void", "delete"],
             },
         },
         sales: {
@@ -243,6 +247,7 @@ const ACTION_SHORT: Record<string, string> = {
     adjust: "调整",
     ship: "发货",
     void: "作废",
+    "void-any-day": "跨天作废",
     print: "打印",
     manage: "管理",
 };

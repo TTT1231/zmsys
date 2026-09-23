@@ -59,20 +59,22 @@ describe("can / menuVisible", () => {
 describe("buildDefaultGrants", () => {
     it("matches the role matrix documented in AGENTS.md", () => {
         const grants = buildDefaultGrants();
-        // 超级管理员：全部菜单（含 permissions 子项）与全部动作
+        // 超级管理员：全部菜单（含 permissions 子项）与全部动作（含跨天作废/删除）
         expect(grants.super.menus).toContain("permissions");
         expect(grants.super.menus).toContain("permissions-accounts");
-        expect(grants.super.actions.outbound).toEqual(["view", "ship", "void", "print"]);
+        expect(grants.super.actions.inbound).toEqual(["view", "register", "edit", "delete", "adjust", "void-any-day"]);
+        expect(grants.super.actions.outbound).toEqual(["view", "ship", "void", "print", "delete"]);
         expect(grants.super.actions.permissions).toEqual(["view", "manage"]);
         // 管理员：出入库只读 + 打印，无用户权限
         expect(grants.admin.menus).not.toContain("permissions");
         expect(grants.admin.actions.inbound).toEqual(["view"]);
         expect(grants.admin.actions.outbound).toEqual(["view", "print"]);
         expect(grants.admin.actions.orders).toEqual(["view", "create", "edit", "cancel"]);
-        // 仓管：可写台账不可打印，无客户档案
+        // 仓管：可写台账（含删除已作废）不可打印，无客户档案；跨天作废仅超管
         expect(grants.warehouse.menus).not.toContain("customers");
-        expect(grants.warehouse.actions.inbound).toEqual(["view", "register", "edit"]);
-        expect(grants.warehouse.actions.outbound).toEqual(["view", "ship", "void"]);
+        expect(grants.warehouse.actions.inbound).toEqual(["view", "register", "edit", "delete"]);
+        expect(grants.warehouse.actions.outbound).toEqual(["view", "ship", "void", "delete"]);
+        expect(can(grants.warehouse, "inbound:void-any-day")).toBe(false);
         // 销售：业务三模块全量，出入库只读且不可打印
         expect(grants.sales.menus).not.toContain("permissions");
         expect(grants.sales.actions.customers).toEqual(["view", "create", "edit"]);
@@ -98,7 +100,8 @@ describe("menuTagFor", () => {
         expect(menuTagFor("orders", grantOf("staff"))).toBe("只读");
         expect(menuTagFor("outbound", grantOf("super"))).toBe("全部权限");
         expect(menuTagFor("outbound", grantOf("admin"))).toBe("查看+打印");
-        expect(menuTagFor("outbound", grantOf("warehouse"))).toBe("查看+发货 / 作废");
+        // 仓管出库含发货/作废/删除，超 7 字截断展示
+        expect(menuTagFor("outbound", grantOf("warehouse"))).toBe("查看+发货 / 作…");
         expect(menuTagFor("unknown-menu", grantOf("super"))).toBe("");
     });
 

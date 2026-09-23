@@ -327,6 +327,15 @@ export class BomsService {
                 created: beijingDayKey(now),
                 unit: "个",
             };
+            // 审计清单：建档动作留档案快照（与 delete_bom 的详存风格一致）
+            await recordOpLog(tx, this.snowflake, actor, {
+                action: "create_bom",
+                targetType: "bom",
+                targetId: bomId,
+                targetCode: bomCode,
+                detail: bom as unknown as Prisma.InputJsonValue,
+                now,
+            });
             await this.idempotency.complete(tx, {
                 id: placeholderId,
                 httpStatus: 200,

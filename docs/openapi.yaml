@@ -483,8 +483,8 @@ paths:
         post:
             tags: [inbound]
             operationId: voidInbound
-            summary: 作废当天录入的入库
-            description: 权限 `inbound:edit`，默认 warehouse/super。不是物理删除；作废后不计库存并写 before/after 审计日志。
+            summary: 作废入库（当天窗口；持跨天权限可作废任意天数）
+            description: 权限 `inbound:edit`，默认 warehouse/super。created_at 落在北京当天的记录可作废；受保护权限 `inbound:void-any-day`（仅 super）可跨天作废。不是物理删除；作废后不计库存并写 before/after 审计日志与 op_log(void_inbound)；库存非负校验对跨天作废同样生效。
             parameters:
                 - $ref: "#/components/parameters/InboundNo"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -499,6 +499,27 @@ paths:
                     content:
                         application/json:
                             schema: { $ref: "#/components/schemas/InboundEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
+
+    /inbound/{no}/delete:
+        post:
+            tags: [inbound]
+            operationId: deleteInbound
+            summary: 删除已作废的入库记录（软删除）
+            description: 权限 `inbound:delete`，默认 warehouse/super（非受保护，super 可按需授予其他角色）。仅 VOIDED 状态可删（ACTIVE 必须先作废，作废时库存已扣回）；被库存调整单引用的单返回 409（保证物理清理外键安全）。软删除：行打 `deleted_at` 标记、列表不再返回，不递增 row_version、不写变更日志（版本链止于 VOID）；`op_log` 记 delete_inbound 与删除前快照（含作废原因）。7 天保留期后由 maintenance 定时物理清理（连带变更日志同删，op_log 快照为唯一残留）。
+            parameters:
+                - $ref: "#/components/parameters/InboundNo"
+                - $ref: "#/components/parameters/IdempotencyKey"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/DeleteInboundInput" }
+            responses:
+                "200": { $ref: "#/components/responses/SuccessWithoutData" }
                 "400": { $ref: "#/components/responses/BadRequest" }
                 "403": { $ref: "#/components/responses/Forbidden" }
                 "404": { $ref: "#/components/responses/NotFound" }
@@ -594,6 +615,27 @@ paths:
                     content:
                         application/json:
                             schema: { $ref: "#/components/schemas/OutboundEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
+
+    /outbound/{no}/delete:
+        post:
+            tags: [outbound]
+            operationId: deleteOutbound
+            summary: 删除已作废的出库单（软删除）
+            description: 权限 `outbound:delete`，默认 warehouse/super（非受保护，super 可按需授予其他角色）。仅 VOIDED 状态可删（作废时已追加冲销、订单已发量已恢复）。软删除：单头打 `deleted_at` 标记、列表不再返回，不递增 row_version、不写状态日志；`op_log` 记 delete_outbound 与删除前快照（含作废原因）。7 天保留期后由 maintenance 定时物理清理（连带状态日志与 NORMAL+CORRECTION 数量流水同删，零和不改变统计）。
+            parameters:
+                - $ref: "#/components/parameters/OutboundNo"
+                - $ref: "#/components/parameters/IdempotencyKey"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/DeleteOutboundInput" }
+            responses:
+                "200": { $ref: "#/components/responses/SuccessWithoutData" }
                 "400": { $ref: "#/components/responses/BadRequest" }
                 "403": { $ref: "#/components/responses/Forbidden" }
                 "404": { $ref: "#/components/responses/NotFound" }
@@ -1071,6 +1113,20 @@ components:
                 reason: { type: string, maxLength: 500, description: 归档备注（选填） }
 
         DeleteOrderInput:
+            type: object
+            additionalProperties: false
+            required: [expectedVersion]
+            properties:
+                expectedVersion: { type: integer, minimum: 1 }
+
+        DeleteInboundInput:
+            type: object
+            additionalProperties: false
+            required: [expectedVersion]
+            properties:
+                expectedVersion: { type: integer, minimum: 1 }
+
+        DeleteOutboundInput:
             type: object
             additionalProperties: false
             required: [expectedVersion]

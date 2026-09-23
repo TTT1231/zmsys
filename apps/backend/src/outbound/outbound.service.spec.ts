@@ -81,6 +81,7 @@ const mkShipment = (overrides: Partial<ShipmentRow> = {}): ShipmentRow =>
         voidedBy: null,
         voidReason: null,
         voidedAt: null,
+        deletedAt: null,
         rowVersion: 1n,
         requestKey: "req-ship",
         registeredBy: 1n,
@@ -158,7 +159,7 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>) => {
                         where.shipmentNo ? s.shipmentNo === where.shipmentNo : s.id === where.id,
                     ) ?? null,
             ),
-            findMany: vi.fn(async () => store.shipments),
+            findMany: vi.fn(async () => store.shipments.filter(s => s.deletedAt === null)),
             create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
                 const created = mkShipment({
                     id: data.id as bigint,
@@ -342,6 +343,44 @@ describe("OutboundService.voidOutbound", () => {
             correctionReason: "数量有误",
         });
         expect(store.stateLogs.at(-1)).toMatchObject({ eventType: "VOID" });
+        // 审计清单：作废动作进 op_log（含快照与原因）
+        expect(store.opLogs).toHaveLength(1);
+        expect(store.opLogs[0]).toMatchObject({ action: "void_outbound", targetCode: "CK26091301" });
+    });
+});
+
+describe("OutboundService.deleteOutbound", () => {
+    it("非作废 409；已删除 409；成功打标不动版本，op_log 快照含作废原因，列表不再返回", async () => {
+        const store = emptyStore();
+        store.shipments.push(mkShipment()); // REGISTERED：必须先作废
+        const { service } = mkService(store);
+        await expect(service.deleteOutbound("CK26091301", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException("仅已作废的出库单可删除，请先作废"),
+        );
+
+        store.shipments[0] = mkShipment({ state: "VOIDED", deletedAt: new Date() });
+        await expect(service.deleteOutbound("CK26091301", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException("该出库单已删除"),
+        );
+
+        store.shipments[0] = mkShipment({
+            state: "VOIDED",
+            voidReason: "数量有误",
+            voidedBy: 1n,
+            voidedAt: new Date(),
+            rowVersion: 2n,
+        });
+        await expect(service.deleteOutbound("CK26091301", { expectedVersion: 2 }, actor, ID_KEY)).resolves.toBeNull();
+
+        // 删除是可见性管理非业务变更：版本链止于 VOID，不递增 row_version、不写状态日志
+        expect(store.shipments[0]!.deletedAt).toBeInstanceOf(Date);
+        expect(store.shipments[0]!.rowVersion).toBe(2n);
+        expect(store.stateLogs).toHaveLength(0);
+        expect(store.opLogs).toHaveLength(1);
+        expect(store.opLogs[0]).toMatchObject({ action: "delete_outbound", targetCode: "CK26091301" });
+        expect((store.opLogs[0] as { detailJson: { voidReason: string } }).detailJson.voidReason).toBe("数量有误");
+        // 列表过滤已删除单
+        expect(await service.listOutbound()).toHaveLength(0);
     });
 });
 

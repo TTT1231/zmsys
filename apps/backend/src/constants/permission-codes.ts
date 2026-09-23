@@ -42,13 +42,16 @@ export const PERMISSIONS = {
     INBOUND_VIEW: "inbound:view",
     INBOUND_REGISTER: "inbound:register",
     INBOUND_EDIT: "inbound:edit",
+    INBOUND_DELETE: "inbound:delete", // 默认授仓管，超管可按需授予其他角色
     INBOUND_ADJUST: "inbound:adjust", // 受保护
+    INBOUND_VOID_ANY_DAY: "inbound:void-any-day", // 受保护：跨天作废
 
     // ---- 出库 ----
     OUTBOUND_VIEW: "outbound:view",
     OUTBOUND_SHIP: "outbound:ship",
     OUTBOUND_VOID: "outbound:void",
     OUTBOUND_PRINT: "outbound:print",
+    OUTBOUND_DELETE: "outbound:delete", // 默认授仓管，超管可按需授予其他角色
 
     // ---- 用户与权限（受保护，仅 super）----
     PERMISSIONS_VIEW: "permissions:view",

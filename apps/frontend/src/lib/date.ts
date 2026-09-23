@@ -5,6 +5,16 @@ export const toIso = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth(
 
 export const todayIso = () => toIso(new Date());
 
+/** 北京时区（UTC+8）日历日期：时刻 +8h 后取 UTC 字段即北京墙上时钟。
+ *  与后端 beijing-day 口径一致——"当天可作废"等服务端窗口规则的前端判定
+ *  必须用北京日期（todayIso 是浏览器本地时区，非北京时区浏览器会错位） */
+export const beijingDateOf = (date: Date) => {
+    const shifted = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+    return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}`;
+};
+
+export const beijingTodayIso = () => beijingDateOf(new Date());
+
 export const addDays = (isoDate: string, n: number) => {
     const date = new Date(`${isoDate}T00:00:00`);
     date.setDate(date.getDate() + n);

@@ -19,12 +19,19 @@ import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { nextSortState, type SortState } from "@/lib/tableSort";
 import { TextArea, TextField } from "@/components/ui/Field";
 import { SelectMenuField } from "@/components/ui/SelectMenuField";
-import { useCreateInbound, useUpdateInbound, useVoidInbound, useWbRefresh, useWbSnapshot } from "@/data/queries";
+import {
+    useCreateInbound,
+    useDeleteInbound,
+    useUpdateInbound,
+    useVoidInbound,
+    useWbRefresh,
+    useWbSnapshot,
+} from "@/data/queries";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { EMPTY_SNAPSHOT, bomByCode } from "@/data/views";
-import { todayIso } from "@/lib/date";
+import { beijingDateOf, beijingTodayIso, todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/toastContexts";
 
 import { BomCell } from "@/components/bom/BomCell";
@@ -264,7 +271,7 @@ export function VoucherModal({
         <Modal
             open={!!row}
             onClose={onClose}
-            label="入库凭证"
+            label="入库详情"
             title={row.no}
             width={560}
             layout="detail"
@@ -432,11 +439,14 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
 function VoidInboundModal({
     row,
     pending,
+    crossDay,
     onClose,
     onConfirm,
 }: {
     row: InboundRow;
     pending: boolean;
+    /** 跨天作废（持 inbound:void-any-day 超管对非当天记录的操作）：加二次确认警示 */
+    crossDay: boolean;
     onClose: () => void;
     onConfirm: (reason: string) => void;
 }) {
@@ -462,7 +472,7 @@ function VoidInboundModal({
             open
             onClose={close}
             title="作废入库记录"
-            subtitle={`${row.no} · 今天登记的入库`}
+            subtitle={`${row.no} · ${crossDay ? "非当天录入的入库" : "今天登记的入库"}`}
             label="作废入库记录"
             width={440}
             footer={
@@ -471,12 +481,20 @@ function VoidInboundModal({
                         取消
                     </Button>
                     <Button type="submit" form={formId} disabled={pending}>
-                        {pending ? "正在作废…" : "确认作废"}
+                        {pending ? "正在作废…" : crossDay ? "确认跨天作废" : "确认作废"}
                     </Button>
                 </>
             }
         >
             <form id={formId} onSubmit={submit} aria-busy={pending}>
+                {crossDay && (
+                    <div className="mb-3 flex items-start gap-3 rounded-panel border border-[#fecdca] bg-danger-soft/60 p-4">
+                        <Icon name="alert" size={20} className="mt-0.5 shrink-0 text-danger" />
+                        <div className="text-14 leading-6 text-td">
+                            <p className="font-medium text-danger">该记录非当天录入，跨天作废将影响历史库存统计。</p>
+                        </div>
+                    </div>
+                )}
                 <TextArea
                     label="作废原因"
                     required
@@ -493,6 +511,60 @@ function VoidInboundModal({
     );
 }
 
+/** 删除已作废入库的二次确认：软删除（7 天后悔期后系统物理清理），动作记入系统日志 */
+function DeleteInboundModal({
+    row,
+    pending,
+    onClose,
+    onConfirm,
+}: {
+    row: InboundRow;
+    pending: boolean;
+    onClose: () => void;
+    onConfirm: () => void;
+}) {
+    return (
+        <Modal
+            open
+            onClose={onClose}
+            label="危险操作"
+            title="删除入库记录"
+            subtitle={`${row.no} · 已作废`}
+            width={440}
+            footer={
+                <>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
+                    >
+                        取消
+                    </button>
+                    <button
+                        type="button"
+                        disabled={pending}
+                        onClick={onConfirm}
+                        className="min-h-10 rounded-btn bg-danger px-4 text-14 font-medium text-white transition hover:opacity-90 disabled:opacity-60"
+                    >
+                        {pending ? "正在删除…" : "确认删除"}
+                    </button>
+                </>
+            }
+        >
+            <div className="flex items-start gap-3 rounded-panel border border-[#fecdca] bg-danger-soft/60 p-4">
+                <Icon name="alert" size={20} className="mt-0.5 shrink-0 text-danger" />
+                <div className="text-14 leading-6 text-td">
+                    即将删除已作废的入库记录 <span className="tnum font-semibold text-ink">{row.no}</span>（
+                    {row.bomCode} · {num(row.qty)} 个）。
+                    <p className="mt-1 font-medium text-danger">
+                        删除后该记录将从台账列表移除，7 天后系统自动彻底清除；操作将记入系统日志。
+                    </p>
+                </div>
+            </div>
+        </Modal>
+    );
+}
+
 export function InboundPage() {
     const { can } = useApp();
     const { data, isLoading, isFetching } = useWbSnapshot();
@@ -501,6 +573,7 @@ export function InboundPage() {
     const overlay = useDelayedFlag(isFetching && !isLoading);
     const snap = data ?? EMPTY_SNAPSHOT;
     const voidRequest = useVoidInbound();
+    const deleteRequest = useDeleteInbound();
     const toast = useToast();
     const [searchParams, setSearchParams] = useSearchParams();
     const [keyword, setKeyword] = useState("");
@@ -514,6 +587,7 @@ export function InboundPage() {
     const [voucher, setVoucher] = useState<InboundRow | null>(null);
     const currentVoucher = voucher ? (snap.inboundLedger.find(row => row.no === voucher.no) ?? null) : null;
     const [voidTarget, setVoidTarget] = useState<InboundRow | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<InboundRow | null>(null);
     const [editTarget, setEditTarget] = useState<InboundRow | null>(null);
 
     const rows = snap.inboundLedger;
@@ -546,14 +620,21 @@ export function InboundPage() {
     const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize);
     const canRegister = can("inbound:register");
     const canVoidToday = can("inbound:edit");
+    const canDeleteVoided = can("inbound:delete");
+    const canVoidAnyDay = can("inbound:void-any-day");
     const applySort = (key: LedgerSortKey) => setSort(current => nextSortState(current, key));
     // 排序或翻页后行序变化，滚动区回到顶部，避免误以为排错行
     const tableScrollRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
         if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
     }, [page, sort]);
-    // 当天（北京时间）录入且未作废的记录才允许当天作废；跨日只能走库存调整
-    const voidable = (row: InboundRow) => canVoidToday && row.status === "active" && row.date === todayIso();
+    // "当天"按 created_at 的北京日期判定（与后端 beijing-day 窗口同口径，todayIso 是
+    // 浏览器本地时区，非北京时区会错位）；补录历史业务日期的记录当天仍可纠错
+    const isToday = (row: InboundRow) => beijingDateOf(new Date(row.createdAt)) === beijingTodayIso();
+    // 修正：仅当天录入且未作废（跨天修正一律走库存调整，超管也不例外）
+    const editableToday = (row: InboundRow) => canVoidToday && row.status === "active" && isToday(row);
+    // 作废：当天记录人人（有 inbound:edit）可作废；非当天记录需持跨天作废权限（超管）
+    const voidableNow = (row: InboundRow) => canVoidToday && row.status === "active" && (isToday(row) || canVoidAnyDay);
 
     useEffect(() => {
         if (searchParams.get("new") === "inbound") setSearchParams({}, { replace: true });
@@ -669,7 +750,7 @@ export function InboundPage() {
                                     }
                                     actions={
                                         <Button variant="secondary" onClick={() => setVoucher(row)}>
-                                            查看凭证
+                                            查看详情
                                         </Button>
                                     }
                                 >
@@ -790,7 +871,7 @@ export function InboundPage() {
                                                     onClick={() => setVoucher(row)}
                                                     className="text-14 font-medium text-primary-strong underline-offset-2 hover:underline"
                                                 >
-                                                    查看凭证
+                                                    查看详情
                                                 </button>
                                             </td>
                                         </tr>
@@ -822,24 +903,38 @@ export function InboundPage() {
                 snap={snap}
                 onClose={() => setVoucher(null)}
                 actions={
-                    currentVoucher &&
-                    voidable(currentVoucher) && (
+                    currentVoucher && (
                         <>
-                            <button
-                                type="button"
-                                disabled={voidRequest.isPending}
-                                onClick={() => setVoidTarget(currentVoucher)}
-                                className="min-h-10 rounded-btn border border-danger/30 bg-danger-soft px-4 text-14 font-medium text-danger disabled:opacity-50"
-                            >
-                                作废
-                            </button>
-                            <Button
-                                variant="secondary"
-                                disabled={voidRequest.isPending}
-                                onClick={() => setEditTarget(currentVoucher)}
-                            >
-                                修正
-                            </Button>
+                            {voidableNow(currentVoucher) && (
+                                <button
+                                    type="button"
+                                    disabled={voidRequest.isPending}
+                                    onClick={() => setVoidTarget(currentVoucher)}
+                                    className="min-h-10 rounded-btn border border-danger/30 bg-danger-soft px-4 text-14 font-medium text-danger disabled:opacity-50"
+                                >
+                                    作废
+                                </button>
+                            )}
+                            {editableToday(currentVoucher) && (
+                                <Button
+                                    variant="secondary"
+                                    disabled={voidRequest.isPending}
+                                    onClick={() => setEditTarget(currentVoucher)}
+                                >
+                                    修正
+                                </Button>
+                            )}
+                            {/* 已作废记录的清理入口：软删除（7 天后悔期），仅持有删除权限者可见 */}
+                            {canDeleteVoided && currentVoucher.status === "voided" && (
+                                <button
+                                    type="button"
+                                    disabled={deleteRequest.isPending}
+                                    onClick={() => setDeleteTarget(currentVoucher)}
+                                    className="min-h-10 rounded-btn border border-danger/30 bg-danger-soft px-4 text-14 font-medium text-danger disabled:opacity-50"
+                                >
+                                    删除
+                                </button>
+                            )}
                         </>
                     )
                 }
@@ -849,6 +944,7 @@ export function InboundPage() {
                 <VoidInboundModal
                     row={voidTarget}
                     pending={voidRequest.isPending}
+                    crossDay={!isToday(voidTarget)}
                     onClose={() => setVoidTarget(null)}
                     onConfirm={reason =>
                         voidRequest.mutate(
@@ -858,6 +954,26 @@ export function InboundPage() {
                                 onSuccess: updated => {
                                     setVoidTarget(null);
                                     toast(`入库记录 ${updated.no} 已作废，库存已扣回`);
+                                },
+                            },
+                        )
+                    }
+                />
+            )}
+            {deleteTarget && (
+                <DeleteInboundModal
+                    row={deleteTarget}
+                    pending={deleteRequest.isPending}
+                    onClose={() => setDeleteTarget(null)}
+                    onConfirm={() =>
+                        deleteRequest.mutate(
+                            { no: deleteTarget.no, expectedVersion: deleteTarget.version },
+                            {
+                                onError: error => toast(error.message, true),
+                                onSuccess: () => {
+                                    setDeleteTarget(null);
+                                    setVoucher(null);
+                                    toast(`入库记录 ${deleteTarget.no} 已删除`);
                                 },
                             },
                         )

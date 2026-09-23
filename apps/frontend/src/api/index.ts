@@ -9,10 +9,11 @@ export {
     createInbound,
     updateInbound,
     voidInbound,
+    deleteInbound,
     fetchStockAdjustments,
     createStockAdjustment,
 } from "./inbound";
-export { fetchOutboundLedger, createOutbound, voidOutbound, printOutboundDocument } from "./outbound";
+export { fetchOutboundLedger, createOutbound, voidOutbound, deleteOutbound, printOutboundDocument } from "./outbound";
 export {
     fetchUsers,
     fetchCustomerOwnerOptions,
