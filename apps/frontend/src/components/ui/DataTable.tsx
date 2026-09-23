@@ -107,6 +107,10 @@ function TableView({
     // 翻到尾页只剩几行时卡片高度塌陷、分页条猛地上跳；记住本会话见过的满页表高，
     // 短页用最小高度兜底，翻页时高度保持稳定。
     const [minBodyHeight, setMinBodyHeight] = useState(0);
+    // 列最小宽锚定表头内容的完整宽度（managed-th 为 nowrap，scrollWidth 即文字+排序图标完整宽，
+    // 与当前列宽无关）：表头回答"这列是什么"，任何压缩下都必须完整可读；列内容在窄列下
+    // 截断（title 悬停/详情弹窗兜底）。jsdom 测不出宽度（scrollWidth=0）时不写入，走 90 兜底。
+    const [headerMins, setHeaderMins] = useState<Record<string, number>>({});
     const [preferences, setPreferences] = useState(() => readPreferences(storageKey));
     const [settings, setSettings] = useState(false);
     const [activeColumn, setActiveColumn] = useState<string | null>(null);
@@ -134,23 +138,13 @@ function TableView({
         const width = defaultWidths[index] ?? 160;
         const wide = /BOM|成品|物料构成|客户信息/.test(label) && width >= 220;
         const recommended = compact && wide ? Math.min(width, 220) : width;
-        const minimum = wide
-            ? Math.min(recommended, 280)
-            : index === identityColumn
-              ? 150
-              : /日期|数量/.test(label)
-                ? 120
-                : /备注/.test(label)
-                  ? // 备注列两行内容（客户格备注行/警示备注），压缩下限高于普通列，避免窄屏压扁不可读
-                    140
-                  : 100;
         return {
             header,
             index,
             label,
             key: label,
             width: recommended,
-            min: Math.min(recommended, minimum),
+            min: Math.min(recommended, headerMins[label] ?? 90),
             max: 800,
             grow: wide,
             fixed: index === headers.length - 1,
@@ -193,6 +187,40 @@ function TableView({
             window.removeEventListener("resize", measure);
         };
     }, []);
+    // 表头最小宽测量：密度切换 / 列显隐 / 视口缩放（含字体缩放）后重测。
+    // th.scrollWidth 是 max(列宽, 内容宽)，列宽大于文字时量不出内容固有宽——
+    // 用 Range 量内容节点（跳过列宽拖拽手柄）的真实包围盒，加左右 padding。
+    useLayoutEffect(() => {
+        const next: Record<string, number> = {};
+        bodyRef.current?.querySelectorAll<HTMLElement>("thead th[aria-label]").forEach(th => {
+            const label = th.getAttribute("aria-label");
+            if (!label) return;
+            const range = document.createRange();
+            let left = Number.POSITIVE_INFINITY;
+            let right = Number.NEGATIVE_INFINITY;
+            for (const node of Array.from(th.childNodes)) {
+                if (node instanceof Element && node.classList.contains("column-resizer")) continue;
+                range.selectNodeContents(node);
+                const rect = range.getBoundingClientRect();
+                if (rect.width > 0) {
+                    left = Math.min(left, rect.left);
+                    right = Math.max(right, rect.right);
+                }
+            }
+            if (!(right > left)) return;
+            const style = getComputedStyle(th);
+            next[label] =
+                Math.ceil(right - left + Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight)) +
+                2;
+        });
+        setHeaderMins(current => {
+            const entries = Object.entries(next);
+            const same =
+                entries.length === Object.keys(current).length &&
+                entries.every(([key, value]) => current[key] === value);
+            return same ? current : next;
+        });
+    }, [viewport, headers.length, compact]);
     // 最大化时高度由视口撑起而非内容，不参与记忆，避免退出后短页残留整屏高度。
     useLayoutEffect(() => {
         const element = bodyRef.current;
