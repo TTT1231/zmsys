@@ -979,10 +979,11 @@ button:active:not(:disabled) {
 .managed-table tr.row-voided:hover td {
     background: color-mix(in srgb, var(--color-danger) 5%, var(--color-surface));
 }
-/* 左竖条打在 sticky 单号列上：横向滚动时唯一始终可见的作废锚点；
-   单号列保持 td-strong 可读性，供删除线识别，其余单元格正文弱化 */
+/* 作废行的固定列不再画内嵌竖条：固定多列时每根左缘各出一根（出库页固定两列
+   即左右两根粗条），视觉上加粗成对反而压过内容；作废底色打在 td 层，特异性
+   本就压过固定列白底，横向滚动时粉色固定列即作废锚点。保留 td-strong 深字
+   便于在弱化行里读单据号 */
 .managed-table tr.row-voided td[data-pinned="start"] {
-    box-shadow: inset 3px 0 0 var(--color-danger);
     color: var(--color-td-strong);
 }
 /* 作废行内的警示备注随行降级：灰字去字重、内容保留——警示语义仅对未作废单据生效，

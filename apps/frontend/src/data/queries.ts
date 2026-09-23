@@ -41,6 +41,7 @@ import {
 
 export const wbKeys = {
     all: ["wb"] as const,
+    bomUsage: ["wb", "bom-usage"] as const,
     grants: ["roles", "grants"] as const,
     grantLog: ["roles", "grants", "log"] as const,
 };
@@ -83,15 +84,30 @@ export function useBomStockLedger(code: string | null) {
     });
 }
 
-/** 刷新 BOM 域三个查询；页面本地筛选/分页不受影响 */
+/** 刷新 BOM 域查询与使用关系；不在 BOM 页时，引用查询只失效缓存。 */
 export function useBomRefresh() {
     const queryClient = useQueryClient();
-    return { refresh: () => void queryClient.invalidateQueries({ queryKey: bomKeys.all }) };
+    return {
+        refresh: () => {
+            void queryClient.invalidateQueries({ queryKey: bomKeys.all });
+            void queryClient.invalidateQueries({ queryKey: wbKeys.bomUsage });
+        },
+    };
 }
 
-/** 订单列表独立查询：BOM 页据此判断档案是否被订单引用（引用关系低频变化，挂载即取） */
-export function useOrders() {
-    return useQuery({ queryKey: ["orders", "list"], queryFn: fetchOrders });
+/** BOM 使用关系只取订单与成品台账，避免 BOM 页为一个筛选请求完整工作台快照。 */
+export function useBomUsage() {
+    return useQuery({
+        queryKey: wbKeys.bomUsage,
+        queryFn: async () => {
+            const [orders, inboundLedger, outboundLedger] = await Promise.all([
+                fetchOrders(),
+                fetchInboundLedger(),
+                fetchOutboundLedger(),
+            ]);
+            return { orders, inboundLedger, outboundLedger };
+        },
+    });
 }
 
 /* 过渡实现：并发拉取当前完整计算窗口；库存按有效入库 + 库存调整 − 有效出库推导。

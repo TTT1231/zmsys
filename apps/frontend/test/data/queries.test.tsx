@@ -1,17 +1,29 @@
 // @vitest-environment jsdom
-/* BOM 独立查询的缓存与失效：staleTime 内不重复请求，createBom 只失效列表，台账写操作失效库存余量。 */
+/* BOM 独立查询的缓存与失效：staleTime 内不重复请求，createBom 只失效列表，
+   台账写操作失效库存余量，BOM 页刷新会重取使用关系。 */
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { detailBom, detailInbound } from "../fixtures/recordDetails";
-import { useBomStocks, useBoms, useCreateBom, useCreateInbound, useWbRefresh } from "@/data/queries";
+import {
+    useBomRefresh,
+    useBomStocks,
+    useBomUsage,
+    useBoms,
+    useCreateBom,
+    useCreateInbound,
+    useWbRefresh,
+} from "@/data/queries";
 
 const api = vi.hoisted(() => ({
     fetchBoms: vi.fn(),
     fetchBomCategories: vi.fn(),
     fetchBomStocks: vi.fn(),
+    fetchOrders: vi.fn(),
+    fetchInboundLedger: vi.fn(),
+    fetchOutboundLedger: vi.fn(),
     createBom: vi.fn(),
     createInbound: vi.fn(),
 }));
@@ -29,6 +41,9 @@ beforeEach(() => {
     vi.clearAllMocks();
     api.fetchBoms.mockResolvedValue([detailBom]);
     api.fetchBomStocks.mockResolvedValue({ [detailBom.code]: 200 });
+    api.fetchOrders.mockResolvedValue([]);
+    api.fetchInboundLedger.mockResolvedValue([]);
+    api.fetchOutboundLedger.mockResolvedValue([]);
 });
 
 it("BOM 列表在长 staleTime 内二次挂载命中缓存，不重复请求", async () => {
@@ -80,6 +95,25 @@ it("台账写操作（登记入库）成功后库存余量失效，重新挂载�
     await waitFor(() => {
         expect(api.fetchBomStocks).toHaveBeenCalledTimes(2);
         expect(refreshed.result.current.data).toEqual({ [detailBom.code]: 200 });
+    });
+});
+
+it("BOM 页刷新同时重取订单及成品出入库引用", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    const usage = mount(() => useBomUsage(), client);
+    await waitFor(() =>
+        expect(usage.result.current.data).toEqual({ orders: [], inboundLedger: [], outboundLedger: [] }),
+    );
+    expect(api.fetchOrders).toHaveBeenCalledTimes(1);
+    expect(api.fetchInboundLedger).toHaveBeenCalledTimes(1);
+    expect(api.fetchOutboundLedger).toHaveBeenCalledTimes(1);
+
+    const refresh = mount(() => useBomRefresh(), client);
+    act(() => refresh.result.current.refresh());
+    await waitFor(() => {
+        expect(api.fetchOrders).toHaveBeenCalledTimes(2);
+        expect(api.fetchInboundLedger).toHaveBeenCalledTimes(2);
+        expect(api.fetchOutboundLedger).toHaveBeenCalledTimes(2);
     });
 });
 

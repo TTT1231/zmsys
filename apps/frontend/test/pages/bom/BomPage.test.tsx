@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 /* BOM 页接入独立查询：表格渲染物料行，移动卡片库存列在余量未加载时降级为占位符；
    删除入口仅对持 bom:delete、订单引用与库存已成功加载、未被引用且无余量的档案显示；
-   点击后需二次确认，确认才发起删除请求、取消不发起。 */
+   点击后需二次确认，确认才发起删除请求、取消不发起。
+   使用状态筛选「未使用」= 无销售订单与成品出入库引用，行沿用作废单弱化样式。 */
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
@@ -16,15 +17,30 @@ vi.mock("@/components/ui/toastContexts", () => ({ useToast: () => vi.fn() }));
 const copyText = vi.hoisted(() => vi.fn().mockResolvedValue(true));
 vi.mock("@/lib/clipboard", () => ({ copyText }));
 
-/* 用例间替换库存余量/订单引用返回值：工厂被提升到模块顶部，须经 ref 惰性读取 */
+/* 用例间替换库存余量/使用关系返回值：工厂被提升到模块顶部，须经 ref 惰性读取；
+   usageRef 只给页面实际消费的字段（orders + 出入库台账），undefined = 引用未加载 */
 const stocksRef = vi.hoisted(() => ({ current: undefined as Record<string, number> | undefined }));
-const ordersRef = vi.hoisted(() => ({ current: undefined as Array<{ bomCode: string }> | undefined }));
+const usageRef = vi.hoisted(() => ({
+    current: undefined as
+        | {
+              orders: Array<{ bomCode: string }>;
+              inboundLedger: Array<{ bomCode: string }>;
+              outboundLedger: Array<{ bomCode: string }>;
+          }
+        | undefined,
+}));
+const usageErrorRef = vi.hoisted(() => ({ current: false }));
 const deleteMutate = vi.hoisted(() => vi.fn());
 vi.mock("@/data/queries", () => ({
     useBoms: () => ({ data: [detailBom], isLoading: false, isFetching: false }),
     useBomCategories: () => ({ data: [], isLoading: false, isFetching: false }),
     useBomStocks: () => ({ data: stocksRef.current, isLoading: false, isFetching: false }),
-    useOrders: () => ({ data: ordersRef.current, isLoading: false, isFetching: false }),
+    useBomUsage: () => ({
+        data: usageRef.current,
+        isLoading: usageRef.current === undefined && !usageErrorRef.current,
+        isFetching: false,
+        isError: usageErrorRef.current,
+    }),
     useBomRefresh: () => ({ refresh: vi.fn() }),
     useCreateBom: () => ({ mutate: vi.fn(), isPending: false }),
     useDeleteBom: () => ({ mutate: deleteMutate, isPending: false }),
@@ -39,7 +55,8 @@ const renderPage = () =>
 afterEach(() => {
     cleanup();
     stocksRef.current = undefined;
-    ordersRef.current = undefined;
+    usageRef.current = undefined;
+    usageErrorRef.current = false;
     authRef.current = { can: () => false };
     deleteMutate.mockClear();
     copyText.mockClear();
@@ -68,9 +85,53 @@ it("库存余量已加载时移动卡片显示数量，未加载时降级为占�
     expect(screen.queryByText("200 个")).not.toBeInTheDocument();
 });
 
+it("未使用筛选排除订单和成品台账引用，库存余量未加载不影响筛选", () => {
+    stocksRef.current = undefined;
+    usageRef.current = { orders: [], inboundLedger: [], outboundLedger: [] };
+    const { unmount } = renderPage();
+    fireEvent.change(screen.getByRole("combobox", { name: "按使用状态筛选" }), {
+        target: { value: "未使用" },
+    });
+    expect(screen.getByRole("table")).toHaveTextContent(detailBom.code);
+    expect(screen.getByRole("table").querySelector("tbody tr.row-voided")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "清空条件" }));
+    expect(screen.getByRole("combobox", { name: "按使用状态筛选" })).toHaveValue("全部状态");
+    unmount();
+
+    for (const references of [
+        { orders: [{ bomCode: detailBom.code }], inboundLedger: [], outboundLedger: [] },
+        { orders: [], inboundLedger: [{ bomCode: detailBom.code }], outboundLedger: [] },
+        { orders: [], inboundLedger: [], outboundLedger: [{ bomCode: detailBom.code }] },
+    ]) {
+        usageRef.current = references;
+        const { unmount: removePage } = renderPage();
+        fireEvent.change(screen.getByRole("combobox", { name: "按使用状态筛选" }), {
+            target: { value: "未使用" },
+        });
+        expect(screen.getByText("没有未使用的 BOM")).toBeInTheDocument();
+        removePage();
+    }
+});
+
+it("使用关系未加载或加载失败时不误报为未使用", () => {
+    const { unmount } = renderPage();
+    fireEvent.change(screen.getByRole("combobox", { name: "按使用状态筛选" }), {
+        target: { value: "未使用" },
+    });
+    expect(screen.queryByText("没有未使用的 BOM")).not.toBeInTheDocument();
+    unmount();
+
+    usageErrorRef.current = true;
+    renderPage();
+    fireEvent.change(screen.getByRole("combobox", { name: "按使用状态筛选" }), {
+        target: { value: "未使用" },
+    });
+    expect(screen.getAllByText("使用状态加载失败，请刷新重试")).toHaveLength(2);
+});
+
 it("删除入口仅超级管理员且未被订单引用时显示；确认后才发起请求，取消不发起", () => {
     // 无删除权限（员工/管理员等）：桌面与移动端都不出现删除入口
-    ordersRef.current = [];
+    usageRef.current = { orders: [], inboundLedger: [], outboundLedger: [] };
     stocksRef.current = { [detailBom.code]: 0 };
     const { unmount } = renderPage();
     fireEvent.click(screen.getAllByRole("button", { name: "查看详情" })[0]);
@@ -98,19 +159,26 @@ it("删除入口仅超级管理员且未被订单引用时显示；确认后才�
     expect(deleteMutate).toHaveBeenCalledWith(detailBom.code, expect.anything());
 });
 
-it("被销售订单引用或有库存余量的档案不显示删除入口", () => {
+it("被销售订单或成品台账引用、或有库存余量的档案不显示删除入口", () => {
     authRef.current = { can: (perm: string) => perm === "bom:delete" };
 
     // 被订单引用（含已取消订单）不可删
-    ordersRef.current = [{ bomCode: detailBom.code }];
+    usageRef.current = { orders: [{ bomCode: detailBom.code }], inboundLedger: [], outboundLedger: [] };
     stocksRef.current = { [detailBom.code]: 0 };
     const { unmount } = renderPage();
     fireEvent.click(screen.getAllByRole("button", { name: "查看详情" })[0]);
     expect(screen.queryByRole("button", { name: "删除 BOM" })).not.toBeInTheDocument();
     unmount();
 
+    // 入库后即使余量为 0，历史流水也不允许删除
+    usageRef.current = { orders: [], inboundLedger: [{ bomCode: detailBom.code }], outboundLedger: [] };
+    const { unmount: removeLedgerPage } = renderPage();
+    fireEvent.click(screen.getAllByRole("button", { name: "查看详情" })[0]);
+    expect(screen.queryByRole("button", { name: "删除 BOM" })).not.toBeInTheDocument();
+    removeLedgerPage();
+
     // 有库存余量（必有流水）同样不显示，后端权威校验兜底
-    ordersRef.current = [];
+    usageRef.current = { orders: [], inboundLedger: [], outboundLedger: [] };
     stocksRef.current = { [detailBom.code]: 120 };
     renderPage();
     fireEvent.click(screen.getAllByRole("button", { name: "查看详情" })[0]);
@@ -121,7 +189,7 @@ it("订单引用或库存余量未加载（含首次请求失败）时，不能�
     authRef.current = { can: (perm: string) => perm === "bom:delete" };
 
     // 订单引用未加载：即使库存为 0 也不显示删除入口
-    ordersRef.current = undefined;
+    usageRef.current = undefined;
     stocksRef.current = { [detailBom.code]: 0 };
     const { unmount } = renderPage();
     fireEvent.click(screen.getAllByRole("button", { name: "查看详情" })[0]);
@@ -129,7 +197,7 @@ it("订单引用或库存余量未加载（含首次请求失败）时，不能�
     unmount();
 
     // 库存余量未加载：即使无订单引用也不显示删除入口
-    ordersRef.current = [];
+    usageRef.current = { orders: [], inboundLedger: [], outboundLedger: [] };
     stocksRef.current = undefined;
     renderPage();
     fireEvent.click(screen.getAllByRole("button", { name: "查看详情" })[0]);

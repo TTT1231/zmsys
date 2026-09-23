@@ -23,10 +23,10 @@ import {
     useBomCategories,
     useBomRefresh,
     useBomStocks,
+    useBomUsage,
     useBoms,
     useCreateBom,
     useDeleteBom,
-    useOrders,
 } from "@/data/queries";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
@@ -827,15 +827,26 @@ export function BomPage() {
     const bomsQuery = useBoms();
     const categoriesQuery = useBomCategories();
     const stocksQuery = useBomStocks();
-    const ordersQuery = useOrders();
+    const usageQuery = useBomUsage();
     const { refresh } = useBomRefresh();
-    const isLoading = bomsQuery.isLoading || categoriesQuery.isLoading || stocksQuery.isLoading;
-    const isFetching = bomsQuery.isFetching || categoriesQuery.isFetching || stocksQuery.isFetching;
-    // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
-    const overlay = useDelayedFlag(isFetching && !isLoading);
     const [searchParams, setSearchParams] = useSearchParams();
     const [keyword, setKeyword] = useState("");
     const [category, setCategory] = useState("全部品类");
+    const [statusFilter, setStatusFilter] = useState("全部状态");
+    const showUnused = statusFilter === "未使用";
+    const usageUnavailable = showUnused && usageQuery.isError && usageQuery.data === undefined;
+    const isLoading =
+        bomsQuery.isLoading ||
+        categoriesQuery.isLoading ||
+        stocksQuery.isLoading ||
+        (showUnused && usageQuery.isLoading);
+    const isFetching =
+        bomsQuery.isFetching ||
+        categoriesQuery.isFetching ||
+        stocksQuery.isFetching ||
+        (showUnused && usageQuery.isFetching);
+    // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
+    const overlay = useDelayedFlag(isFetching && !isLoading);
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [sort, setSort] = useState<SortState<BomSortKey> | null>(null);
@@ -846,23 +857,42 @@ export function BomPage() {
 
     const boms = bomsQuery.data ?? EMPTY_BOMS;
     const categories = useMemo(() => [...new Set(boms.map(bom => bom.name))], [boms]);
-    /* 无删除权限（仅超级管理员）、被订单引用或有库存余量的档案不显示删除入口，
-     * 前端先挡一层误操作；订单引用与库存余量须已成功加载才参与判断——
+    /* 无删除权限（仅超级管理员）、被订单或成品台账引用或有库存余量的档案不显示删除入口，
+     * 前端先挡一层误操作；引用与库存余量须已成功加载才参与判断——
      * 未加载或加载失败按“引用未知”处理，不能把“没有数据”当成“没有引用”；
-     * 曾被出入库/调整触碰过的边界由后端权威校验兜底 */
+     * 曾被库存调整触碰过的边界由后端权威校验兜底 */
     const canDeleteBom = can("bom:delete");
     const referencedCodes = useMemo(
-        () => new Set((ordersQuery.data ?? []).map(order => order.bomCode)),
-        [ordersQuery.data],
+        () => new Set((usageQuery.data?.orders ?? []).map(order => order.bomCode)),
+        [usageQuery.data?.orders],
     );
-    const referencesLoaded = ordersQuery.data !== undefined && stocksQuery.data !== undefined;
+    /* 使用判定走订单 + 成品出入库台账；调整单不算使用 */
+    const ledgerCodes = useMemo(
+        () =>
+            new Set(
+                [...(usageQuery.data?.inboundLedger ?? []), ...(usageQuery.data?.outboundLedger ?? [])].map(
+                    row => row.bomCode,
+                ),
+            ),
+        [usageQuery.data?.inboundLedger, usageQuery.data?.outboundLedger],
+    );
+    const usageLoaded = usageQuery.data !== undefined;
+    const referencesLoaded = usageLoaded && stocksQuery.data !== undefined;
     const deletable = (bom: Bom) =>
-        referencesLoaded && !referencedCodes.has(bom.code) && (stocksQuery.data![bom.code] ?? 0) === 0;
+        referencesLoaded &&
+        !referencedCodes.has(bom.code) &&
+        !ledgerCodes.has(bom.code) &&
+        (stocksQuery.data![bom.code] ?? 0) === 0;
 
     const filtered = useMemo(() => {
         const kw = keyword.trim().toLowerCase();
         return boms
             .filter(bom => category === "全部品类" || bom.name === category)
+            .filter(
+                bom =>
+                    statusFilter !== "未使用" ||
+                    (usageLoaded && !referencedCodes.has(bom.code) && !ledgerCodes.has(bom.code)),
+            )
             .filter(
                 bom =>
                     !kw ||
@@ -872,7 +902,7 @@ export function BomPage() {
                         .toLowerCase()
                         .includes(kw),
             );
-    }, [boms, keyword, category]);
+    }, [boms, keyword, category, statusFilter, usageLoaded, referencedCodes, ledgerCodes]);
 
     const sorted = useMemo(() => {
         if (!sort) return filtered;
@@ -891,14 +921,15 @@ export function BomPage() {
         if (searchParams.get("new") === "bom") setSearchParams({}, { replace: true });
     }, [searchParams, setSearchParams]);
 
-    // 清空条件只作用于筛选行（搜索/品类）；快捷入口与分页由用户自行操作
+    // 清空条件只作用于筛选行（搜索/品类/使用状态）；快捷入口与分页由用户自行操作
     const clearFilters = () => {
         setKeyword("");
         setCategory("全部品类");
+        setStatusFilter("全部状态");
         setPage(1);
     };
-    const filtersActive = !!keyword.trim() || category !== "全部品类";
-
+    const filtersActive = !!keyword.trim() || category !== "全部品类" || statusFilter !== "全部状态";
+    // 未使用视图沿用作废单的弱化底色：整表都是无引用档案，视觉语义一致
     return (
         <div className="flex flex-col gap-5">
             <h1 className="sr-only">物料与 BOM</h1>
@@ -931,6 +962,18 @@ export function BomPage() {
                         {categories.map(item => (
                             <option key={item}>{item}</option>
                         ))}
+                    </select>
+                    <select
+                        value={statusFilter}
+                        onChange={event => {
+                            setStatusFilter(event.target.value);
+                            setPage(1);
+                        }}
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
+                        aria-label="按使用状态筛选"
+                    >
+                        <option>全部状态</option>
+                        <option>未使用</option>
                     </select>
                     <button
                         type="button"
@@ -974,34 +1017,42 @@ export function BomPage() {
                 </div>
 
                 <div className="mobile-records">
-                    <ListState loading={isLoading} empty={!pageRows.length}>
-                        {pageRows.map(bom => (
-                            <RecordCard
-                                key={bom.code}
-                                title={bom.code}
-                                subtitle={bom.name}
-                                actions={
-                                    <Button variant="secondary" onClick={() => setDetail(bom)}>
-                                        查看详情
-                                    </Button>
-                                }
-                            >
-                                <BomCell
-                                    categories={categoriesQuery.data}
-                                    bom={bom}
-                                    bomCode={bom.code}
-                                    showIdentity={false}
-                                />
-                                <div className="mt-2 grid grid-cols-2 gap-2">
-                                    <CardField
-                                        label="当前库存"
-                                        value={stocksQuery.data ? `${num(stocksQuery.data[bom.code] ?? 0)} 个` : "—"}
+                    {usageUnavailable ? (
+                        <div role="status" className="p-8">
+                            <EmptyState description="使用状态加载失败，请刷新重试" />
+                        </div>
+                    ) : (
+                        <ListState loading={isLoading} empty={!pageRows.length}>
+                            {pageRows.map(bom => (
+                                <RecordCard
+                                    key={bom.code}
+                                    title={bom.code}
+                                    subtitle={bom.name}
+                                    actions={
+                                        <Button variant="secondary" onClick={() => setDetail(bom)}>
+                                            查看详情
+                                        </Button>
+                                    }
+                                >
+                                    <BomCell
+                                        categories={categoriesQuery.data}
+                                        bom={bom}
+                                        bomCode={bom.code}
+                                        showIdentity={false}
                                     />
-                                    <CardField label="备注" value={bom.remark || "—"} />
-                                </div>
-                            </RecordCard>
-                        ))}
-                    </ListState>
+                                    <div className="mt-2 grid grid-cols-2 gap-2">
+                                        <CardField
+                                            label="当前库存"
+                                            value={
+                                                stocksQuery.data ? `${num(stocksQuery.data[bom.code] ?? 0)} 个` : "—"
+                                            }
+                                        />
+                                        <CardField label="备注" value={bom.remark || "—"} />
+                                    </div>
+                                </RecordCard>
+                            ))}
+                        </ListState>
+                    )}
                 </div>
                 <div className="hidden lg:block">
                     {isLoading ? (
@@ -1047,14 +1098,26 @@ export function BomPage() {
                                 {pageRows.length === 0 && (
                                     <tr>
                                         <td colSpan={6} className="px-5 py-10 text-center">
-                                            <EmptyState description="暂无 BOM" />
+                                            <EmptyState
+                                                description={
+                                                    usageUnavailable
+                                                        ? "使用状态加载失败，请刷新重试"
+                                                        : showUnused
+                                                          ? "没有未使用的 BOM"
+                                                          : "暂无 BOM"
+                                                }
+                                            />
                                         </td>
                                     </tr>
                                 )}
                                 {pageRows.map((bom, index) => (
                                     <tr
                                         key={bom.code}
-                                        className="border-t border-line align-top transition hover:bg-row-hover"
+                                        className={
+                                            showUnused
+                                                ? "row-voided border-t border-line align-top"
+                                                : "border-t border-line align-top transition hover:bg-row-hover"
+                                        }
                                     >
                                         <td className="px-5 py-3 tnum text-14 text-muted">
                                             {(page - 1) * pageSize + index + 1}

@@ -669,7 +669,7 @@ export function InboundPage() {
                                     }
                                     actions={
                                         <Button variant="secondary" onClick={() => setVoucher(row)}>
-                                            查看凭证
+                                            查看详情
                                         </Button>
                                     }
                                 >
@@ -790,7 +790,7 @@ export function InboundPage() {
                                                     onClick={() => setVoucher(row)}
                                                     className="text-14 font-medium text-primary-strong underline-offset-2 hover:underline"
                                                 >
-                                                    查看凭证
+                                                    查看详情
                                                 </button>
                                             </td>
                                         </tr>

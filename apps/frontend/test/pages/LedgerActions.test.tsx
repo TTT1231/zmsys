@@ -86,7 +86,7 @@ it("当天入库修正和作废只出现在凭证中，跨日不再提供", () =
         const table = within(screen.getByRole("table"));
         expect(table.queryByRole("button", { name: "修正" })).not.toBeInTheDocument();
         expect(table.queryByRole("button", { name: "作废" })).not.toBeInTheDocument();
-        fireEvent.click(table.getByRole("button", { name: "查看凭证" }));
+        fireEvent.click(table.getByRole("button", { name: "查看详情" }));
         return within(screen.getByRole("dialog", { name: detailInbound.no }));
     };
     let detail = open();
