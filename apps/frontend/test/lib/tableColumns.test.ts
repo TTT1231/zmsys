@@ -35,7 +35,11 @@ it("紧凑档不向外分配剩余宽度，富余留给表格弹性区", () => {
 it("紧凑档溢出时仍按最小宽收拢，账本模式不横向破版", () => {
     expect(fitTableWidths(columns, {}, 540, { stretch: false })).toEqual({ name: 140, spec: 280, actions: 120 });
 });
-it("收窄不动手动宽度与操作列，列最小宽之和仍溢出时保留溢出", () => {
-    // spec 手动 400 不动：只有 name 可收（180→120），表格仍比容器宽 100
-    expect(fitTableWidths(columns, { spec: 400 }, 540)).toEqual({ name: 120, spec: 400, actions: 120 });
+it("数据列压到下限仍溢出时全员按比例压缩，全部列收进单屏", () => {
+    // 540 容器：先压 name 到 120（第一阶段），仍差 100 → spec 手动 400 也按比例让位
+    expect(fitTableWidths(columns, { spec: 400 }, 540)).toEqual({ name: 108, spec: 312, actions: 120 });
+});
+it("压到保底下限仍放不下的极端窄屏保留溢出，交首尾固定列兜底", () => {
+    // 200 容器远小于可让空间下限之和（208+48），压缩无解，保持溢出走横向滚动
+    expect(fitTableWidths(columns, {}, 200)).toEqual({ name: 120, spec: 280, actions: 120 });
 });
