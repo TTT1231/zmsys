@@ -890,6 +890,11 @@ button:active:not(:disabled) {
     padding: 1px 6px;
     font-size: var(--text-11);
 }
+/* 紧凑账本档收纳单号旁的内联「已作废」小徽章：占行高的次要信息不渲染，
+   作废态由底色 + 竖条 + 删除线承载；状态列徽章只降档不隐藏。 */
+.managed-table[data-density="compact"] .void-flag {
+    display: none;
+}
 .managed-table[data-density="roomy"] .data-table td {
     padding-top: 20px;
     padding-bottom: 20px;
@@ -940,6 +945,22 @@ button:active:not(:disabled) {
     box-shadow:
         inset 2px 0 var(--color-primary-border),
         inset -2px 0 var(--color-primary-border);
+}
+/* 作废单行高亮：底色必须落在 td 层 —— tr 层会被 [data-pinned] 固定列的不透明
+   背景盖住（尤其 sticky 单号列）；hover 用 danger 加深而不是 row-hover，避免
+   全局 hover 规则把作废底色盖回白色、高亮“消失”。 */
+.managed-table tr.row-voided td {
+    background: var(--color-danger-soft);
+    color: var(--color-muted);
+}
+.managed-table tr.row-voided:hover td {
+    background: color-mix(in srgb, var(--color-danger) 5%, var(--color-surface));
+}
+/* 左竖条打在 sticky 单号列上：横向滚动时唯一始终可见的作废锚点；
+   单号列保持 td-strong 可读性，供删除线识别，其余单元格正文弱化 */
+.managed-table tr.row-voided td[data-pinned="start"] {
+    box-shadow: inset 3px 0 0 var(--color-danger);
+    color: var(--color-td-strong);
 }
 .managed-table[data-resizing] {
     user-select: none;
@@ -1048,6 +1069,25 @@ button:active:not(:disabled) {
     overflow: hidden;
     border-radius: 12px;
     padding: 16px;
+}
+/* 作废记录卡片（移动端）：左竖条 + 危险底色 + 标题删除线；徽章仍由页面传入 */
+.record-card-voided {
+    position: relative;
+    border-color: var(--color-danger-border);
+    background: var(--color-danger-soft);
+    color: var(--color-muted);
+}
+.record-card-voided::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: var(--color-danger);
+}
+.record-card-voided h3 {
+    text-decoration: line-through;
+    text-decoration-color: color-mix(in srgb, var(--color-danger) 55%, transparent);
+    text-decoration-thickness: 1.5px;
 }
 .record-card .bom-summary {
     white-space: normal;
