@@ -673,7 +673,8 @@ export function OutboundPage() {
     const [pageSize, setPageSize] = useState(10);
     // 列排序默认升序：默认按出库日期（同日以单号稳定排序）
     const [sort, setSort] = useState<SortState<LedgerSortKey>>({ key: "date", dir: "asc" });
-    const [newOpen, setNewOpen] = useState(false);
+    // 深链 ?new=outbound 首帧即开弹窗（初始 state 直读）；effect 只负责清参数，不在副作用里开弹窗
+    const [newOpen, setNewOpen] = useState(() => searchParams.get("new") === "outbound");
     const [detail, setDetail] = useState<OutboundRow | null>(null);
     /* 订单备注跟客户格走（订单维度信息）：按单号回捞，避免逐行 find */
     const orderRemarkByNo = useMemo(
@@ -687,7 +688,7 @@ export function OutboundPage() {
     const rows = snap.outboundLedger;
     const currentDetail = detail ? (rows.find(row => row.no === detail.no) ?? null) : null;
     const boms = snap.boms;
-    const bomCategory = new Map(boms.map(bom => [bom.code, bom.name]));
+    const bomCategory = useMemo(() => new Map(boms.map(bom => [bom.code, bom.name])), [boms]);
     const categories = [...new Set(boms.map(bom => bom.name))];
 
     const filtered = useMemo(() => {
@@ -752,10 +753,7 @@ export function OutboundPage() {
     };
 
     useEffect(() => {
-        if (searchParams.get("new") === "outbound") {
-            setNewOpen(true);
-            setSearchParams({}, { replace: true });
-        }
+        if (searchParams.get("new") === "outbound") setSearchParams({}, { replace: true });
     }, [searchParams, setSearchParams]);
 
     // 清空条件只作用于筛选行（搜索/状态/品类）；分页由用户自行操作

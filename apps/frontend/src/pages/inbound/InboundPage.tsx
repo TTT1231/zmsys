@@ -509,7 +509,8 @@ export function InboundPage() {
     const [pageSize, setPageSize] = useState(10);
     // 列排序默认升序：默认按入库日期（同日以单号稳定排序）
     const [sort, setSort] = useState<SortState<LedgerSortKey>>({ key: "date", dir: "asc" });
-    const [newOpen, setNewOpen] = useState(false);
+    // 深链 ?new=inbound 首帧即开弹窗（初始 state 直读）；effect 只负责清参数，不在副作用里开弹窗
+    const [newOpen, setNewOpen] = useState(() => searchParams.get("new") === "inbound");
     const [voucher, setVoucher] = useState<InboundRow | null>(null);
     const currentVoucher = voucher ? (snap.inboundLedger.find(row => row.no === voucher.no) ?? null) : null;
     const [voidTarget, setVoidTarget] = useState<InboundRow | null>(null);
@@ -517,7 +518,7 @@ export function InboundPage() {
 
     const rows = snap.inboundLedger;
     const boms = snap.boms;
-    const bomCategory = new Map(boms.map(bom => [bom.code, bom.name]));
+    const bomCategory = useMemo(() => new Map(boms.map(bom => [bom.code, bom.name])), [boms]);
     const categories = [...new Set(boms.map(bom => bom.name))];
 
     const filtered = useMemo(() => {
@@ -555,10 +556,7 @@ export function InboundPage() {
     const voidable = (row: InboundRow) => canVoidToday && row.status === "active" && row.date === todayIso();
 
     useEffect(() => {
-        if (searchParams.get("new") === "inbound") {
-            setNewOpen(true);
-            setSearchParams({}, { replace: true });
-        }
+        if (searchParams.get("new") === "inbound") setSearchParams({}, { replace: true });
     }, [searchParams, setSearchParams]);
 
     // 清空条件只作用于筛选行（搜索/品类）；分页由用户自行操作

@@ -839,7 +839,8 @@ export function BomPage() {
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [sort, setSort] = useState<SortState<BomSortKey> | null>(null);
-    const [newOpen, setNewOpen] = useState(false);
+    // 深链 ?new=bom 首帧即开弹窗（初始 state 直读）；effect 只负责清参数，不在副作用里开弹窗
+    const [newOpen, setNewOpen] = useState(() => searchParams.get("new") === "bom");
     const [detail, setDetail] = useState<Bom | null>(null);
     const [deleting, setDeleting] = useState<Bom | null>(null);
 
@@ -887,10 +888,7 @@ export function BomPage() {
     }, [page, sort]);
 
     useEffect(() => {
-        if (searchParams.get("new") === "bom") {
-            setNewOpen(true);
-            setSearchParams({}, { replace: true });
-        }
+        if (searchParams.get("new") === "bom") setSearchParams({}, { replace: true });
     }, [searchParams, setSearchParams]);
 
     // 清空条件只作用于筛选行（搜索/品类）；快捷入口与分页由用户自行操作

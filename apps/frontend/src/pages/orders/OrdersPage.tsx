@@ -679,7 +679,8 @@ export function OrdersPage() {
         key: role === "warehouse" ? "deliverDate" : "orderNo",
         dir: "asc",
     });
-    const [newOpen, setNewOpen] = useState(false);
+    // 深链 ?new=order 首帧即开弹窗（初始 state 直读）；effect 只负责清参数，不在副作用里开弹窗
+    const [newOpen, setNewOpen] = useState(() => searchParams.get("new") === "order");
     const [ship, setShip] = useState<string | null>(null);
     const [taskFilter, setTaskFilter] = useState(searchParams.get("task") ?? (role === "warehouse" ? "ready" : "all"));
     const [detail, setDetail] = useState<Order | null>(null);
@@ -755,10 +756,7 @@ export function OrdersPage() {
     ];
 
     useEffect(() => {
-        if (searchParams.get("new") === "order") {
-            setNewOpen(true);
-            setSearchParams({}, { replace: true });
-        }
+        if (searchParams.get("new") === "order") setSearchParams({}, { replace: true });
     }, [searchParams, setSearchParams]);
 
     const applySort = (key: OrderSortKey) => setSort(current => nextSortState(current, key));
