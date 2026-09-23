@@ -5,9 +5,10 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { MemoryRouter } from "react-router";
 import { afterEach, expect, it, vi } from "vitest";
 import { OrdersPage } from "@/pages/orders/OrdersPage";
-import { detailOrder, detailSnapshot } from "../../fixtures/recordDetails";
+import { detailBom, detailOrder, detailSnapshot } from "../../fixtures/recordDetails";
 const snapshot = {
     ...detailSnapshot,
+    boms: [{ ...detailBom, remark: "按钮加弹簧垫片，发货前逐个抽检" }],
     orders: [
         {
             ...detailOrder,
@@ -52,4 +53,14 @@ it("表格规格摘要共用同行详情入口，不额外增加规格按钮", (
     expect(table.queryByRole("button", { name: /查看全部规格/ })).not.toBeInTheDocument();
     fireEvent.click(table.getAllByRole("button", { name: "查看详情" })[0]);
     expect(screen.getByRole("dialog", { name: "CANCELLED" })).toHaveTextContent("6.3静片：铜镀银");
+});
+it("成品/BOM 旁的 BOM 备注列展示建档备注", () => {
+    render(
+        <MemoryRouter>
+            <OrdersPage />
+        </MemoryRouter>,
+    );
+    const table = within(screen.getByRole("table"));
+    expect(table.getByRole("columnheader", { name: "BOM 备注" })).toBeInTheDocument();
+    expect(table.getAllByText("按钮加弹簧垫片，发货前逐个抽检")).toHaveLength(3);
 });
