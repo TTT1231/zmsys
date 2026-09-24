@@ -167,6 +167,10 @@
     /* 空值占位（RemarkCell 的"—"）：比 muted/subtle 再退一档，让有内容的备注行更跳 */
     --color-placeholder: #98a2b3;
     --color-row-hover: #f8f9ff;
+    /* 作废/未使用弱化行底色：亮色 6% danger 混白底可辨；暗色同比例几乎不可感知，
+       html.dark 里重声明更高混合比（行/卡片样式统一引用此 token） */
+    --color-voided-row: color-mix(in srgb, var(--color-danger) 6%, var(--color-surface));
+    --color-voided-row-hover: color-mix(in srgb, var(--color-danger) 11%, var(--color-surface));
     --color-soft: #f8fafc;
     --color-panel: #fcfcfd;
     --color-scrim: rgba(15, 23, 42, 0.48);
@@ -366,6 +370,10 @@ html.dark {
     --color-td: #c9cacd;
     --color-td-strong: #d8d9db;
     --color-row-hover: #26282c;
+    /* 暗底近黑，亮色档的 6% danger 混合 R 通道仅 ±13 感知不出（作废/未使用行发不出信号），
+       提高混合比让弱化行在暗色下同样一眼可辨；文字 muted/td-strong 对其对比度仍 ≥4.5:1 */
+    --color-voided-row: color-mix(in srgb, var(--color-danger) 14%, var(--color-surface));
+    --color-voided-row-hover: color-mix(in srgb, var(--color-danger) 19%, var(--color-surface));
     --color-soft: #272729;
     --color-panel: #222428;
     --color-scrim: rgba(0, 0, 0, 0.55);
@@ -984,11 +992,11 @@ button:active:not(:disabled) {
    设计的，刷满整行会变成刺眼砖红（BOM 页未引用行整表泛红即此因）。
    改用 danger 对 surface 低比例 color-mix，浅暗两模式各自得到恰好的弱化底。 */
 .managed-table tr.row-voided td {
-    background: color-mix(in srgb, var(--color-danger) 6%, var(--color-surface));
+    background: var(--color-voided-row);
     color: var(--color-muted);
 }
 .managed-table tr.row-voided:hover td {
-    background: color-mix(in srgb, var(--color-danger) 11%, var(--color-surface));
+    background: var(--color-voided-row-hover);
 }
 /* 作废行的固定列不再画内嵌竖条：固定多列时每根左缘各出一根（出库页固定两列
    即左右两根粗条），视觉上加粗成对反而压过内容；作废底色打在 td 层，特异性
@@ -1158,7 +1166,7 @@ button:active:not(:disabled) {
 .record-card-voided {
     position: relative;
     border-color: color-mix(in srgb, var(--color-danger) 32%, transparent);
-    background: color-mix(in srgb, var(--color-danger) 6%, var(--color-surface));
+    background: var(--color-voided-row);
     color: var(--color-muted);
 }
 .record-card-voided::before {
