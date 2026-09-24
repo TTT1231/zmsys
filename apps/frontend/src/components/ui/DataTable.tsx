@@ -14,6 +14,7 @@ import {
 } from "react";
 import { useApp } from "@/context/useApp";
 import { Icon } from "@/lib/icons";
+import { EmptyRow } from "./EmptyRow";
 import { Modal } from "./Modal";
 import { SortTh } from "./SortTh";
 import { fitTableWidths, resizeTableColumn } from "@/lib/tableColumns";
@@ -471,7 +472,8 @@ function TableView({
                                     const spansColumns = rowCells.some(cell => (cell.props.colSpan ?? 1) > 1);
                                     return cloneElement(
                                         row,
-                                        {},
+                                        // 空态占位行按实际渲染列数跨列（含弹性填充列），与跨列 td 的改写同语义
+                                        row.type === EmptyRow ? { colSpan: renderedColumnCount } : {},
                                         rowCells.flatMap((cell, index) => {
                                             if ((cell.props.colSpan ?? 1) > 1)
                                                 return cloneElement(cell, { colSpan: renderedColumnCount });

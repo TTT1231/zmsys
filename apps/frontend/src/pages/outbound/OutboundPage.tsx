@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { DataTable } from "@/components/ui/DataTable";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { EmptyRow } from "@/components/ui/EmptyRow";
 import { RecordFields, RecordProduct, RecordSummary } from "@/components/business/RecordDetails";
 import { DangerNote } from "@/components/business/DangerNote";
 import { CustomerDetailModal } from "@/pages/customers/CustomersPage";
@@ -833,46 +833,39 @@ export function OutboundPage() {
                                         active={sort.key === "no"}
                                         dir={sort.dir}
                                         onSort={() => applySort("no")}
-                                        className="px-5"
+                                        className="cell-pad-wide"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold">客户 / 备注</th>
-                                    <th className="px-3 py-2.5 font-semibold">销售订单号</th>
+                                    <th>客户 / 备注</th>
+                                    <th>销售订单号</th>
                                     <SortTh
                                         label="BOM 编码"
                                         active={sort.key === "bomCode"}
                                         dir={sort.dir}
                                         onSort={() => applySort("bomCode")}
-                                        className="px-3"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold">BOM 备注</th>
+                                    <th>BOM 备注</th>
                                     <SortTh
                                         label="发货数量（个）"
                                         active={sort.key === "qty"}
                                         dir={sort.dir}
                                         onSort={() => applySort("qty")}
-                                        className="px-3"
                                     />
                                     <SortTh
                                         label="出库日期"
                                         active={sort.key === "date"}
                                         dir={sort.dir}
                                         onSort={() => applySort("date")}
-                                        className="px-3"
                                     />
                                     {/* 出库备注基本不填，排到状态之后、操作列之前 */}
-                                    <th className="px-3 py-2.5 text-14 font-semibold">操作人</th>
-                                    <th className="px-3 py-2.5 font-semibold">状态</th>
-                                    <th className="px-3 py-2.5 font-semibold">出库备注</th>
-                                    <th className="px-5 py-2.5 text-center font-semibold">操作</th>
+                                    <th className="text-14">操作人</th>
+                                    <th>状态</th>
+                                    <th>出库备注</th>
+                                    <th className="cell-pad-wide text-center">操作</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {pageRows.length === 0 && (
-                                    <tr className="row-empty">
-                                        <td colSpan={11} className="px-5 py-10 text-center">
-                                            <EmptyState description="没有找到匹配的出库记录" />
-                                        </td>
-                                    </tr>
+                                    <EmptyRow colSpan={11} description="没有找到匹配的出库记录" />
                                 )}
                                 {pageRows.map(row => {
                                     const bom = bomByCode(snap, row.bomCode);
@@ -882,18 +875,18 @@ export function OutboundPage() {
                                             className={
                                                 row.state === "voided"
                                                     ? /* row-voided：底色落 td 层，避开固定列白底与全局 hover 盖色 */
-                                                      "row-voided border-t border-line"
-                                                    : "border-t border-line transition hover:bg-row-hover"
+                                                      "row-voided"
+                                                    : undefined
                                             }
                                         >
                                             <td
-                                                className={`px-5 py-3 tnum text-14 font-semibold text-td-strong${
+                                                className={`cell-pad-wide tnum text-14 font-semibold text-td-strong${
                                                     row.state === "voided" ? " line-through decoration-danger/50" : ""
                                                 }`}
                                             >
                                                 {row.no}
                                             </td>
-                                            <td className="px-3 py-3">
+                                            <td>
                                                 {/* 与销售订单列表同款：客户名可点开客户档案详情（档案已删除的不可点） */}
                                                 <CustomerCell
                                                     name={row.customer}
@@ -905,33 +898,33 @@ export function OutboundPage() {
                                                     }
                                                 />
                                             </td>
-                                            <td className="px-3 py-3 tnum text-14 text-td">{row.orderNo}</td>
-                                            <td className="px-3 py-4">
+                                            <td className="tnum text-14 text-td">{row.orderNo}</td>
+                                            <td>
                                                 <BomCell
                                                     categories={snap.bomCategories}
                                                     bom={bom}
                                                     bomCode={row.bomCode}
                                                 />
                                             </td>
-                                            <td className="px-3 py-3">
+                                            <td>
                                                 <RemarkCell remark={bom?.remark} variant="warning" />
                                             </td>
-                                            <td className="px-3 py-3">
+                                            <td>
                                                 <QtyCell value={row.qty} />
                                             </td>
-                                            <td className="px-3 py-3 tnum text-14 text-td">{row.date}</td>
-                                            <td className="px-3 py-3 text-14 text-td">{row.operator}</td>
-                                            <td className="px-3 py-3">
+                                            <td className="tnum text-14 text-td">{row.date}</td>
+                                            <td className="text-14 text-td">{row.operator}</td>
+                                            <td>
                                                 {row.state === "voided" ? (
                                                     <Badge tone="danger">已作废</Badge>
                                                 ) : (
                                                     <Badge tone="pending">已登记</Badge>
                                                 )}
                                             </td>
-                                            <td className="px-3 py-3">
+                                            <td>
                                                 <RemarkCell remark={row.remark} />
                                             </td>
-                                            <td className="px-5 py-3 text-center">
+                                            <td className="cell-pad-wide text-center">
                                                 <button
                                                     type="button"
                                                     onClick={() => setDetail(row)}

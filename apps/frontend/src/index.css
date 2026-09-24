@@ -826,11 +826,19 @@ button:active:not(:disabled) {
     background: var(--color-soft);
     color: var(--color-primary-strong);
 }
+/* 单轨契约：th/td 水平内距与 th 纵向内距、字重在此统一定义，页面单元格只写语义类
+   （对齐/字色/tnum 等），不再重复 padding 与字重样板；
+   managed-th 的 18px 右内距（列宽手柄 gutter）特异性更高，继续覆盖 th 右侧 */
 .managed-table .data-table th,
 .managed-table .data-table td {
     overflow: hidden;
     border-bottom: 1px solid var(--color-line);
     overflow-wrap: normal;
+    padding-inline: 12px;
+}
+.managed-table .data-table th {
+    padding-block: 10px;
+    font-weight: 600;
 }
 .managed-table .data-table td {
     padding-top: 14px;
@@ -942,6 +950,12 @@ button:active:not(:disabled) {
     white-space: nowrap;
     border-top: 1px solid var(--color-line);
     box-shadow: none;
+}
+/* 行首/行尾宽留白列（原页面 px-5 样板收编）：特异性压过 managed-th 的 18px，
+   宽列 th 右侧随宽档走 20px（列宽手柄 12px 宽仍容纳得下） */
+.managed-table .data-table th.cell-pad-wide,
+.managed-table .data-table td.cell-pad-wide {
+    padding-inline: 20px;
 }
 .managed-table [data-pinned] {
     position: sticky;

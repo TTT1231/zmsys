@@ -3,6 +3,7 @@ import { SortTh } from "@/components/ui/SortTh";
 import { nextSortState, type SortState } from "@/lib/tableSort";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
+import { EmptyRow } from "@/components/ui/EmptyRow";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useMemo, useRef, useState, useEffect } from "react";
 import { Icon } from "@/lib/icons";
@@ -419,8 +420,8 @@ export function StockPage() {
                         >
                             <thead>
                                 <tr className="text-left text-13 text-muted">
-                                    <th className="px-5 py-2.5 font-semibold">序号</th>
-                                    <th className="px-3 py-2.5 font-semibold">品类</th>
+                                    <th className="cell-pad-wide">序号</th>
+                                    <th>品类</th>
                                     <SortTh
                                         label="BOM 编码"
                                         active={sort?.key === "code"}
@@ -430,9 +431,8 @@ export function StockPage() {
                                                 current ? nextSortState(current, "code") : { key: "code", dir: "asc" },
                                             )
                                         }
-                                        className="px-3"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold">BOM 备注</th>
+                                    <th>BOM 备注</th>
                                     <SortTh
                                         label="库存数量（个）"
                                         active={sort?.key === "stock"}
@@ -444,32 +444,28 @@ export function StockPage() {
                                                     : { key: "stock", dir: "asc" },
                                             )
                                         }
-                                        className="px-3"
                                     />
-                                    <th className="px-5 py-2.5 text-center font-semibold">操作</th>
+                                    <th className="cell-pad-wide text-center">操作</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {pageRows.length === 0 && (
-                                    <tr className="row-empty">
-                                        <td colSpan={6} className="px-5 py-10 text-center">
-                                            <EmptyState
-                                                description={
-                                                    statusFilter === "全部状态"
-                                                        ? "暂无库存记录"
-                                                        : `没有${statusFilter}的库存记录`
-                                                }
-                                            />
-                                        </td>
-                                    </tr>
+                                    <EmptyRow
+                                        colSpan={6}
+                                        description={
+                                            statusFilter === "全部状态"
+                                                ? "暂无库存记录"
+                                                : `没有${statusFilter}的库存记录`
+                                        }
+                                    />
                                 )}
                                 {pageRows.map((row, index) => (
-                                    <tr key={row.code} className="border-t border-line transition hover:bg-row-hover">
-                                        <td className="tnum px-5 py-3 text-14 text-muted">
+                                    <tr key={row.code}>
+                                        <td className="tnum cell-pad-wide text-14 text-muted">
                                             {(page - 1) * pageSize + index + 1}
                                         </td>
-                                        <td className="px-3 py-3 text-14 text-td">{row.name}</td>
-                                        <td className="px-3 py-4">
+                                        <td className="text-14 text-td">{row.name}</td>
+                                        <td>
                                             <BomCell
                                                 categories={categoriesQuery.data}
                                                 bom={row.bom}
@@ -477,15 +473,15 @@ export function StockPage() {
                                                 showName={false}
                                             />
                                         </td>
-                                        <td className="px-3 py-3">
+                                        <td>
                                             <RemarkCell remark={row.remark} variant="warning" />
                                         </td>
                                         <td
-                                            className={`tnum px-3 py-3 text-14 font-semibold ${row.stock === 0 ? "text-muted" : "text-ink"}`}
+                                            className={`tnum text-14 font-semibold ${row.stock === 0 ? "text-muted" : "text-ink"}`}
                                         >
                                             {num(row.stock)}
                                         </td>
-                                        <td className="px-5 py-3 text-center">
+                                        <td className="cell-pad-wide text-center">
                                             <TableLink onClick={() => setDetail(row.bom)}>查看详情</TableLink>
                                         </td>
                                     </tr>

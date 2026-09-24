@@ -1,7 +1,7 @@
 import { DataTable } from "@/components/ui/DataTable";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, OrderTaskCard } from "@/components/ui/MobileList";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { EmptyRow } from "@/components/ui/EmptyRow";
 import { BomCell } from "@/components/bom/BomCell";
 import { OrderDetailModal } from "@/pages/orders/OrdersPage";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -314,21 +314,16 @@ export function ArchivedOrdersPage() {
                                         active={sort.key === "orderNo"}
                                         dir={sort.dir}
                                         onSort={() => applySort("orderNo")}
-                                        className="px-5"
+                                        className="cell-pad-wide"
                                         width="11%"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "12%" }}>
-                                        客户
-                                    </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "16%" }}>
-                                        成品 / BOM
-                                    </th>
+                                    <th style={{ width: "12%" }}>客户</th>
+                                    <th style={{ width: "16%" }}>成品 / BOM</th>
                                     <SortTh
                                         label="订单数量"
                                         active={sort.key === "qty"}
                                         dir={sort.dir}
                                         onSort={() => applySort("qty")}
-                                        className="px-3"
                                         width="7%"
                                     />
                                     <SortTh
@@ -336,54 +331,37 @@ export function ArchivedOrdersPage() {
                                         active={sort.key === "deliverDate"}
                                         dir={sort.dir}
                                         onSort={() => applySort("deliverDate")}
-                                        className="px-3"
                                         width="9%"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "11%" }}>
-                                        交付情况
-                                    </th>
+                                    <th style={{ width: "11%" }}>交付情况</th>
                                     <SortTh
                                         label="归档时间"
                                         active={sort.key === "archivedAt"}
                                         dir={sort.dir}
                                         onSort={() => applySort("archivedAt")}
-                                        className="px-3"
                                         width="11%"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "7%" }}>
-                                        归档人
-                                    </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "9%" }}>
-                                        归档备注
-                                    </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "8%" }}>
-                                        状态
-                                    </th>
-                                    <th
-                                        className="min-w-24 px-5 py-2.5 text-center font-semibold"
-                                        style={{ width: "10%" }}
-                                    >
+                                    <th style={{ width: "7%" }}>归档人</th>
+                                    <th style={{ width: "9%" }}>归档备注</th>
+                                    <th style={{ width: "8%" }}>状态</th>
+                                    <th className="min-w-24 cell-pad-wide text-center" style={{ width: "10%" }}>
                                         操作
                                     </th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {pageRows.length === 0 && (
-                                    <tr className="row-empty">
-                                        <td colSpan={11} className="px-5 py-10 text-center">
-                                            <EmptyState description="暂无归档订单；在销售订单的编辑弹窗中归档发过货的订单（已完成或部分发货）后，会在这里显示" />
-                                        </td>
-                                    </tr>
+                                    <EmptyRow
+                                        colSpan={11}
+                                        description="暂无归档订单；在销售订单的编辑弹窗中归档发过货的订单（已完成或部分发货）后，会在这里显示"
+                                    />
                                 )}
                                 {pageRows.map(order => {
                                     const bom = bomByCode(snap, order.bomCode);
                                     const status = orderStatusOf(snap, order);
                                     return (
-                                        <tr
-                                            key={order.orderNo}
-                                            className="border-t border-line transition hover:bg-row-hover"
-                                        >
-                                            <td className="px-5 py-4">
+                                        <tr key={order.orderNo}>
+                                            <td className="cell-pad-wide">
                                                 <button
                                                     type="button"
                                                     onClick={() => setDetail(order)}
@@ -392,23 +370,23 @@ export function ArchivedOrdersPage() {
                                                     {order.orderNo}
                                                 </button>
                                             </td>
-                                            <td className="px-3 py-4">
+                                            <td>
                                                 <CustomerCell name={order.customer} note={order.customerCode} />
                                             </td>
-                                            <td className="px-3 py-4">
+                                            <td>
                                                 <BomCell
                                                     categories={snap.bomCategories}
                                                     bom={bom}
                                                     bomCode={order.bomCode}
                                                 />
                                             </td>
-                                            <td className="px-3 py-4">
+                                            <td>
                                                 <QtyCell value={order.qty} />
                                             </td>
-                                            <td className="px-3 py-4">
+                                            <td>
                                                 <DateCell date={order.deliverDate} />
                                             </td>
-                                            <td className="delivery-cell px-3 py-4">
+                                            <td className="delivery-cell">
                                                 {/* 已全部交付只留绿色满条（悬停 title 兜底语义），有欠量才展开明细 */}
                                                 {order.outbound >= order.qty ? (
                                                     <div className="delivery-track" title="已全部交付">
@@ -430,15 +408,15 @@ export function ArchivedOrdersPage() {
                                                     </>
                                                 )}
                                             </td>
-                                            <td className="px-3 py-4">
+                                            <td>
                                                 <div className="text-13 text-muted">
                                                     {order.archivedAt ? datetimeOf(order.archivedAt) : "—"}
                                                 </div>
                                             </td>
-                                            <td className="px-3 py-4">
+                                            <td>
                                                 <div className="text-13 text-muted">{order.archivedBy || "—"}</div>
                                             </td>
-                                            <td className="px-3 py-4">
+                                            <td>
                                                 <div
                                                     className="truncate text-13 text-muted"
                                                     title={order.archiveReason || ""}
@@ -446,10 +424,10 @@ export function ArchivedOrdersPage() {
                                                     {order.archiveReason || "—"}
                                                 </div>
                                             </td>
-                                            <td className="px-3 py-4">
+                                            <td>
                                                 <StatusBadge status={status.key} label={status.label} />
                                             </td>
-                                            <td className="min-w-24 px-5 py-4 text-center whitespace-nowrap">
+                                            <td className="min-w-24 cell-pad-wide text-center whitespace-nowrap">
                                                 <TableLink onClick={() => setDetail(order)}>查看详情</TableLink>
                                             </td>
                                         </tr>

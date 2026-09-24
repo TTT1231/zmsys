@@ -6,6 +6,7 @@ import { SortTh } from "@/components/ui/SortTh";
 import { nextSortState, type SortState } from "@/lib/tableSort";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
+import { EmptyRow } from "@/components/ui/EmptyRow";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BomSpecs } from "@/components/bom/BomSpecs";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -1071,7 +1072,7 @@ export function BomPage() {
                         >
                             <thead>
                                 <tr className="text-left text-13 text-muted">
-                                    <th className="px-5 py-2.5 font-semibold" style={{ width: "6%" }}>
+                                    <th className="cell-pad-wide" style={{ width: "6%" }}>
                                         序号
                                     </th>
                                     <SortTh
@@ -1083,56 +1084,40 @@ export function BomPage() {
                                                 current ? nextSortState(current, "code") : { key: "code", dir: "asc" },
                                             )
                                         }
-                                        className="px-3"
                                         width="16%"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "12%" }}>
-                                        品类
-                                    </th>
-                                    <th className="px-3 py-2.5 font-semibold">物料构成</th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "16%" }}>
-                                        BOM 备注
-                                    </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "8%" }}>
-                                        创建人
-                                    </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "12%" }}>
-                                        创建时间
-                                    </th>
-                                    <th className="px-5 py-2.5 text-center font-semibold" style={{ width: "10%" }}>
+                                    <th style={{ width: "12%" }}>品类</th>
+                                    <th>物料构成</th>
+                                    <th style={{ width: "16%" }}>BOM 备注</th>
+                                    <th style={{ width: "8%" }}>创建人</th>
+                                    <th style={{ width: "12%" }}>创建时间</th>
+                                    <th className="cell-pad-wide text-center" style={{ width: "10%" }}>
                                         操作
                                     </th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {pageRows.length === 0 && (
-                                    <tr className="row-empty">
-                                        <td colSpan={8} className="px-5 py-10 text-center">
-                                            <EmptyState
-                                                description={
-                                                    usageUnavailable
-                                                        ? "使用状态加载失败，请刷新重试"
-                                                        : statusFilter !== "全部状态"
-                                                          ? `没有${statusFilter}的 BOM`
-                                                          : "暂无 BOM"
-                                                }
-                                            />
-                                        </td>
-                                    </tr>
+                                    <EmptyRow
+                                        colSpan={8}
+                                        description={
+                                            usageUnavailable
+                                                ? "使用状态加载失败，请刷新重试"
+                                                : statusFilter !== "全部状态"
+                                                  ? `没有${statusFilter}的 BOM`
+                                                  : "暂无 BOM"
+                                        }
+                                    />
                                 )}
                                 {pageRows.map((bom, index) => (
                                     <tr
                                         key={bom.code}
-                                        className={
-                                            unusedCodes.has(bom.code)
-                                                ? "row-voided border-t border-line align-top"
-                                                : "border-t border-line align-top transition hover:bg-row-hover"
-                                        }
+                                        className={unusedCodes.has(bom.code) ? "row-voided align-top" : "align-top"}
                                     >
-                                        <td className="px-5 py-3 tnum text-14 text-muted">
+                                        <td className="cell-pad-wide tnum text-14 text-muted">
                                             {(page - 1) * pageSize + index + 1}
                                         </td>
-                                        <td className="px-3 py-3">
+                                        <td>
                                             <button
                                                 type="button"
                                                 onClick={() => setDetail(bom)}
@@ -1141,8 +1126,8 @@ export function BomPage() {
                                                 {bom.code}
                                             </button>
                                         </td>
-                                        <td className="px-3 py-3 text-14 text-td">{bom.name}</td>
-                                        <td className="px-3 py-3">
+                                        <td className="text-14 text-td">{bom.name}</td>
+                                        <td>
                                             <BomCell
                                                 categories={categoriesQuery.data}
                                                 bom={bom}
@@ -1150,14 +1135,12 @@ export function BomPage() {
                                                 showIdentity={false}
                                             />
                                         </td>
-                                        <td className="px-3 py-3">
+                                        <td>
                                             <RemarkCell remark={bom.remark} variant="warning" />
                                         </td>
-                                        <td className="px-3 py-3 text-14 text-td">{bom.creator}</td>
-                                        <td className="tnum px-3 py-3 text-14 text-td">
-                                            {formatDateTime(bom.created)}
-                                        </td>
-                                        <td className="px-5 py-3 text-center">
+                                        <td className="text-14 text-td">{bom.creator}</td>
+                                        <td className="tnum text-14 text-td">{formatDateTime(bom.created)}</td>
+                                        <td className="cell-pad-wide text-center">
                                             <TableLink onClick={() => setDetail(bom)}>查看详情</TableLink>
                                         </td>
                                     </tr>

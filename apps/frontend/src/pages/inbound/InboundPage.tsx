@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { DataTable } from "@/components/ui/DataTable";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { EmptyRow } from "@/components/ui/EmptyRow";
 import { RecordFields, RecordProduct, RecordSummary } from "@/components/business/RecordDetails";
 import { DangerNote } from "@/components/business/DangerNote";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -792,55 +792,39 @@ export function InboundPage() {
                                         active={sort.key === "no"}
                                         dir={sort.dir}
                                         onSort={() => applySort("no")}
-                                        className="px-5"
+                                        className="cell-pad-wide"
                                     />
                                     <SortTh
                                         label="BOM 编码"
                                         active={sort.key === "bomCode"}
                                         dir={sort.dir}
                                         onSort={() => applySort("bomCode")}
-                                        className="px-3"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold">BOM 备注</th>
+                                    <th>BOM 备注</th>
                                     <SortTh
                                         label="入库数量（个）"
                                         active={sort.key === "qty"}
                                         dir={sort.dir}
                                         onSort={() => applySort("qty")}
-                                        className="px-3"
                                     />
                                     <SortTh
                                         label="入库日期"
                                         active={sort.key === "date"}
                                         dir={sort.dir}
                                         onSort={() => applySort("date")}
-                                        className="px-3"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold">检验登记人</th>
-                                    <th className="px-5 py-2.5 text-center font-semibold">操作</th>
+                                    <th>检验登记人</th>
+                                    <th className="cell-pad-wide text-center">操作</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {pageRows.length === 0 && (
-                                    <tr className="row-empty">
-                                        <td colSpan={7} className="px-5 py-10 text-center">
-                                            <EmptyState description="没有找到匹配的入库记录" />
-                                        </td>
-                                    </tr>
-                                )}
+                                {pageRows.length === 0 && <EmptyRow colSpan={7} description="没有找到匹配的入库记录" />}
                                 {pageRows.map(row => {
                                     const bom = bomByCode(snap, row.bomCode);
                                     const voided = row.status === "voided";
                                     return (
-                                        <tr
-                                            key={row.no}
-                                            className={
-                                                voided
-                                                    ? "row-voided border-t border-line"
-                                                    : "border-t border-line transition hover:bg-row-hover"
-                                            }
-                                        >
-                                            <td className="px-5 py-3 tnum text-14 font-semibold text-td-strong">
+                                        <tr key={row.no} className={voided ? "row-voided" : undefined}>
+                                            <td className="cell-pad-wide tnum text-14 font-semibold text-td-strong">
                                                 {/* 作废单号加删除线；内联小徽章兜底（颜色不是唯一指示器），
                                                     紧凑账本档经 .void-flag 收纳，识别交给不占空间的底色/竖条/删除线 */}
                                                 <span className="inline-flex items-center gap-2">
@@ -858,22 +842,22 @@ export function InboundPage() {
                                                     )}
                                                 </span>
                                             </td>
-                                            <td className="px-3 py-4">
+                                            <td>
                                                 <BomCell
                                                     categories={snap.bomCategories}
                                                     bom={bom}
                                                     bomCode={row.bomCode}
                                                 />
                                             </td>
-                                            <td className="px-3 py-3">
+                                            <td>
                                                 <RemarkCell remark={bom?.remark} variant="warning" />
                                             </td>
-                                            <td className="px-3 py-3">
+                                            <td>
                                                 <QtyCell value={row.qty} />
                                             </td>
-                                            <td className="px-3 py-3 tnum text-14 text-td">{row.date}</td>
-                                            <td className="px-3 py-3 text-14 text-td">{row.inspector}</td>
-                                            <td className="px-5 py-3 text-center">
+                                            <td className="tnum text-14 text-td">{row.date}</td>
+                                            <td className="text-14 text-td">{row.inspector}</td>
+                                            <td className="cell-pad-wide text-center">
                                                 <button
                                                     type="button"
                                                     onClick={() => setVoucher(row)}

@@ -2,7 +2,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { ListState, OrderTaskCard } from "@/components/ui/MobileList";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { EmptyRow } from "@/components/ui/EmptyRow";
 import { BomCell } from "@/components/bom/BomCell";
 import { RemarkCell } from "@/components/ui/RemarkCell";
 import { RecordFields, RecordProduct, RecordSummary } from "@/components/business/RecordDetails";
@@ -1061,24 +1061,17 @@ export function OrdersPage() {
                                         active={sort.key === "orderNo"}
                                         dir={sort.dir}
                                         onSort={() => applySort("orderNo")}
-                                        className="px-5"
+                                        className="cell-pad-wide"
                                         width="14%"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "14%" }}>
-                                        客户 / 备注
-                                    </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "24%" }}>
-                                        成品 / BOM
-                                    </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "12%" }}>
-                                        BOM 备注
-                                    </th>
+                                    <th style={{ width: "14%" }}>客户 / 备注</th>
+                                    <th style={{ width: "24%" }}>成品 / BOM</th>
+                                    <th style={{ width: "12%" }}>BOM 备注</th>
                                     <SortTh
                                         label="订单数量"
                                         active={sort.key === "qty"}
                                         dir={sort.dir}
                                         onSort={() => applySort("qty")}
-                                        className="px-3"
                                         width="8%"
                                     />
                                     <SortTh
@@ -1086,7 +1079,6 @@ export function OrdersPage() {
                                         active={sort.key === "deliverDate"}
                                         dir={sort.dir}
                                         onSort={() => applySort("deliverDate")}
-                                        className="px-3"
                                         width="12%"
                                     />
                                     <SortTh
@@ -1094,39 +1086,24 @@ export function OrdersPage() {
                                         active={sort.key === "outbound"}
                                         dir={sort.dir}
                                         onSort={() => applySort("outbound")}
-                                        className="px-3"
                                         width="12%"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "7%" }}>
-                                        创建人
-                                    </th>
+                                    <th style={{ width: "7%" }}>创建人</th>
                                     <SortTh
                                         label="创建时间"
                                         active={sort.key === "createdAt"}
                                         dir={sort.dir}
                                         onSort={() => applySort("createdAt")}
-                                        className="px-3"
                                         width="10%"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "8%" }}>
-                                        状态
-                                    </th>
-                                    <th
-                                        className="min-w-28 px-5 py-2.5 text-center font-semibold"
-                                        style={{ width: "8%" }}
-                                    >
+                                    <th style={{ width: "8%" }}>状态</th>
+                                    <th className="min-w-28 cell-pad-wide text-center" style={{ width: "8%" }}>
                                         操作
                                     </th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {pageRows.length === 0 && (
-                                    <tr className="row-empty">
-                                        <td colSpan={11} className="px-5 py-10 text-center">
-                                            <EmptyState description="没有找到匹配的订单" />
-                                        </td>
-                                    </tr>
-                                )}
+                                {pageRows.length === 0 && <EmptyRow colSpan={11} description="没有找到匹配的订单" />}
                                 {pageRows.map(order => {
                                     const bom = bomByCode(snap, order.bomCode);
                                     const status = orderStatusOf(snap, order);
@@ -1136,11 +1113,8 @@ export function OrdersPage() {
                                     // 档案已删除的客户名不可点（快照里已无对应档案）
                                     const customer = snap.customers.find(item => item.code === order.customerCode);
                                     return (
-                                        <tr
-                                            key={order.orderNo}
-                                            className="border-t border-line transition hover:bg-row-hover"
-                                        >
-                                            <td className="px-5 py-4">
+                                        <tr key={order.orderNo}>
+                                            <td className="cell-pad-wide">
                                                 <button
                                                     type="button"
                                                     onClick={() => setDetail(order)}
@@ -1149,7 +1123,7 @@ export function OrdersPage() {
                                                     {order.orderNo}
                                                 </button>
                                             </td>
-                                            <td className="px-3 py-4">
+                                            <td>
                                                 <CustomerCell
                                                     name={order.customer}
                                                     remark={order.remark}
@@ -1160,26 +1134,26 @@ export function OrdersPage() {
                                                     }
                                                 />
                                             </td>
-                                            <td className="px-3 py-4">
+                                            <td>
                                                 <BomCell
                                                     categories={snap.bomCategories}
                                                     bom={bom}
                                                     bomCode={order.bomCode}
                                                 />
                                             </td>
-                                            <td className="px-3 py-4">
+                                            <td>
                                                 <RemarkCell remark={bom?.remark} variant="warning" />
                                             </td>
-                                            <td className="px-3 py-4">
+                                            <td>
                                                 <QtyCell value={order.qty} />
                                             </td>
-                                            <td className="px-3 py-4">
+                                            <td>
                                                 <DateCell
                                                     date={order.deliverDate}
                                                     overdue={order.deliverDate < todayIso() && remaining > 0}
                                                 />
                                             </td>
-                                            <td className="delivery-cell px-3 py-4">
+                                            <td className="delivery-cell">
                                                 {/* 已全部交付只留绿色满条（悬停 title 兜底语义），
                                                     未交付/已取消才展开文字明细 */}
                                                 {cancelled ? (
@@ -1209,14 +1183,12 @@ export function OrdersPage() {
                                                     </>
                                                 )}
                                             </td>
-                                            <td className="px-3 py-4 text-14 text-td">{order.createdBy}</td>
-                                            <td className="px-3 py-4 tnum text-14 text-td">
-                                                {formatDateTime(order.createdAt)}
-                                            </td>
-                                            <td className="px-3 py-4">
+                                            <td className="text-14 text-td">{order.createdBy}</td>
+                                            <td className="tnum text-14 text-td">{formatDateTime(order.createdAt)}</td>
+                                            <td>
                                                 <StatusBadge status={status.key} label={status.label} />
                                             </td>
-                                            <td className="min-w-28 px-5 py-4 text-center whitespace-nowrap">
+                                            <td className="min-w-28 cell-pad-wide text-center whitespace-nowrap">
                                                 <TableLink onClick={() => setDetail(order)}>查看详情</TableLink>
                                             </td>
                                         </tr>
