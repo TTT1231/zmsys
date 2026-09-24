@@ -5,6 +5,7 @@ import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { RecordFields, RecordProduct, RecordSummary } from "@/components/business/RecordDetails";
 import { DangerNote } from "@/components/business/DangerNote";
+import { CustomerDetailModal } from "@/pages/customers/CustomersPage";
 import { BomCell } from "@/components/bom/BomCell";
 import { BomRemarkNote } from "@/components/bom/BomRemarkNote";
 import { RemarkCell } from "@/components/ui/RemarkCell";
@@ -564,6 +565,8 @@ export function OutboundPage() {
     const [keyword, setKeyword] = useState("");
     const [category, setCategory] = useState("全部品类");
     const [statusFilter, setStatusFilter] = useState("全部状态");
+    // 按操作人筛：看单个人的全部出库记录（选项来自台账里实际出现过的操作人）
+    const [operatorFilter, setOperatorFilter] = useState("全部操作人");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     // 列排序默认升序：默认按出库日期（同日以单号稳定排序）
@@ -578,8 +581,11 @@ export function OutboundPage() {
     );
     const [voidTarget, setVoidTarget] = useState<OutboundRow | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<OutboundRow | null>(null);
+    // “客户/备注”列点客户名打开客户档案详情；存编码渲染时回捞，刷新后数据保持同步
+    const [customerDetailCode, setCustomerDetailCode] = useState<string | null>(null);
 
     const rows = snap.outboundLedger;
+    const operators = useMemo(() => [...new Set(rows.map(row => row.operator))], [rows]);
     const currentDetail = detail ? (rows.find(row => row.no === detail.no) ?? null) : null;
     const boms = snap.boms;
     const bomCategory = useMemo(() => new Map(boms.map(bom => [bom.code, bom.name])), [boms]);
@@ -590,9 +596,10 @@ export function OutboundPage() {
         return rows.filter(row => {
             if (statusFilter !== "全部状态" && outboundStateLabel(row) !== statusFilter) return false;
             if (category !== "全部品类" && bomCategory.get(row.bomCode) !== category) return false;
+            if (operatorFilter !== "全部操作人" && row.operator !== operatorFilter) return false;
             return !kw || `${row.no} ${row.orderNo} ${row.customer} ${row.bomCode}`.toLowerCase().includes(kw);
         });
-    }, [rows, keyword, category, statusFilter, bomCategory]);
+    }, [rows, keyword, category, statusFilter, operatorFilter, bomCategory]);
 
     const sorted = useMemo(() => {
         const factor = sort.dir === "asc" ? 1 : -1;
@@ -649,14 +656,16 @@ export function OutboundPage() {
         if (searchParams.get("new") === "outbound") setSearchParams({}, { replace: true });
     }, [searchParams, setSearchParams]);
 
-    // 清空条件只作用于筛选行（搜索/状态/品类）；分页由用户自行操作
+    // 清空条件只作用于筛选行（搜索/状态/品类/操作人）；分页由用户自行操作
     const clearFilters = () => {
         setKeyword("");
         setCategory("全部品类");
         setStatusFilter("全部状态");
+        setOperatorFilter("全部操作人");
         setPage(1);
     };
-    const filtersActive = !!keyword.trim() || statusFilter !== "全部状态" || category !== "全部品类";
+    const filtersActive =
+        !!keyword.trim() || statusFilter !== "全部状态" || category !== "全部品类" || operatorFilter !== "全部操作人";
 
     return (
         <div className="flex flex-col gap-5">
@@ -701,6 +710,20 @@ export function OutboundPage() {
                     >
                         <option>全部品类</option>
                         {categories.map(item => (
+                            <option key={item}>{item}</option>
+                        ))}
+                    </select>
+                    <select
+                        value={operatorFilter}
+                        onChange={event => {
+                            setOperatorFilter(event.target.value);
+                            setPage(1);
+                        }}
+                        aria-label="按操作人筛选"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
+                    >
+                        <option>全部操作人</option>
+                        {operators.map(item => (
                             <option key={item}>{item}</option>
                         ))}
                     </select>
@@ -798,10 +821,10 @@ export function OutboundPage() {
                     ) : (
                         <DataTable
                             tableId="outbound"
-                            defaultWidths={[158, 190, 110, 100, 302, 150, 110, 110, 90, 90, 150, 100]}
+                            defaultWidths={[158, 190, 110, 302, 150, 110, 110, 90, 90, 150, 100]}
                             recordCount={filtered.length}
                             identityColumn={0}
-                            pinnedStart={[1, 2]}
+                            pinnedStart={[0, 1, 2, 3, 4]}
                             scrollRef={tableScrollRef}
                         >
                             <thead>
@@ -815,7 +838,6 @@ export function OutboundPage() {
                                     />
                                     <th className="px-3 py-2.5 font-semibold">客户 / 备注</th>
                                     <th className="px-3 py-2.5 font-semibold">销售订单号</th>
-                                    <th className="px-3 py-2.5 font-semibold">客户编码</th>
                                     <SortTh
                                         label="BOM 编码"
                                         active={sort.key === "bomCode"}
@@ -848,7 +870,7 @@ export function OutboundPage() {
                             <tbody>
                                 {pageRows.length === 0 && (
                                     <tr className="row-empty">
-                                        <td colSpan={12} className="px-5 py-10 text-center">
+                                        <td colSpan={11} className="px-5 py-10 text-center">
                                             <EmptyState description="没有找到匹配的出库记录" />
                                         </td>
                                     </tr>
@@ -873,13 +895,18 @@ export function OutboundPage() {
                                                 {row.no}
                                             </td>
                                             <td className="px-3 py-3">
+                                                {/* 与销售订单列表同款：客户名可点开客户档案详情（档案已删除的不可点） */}
                                                 <CustomerCell
                                                     name={row.customer}
                                                     remark={orderRemarkByNo.get(row.orderNo)}
+                                                    onClick={
+                                                        snap.customers.some(item => item.code === row.customerCode)
+                                                            ? () => setCustomerDetailCode(row.customerCode)
+                                                            : undefined
+                                                    }
                                                 />
                                             </td>
                                             <td className="px-3 py-3 tnum text-14 text-td">{row.orderNo}</td>
-                                            <td className="px-3 py-3 tnum text-12 text-muted">{row.customerCode}</td>
                                             <td className="px-3 py-4">
                                                 <BomCell
                                                     categories={snap.bomCategories}
@@ -938,6 +965,13 @@ export function OutboundPage() {
             </section>
 
             {canRegister && <OutboundModal open={newOpen} onClose={() => setNewOpen(false)} />}
+            <CustomerDetailModal
+                customer={
+                    customerDetailCode ? (snap.customers.find(item => item.code === customerDetailCode) ?? null) : null
+                }
+                snap={snap}
+                onClose={() => setCustomerDetailCode(null)}
+            />
             <OutboundDetailModal
                 row={currentDetail}
                 snap={snap}

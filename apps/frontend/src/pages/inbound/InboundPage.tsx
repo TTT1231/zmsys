@@ -549,6 +549,8 @@ export function InboundPage() {
     const [keyword, setKeyword] = useState("");
     const [category, setCategory] = useState("全部品类");
     const [statusFilter, setStatusFilter] = useState("全部状态");
+    // 按检验登记人筛：看单个人的全部入库记录（选项来自台账里实际出现过的登记人）
+    const [inspectorFilter, setInspectorFilter] = useState("全部登记人");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     // 列排序默认升序：默认按入库日期（同日以单号稳定排序）
@@ -562,6 +564,7 @@ export function InboundPage() {
     const [editTarget, setEditTarget] = useState<InboundRow | null>(null);
 
     const rows = snap.inboundLedger;
+    const inspectors = useMemo(() => [...new Set(rows.map(row => row.inspector))], [rows]);
     const boms = snap.boms;
     const bomCategory = useMemo(() => new Map(boms.map(bom => [bom.code, bom.name])), [boms]);
     const categories = [...new Set(boms.map(bom => bom.name))];
@@ -572,9 +575,10 @@ export function InboundPage() {
             if (statusFilter !== "全部状态" && (row.status === "voided" ? "已作废" : "已入库") !== statusFilter)
                 return false;
             if (category !== "全部品类" && bomCategory.get(row.bomCode) !== category) return false;
+            if (inspectorFilter !== "全部登记人" && row.inspector !== inspectorFilter) return false;
             return !kw || `${row.no} ${row.bomCode} ${row.inspector}`.toLowerCase().includes(kw);
         });
-    }, [rows, keyword, category, statusFilter, bomCategory]);
+    }, [rows, keyword, category, statusFilter, inspectorFilter, bomCategory]);
 
     const sorted = useMemo(() => {
         const factor = sort.dir === "asc" ? 1 : -1;
@@ -613,14 +617,16 @@ export function InboundPage() {
         if (searchParams.get("new") === "inbound") setSearchParams({}, { replace: true });
     }, [searchParams, setSearchParams]);
 
-    // 清空条件只作用于筛选行（搜索/状态/品类）；分页由用户自行操作
+    // 清空条件只作用于筛选行（搜索/状态/品类/登记人）；分页由用户自行操作
     const clearFilters = () => {
         setKeyword("");
         setCategory("全部品类");
         setStatusFilter("全部状态");
+        setInspectorFilter("全部登记人");
         setPage(1);
     };
-    const filtersActive = !!keyword.trim() || statusFilter !== "全部状态" || category !== "全部品类";
+    const filtersActive =
+        !!keyword.trim() || statusFilter !== "全部状态" || category !== "全部品类" || inspectorFilter !== "全部登记人";
 
     return (
         <div className="flex flex-col gap-5">
@@ -665,6 +671,20 @@ export function InboundPage() {
                     >
                         <option>全部品类</option>
                         {categories.map(item => (
+                            <option key={item}>{item}</option>
+                        ))}
+                    </select>
+                    <select
+                        value={inspectorFilter}
+                        onChange={event => {
+                            setInspectorFilter(event.target.value);
+                            setPage(1);
+                        }}
+                        aria-label="按登记人筛选"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
+                    >
+                        <option>全部登记人</option>
+                        {inspectors.map(item => (
                             <option key={item}>{item}</option>
                         ))}
                     </select>

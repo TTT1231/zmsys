@@ -409,24 +409,26 @@ export function ArchivedOrdersPage() {
                                                 <DateCell date={order.deliverDate} />
                                             </td>
                                             <td className="delivery-cell px-3 py-4">
-                                                <div className="text-13 text-muted">
-                                                    {order.outbound >= order.qty ? (
-                                                        "已全部交付"
-                                                    ) : (
-                                                        <>
+                                                {/* 已全部交付只留绿色满条（悬停 title 兜底语义），有欠量才展开明细 */}
+                                                {order.outbound >= order.qty ? (
+                                                    <div className="delivery-track" title="已全部交付">
+                                                        <ProgressTrack value={1} done />
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <div className="text-13 text-muted">
                                                             待交 <QtyCell value={remainingOf(order)} />
-                                                        </>
-                                                    )}
-                                                </div>
-                                                <div className="delivery-shipped tnum mt-0.5 text-12 text-muted">
-                                                    已发 {num(order.outbound)} / {num(order.qty)}
-                                                </div>
-                                                <div className="delivery-track mt-1.5">
-                                                    <ProgressTrack
-                                                        value={order.qty === 0 ? 0 : order.outbound / order.qty}
-                                                        done={order.outbound >= order.qty}
-                                                    />
-                                                </div>
+                                                        </div>
+                                                        <div className="delivery-shipped tnum mt-0.5 text-12 text-muted">
+                                                            已发 {num(order.outbound)} / {num(order.qty)}
+                                                        </div>
+                                                        <div className="delivery-track mt-1.5">
+                                                            <ProgressTrack
+                                                                value={order.qty === 0 ? 0 : order.outbound / order.qty}
+                                                            />
+                                                        </div>
+                                                    </>
+                                                )}
                                             </td>
                                             <td className="px-3 py-4">
                                                 <div className="text-13 text-muted">

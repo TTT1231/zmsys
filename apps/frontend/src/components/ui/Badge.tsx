@@ -82,12 +82,12 @@ export function TableLink({ children, onClick }: { children: ReactNode; onClick?
     );
 }
 
-/* 交付进度条（.ledger-track） */
+/* 交付进度条（.ledger-track）；交付完成走 success 绿（全量交付一眼可辨，未完成走主题色渐变） */
 export function ProgressTrack({ value, done }: { value: number; done?: boolean }) {
     return (
         <div className="ledger-track h-0.75 w-full max-w-30 overflow-hidden rounded-full bg-soft">
             <div
-                className={`h-full rounded-full ${done ? " bg-accent" : "bg-linear-to-r from-[var(--color-primary)] to-[color-mix(in_srgb,var(--color-primary)_60%,white)]"}`}
+                className={`h-full rounded-full ${done ? " bg-success" : "bg-linear-to-r from-[var(--color-primary)] to-[color-mix(in_srgb,var(--color-primary)_60%,white)]"}`}
                 style={{ width: `${Math.min(100, Math.round(value * 100))}%` }}
             />
         </div>

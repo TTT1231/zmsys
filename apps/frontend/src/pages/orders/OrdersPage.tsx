@@ -43,13 +43,14 @@ const STATUS_OPTIONS = ["全部状态", "待备货", "可发货", "部分可发�
 const EMPTY_BOMS: Snapshot["boms"] = [];
 const EMPTY_CUSTOMERS: Snapshot["customers"] = [];
 
-/* 可排序列：订单号 / 数量 / 交期 / 交付情况（按累计已发对比）；桌面表头与移动端排序下拉共用 */
-type OrderSortKey = "orderNo" | "qty" | "deliverDate" | "outbound";
+/* 可排序列：订单号 / 数量 / 交期 / 交付情况（按累计已发对比）/ 创建时间；桌面表头与移动端排序下拉共用 */
+type OrderSortKey = "orderNo" | "qty" | "deliverDate" | "outbound" | "createdAt";
 const ORDER_SORT_COLUMNS: Array<{ key: OrderSortKey; label: string }> = [
     { key: "orderNo", label: "销售订单号" },
     { key: "qty", label: "订单数量" },
     { key: "deliverDate", label: "交货日期" },
     { key: "outbound", label: "交付情况" },
+    { key: "createdAt", label: "创建时间" },
 ];
 
 /* 交期筛选激活时在按钮上回显的简写日期（MM/DD） */
@@ -747,7 +748,9 @@ export function OrdersPage() {
                       ? a.outbound - b.outbound
                       : sort.key === "deliverDate"
                         ? a.deliverDate.localeCompare(b.deliverDate)
-                        : a.orderNo.localeCompare(b.orderNo);
+                        : sort.key === "createdAt"
+                          ? a.createdAt.localeCompare(b.createdAt)
+                          : a.orderNo.localeCompare(b.orderNo);
             return byKey * factor || a.orderNo.localeCompare(b.orderNo);
         });
     })();
@@ -1045,10 +1048,10 @@ export function OrdersPage() {
                     ) : (
                         <DataTable
                             tableId="orders"
-                            defaultWidths={[154, 260, 100, 397, 150, 100, 120, 140, 90, 150, 125, 100]}
+                            defaultWidths={[154, 260, 397, 150, 100, 120, 140, 90, 150, 125, 100]}
                             recordCount={filtered.length}
                             identityColumn={0}
-                            pinnedStart={[0, 1]}
+                            pinnedStart={[0, 1, 2, 3]}
                             scrollRef={tableScrollRef}
                         >
                             <thead>
@@ -1063,9 +1066,6 @@ export function OrdersPage() {
                                     />
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "14%" }}>
                                         客户 / 备注
-                                    </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "8%" }}>
-                                        客户编码
                                     </th>
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "24%" }}>
                                         成品 / BOM
@@ -1100,9 +1100,14 @@ export function OrdersPage() {
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "7%" }}>
                                         创建人
                                     </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "10%" }}>
-                                        创建时间
-                                    </th>
+                                    <SortTh
+                                        label="创建时间"
+                                        active={sort.key === "createdAt"}
+                                        dir={sort.dir}
+                                        onSort={() => applySort("createdAt")}
+                                        className="px-3"
+                                        width="10%"
+                                    />
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "8%" }}>
                                         状态
                                     </th>
@@ -1117,7 +1122,7 @@ export function OrdersPage() {
                             <tbody>
                                 {pageRows.length === 0 && (
                                     <tr className="row-empty">
-                                        <td colSpan={12} className="px-5 py-10 text-center">
+                                        <td colSpan={11} className="px-5 py-10 text-center">
                                             <EmptyState description="没有找到匹配的订单" />
                                         </td>
                                     </tr>
@@ -1155,7 +1160,6 @@ export function OrdersPage() {
                                                     }
                                                 />
                                             </td>
-                                            <td className="px-3 py-4 tnum text-12 text-muted">{order.customerCode}</td>
                                             <td className="px-3 py-4">
                                                 <BomCell
                                                     categories={snap.bomCategories}
@@ -1176,27 +1180,33 @@ export function OrdersPage() {
                                                 />
                                             </td>
                                             <td className="delivery-cell px-3 py-4">
-                                                <div className="text-13 text-muted">
-                                                    {cancelled ? (
-                                                        "已停止交付"
-                                                    ) : done ? (
-                                                        "已全部交付"
-                                                    ) : (
-                                                        <>
-                                                            待交 <QtyCell value={remaining} />
-                                                        </>
-                                                    )}
-                                                </div>
-                                                <div className="delivery-shipped tnum mt-0.5 text-12 text-muted">
-                                                    已发 {num(order.outbound)} / {num(order.qty)}
-                                                </div>
-                                                {!cancelled && (
-                                                    <div className="delivery-track mt-1.5">
-                                                        <ProgressTrack
-                                                            value={order.qty === 0 ? 0 : order.outbound / order.qty}
-                                                            done={done}
-                                                        />
+                                                {/* 已全部交付只留绿色满条（悬停 title 兜底语义），
+                                                    未交付/已取消才展开文字明细 */}
+                                                {cancelled ? (
+                                                    <>
+                                                        <div className="text-13 text-muted">已停止交付</div>
+                                                        <div className="delivery-shipped tnum mt-0.5 text-12 text-muted">
+                                                            已发 {num(order.outbound)} / {num(order.qty)}
+                                                        </div>
+                                                    </>
+                                                ) : done ? (
+                                                    <div className="delivery-track" title="已全部交付">
+                                                        <ProgressTrack value={1} done />
                                                     </div>
+                                                ) : (
+                                                    <>
+                                                        <div className="text-13 text-muted">
+                                                            待交 <QtyCell value={remaining} />
+                                                        </div>
+                                                        <div className="delivery-shipped tnum mt-0.5 text-12 text-muted">
+                                                            已发 {num(order.outbound)} / {num(order.qty)}
+                                                        </div>
+                                                        <div className="delivery-track mt-1.5">
+                                                            <ProgressTrack
+                                                                value={order.qty === 0 ? 0 : order.outbound / order.qty}
+                                                            />
+                                                        </div>
+                                                    </>
                                                 )}
                                             </td>
                                             <td className="px-3 py-4 text-14 text-td">{order.createdBy}</td>
