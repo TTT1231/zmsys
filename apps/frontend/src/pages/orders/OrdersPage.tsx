@@ -30,7 +30,7 @@ import {
     useWbSnapshot,
 } from "@/data/queries";
 import { EMPTY_SNAPSHOT, bomByCode, maxShipOf, orderStatusOf, remainingOf } from "@/data/views";
-import { addDays, addMonths, todayIso } from "@/lib/date";
+import { addDays, addMonths, formatDateTime, todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/toastContexts";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
@@ -613,6 +613,8 @@ export function OrderDetailModal({
                                 </>
                             ),
                         },
+                        { label: "创建人", value: order.createdBy },
+                        { label: "创建时间", value: formatDateTime(order.createdAt) },
                         { label: "订单备注", value: order.remark || "—", fullWidth: true },
                         ...(wasCancelled
                             ? [{ label: "取消原因", value: order.cancelReason || "—", fullWidth: true }]
@@ -976,6 +978,8 @@ export function OrdersPage() {
                                             "订单数量",
                                             "交货日期",
                                             "累计出库",
+                                            "创建人",
+                                            "创建时间",
                                             "状态",
                                         ],
                                         pageRows.map(order => [
@@ -988,6 +992,8 @@ export function OrdersPage() {
                                             String(order.qty),
                                             order.deliverDate,
                                             String(order.outbound),
+                                            order.createdBy,
+                                            formatDateTime(order.createdAt),
                                             orderStatusOf(snap, order).label,
                                         ]),
                                     )
@@ -1017,7 +1023,7 @@ export function OrdersPage() {
                     ) : (
                         <DataTable
                             tableId="orders"
-                            defaultWidths={[154, 260, 100, 397, 150, 100, 120, 140, 125, 100]}
+                            defaultWidths={[154, 260, 100, 397, 150, 100, 120, 140, 90, 150, 125, 100]}
                             recordCount={filtered.length}
                             identityColumn={0}
                             pinnedStart={[0, 1]}
@@ -1069,6 +1075,12 @@ export function OrdersPage() {
                                         className="px-3"
                                         width="12%"
                                     />
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "7%" }}>
+                                        创建人
+                                    </th>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "10%" }}>
+                                        创建时间
+                                    </th>
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "8%" }}>
                                         状态
                                     </th>
@@ -1083,7 +1095,7 @@ export function OrdersPage() {
                             <tbody>
                                 {pageRows.length === 0 && (
                                     <tr>
-                                        <td colSpan={10} className="px-5 py-10 text-center">
+                                        <td colSpan={12} className="px-5 py-10 text-center">
                                             <EmptyState description="没有找到匹配的订单" />
                                         </td>
                                     </tr>
@@ -1154,6 +1166,10 @@ export function OrdersPage() {
                                                         />
                                                     </div>
                                                 )}
+                                            </td>
+                                            <td className="px-3 py-4 text-14 text-td">{order.createdBy}</td>
+                                            <td className="px-3 py-4 tnum text-14 text-td">
+                                                {formatDateTime(order.createdAt)}
                                             </td>
                                             <td className="px-3 py-4">
                                                 <StatusBadge status={status.key} label={status.label} />

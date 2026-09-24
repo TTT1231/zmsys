@@ -30,6 +30,8 @@ export const detailOrder: Order = {
     deliverDate: "2026-09-30",
     remark: "请按型号分箱，随货附出库单。",
     lifecycleStatus: "active",
+    createdBy: "梁静",
+    createdAt: "2026-09-13T02:05:00Z",
 };
 export const detailInbound: InboundRow = {
     no: "RK26091301",

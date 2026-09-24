@@ -75,6 +75,7 @@ function renderOutboundDocument(document: OutboundPrintDocument, win: Window) {
         ["发货数量", escapeHtml(`${num(document.qty)} 个`)],
         ["出库日期", escapeHtml(document.date)],
         ["登记人", escapeHtml(document.operator)],
+        ["登记时间", escapeHtml(new Date(document.registeredAt).toLocaleString())],
         ["打印人", escapeHtml(document.printedBy)],
         ["备注", escapeHtml(document.remark || "—")],
         ...(voided ? ([["作废原因", escapeHtml(document.voidReason || "—")]] as Array<[string, string]>) : []),
@@ -548,6 +549,8 @@ export function OutboundDetailModal({
                         { label: "关联订单", value: row.orderNo, fullWidth: true },
                         { label: "出库日期", value: row.date },
                         { label: "操作人", value: row.operator },
+                        // 登记时间 = 系统落账时刻，与入库详情同构；出库日期可补录，以此为准
+                        { label: "登记时间", value: row.time },
                         { label: "备注", value: row.remark || "—", fullWidth: true },
                         ...(row.state === "voided"
                             ? [{ label: "作废原因", value: row.voidReason || "—", fullWidth: true }]

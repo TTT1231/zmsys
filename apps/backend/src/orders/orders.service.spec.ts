@@ -23,6 +23,7 @@ const ID_KEY = "idem-key-01";
 type OrderRow = SalesOrderTable & {
     customer: { customerCode: string };
     bom: { bomCode: string };
+    creator: { name: string };
     canceller: { name: string } | null;
     archiver: { name: string } | null;
 };
@@ -98,6 +99,7 @@ const mkOrder = (overrides: Partial<OrderRow> = {}): OrderRow =>
         updatedAt: new Date(),
         customer: { customerCode: "CUS-0900" },
         bom: { bomCode: "ZMKW0001" },
+        creator: { name: "郭均" },
         canceller: null,
         archiver: null,
         ...overrides,
@@ -130,6 +132,7 @@ const createStore = (store: Store) => {
             ? { customerCode: store.customers.find(c => c.id === order.customerId)!.customerCode }
             : { customerCode: "CUS-0000" },
         bom: { bomCode: store.boms.find(b => b.id === order.bomId)?.bomCode ?? "ZM0000000" },
+        creator: { name: "郭均" },
         canceller: null,
         archiver: null,
     });
