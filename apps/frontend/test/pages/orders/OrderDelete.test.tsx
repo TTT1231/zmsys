@@ -64,7 +64,7 @@ it("超级管理员编辑一件未发的订单：警告二次确认后按乐观�
     await user.click(within(dialog).getByRole("button", { name: "删除订单" }));
 
     const confirm = screen.getByRole("dialog", { name: "删除销售订单" });
-    expect(within(confirm).getByText(/立即从列表移除/)).toBeInTheDocument();
+    expect(within(confirm).getByText(/从列表移除/)).toBeInTheDocument();
     expect(within(confirm).getByText(/7 天后清理记录/)).toBeInTheDocument();
     expect(deleteMutate).not.toHaveBeenCalled();
 

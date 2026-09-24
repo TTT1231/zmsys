@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { BomCell } from "@/components/bom/BomCell";
 import { RemarkCell } from "@/components/ui/RemarkCell";
 import { RecordFields, RecordProduct, RecordSummary } from "@/components/business/RecordDetails";
+import { DangerNote } from "@/components/business/DangerNote";
 import { OutboundModal } from "@/pages/outbound/OutboundPage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -442,36 +443,29 @@ function EditOrderModal({
                 <Modal
                     open
                     onClose={() => setConfirmDelete(false)}
-                    label="危险操作"
                     title="删除销售订单"
                     subtitle={order ? `${order.orderNo} · ${order.customer}` : ""}
                     width={440}
                     footer={
                         <>
-                            <button
-                                type="button"
-                                onClick={() => setConfirmDelete(false)}
-                                className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
-                            >
+                            <Button variant="secondary" type="button" onClick={() => setConfirmDelete(false)}>
                                 取消
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                                variant="danger"
                                 type="button"
                                 disabled={deleteOrder.isPending}
                                 onClick={submitDelete}
-                                className="min-h-10 rounded-btn bg-danger px-4 text-14 font-medium text-white transition hover:opacity-90 disabled:opacity-60"
                             >
                                 {deleteOrder.isPending ? "正在删除…" : "确认删除"}
-                            </button>
+                            </Button>
                         </>
                     }
                 >
-                    <div className="rounded-panel border border-danger/20 bg-danger-soft/50 p-4">
-                        <p className="text-14 font-semibold text-ink">删除后，这张订单会立即从列表移除</p>
-                        <p className="mt-1 text-13 leading-5 text-muted">
-                            {num(order.qty)} 个的订单当前已发 0 个。7 天后清理记录，操作日志保留。
-                        </p>
-                    </div>
+                    <DangerNote
+                        impact="删除后，这张订单会从列表移除"
+                        note={`${num(order.qty)} 个的订单当前已发 0 个；7 天后清理记录，操作日志保留。`}
+                    />
                 </Modal>
             )}
             {confirmArchive && order && (

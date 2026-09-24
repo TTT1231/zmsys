@@ -1,4 +1,5 @@
 import { BomCell } from "@/components/bom/BomCell";
+import { DangerNote } from "@/components/business/DangerNote";
 import { RemarkCell } from "@/components/ui/RemarkCell";
 import { DataTable } from "@/components/ui/DataTable";
 import { SortTh } from "@/components/ui/SortTh";
@@ -145,40 +146,24 @@ function DeleteBomModal({ bom, onClose }: { bom: Bom | null; onClose: () => void
         <Modal
             open
             onClose={onClose}
-            label="危险操作"
             title="删除 BOM"
             subtitle={bom.code}
             width={440}
             footer={
                 <>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
-                    >
+                    <Button variant="secondary" type="button" onClick={onClose}>
                         取消
-                    </button>
-                    <button
-                        type="button"
-                        disabled={deleteBom.isPending}
-                        onClick={submit}
-                        className="min-h-10 rounded-btn bg-danger px-4 text-14 font-medium text-white transition hover:opacity-90 disabled:opacity-60"
-                    >
+                    </Button>
+                    <Button variant="danger" type="button" disabled={deleteBom.isPending} onClick={submit}>
                         {deleteBom.isPending ? "正在删除…" : "确认删除"}
-                    </button>
+                    </Button>
                 </>
             }
         >
-            <div className="flex items-start gap-3 rounded-panel border border-[#fecdca] bg-danger-soft/60 p-4">
-                <Icon name="alert" size={20} className="mt-0.5 shrink-0 text-danger" />
-                <div className="text-14 leading-6 text-td">
-                    即将删除 BOM <span className="tnum font-semibold text-ink">{bom.code}</span>（{bom.name}
-                    ）。该 BOM 未被任何销售订单引用。
-                    <p className="mt-1 font-medium text-danger">
-                        删除后该档案将从系统永久移除，不可恢复。请确认它是手误创建的档案。
-                    </p>
-                </div>
-            </div>
+            <DangerNote
+                impact={`删除后，BOM ${bom.code}（${bom.name}）将永久移除，不可恢复`}
+                note="该 BOM 未被任何销售订单引用；请确认它是手误创建的档案。"
+            />
         </Modal>
     );
 }
