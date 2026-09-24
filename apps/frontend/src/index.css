@@ -960,8 +960,10 @@ button:active:not(:disabled) {
     z-index: 3;
     background: var(--color-soft);
 }
-/* 空态占位行不是数据行：不参与行悬停底色（占位区跟着 hover 变色会被误读成可交互） */
-.managed-table tbody tr:not(.row-empty):hover td {
+/* 空态占位行不是数据行：不参与行悬停底色（占位区跟着 hover 变色会被误读成可交互）。
+   作废行同样排除：它的悬停底色由下方 row-voided 专属规则（danger 加深）负责，
+   这里若命中会以更高特异性把作废底色盖回普通悬停色、高亮“消失” */
+.managed-table tbody tr:not(.row-empty):not(.row-voided):hover td {
     background: var(--color-row-hover);
 }
 /* 仅剩空态占位行时表格撑满表体视口高度，占位行吃掉剩余空间——
