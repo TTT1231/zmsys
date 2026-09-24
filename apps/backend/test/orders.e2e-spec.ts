@@ -562,27 +562,62 @@ describe("销售订单 (e2e)", () => {
         expect(mine.lifecycleStatus).toBe("archived");
     });
 
-    it("已取消订单（未发货取消）可归档：取消语境保留、备注留空", async () => {
-        const created = await createOrder(superToken, orderInput(customerCode), `e2e-ord-${RUN}-arc2`);
-        const target = created.json().data as { orderNo: string; version: number };
-
+    it("未发货取消的订单不可归档（走删除）；部分发货后取消的订单可归档且保留取消语境", async () => {
+        // 一件未发的取消单：归档 409，直接删除收尾
+        const bare = await createOrder(superToken, orderInput(customerCode), `e2e-ord-${RUN}-arc2`);
+        const bareTarget = bare.json().data as { orderNo: string; version: number };
         const cancelled = await app.inject({
             method: "POST",
-            url: `/api/orders/${target.orderNo}/cancel`,
+            url: `/api/orders/${bareTarget.orderNo}/cancel`,
             headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-arc2-cancel` },
-            payload: { expectedVersion: target.version, reason: "客户撤单" },
+            payload: { expectedVersion: bareTarget.version, reason: "客户撤单" },
         });
         expect(cancelled.statusCode).toBe(200);
+
+        const refused = await app.inject({
+            method: "POST",
+            url: `/api/orders/${bareTarget.orderNo}/archive`,
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-arc2-refuse` },
+            payload: { expectedVersion: bareTarget.version + 1 },
+        });
+        expect(refused.statusCode).toBe(409);
+        expect(refused.json().message).toContain("一件未发");
+
+        const removed = await app.inject({
+            method: "POST",
+            url: `/api/orders/${bareTarget.orderNo}/delete`,
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-arc2-del` },
+            payload: { expectedVersion: bareTarget.version + 1 },
+        });
+        expect(removed.statusCode).toBe(200);
+
+        // 部分发货后取消：可归档，取消语境保留、备注留空
+        const created = await createOrder(superToken, orderInput(customerCode), `e2e-ord-${RUN}-arc3`);
+        const target = created.json().data as { orderNo: string; version: number };
+        await seedRegisteredShipment(
+            (await prisma.salesOrderTable.findUnique({ where: { orderNo: target.orderNo } }))!.id,
+            `CKE2EB${RUN}`,
+            30,
+        );
+
+        const partCancelled = await app.inject({
+            method: "POST",
+            url: `/api/orders/${target.orderNo}/cancel`,
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-arc3-cancel` },
+            payload: { expectedVersion: target.version, reason: "客户撤单" },
+        });
+        expect(partCancelled.statusCode).toBe(200);
 
         const archived = await app.inject({
             method: "POST",
             url: `/api/orders/${target.orderNo}/archive`,
-            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-arc2-ok` },
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-arc3-ok` },
             payload: { expectedVersion: target.version + 1 },
         });
         expect(archived.statusCode).toBe(200);
         expect(archived.json().data).toMatchObject({
             lifecycleStatus: "archived",
+            outbound: 30,
             cancelReason: "客户撤单",
         });
         expect(archived.json().data.archivedAt).toBeDefined();

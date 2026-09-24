@@ -22,8 +22,9 @@ import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import type { Order } from "@/api";
 
-/* 归档状态筛选：与 views.statusOf 的归档标签一一对应（按 label 全等比较） */
-const STATUS_OPTIONS = ["全部状态", "已完成后归档", "部分发货后归档", "取消后归档", "部分发货取消后归档"];
+/* 归档状态筛选：与 views.statusOf 的归档标签一一对应（按 label 全等比较）；
+ * 一件未发的单不归档（取消后直接删除），故只有发过货的三种形态 */
+const STATUS_OPTIONS = ["全部状态", "已完成后归档", "部分发货后归档", "部分发货取消后归档"];
 
 /* 可排序列：订单号 / 数量 / 交期 / 归档时间；桌面表头与移动端排序下拉共用 */
 type ArchivedSortKey = "orderNo" | "qty" | "deliverDate" | "archivedAt";
@@ -296,7 +297,7 @@ export function ArchivedOrdersPage() {
                     ) : (
                         <DataTable
                             tableId="archived-orders"
-                            defaultWidths={[150, 160, 300, 110, 125, 140, 160, 145, 110]}
+                            defaultWidths={[140, 150, 270, 100, 115, 130, 155, 95, 140, 105]}
                             recordCount={filtered.length}
                             identityColumn={0}
                             scrollRef={tableScrollRef}
@@ -309,12 +310,12 @@ export function ArchivedOrdersPage() {
                                         dir={sort.dir}
                                         onSort={() => applySort("orderNo")}
                                         className="px-5"
-                                        width="13%"
+                                        width="12%"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "14%" }}>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "13%" }}>
                                         客户
                                     </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "20%" }}>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "17%" }}>
                                         成品 / BOM
                                     </th>
                                     <SortTh
@@ -331,9 +332,9 @@ export function ArchivedOrdersPage() {
                                         dir={sort.dir}
                                         onSort={() => applySort("deliverDate")}
                                         className="px-3"
-                                        width="11%"
+                                        width="10%"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "12%" }}>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "11%" }}>
                                         交付情况
                                     </th>
                                     <SortTh
@@ -344,7 +345,10 @@ export function ArchivedOrdersPage() {
                                         className="px-3"
                                         width="12%"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "10%" }}>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "8%" }}>
+                                        归档人
+                                    </th>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "9%" }}>
                                         状态
                                     </th>
                                     <th
@@ -358,8 +362,8 @@ export function ArchivedOrdersPage() {
                             <tbody>
                                 {pageRows.length === 0 && (
                                     <tr>
-                                        <td colSpan={9} className="px-5 py-10 text-center">
-                                            <EmptyState description="暂无归档订单；在销售订单的编辑弹窗中归档已完成或部分发货的订单后，会在这里显示" />
+                                        <td colSpan={10} className="px-5 py-10 text-center">
+                                            <EmptyState description="暂无归档订单；在销售订单的编辑弹窗中归档已完成、部分发货或部分发货后取消的订单后，会在这里显示" />
                                         </td>
                                     </tr>
                                 )}
@@ -410,9 +414,9 @@ export function ArchivedOrdersPage() {
                                                 <div className="text-13 text-muted">
                                                     {order.archivedAt ? datetimeOf(order.archivedAt) : "—"}
                                                 </div>
-                                                <div className="mt-0.5 text-12 text-subtle">
-                                                    {order.archivedBy || "—"}
-                                                </div>
+                                            </td>
+                                            <td className="px-3 py-4">
+                                                <div className="text-13 text-muted">{order.archivedBy || "—"}</div>
                                             </td>
                                             <td className="px-3 py-4">
                                                 <StatusBadge status={status.key} label={status.label} />

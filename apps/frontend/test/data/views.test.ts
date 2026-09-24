@@ -145,14 +145,7 @@ describe("orderStatusOf", () => {
             label: "部分发货后归档",
             key: "archived",
         });
-        // 取消后归档（未发货取消）
-        expect(
-            orderStatusOf(
-                snap(),
-                order({ lifecycleStatus: "archived", cancelledAt: "2026-03-12T00:00:00Z", outbound: 0 }),
-            ),
-        ).toEqual({ label: "取消后归档", key: "archived" });
-        // 部分发货后取消、再归档
+        // 部分发货后取消、再归档（一件未发的取消单不归档、直接删除，无"取消后归档"形态）
         expect(
             orderStatusOf(
                 snap(),

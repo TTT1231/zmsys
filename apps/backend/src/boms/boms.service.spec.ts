@@ -798,7 +798,7 @@ describe("BomsService", () => {
             await expect(service.deleteBom("XK2010", actor, undefined)).rejects.toThrow(BadRequestException);
         });
 
-        it("被销售订单引用（含已取消订单）一律 409，不触碰任何行", async () => {
+        it("被销售订单引用（含已取消/已归档订单，引用计数不过滤状态）一律 409，不触碰任何行", async () => {
             store.boms = [mkBom()];
             store.orderRefs = [5000n];
             const { service, store: written } = mkService(store);

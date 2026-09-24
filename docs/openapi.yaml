@@ -195,7 +195,7 @@ paths:
             tags: [orders]
             operationId: archiveOrder
             summary: 归档订单（终态）
-            description: 受保护权限 `orders:archive`，仅 super。收尾已完成、部分发货或已取消的订单使其退出活跃视图：归档后订单从销售订单页移入归档订单页，仅供查询，不可修改/取消/删除，剩余欠量（若有）不再安排交付。未发货的 ACTIVE 订单不可归档（手误单走取消/删除）；存在未作废出库单时归档直接放行，已发数量保留。归档为最终终态，不可恢复；归档人、归档时间与备注（选填）随行落库并写 change_log ARCHIVE 事件与 op_log 供审计。幂等（Idempotency-Key）。
+            description: 受保护权限 `orders:archive`，仅 super。收尾已完成、部分发货或部分发货后取消的订单使其退出活跃视图：归档后订单从销售订单页移入归档订单页，仅供查询，不可修改/取消/删除，剩余欠量（若有）不再安排交付。一件未发的订单不可归档（ACTIVE 手误单走取消/删除，已取消的直接删除）；存在未作废出库单时归档直接放行，已发数量保留。归档为最终终态，不可恢复，且冻结依赖链：该订单的出库单不可作废/删除（审计依据），被引用 BOM 不可删除。归档人、归档时间与备注（选填）随行落库并写 change_log ARCHIVE 事件与 op_log 供审计。幂等（Idempotency-Key）。
             parameters:
                 - $ref: "#/components/parameters/OrderNo"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -1066,7 +1066,7 @@ components:
                 deliverDate: { type: string, format: date, description: 交货日期（单个日历日，排序/逾期口径） }
                 remark: { type: string }
                 lifecycleStatus: { type: string, enum: [active, cancelled, archived] }
-                cancelledAt: { type: string, format: date-time, description: 实际取消过才返回（含取消后归档的订单） }
+                cancelledAt: { type: string, format: date-time, description: 实际取消过才返回（含部分发货后取消再归档的订单） }
                 cancelledBy: { type: string }
                 cancelReason: { type: string }
                 archivedAt: { type: string, format: date-time, description: 仅归档终态返回 }

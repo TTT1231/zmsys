@@ -274,6 +274,12 @@ describe("OutboundService.createOutbound", () => {
             new ConflictException("订单已取消，不能登记发货"),
         );
 
+        // 归档是终态：不再接收任何发货（显式拦截给出准确文案，不经可发量兜底）
+        store.orders[0] = mkOrder({ lifecycleStatus: "ARCHIVED" });
+        await expect(service.createOutbound(shipInput, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException("订单已归档，不能登记发货"),
+        );
+
         store.orders[0] = mkOrder();
         store.stock.set(10n, 100); // 库存 100 < 请求 200
         await expect(service.createOutbound(shipInput, actor, ID_KEY)).rejects.toThrow(
@@ -349,6 +355,19 @@ describe("OutboundService.voidOutbound", () => {
         expect(store.opLogs).toHaveLength(1);
         expect(store.opLogs[0]).toMatchObject({ action: "void_outbound", targetCode: "CK26091301" });
     });
+
+    it("所属订单已归档 409：作废会回退归档单冻结的已发口径，禁止", async () => {
+        const store = emptyStore();
+        store.orders[0] = mkOrder({ lifecycleStatus: "ARCHIVED" });
+        store.shipments.push(mkShipment());
+        const { service } = mkService(store);
+        await expect(
+            service.voidOutbound("CK26091301", { expectedVersion: 1, reason: "试图作废归档单出库" }, actor, ID_KEY),
+        ).rejects.toThrow(new ConflictException("所属订单已归档，出库记录为审计依据，不可作废"));
+        // 冲销流水与状态日志均未落库
+        expect(store.ledgers).toHaveLength(0);
+        expect(store.stateLogs).toHaveLength(0);
+    });
 });
 
 describe("OutboundService.deleteOutbound", () => {
@@ -389,6 +408,18 @@ describe("OutboundService.deleteOutbound", () => {
         });
         // 列表过滤已删除单
         expect(await service.listOutbound()).toHaveLength(0);
+    });
+
+    it("所属订单已归档 409：含归档前已作废的单，删除后物理清理会断归档审计链", async () => {
+        const store = emptyStore();
+        store.orders[0] = mkOrder({ lifecycleStatus: "ARCHIVED" });
+        store.shipments.push(mkShipment({ state: "VOIDED", voidReason: "归档前作废", rowVersion: 2n }));
+        const { service } = mkService(store);
+        await expect(service.deleteOutbound("CK26091301", { expectedVersion: 2 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException("所属订单已归档，出库记录为审计依据，不可删除"),
+        );
+        expect(store.shipments[0]!.deletedAt).toBeNull();
+        expect(store.opLogs).toHaveLength(0);
     });
 });
 
