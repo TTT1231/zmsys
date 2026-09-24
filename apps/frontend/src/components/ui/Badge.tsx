@@ -2,17 +2,18 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { Icon } from "@/lib/icons";
 import type { StatusKey } from "@/api";
 
-/* 状态徽章：配色沿用 saas-theme.css 的 status token */
+/* 状态徽章：一律走语义 token（soft 底 + 语义字色 + 基色 30% 透明边框），
+   边框不用固定浅色 hex——暗色下 base token 整体提亮，透明度随动，浅暗共用一份定义 */
 const STATUS_STYLES: Record<string, string> = {
-    done: "bg-accent-soft text-sky-700 border-sky-200",
-    ready: "bg-accent-soft text-sky-700 border-sky-200",
-    partReady: "bg-[#fff6e7] text-[#a15c07] border-[#fedf89]",
-    progress: "bg-[#f2f4f7] text-td-strong border-line",
-    pending: "bg-[#fff6e7] text-[#a15c07] border-[#fedf89]",
-    cancelled: "bg-danger-soft text-danger border-[#fecdca]",
-    archived: "bg-[#f2f4f7] text-subtle border-line",
-    danger: "bg-danger-soft text-danger border-[#fecdca]",
-    success: "bg-success-soft text-success border-[#abefc6]",
+    done: "bg-accent-soft text-accent border-accent/30",
+    ready: "bg-accent-soft text-accent border-accent/30",
+    partReady: "bg-warning-soft text-warning border-warning/30",
+    progress: "bg-soft text-td-strong border-line",
+    pending: "bg-warning-soft text-warning border-warning/30",
+    cancelled: "bg-danger-soft text-danger border-danger/30",
+    archived: "bg-soft text-subtle border-line",
+    danger: "bg-danger-soft text-danger border-danger/30",
+    success: "bg-success-soft text-success border-success/30",
 };
 
 const STATUS_LABELS: Record<StatusKey, string> = {

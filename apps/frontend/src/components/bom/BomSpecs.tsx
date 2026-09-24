@@ -64,7 +64,7 @@ export function BomSpecs({ bom, layout = "detail", showIdentity = true, categori
                                     "text-13 leading-5 wrap-anywhere",
                                     record
                                         ? "text-muted"
-                                        : "w-fit max-w-full rounded-sm bg-slate-100 px-1.5 py-px font-medium text-td",
+                                        : "w-fit max-w-full rounded-sm bg-soft px-1.5 py-px font-medium text-td",
                                 )}
                             >
                                 {group.groupName}

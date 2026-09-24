@@ -434,7 +434,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                     )}
                     {!node.multi &&
                         (node.qty ? (
-                            <span className="shrink-0 rounded-full border border-[#fed7aa] bg-warning-soft px-1.5 py-0.5 text-11 font-medium text-[#9a3412]">
+                            <span className="shrink-0 rounded-full border border-warning/40 bg-warning-soft px-1.5 py-0.5 text-11 font-medium text-warning">
                                 单选
                             </span>
                         ) : (

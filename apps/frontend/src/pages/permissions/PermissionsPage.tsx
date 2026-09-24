@@ -889,7 +889,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                 全选
                             </label>
                         </div>
-                        <div className="rounded-xl border border-line bg-[#fdfdff] px-3 py-2">
+                        <div className="rounded-xl border border-line bg-panel px-3 py-2">
                             {MENU_CATALOG.filter(menu => !menu.onlyFor).map(menu => (
                                 <div key={menu.key}>
                                     <label
@@ -932,7 +932,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
                         <p className="mb-2.5 text-12 leading-5 text-subtle">
                             灰色不可勾选项为受保护权限（如删除订单、删除 BOM），仅超级管理员持有， 不能授权给其他角色。
                         </p>
-                        <div className="rounded-xl border border-line bg-[#fdfdff] px-4 py-1">
+                        <div className="rounded-xl border border-line bg-panel px-4 py-1">
                             {Object.entries(ACTION_CATALOG).map(([menuKey, actions]) => {
                                 const menuOn = effective.menus.includes(menuKey);
                                 const chosen = effective.actions[menuKey] ?? [];
@@ -1067,7 +1067,7 @@ function MatrixTab() {
                                         return (
                                             <td
                                                 key={role.id}
-                                                className="border border-line px-3 py-2 text-center text-[#c0c5cf]"
+                                                className="border border-line px-3 py-2 text-center text-placeholder"
                                             >
                                                 —
                                             </td>

@@ -27,10 +27,12 @@ import { EMPTY_SNAPSHOT, orderStatusOf, remainingOf } from "@/data/views";
 import { useToast } from "@/components/ui/toastContexts";
 import type { Customer, Snapshot } from "@/api";
 
+/* 头像底色四循环：全走语义 token（warning/success/primary/accent 轮换），
+   暗色下 soft/strong 自动切换到提亮档，不再出现浅色块浮在深底上 */
 const AVATAR_TONES = [
-    "bg-orange-100 text-orange-700",
+    "bg-warning-soft text-warning",
     "bg-success-soft text-success",
-    "bg-purple-100 text-purple-700",
+    "bg-primary-soft text-primary-strong",
     "bg-accent-soft text-accent",
 ];
 
