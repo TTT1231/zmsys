@@ -2,7 +2,8 @@
 /* BOM 页接入独立查询：表格渲染物料行，移动卡片库存列在余量未加载时降级为占位符；
    删除入口仅对持 bom:delete、订单引用与库存已成功加载、未被引用且无余量的档案显示；
    点击后需二次确认，确认才发起删除请求、取消不发起。
-   使用状态筛选「未使用」= 无销售订单与成品出入库引用，行沿用作废单弱化样式。 */
+   使用状态筛选「未使用」= 无销售订单与成品出入库引用，「正在使用」为其补集，
+   行沿用作废单弱化样式。 */
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
@@ -104,6 +105,24 @@ it("全部状态下按每条 BOM 的使用关系标注未使用行，筛选后�
     });
     expect(within(table).getByRole("button", { name: detailBom.code }).closest("tr")).toHaveClass("row-voided");
     expect(within(table).queryByRole("button", { name: usedBom.code })).not.toBeInTheDocument();
+});
+
+it("正在使用筛选只保留被订单或成品台账引用的 BOM", () => {
+    const usedBom = { ...detailBom, code: "KQ011" };
+    bomsRef.current = [detailBom, usedBom];
+    usageRef.current = { orders: [], inboundLedger: [{ bomCode: usedBom.code }], outboundLedger: [] };
+    renderPage();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "按使用状态筛选" }), {
+        target: { value: "正在使用" },
+    });
+    const table = screen.getByRole("table");
+    expect(within(table).getByRole("button", { name: usedBom.code })).toBeInTheDocument();
+    expect(within(table).queryByRole("button", { name: detailBom.code })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "清空条件" }));
+    expect(screen.getByRole("combobox", { name: "按使用状态筛选" })).toHaveValue("全部状态");
+    expect(within(table).getByRole("button", { name: detailBom.code })).toBeInTheDocument();
 });
 
 it("未使用筛选排除订单和成品台账引用，库存余量未加载不影响筛选", () => {

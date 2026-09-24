@@ -247,6 +247,8 @@ export function StockPage() {
     const overlay = useDelayedFlag(isFetching && !isLoading);
     const [keyword, setKeyword] = useState("");
     const [category, setCategory] = useState("全部品类");
+    /* 已用完 = 余量为 0，未用完 = 余量不为 0 */
+    const [statusFilter, setStatusFilter] = useState("全部状态");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [sort, setSort] = useState<SortState<StockSortKey> | null>(null);
@@ -273,9 +275,10 @@ export function StockPage() {
         return rows.filter(
             row =>
                 (category === "全部品类" || row.name === category) &&
+                (statusFilter === "全部状态" || (row.stock === 0) === (statusFilter === "已用完")) &&
                 (!kw || `${row.code} ${row.name} ${row.remark}`.toLowerCase().includes(kw)),
         );
-    }, [rows, keyword, category]);
+    }, [rows, keyword, category, statusFilter]);
 
     const sorted = useMemo(() => {
         if (!sort) return filtered;
@@ -295,9 +298,10 @@ export function StockPage() {
     const clearFilters = () => {
         setKeyword("");
         setCategory("全部品类");
+        setStatusFilter("全部状态");
         setPage(1);
     };
-    const filtersActive = !!keyword.trim() || category !== "全部品类";
+    const filtersActive = !!keyword.trim() || category !== "全部品类" || statusFilter !== "全部状态";
 
     return (
         <div className="flex flex-col gap-5">
@@ -330,6 +334,19 @@ export function StockPage() {
                         <option>全部品类</option>
                         {categories.map(item => (
                             <option key={item}>{item}</option>
+                        ))}
+                    </select>
+                    <select
+                        value={statusFilter}
+                        onChange={event => {
+                            setStatusFilter(event.target.value);
+                            setPage(1);
+                        }}
+                        aria-label="按库存状态筛选"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
+                    >
+                        {["全部状态", "已用完", "未用完"].map(option => (
+                            <option key={option}>{option}</option>
                         ))}
                     </select>
                     <button
@@ -436,7 +453,13 @@ export function StockPage() {
                                 {pageRows.length === 0 && (
                                     <tr className="row-empty">
                                         <td colSpan={6} className="px-5 py-10 text-center">
-                                            <EmptyState description="暂无库存记录" />
+                                            <EmptyState
+                                                description={
+                                                    statusFilter === "全部状态"
+                                                        ? "暂无库存记录"
+                                                        : `没有${statusFilter}的库存记录`
+                                                }
+                                            />
                                         </td>
                                     </tr>
                                 )}
