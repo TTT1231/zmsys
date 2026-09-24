@@ -4,6 +4,7 @@ import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { RecordFields, RecordProduct, RecordSummary } from "@/components/business/RecordDetails";
+import { DangerNote } from "@/components/business/DangerNote";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
@@ -471,12 +472,11 @@ function VoidInboundModal({
             }
         >
             <form id={formId} onSubmit={submit} aria-busy={pending}>
-                <div className="mb-4 rounded-panel border border-danger/20 bg-danger-soft/50 p-4">
-                    <p className="text-14 font-semibold text-ink">
-                        作废后，{row.bomCode} 库存减少 {num(row.qty)} 个
-                    </p>
-                    <p className="mt-1 text-13 leading-5 text-muted">库存不足时系统会阻止作废，请先处理相关出库单。</p>
-                </div>
+                <DangerNote
+                    className="mb-4"
+                    impact={`作废后，${row.bomCode} 库存减少 ${num(row.qty)} 个`}
+                    note="库存不足时无法作废。"
+                />
                 {crossDay && (
                     <p className="mb-4 flex items-start gap-2 text-13 leading-5 text-warning">
                         <Icon name="alert" size={16} className="mt-0.5 shrink-0" />
@@ -491,7 +491,6 @@ function VoidInboundModal({
                     placeholder="例如：入库数量登记错误"
                     onChange={event => setReason(event.target.value)}
                 />
-                <p className="mt-2 text-13 text-muted">作废记录仍保留在入库台账，可随后删除。</p>
             </form>
         </Modal>
     );
@@ -513,36 +512,24 @@ function DeleteInboundModal({
         <Modal
             open
             onClose={onClose}
-            label="危险操作"
-            title="删除入库记录"
+            title="删除入库单"
             subtitle={`${row.no} · 已作废`}
             width={440}
             footer={
                 <>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
-                    >
+                    <Button variant="secondary" type="button" onClick={onClose}>
                         取消
-                    </button>
-                    <button
-                        type="button"
-                        disabled={pending}
-                        onClick={onConfirm}
-                        className="min-h-10 rounded-btn bg-danger px-4 text-14 font-medium text-white transition hover:opacity-90 disabled:opacity-60"
-                    >
+                    </Button>
+                    <Button variant="danger" type="button" disabled={pending} onClick={onConfirm}>
                         {pending ? "正在删除…" : "确认删除"}
-                    </button>
+                    </Button>
                 </>
             }
         >
-            <div className="rounded-panel border border-danger/20 bg-danger-soft/50 p-4">
-                <p className="text-14 font-semibold text-ink">删除后，这笔入库会立即从列表移除</p>
-                <p className="mt-1 text-13 leading-5 text-muted">
-                    已作废的 {num(row.qty)} 个不再计入库存。7 天后清理记录，操作日志保留。
-                </p>
-            </div>
+            <DangerNote
+                impact="删除后，这笔入库单会从列表移除"
+                note={`已作废的 ${num(row.qty)} 个不再计入库存；7 天后清理记录，操作日志保留。`}
+            />
         </Modal>
     );
 }
@@ -956,7 +943,7 @@ export function InboundPage() {
                                 onSuccess: () => {
                                     setDeleteTarget(null);
                                     setVoucher(null);
-                                    toast(`入库记录 ${deleteTarget.no} 已删除`);
+                                    toast(`入库单 ${deleteTarget.no} 已删除`);
                                 },
                             },
                         )

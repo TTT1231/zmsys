@@ -151,7 +151,7 @@ it("已作废入库对持删除权限者出现删除入口，确认后携带乐�
     state.extraPerms = ["inbound:delete"];
     const detail = openInbound();
     fireEvent.click(detail.getByRole("button", { name: "删除" }));
-    const confirm = screen.getByRole("dialog", { name: "删除入库记录" });
+    const confirm = screen.getByRole("dialog", { name: "删除入库单" });
     expect(confirm).toHaveTextContent(/7 天后清理记录/);
     fireEvent.click(within(confirm).getByRole("button", { name: "确认删除" }));
     expect(state.del).toHaveBeenCalledWith(

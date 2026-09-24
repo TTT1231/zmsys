@@ -4,6 +4,7 @@ import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { RecordFields, RecordProduct, RecordSummary } from "@/components/business/RecordDetails";
+import { DangerNote } from "@/components/business/DangerNote";
 import { BomCell } from "@/components/bom/BomCell";
 import { BomRemarkNote } from "@/components/bom/BomRemarkNote";
 import { RemarkCell } from "@/components/ui/RemarkCell";
@@ -152,12 +153,11 @@ function VoidOutboundModal({
             }
         >
             <form id={formId} onSubmit={submit} aria-busy={pending}>
-                <div className="mb-4 rounded-panel border border-danger/20 bg-danger-soft/50 p-4">
-                    <p className="text-14 font-semibold text-ink">作废后，库存增加 {num(row.qty)} 个</p>
-                    <p className="mt-1 text-13 leading-5 text-muted">
-                        订单 {row.orderNo} 的已发数量同时减少 {num(row.qty)} 个。
-                    </p>
-                </div>
+                <DangerNote
+                    className="mb-4"
+                    impact={`作废后，库存增加 ${num(row.qty)} 个`}
+                    note={`订单的已发数量同时减少 ${num(row.qty)} 个。`}
+                />
                 <TextArea
                     label="作废原因"
                     required
@@ -166,7 +166,6 @@ function VoidOutboundModal({
                     placeholder="例如：发货数量登记错误"
                     onChange={event => setReason(event.target.value)}
                 />
-                <p className="mt-2 text-13 text-muted">作废单仍保留在出库台账，可随后删除。</p>
             </form>
         </Modal>
     );
@@ -468,36 +467,24 @@ function DeleteOutboundModal({
         <Modal
             open
             onClose={onClose}
-            label="危险操作"
             title="删除出库单"
             subtitle={`${row.no} · 已作废`}
             width={440}
             footer={
                 <>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
-                    >
+                    <Button variant="secondary" type="button" onClick={onClose}>
                         取消
-                    </button>
-                    <button
-                        type="button"
-                        disabled={pending}
-                        onClick={onConfirm}
-                        className="min-h-10 rounded-btn bg-danger px-4 text-14 font-medium text-white transition hover:opacity-90 disabled:opacity-60"
-                    >
+                    </Button>
+                    <Button variant="danger" type="button" disabled={pending} onClick={onConfirm}>
                         {pending ? "正在删除…" : "确认删除"}
-                    </button>
+                    </Button>
                 </>
             }
         >
-            <div className="rounded-panel border border-danger/20 bg-danger-soft/50 p-4">
-                <p className="text-14 font-semibold text-ink">删除后，这张出库单会立即从列表移除</p>
-                <p className="mt-1 text-13 leading-5 text-muted">
-                    已作废的 {num(row.qty)} 个不再计入库存和订单。7 天后清理记录，操作日志保留。
-                </p>
-            </div>
+            <DangerNote
+                impact="删除后，这张出库单会从列表移除"
+                note={`已作废的 ${num(row.qty)} 个不再计入库存和订单；7 天后清理记录，操作日志保留。`}
+            />
         </Modal>
     );
 }
@@ -955,32 +942,32 @@ export function OutboundPage() {
                 actions={
                     currentDetail && (
                         <>
+                            {/* 危险入口固定最左（软红底），打印保持主按钮紧邻关闭：已登记/已作废两种状态槽位一致 */}
                             {canVoid && currentDetail.state === "registered" && (
-                                <Button
-                                    variant="secondary"
+                                <button
+                                    type="button"
                                     disabled={voidRequest.isPending}
                                     onClick={() => setVoidTarget(currentDetail)}
+                                    className="min-h-10 rounded-btn border border-danger/30 bg-danger-soft px-4 text-14 font-medium text-danger disabled:opacity-50"
                                 >
                                     作废
-                                </Button>
-                            )}
-                            {canPrint && (
-                                <Button
-                                    icon="print"
-                                    disabled={printRequest.isPending}
-                                    onClick={() => requestPrint(currentDetail)}
-                                >
-                                    {printRequest.isPending ? "处理中…" : "打印"}
-                                </Button>
+                                </button>
                             )}
                             {/* 已作废单的清理入口：软删除（7 天后悔期），仅持有删除权限者可见 */}
                             {canDeleteVoided && currentDetail.state === "voided" && (
-                                <Button
-                                    variant="secondary"
+                                <button
+                                    type="button"
                                     disabled={deleteRequest.isPending}
                                     onClick={() => setDeleteTarget(currentDetail)}
+                                    className="min-h-10 rounded-btn border border-danger/30 bg-danger-soft px-4 text-14 font-medium text-danger disabled:opacity-50"
                                 >
                                     删除
+                                </button>
+                            )}
+                            {canPrint && (
+                                <Button disabled={printRequest.isPending} onClick={() => requestPrint(currentDetail)}>
+                                    {/* 打印是常规操作不带图标（图标库也无 print 字形，传了会落到 info 兜底） */}
+                                    {printRequest.isPending ? "处理中…" : "打印"}
                                 </Button>
                             )}
                         </>
