@@ -971,13 +971,16 @@ button:active:not(:disabled) {
 }
 /* 作废单行高亮：底色必须落在 td 层 —— tr 层会被 [data-pinned] 固定列的不透明
    背景盖住（尤其 sticky 单号列）；hover 用 danger 加深而不是 row-hover，避免
-   全局 hover 规则把作废底色盖回白色、高亮“消失”。 */
+   全局 hover 规则把作废底色盖回白色、高亮“消失”。
+   底色不走 --color-danger-soft：它的暗色档（亮红 14% 透明度）是给小徽章/图标底
+   设计的，刷满整行会变成刺眼砖红（BOM 页未引用行整表泛红即此因）。
+   改用 danger 对 surface 低比例 color-mix，浅暗两模式各自得到恰好的弱化底。 */
 .managed-table tr.row-voided td {
-    background: var(--color-danger-soft);
+    background: color-mix(in srgb, var(--color-danger) 6%, var(--color-surface));
     color: var(--color-muted);
 }
 .managed-table tr.row-voided:hover td {
-    background: color-mix(in srgb, var(--color-danger) 5%, var(--color-surface));
+    background: color-mix(in srgb, var(--color-danger) 11%, var(--color-surface));
 }
 /* 作废行的固定列不再画内嵌竖条：固定多列时每根左缘各出一根（出库页固定两列
    即左右两根粗条），视觉上加粗成对反而压过内容；作废底色打在 td 层，特异性
@@ -1140,11 +1143,14 @@ button:active:not(:disabled) {
     border-radius: 12px;
     padding: 16px;
 }
-/* 作废记录卡片（移动端）：左竖条 + 危险底色 + 标题删除线；徽章仍由页面传入 */
+/* 作废记录卡片（移动端）：左竖条 + 危险底色 + 标题删除线；徽章仍由页面传入。
+   边框/底色与 .row-voided 同源：danger 低比例 color-mix（浅暗自适应），
+   不用 danger-soft（暗色 14% 亮红对整卡过浓）；border 走半透明 danger
+   （原先引用的 --color-danger-border 从未定义，实际一直回退成 currentColor） */
 .record-card-voided {
     position: relative;
-    border-color: var(--color-danger-border);
-    background: var(--color-danger-soft);
+    border-color: color-mix(in srgb, var(--color-danger) 32%, transparent);
+    background: color-mix(in srgb, var(--color-danger) 6%, var(--color-surface));
     color: var(--color-muted);
 }
 .record-card-voided::before {
