@@ -357,7 +357,7 @@ export function ArchivedOrdersPage() {
                             </thead>
                             <tbody>
                                 {pageRows.length === 0 && (
-                                    <tr>
+                                    <tr className="row-empty">
                                         <td colSpan={9} className="px-5 py-10 text-center">
                                             <EmptyState description="暂无归档订单；在销售订单的编辑弹窗中归档已完成或部分发货的订单后，会在这里显示" />
                                         </td>

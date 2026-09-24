@@ -785,7 +785,7 @@ export function InboundPage() {
                             </thead>
                             <tbody>
                                 {pageRows.length === 0 && (
-                                    <tr>
+                                    <tr className="row-empty">
                                         <td colSpan={7} className="px-5 py-10 text-center">
                                             <EmptyState description="没有找到匹配的入库记录" />
                                         </td>
