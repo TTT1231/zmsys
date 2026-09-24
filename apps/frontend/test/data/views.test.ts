@@ -45,6 +45,8 @@ const order = (over: Partial<Order> = {}): Order => ({
     deliverDate: "2026-03-20",
     remark: "",
     lifecycleStatus: "active",
+    createdBy: "郭均",
+    createdAt: "2026-03-10T02:00:00Z",
     ...over,
 });
 

@@ -23,6 +23,8 @@ export interface Order {
     deliverDate: string; // 交货日期（单个日历日，排序/逾期口径）
     remark: string;
     lifecycleStatus: OrderLifecycleStatus;
+    createdBy: string; // 创建人姓名（审计展示，不随编辑变化）
+    createdAt: string; // 创建时刻 ISO
     cancelledAt?: string;
     cancelledBy?: string;
     cancelReason?: string;
@@ -181,6 +183,7 @@ export interface OutboundPrintDocument {
     bomSpec: string;
     qty: number;
     date: string;
+    registeredAt: string; // 实际登记时刻 ISO（区别于手选补录的出库日期）
     operator: string;
     remark: string;
     state: "registered" | "voided";

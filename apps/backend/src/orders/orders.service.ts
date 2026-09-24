@@ -25,10 +25,11 @@ const cancelOperationKeyOf = (orderNo: string): string => `orders:cancel:${order
 const archiveOperationKeyOf = (orderNo: string): string => `orders:archive:${orderNo}`;
 const deleteOperationKeyOf = (orderNo: string): string => `orders:delete:${orderNo}`;
 
-/** 订单行 + 响应映射必需的关联（canceller/archiver 仅终态后有值） */
+/** 订单行 + 响应映射必需的关联（canceller/archiver 仅终态后有值；creator 供审计展示） */
 type OrderRow = SalesOrderTable & {
     customer: { customerCode: string };
     bom: { bomCode: string };
+    creator: { name: string };
     canceller: { name: string } | null;
     archiver: { name: string } | null;
 };
@@ -55,6 +56,7 @@ export class OrdersService {
             include: {
                 customer: { select: { customerCode: true } },
                 bom: { select: { bomCode: true } },
+                creator: { select: { name: true } },
                 canceller: { select: { name: true } },
                 archiver: { select: { name: true } },
             },
@@ -149,6 +151,7 @@ export class OrdersService {
                     ...created,
                     customer: { customerCode: customer.customerCode },
                     bom: { bomCode: bom.bomCode },
+                    creator: { name: actor.name },
                     canceller: null,
                     archiver: null,
                 },
@@ -205,6 +208,7 @@ export class OrdersService {
                 include: {
                     customer: { select: { customerCode: true } },
                     bom: { select: { bomCode: true } },
+                    creator: { select: { name: true } },
                     canceller: { select: { name: true } },
                     archiver: { select: { name: true } },
                 },
@@ -284,6 +288,7 @@ export class OrdersService {
                 include: {
                     customer: { select: { customerCode: true } },
                     bom: { select: { bomCode: true } },
+                    creator: { select: { name: true } },
                     canceller: { select: { name: true } },
                     archiver: { select: { name: true } },
                 },
@@ -374,6 +379,7 @@ export class OrdersService {
                 include: {
                     customer: { select: { customerCode: true } },
                     bom: { select: { bomCode: true } },
+                    creator: { select: { name: true } },
                     canceller: { select: { name: true } },
                     archiver: { select: { name: true } },
                 },
@@ -540,6 +546,7 @@ export class OrdersService {
             include: {
                 customer: { select: { customerCode: true } },
                 bom: { select: { bomCode: true } },
+                creator: { select: { name: true } },
                 canceller: { select: { name: true } },
                 archiver: { select: { name: true } },
             },
@@ -575,8 +582,9 @@ export class OrdersService {
         };
     }
 
-    /** 契约 Order 映射：version 序列化为 number；日期列 yyyy-MM-dd；取消/归档字段仅
-        终态且有值时返回（曾取消再归档的订单两套终态字段并存，均返回供审计） */
+    /** 契约 Order 映射：version 序列化为 number；日期列 yyyy-MM-dd；createdAt 为 ISO 时刻
+        （前端 formatDateTime 展示）；取消/归档字段仅终态且有值时返回（曾取消再归档的订单
+        两套终态字段并存，均返回供审计） */
     private toOrder(row: OrderRow, outbound: number): Order {
         const archived = row.lifecycleStatus === "ARCHIVED";
         return {
@@ -590,6 +598,8 @@ export class OrdersService {
             orderDate: formatDateColumn(row.orderDate),
             deliverDate: formatDateColumn(row.deliverDate),
             remark: row.remark,
+            createdBy: row.creator.name,
+            createdAt: row.createdAt.toISOString(),
             lifecycleStatus:
                 row.lifecycleStatus === "ACTIVE"
                     ? "active"

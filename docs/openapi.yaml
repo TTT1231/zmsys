@@ -1053,7 +1053,7 @@ components:
 
         Order:
             type: object
-            required: [version, orderNo, customer, customerCode, bomCode, qty, outbound, orderDate, deliverDate, remark, lifecycleStatus]
+            required: [version, orderNo, customer, customerCode, bomCode, qty, outbound, orderDate, deliverDate, remark, lifecycleStatus, createdBy, createdAt]
             properties:
                 version: { type: integer, minimum: 1 }
                 orderNo: { type: string }
@@ -1066,6 +1066,8 @@ components:
                 deliverDate: { type: string, format: date, description: 交货日期（单个日历日，排序/逾期口径） }
                 remark: { type: string }
                 lifecycleStatus: { type: string, enum: [active, cancelled, archived] }
+                createdBy: { type: string, description: 创建人姓名（审计展示，不随编辑变化） }
+                createdAt: { type: string, format: date-time, description: 创建时刻 }
                 cancelledAt: { type: string, format: date-time, description: 实际取消过才返回（含取消后归档的订单） }
                 cancelledBy: { type: string }
                 cancelReason: { type: string }
@@ -1382,7 +1384,7 @@ components:
 
         OutboundPrintDocument:
             type: object
-            required: [no, orderNo, customer, customerCode, bomCode, bomSpec, qty, date, operator, remark, state, printedBy, printedAt]
+            required: [no, orderNo, customer, customerCode, bomCode, bomSpec, qty, date, registeredAt, operator, remark, state, printedBy, printedAt]
             properties:
                 no: { type: string }
                 orderNo: { type: string }
@@ -1392,6 +1394,7 @@ components:
                 bomSpec: { type: string }
                 qty: { type: integer, minimum: 1 }
                 date: { type: string, format: date }
+                registeredAt: { type: string, format: date-time, description: 实际登记时刻（区别于手选补录的出库日期） }
                 operator: { type: string, description: 出库登记人 }
                 remark: { type: string }
                 state:

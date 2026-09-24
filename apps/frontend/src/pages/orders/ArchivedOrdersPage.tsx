@@ -17,6 +17,7 @@ import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { nextSortState, type SortState } from "@/lib/tableSort";
 import { Field } from "@/components/ui/Field";
 import { EMPTY_SNAPSHOT, bomByCode, orderStatusOf } from "@/data/views";
+import { formatDateTime } from "@/lib/date";
 import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
@@ -251,6 +252,8 @@ export function ArchivedOrdersPage() {
                                             "订单数量",
                                             "交货日期",
                                             "累计出库",
+                                            "创建人",
+                                            "创建时间",
                                             "归档时间",
                                             "归档人",
                                             "归档备注",
@@ -264,6 +267,8 @@ export function ArchivedOrdersPage() {
                                             String(order.qty),
                                             order.deliverDate,
                                             String(order.outbound),
+                                            order.createdBy,
+                                            formatDateTime(order.createdAt),
                                             order.archivedAt ? datetimeOf(order.archivedAt) : "",
                                             order.archivedBy ?? "",
                                             order.archiveReason ?? "",

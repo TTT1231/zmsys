@@ -385,6 +385,7 @@ export class OutboundService {
             bomSpec: bomSpecOf(current.order.bomSpecSnapshot),
             qty: current.originalQty,
             date: formatDateColumn(current.businessDate),
+            registeredAt: current.registeredAt.toISOString(),
             operator: current.registrar.name,
             remark: this.normalRemarkOf(current),
             state: voided ? "voided" : "registered",
