@@ -434,7 +434,7 @@ export function StockPage() {
                             </thead>
                             <tbody>
                                 {pageRows.length === 0 && (
-                                    <tr>
+                                    <tr className="row-empty">
                                         <td colSpan={6} className="px-5 py-10 text-center">
                                             <EmptyState description="暂无库存记录" />
                                         </td>

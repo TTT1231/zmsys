@@ -960,8 +960,14 @@ button:active:not(:disabled) {
     z-index: 3;
     background: var(--color-soft);
 }
-.managed-table tbody tr:hover td {
+/* 空态占位行不是数据行：不参与行悬停底色（占位区跟着 hover 变色会被误读成可交互） */
+.managed-table tbody tr:not(.row-empty):hover td {
     background: var(--color-row-hover);
+}
+/* 仅剩空态占位行时表格撑满表体视口高度，占位行吃掉剩余空间——
+   配合 td 的 vertical-align:middle 与 text-center 让空态上下左右居中 */
+.managed-table .data-table:has(tbody tr.row-empty) {
+    height: 100%;
 }
 .managed-table .data-table .column-highlight {
     background: var(--color-primary-soft);

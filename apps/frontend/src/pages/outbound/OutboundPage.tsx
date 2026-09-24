@@ -857,7 +857,7 @@ export function OutboundPage() {
                             </thead>
                             <tbody>
                                 {pageRows.length === 0 && (
-                                    <tr>
+                                    <tr className="row-empty">
                                         <td colSpan={12} className="px-5 py-10 text-center">
                                             <EmptyState description="没有找到匹配的出库记录" />
                                         </td>

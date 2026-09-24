@@ -629,7 +629,7 @@ export function CustomersPage() {
                             </thead>
                             <tbody>
                                 {pageRows.length === 0 && (
-                                    <tr>
+                                    <tr className="row-empty">
                                         <td colSpan={9} className="px-5 py-10 text-center">
                                             <EmptyState description="没有找到匹配的客户" />
                                         </td>
