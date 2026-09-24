@@ -130,6 +130,7 @@ export function OrderTaskCard({
                     />
                 )}
                 {archived && <CardField label="归档人" value={order.archivedBy || "—"} />}
+                {archived && <CardField label="归档备注" value={order.archiveReason || "—"} />}
                 <div className="flex flex-wrap justify-between gap-2">
                     {cancelled ? <span className="text-muted">已停止交付</span> : null}
                     {archived ? <span className="text-muted">已归档</span> : null}

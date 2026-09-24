@@ -35,18 +35,10 @@ export function remainingOf(order: Order): number {
 
 /* 状态判定核心：可发量（按交期分配，同"本次最多可发"口径）对比剩余待交。
  * 可发量盖不住整单剩余 → 部分可发货；已发过货且剩余可整单覆盖（或暂无可发）→ 部分发货。
- * 归档为最终终态：一件未发的单不归档（取消后直接删除），徽章按归档前形态区分
- * （完成/部分发货/部分发货后取消）三种，仅供归档页展示。 */
+ * 归档单无专属状态：归档 = 结案标记，状态徽章直接复用交付进度口径（已完成/
+ * 部分发货）——归档单不参与分配（remainingOf=0），自然落入对应分支。
+ * 已取消仅为历史数据防御展示：新业务没有取消动作，未发货不要了直接删除。 */
 function statusOf(order: Order, maxShip: number): OrderStatus {
-    if (order.lifecycleStatus === "archived")
-        return {
-            label: order.cancelledAt
-                ? "部分发货取消后归档"
-                : order.outbound >= order.qty
-                  ? "已完成后归档"
-                  : "部分发货后归档",
-            key: "archived",
-        };
     if (order.lifecycleStatus === "cancelled")
         return { label: order.outbound > 0 ? "部分发货后取消" : "已取消", key: "cancelled" };
     if (order.outbound >= order.qty) return { label: "已完成", key: "done" };
