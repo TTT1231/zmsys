@@ -921,6 +921,7 @@ CREATE TABLE sales_order_table (
     archived_at DATETIME(3) NULL,
     archived_by BIGINT NULL,
     archive_reason VARCHAR(500) NULL,
+    deleted_at DATETIME(3) NULL,
     row_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
     request_key VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     created_by BIGINT NOT NULL,
@@ -932,6 +933,7 @@ CREATE TABLE sales_order_table (
     UNIQUE KEY uk_sales_order_request (request_key),
     KEY idx_sales_order_bom_queue (bom_id, lifecycle_status, deliver_date, order_no),
     KEY idx_sales_order_customer_date (customer_id, order_date),
+    KEY idx_sales_order_deleted (deleted_at),
     CONSTRAINT fk_sales_order_customer FOREIGN KEY (customer_id) REFERENCES custom_table (id)
         ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT fk_sales_order_bom FOREIGN KEY (bom_id) REFERENCES bom_table (id)

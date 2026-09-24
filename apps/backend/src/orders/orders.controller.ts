@@ -11,8 +11,8 @@ import { DeleteOrderDto } from "./dto/delete-order.dto";
 import type { AuthUser } from "../common/types/auth-user";
 import type { Order } from "./types";
 
-/** 销售订单（openapi orders tag）：取消/归档均为生命周期终态；完全未发货的手误
- * 订单可由超级管理员物理删除（专用端点 :orderNo/delete），已发货订单只能取消；
+/** 销售订单（openapi orders tag）：取消/归档均为生命周期终态；净发货为零且
+ * 关联出库单已删除的订单可由超级管理员软删除（专用端点 :orderNo/delete）；
  * 已完成/部分发货/已取消的订单由超级管理员归档（:orderNo/archive）退出活跃视图 */
 @Controller("orders")
 export class OrdersController {

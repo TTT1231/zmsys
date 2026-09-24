@@ -112,6 +112,9 @@ export class OutboundService {
             if (!order) {
                 throw new NotFoundException("订单不存在");
             }
+            if (order.deletedAt !== null) {
+                throw new NotFoundException("订单不存在");
+            }
             if (order.lifecycleStatus === "CANCELLED") {
                 throw new ConflictException("订单已取消，不能登记发货");
             }

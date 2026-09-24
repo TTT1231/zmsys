@@ -50,6 +50,7 @@ export class OrdersService {
      */
     async listOrders(): Promise<Order[]> {
         const rows = await this.prisma.salesOrderTable.findMany({
+            where: { deletedAt: null },
             orderBy: { orderNo: "asc" },
             include: {
                 customer: { select: { customerCode: true } },
@@ -419,13 +420,8 @@ export class OrdersService {
     }
 
     /**
-     * 删除完全未发货的订单（契约 orders:delete，幂等，仅超级管理员）：清理手误创建。
-     * 锁序与编辑/取消一致（先 BOM 后订单），删除与它们及出库登记、打印竞争同一
-     * 订单行锁，先提交者生效。命中任一条件即 409：
-     * - 有效出库净额 > 0（曾发货即不可删，只能取消）
-     * - outbound_shipment 存在任意单据（含已作废——台账审计链不悬空，外键 RESTRICT 兜底）
-     * 校验通过后同事务删除该订单全部 sales_order_change_log（外键要求先清子行）与
-     * 订单行，op_log 记录 delete_order 与删除前快照。
+     * 删除净发货为零且没有可见出库单的订单：先软删除以保留仍在 7 天后悔期内的
+     * 出库单外键，待其物理清理后由维护任务清理订单与变更日志。
      */
     async deleteOrder(
         orderNo: string,
@@ -464,13 +460,17 @@ export class OrdersService {
             if (outbound > 0) {
                 throw new ConflictException("订单已有发货记录，不可删除");
             }
-            const shipmentRefs = await tx.outboundShipment.count({ where: { orderId: current.id } });
+            const shipmentRefs = await tx.outboundShipment.count({
+                where: { orderId: current.id, deletedAt: null },
+            });
             if (shipmentRefs > 0) {
-                throw new ConflictException("订单存在出库流水（含已作废），不可删除");
+                throw new ConflictException("请先作废并删除关联出库单，再删除订单");
             }
 
-            await tx.salesOrderChangeLog.deleteMany({ where: { orderId: current.id } });
-            await tx.salesOrderTable.delete({ where: { id: current.id } });
+            await tx.salesOrderTable.update({
+                where: { id: current.id },
+                data: { deletedAt: now, updatedBy: BigInt(actor.id), updatedAt: now },
+            });
             // op_log 快照：行内字段 + 关联编码（客户/BOM），审计可独立还原删除前形态
             const snapshot = this.orderSnapshot(current) as Record<string, unknown>;
             await recordOpLog(tx, this.snowflake, actor, {
@@ -484,6 +484,7 @@ export class OrdersService {
                     customerCode: current.customer.customerCode,
                     bomCode: current.bom.bomCode,
                     cancelledBy: current.canceller?.name ?? null,
+                    deletedAt: now.toISOString(),
                 } as unknown as Prisma.InputJsonValue,
                 now,
             });
@@ -544,6 +545,9 @@ export class OrdersService {
             },
         });
         if (!order) {
+            throw new NotFoundException("订单不存在");
+        }
+        if (order.deletedAt !== null) {
             throw new NotFoundException("订单不存在");
         }
         return order;

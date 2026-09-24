@@ -154,12 +154,13 @@ function StockLedgerModal({
                 ) : ledgerQuery.isLoading || !ledger ? (
                     <PageLoading className="py-10" />
                 ) : flows.length === 0 ? (
-                    <EmptyState description="暂无出入库流水" />
+                    <EmptyState description="暂无有效出入库流水" />
                 ) : (
                     /* max-h + 内部滚动：流水多时不撑高弹窗，表头吸附在滚动区顶部；
                        窄屏横向滚动，列宽不被挤压 */
                     <section aria-label="库存流水" className="min-w-0">
-                        <h3 className="mb-2 text-14 font-semibold text-ink">库存流水</h3>
+                        <h3 className="text-14 font-semibold text-ink">有效库存流水</h3>
+                        <p className="mb-2 mt-1 text-13 text-muted">已作废单据不计入库存，可在出入库台账查看。</p>
                         <div className="max-h-120 overflow-auto rounded-xl border border-line">
                             <table className="w-full min-w-[780px] table-fixed border-separate border-spacing-0">
                                 <thead>

@@ -30,7 +30,7 @@ export function archiveOrder(orderNo: string, input: ArchiveOrderInput): Promise
     return requestClient.post<Order>(`/orders/${orderNo}/archive`, input, idempotencyConfig());
 }
 
-/** 删除完全未发货的订单（仅超级管理员）；订单移除后不再返回 */
+/** 删除净发货为零且关联出库已删除的订单（仅超级管理员）；列表立即隐藏 */
 export function deleteOrder(orderNo: string, input: DeleteOrderInput): Promise<null> {
     return requestClient.post<null>(`/orders/${orderNo}/delete`, input, idempotencyConfig());
 }

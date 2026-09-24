@@ -591,7 +591,7 @@ describe("销售订单 (e2e)", () => {
         expect(stored!.archiveReason).toBeNull();
     });
 
-    it("删除完全未发货订单：非超管 403、版本不匹配 409、成功后订单消失并写 op_log、重放幂等", async () => {
+    it("删除净发货为零的订单：非超管 403、版本不匹配 409、列表隐藏并写 op_log、重放幂等", async () => {
         const created = await createOrder(superToken, orderInput(customerCode), `e2e-ord-${RUN}-del`);
         expect(created.statusCode).toBe(200);
         const target = created.json().data as { orderNo: string; version: number };
@@ -644,6 +644,9 @@ describe("销售订单 (e2e)", () => {
 
         const list = await app.inject({ method: "GET", url: "/api/orders", headers: authHeaders(superToken) });
         expect(list.json().data.some((item: { orderNo: string }) => item.orderNo === target.orderNo)).toBe(false);
+        expect(
+            (await prisma.salesOrderTable.findUnique({ where: { orderNo: target.orderNo } }))?.deletedAt,
+        ).not.toBeNull();
         const opLog = await prisma.opLog.findFirst({
             where: { action: "delete_order", targetCode: target.orderNo },
         });

@@ -9,6 +9,7 @@ import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fa
 import { AppModule } from "../src/app.module";
 import { configureApp } from "../src/main";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { LedgerPurgeService } from "../src/maintenance/ledger-purge.service";
 
 const RUN = Date.now().toString(36);
 const accountOf = (name: string): string => `qa_${name}_${RUN}`;
@@ -642,7 +643,7 @@ describe("BOM/成品档案 (e2e)", () => {
         expect(referenced.statusCode).toBe(409);
         expect(referenced.json().message).toBe("BOM 已被销售订单引用，不可删除");
 
-        // 引用订单删除后（完全未发货）BOM 恢复可删；成功响应与幂等重放均归一为 null
+        // 订单先软删除；保留期内外键仍阻止删 BOM，物理清理后才恢复可删。
         const order = orderRes.json().data as { orderNo: string; version: number };
         const removeOrder = await app.inject({
             method: "POST",
@@ -651,6 +652,15 @@ describe("BOM/成品档案 (e2e)", () => {
             payload: { expectedVersion: order.version },
         });
         expect(removeOrder.statusCode).toBe(200);
+
+        const pending = await app.inject({
+            method: "POST",
+            url: `/api/boms/${code}/delete`,
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-bom-${RUN}-del-pending` },
+        });
+        expect(pending.statusCode).toBe(409);
+        const counts = await app.get(LedgerPurgeService).purge(new Date(Date.now() + 60_000));
+        expect(counts.orders).toBeGreaterThanOrEqual(1);
 
         const key = `e2e-bom-${RUN}-del-ok`;
         const removed = await app.inject({

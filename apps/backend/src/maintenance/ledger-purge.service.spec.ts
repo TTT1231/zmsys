@@ -7,7 +7,7 @@ import { TransactionRunner } from "../prisma/transaction.runner";
 
 const ids = (...values: number[]) => values.map(value => BigInt(value));
 
-const mkService = (inboundBatches: bigint[][], outboundBatches: bigint[][]) => {
+const mkService = (inboundBatches: bigint[][], outboundBatches: bigint[][], orderBatches: bigint[][] = [[]]) => {
     const ops: Array<{ model: string; where: Record<string, unknown> }> = [];
     const tx = {
         inboundChangeLog: {
@@ -35,6 +35,16 @@ const mkService = (inboundBatches: bigint[][], outboundBatches: bigint[][]) => {
                 ops.push({ model: "outboundShipment", where });
             }),
         },
+        salesOrderChangeLog: {
+            deleteMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
+                ops.push({ model: "salesOrderChangeLog", where });
+            }),
+        },
+        salesOrderTable: {
+            deleteMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
+                ops.push({ model: "salesOrderTable", where });
+            }),
+        },
     };
     const queryRaw = vi.fn(async (sql: unknown) => {
         const isTemplate = Array.isArray(sql);
@@ -42,7 +52,11 @@ const mkService = (inboundBatches: bigint[][], outboundBatches: bigint[][]) => {
             ? (sql as readonly string[])
             : ((sql as { strings?: readonly string[] }).strings ?? []);
         const text = strings.join("");
-        const queue = text.includes("inbound_ledger") ? inboundBatches : outboundBatches;
+        const queue = text.includes("inbound_ledger")
+            ? inboundBatches
+            : text.includes("sales_order_table")
+              ? orderBatches
+              : outboundBatches;
         // 每次查询消费一个批次；队列耗尽返回空（查空即退出）
         const batch = queue.shift() ?? [];
         return batch.map(id => ({ id }));
@@ -58,7 +72,7 @@ describe("LedgerPurgeService.purge", () => {
     it("入库：变更日志先删、台账行后删；分批推进至查空退出；返回累计行数", async () => {
         const { service, ops } = mkService([ids(1, 2), ids(3), []], [[]]);
         const counts = await service.purge(new Date(0));
-        expect(counts).toEqual({ inbound: 3, outbound: 0 });
+        expect(counts).toEqual({ inbound: 3, outbound: 0, orders: 0 });
         // 每批顺序：先 inboundChangeLog 后 inboundLedger
         expect(ops.map(op => op.model)).toEqual([
             "inboundChangeLog",
@@ -90,7 +104,15 @@ describe("LedgerPurgeService.purge", () => {
     it("无候选时零删除零事务（查空即退出，不空转）", async () => {
         const { service, ops } = mkService([[]], [[]]);
         const counts = await service.purge(new Date(0));
-        expect(counts).toEqual({ inbound: 0, outbound: 0 });
+        expect(counts).toEqual({ inbound: 0, outbound: 0, orders: 0 });
         expect(ops).toHaveLength(0);
+    });
+
+    it("订单：关联出库清理后，先删变更日志再删订单", async () => {
+        const { service, ops } = mkService([[]], [[]], [ids(20), []]);
+        const counts = await service.purge(new Date(0));
+        expect(counts).toEqual({ inbound: 0, outbound: 0, orders: 1 });
+        expect(ops.map(op => op.model)).toEqual(["salesOrderChangeLog", "salesOrderTable"]);
+        expect(ops[0]!.where).toEqual({ orderId: { in: ids(20) } });
     });
 });

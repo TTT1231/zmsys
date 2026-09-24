@@ -235,7 +235,9 @@ export class InboundService {
             }
             const stock = await getStockQty(tx, current.bomId);
             if (stock - current.qty < 0) {
-                throw new ConflictException("作废后库存将小于 0，请先核对相关出库记录");
+                throw new ConflictException(
+                    "这笔入库作废后库存不足。请先到「成品出库」处理该成品的有效出库单，或核对库存调整",
+                );
             }
 
             const updated = await tx.inboundLedger.update({

@@ -73,7 +73,9 @@ it("已登记出库提供打印与作废；作废要求原因并携带乐观锁�
     const detail = openOutbound();
     expect(detail.getByRole("button", { name: "打印" })).toBeInTheDocument();
     fireEvent.click(detail.getByRole("button", { name: "作废" }));
-    const confirm = within(screen.getByRole("dialog", { name: "作废" }));
+    const confirm = within(screen.getByRole("dialog", { name: "作废出库单" }));
+    expect(confirm.getByText(/库存增加/)).toBeInTheDocument();
+    expect(confirm.getByText(/已发数量同时减少/)).toBeInTheDocument();
     fireEvent.change(confirm.getByRole("textbox"), { target: { value: "登记数量有误" } });
     fireEvent.click(confirm.getByRole("button", { name: "确认作废" }));
     expect(state.void).toHaveBeenCalledWith(
@@ -98,7 +100,7 @@ it("已作废出库对持删除权限者出现删除入口，确认后携带乐�
     const detail = openOutbound();
     fireEvent.click(detail.getByRole("button", { name: "删除" }));
     const confirm = screen.getByRole("dialog", { name: "删除出库单" });
-    expect(confirm).toHaveTextContent(/7 天后系统自动彻底清除/);
+    expect(confirm).toHaveTextContent(/7 天后清理记录/);
     fireEvent.click(within(confirm).getByRole("button", { name: "确认删除" }));
     expect(state.del).toHaveBeenCalledWith(
         { no: detailOutbound.no, expectedVersion: detailOutbound.version },
@@ -134,8 +136,9 @@ it("持跨天作废权限时跨日仍可作废，且确认弹窗带二次确认�
     // 跨日修正不放开，仍走库存调整
     expect(detail.queryByRole("button", { name: "修正" })).not.toBeInTheDocument();
     fireEvent.click(detail.getByRole("button", { name: "作废" }));
-    const confirm = screen.getByRole("dialog", { name: "作废入库记录" });
-    expect(confirm).toHaveTextContent(/跨天作废将影响历史库存统计/);
+    const confirm = screen.getByRole("dialog", { name: "作废入库单" });
+    expect(confirm).toHaveTextContent(/库存减少/);
+    expect(confirm).toHaveTextContent(/作废会改动历史库存统计/);
     fireEvent.change(within(confirm).getByRole("textbox"), { target: { value: "历史登记有误" } });
     fireEvent.click(within(confirm).getByRole("button", { name: "确认跨天作废" }));
     expect(state.void).toHaveBeenCalledWith(
@@ -149,7 +152,7 @@ it("已作废入库对持删除权限者出现删除入口，确认后携带乐�
     const detail = openInbound();
     fireEvent.click(detail.getByRole("button", { name: "删除" }));
     const confirm = screen.getByRole("dialog", { name: "删除入库记录" });
-    expect(confirm).toHaveTextContent(/7 天后系统自动彻底清除/);
+    expect(confirm).toHaveTextContent(/7 天后清理记录/);
     fireEvent.click(within(confirm).getByRole("button", { name: "确认删除" }));
     expect(state.del).toHaveBeenCalledWith(
         { no: detailInbound.no, expectedVersion: detailInbound.version },

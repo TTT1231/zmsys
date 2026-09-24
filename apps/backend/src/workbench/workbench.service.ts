@@ -36,6 +36,7 @@ export class WorkbenchService {
                 include: { category: { select: { name: true } }, items: true },
             }),
             this.prisma.salesOrderTable.findMany({
+                where: { deletedAt: null },
                 orderBy: { orderNo: "asc" },
                 include: {
                     customer: { select: { customerCode: true, name: true } },

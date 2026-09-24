@@ -50,21 +50,6 @@ const LEDGER_SORT_COLUMNS: Array<{ key: LedgerSortKey; label: string }> = [
 ];
 
 /**
- * BOM 备注（同构成不同备注 = 不同 BOM）：台账里直接看到入库的是哪个 BOM，
- * 沿用警示色突出工艺差异；空值显示占位，避免误以为遗漏字段。
- */
-function BomRemarkText({ remark }: { remark?: string }) {
-    const text = remark?.trim();
-    return text ? (
-        <span className="wrap-break-word font-medium text-warning" title={text}>
-            {text}
-        </span>
-    ) : (
-        <span className="text-subtle">—</span>
-    );
-}
-
-/**
  * 成品选择（入库建档用）：品类 → 按编码 / 物料关键字搜索 + 列表点选；
  * 点选即回填 bomCode。
  */
@@ -471,41 +456,42 @@ function VoidInboundModal({
         <Modal
             open
             onClose={close}
-            title="作废入库记录"
-            subtitle={`${row.no} · ${crossDay ? "非当天录入的入库" : "今天登记的入库"}`}
-            label="作废入库记录"
+            title="作废入库单"
+            subtitle={`${row.no} · ${row.bomCode}`}
             width={440}
             footer={
                 <>
                     <Button variant="secondary" type="button" disabled={pending} onClick={close}>
                         取消
                     </Button>
-                    <Button type="submit" form={formId} disabled={pending}>
+                    <Button variant="danger" type="submit" form={formId} disabled={pending}>
                         {pending ? "正在作废…" : crossDay ? "确认跨天作废" : "确认作废"}
                     </Button>
                 </>
             }
         >
             <form id={formId} onSubmit={submit} aria-busy={pending}>
+                <div className="mb-4 rounded-panel border border-danger/20 bg-danger-soft/50 p-4">
+                    <p className="text-14 font-semibold text-ink">
+                        作废后，{row.bomCode} 库存减少 {num(row.qty)} 个
+                    </p>
+                    <p className="mt-1 text-13 leading-5 text-muted">库存不足时系统会阻止作废，请先处理相关出库单。</p>
+                </div>
                 {crossDay && (
-                    <div className="mb-3 flex items-start gap-3 rounded-panel border border-[#fecdca] bg-danger-soft/60 p-4">
-                        <Icon name="alert" size={20} className="mt-0.5 shrink-0 text-danger" />
-                        <div className="text-14 leading-6 text-td">
-                            <p className="font-medium text-danger">该记录非当天录入，跨天作废将影响历史库存统计。</p>
-                        </div>
-                    </div>
+                    <p className="mb-4 flex items-start gap-2 text-13 leading-5 text-warning">
+                        <Icon name="alert" size={16} className="mt-0.5 shrink-0" />
+                        这笔记录不是今天登记的，作废会改动历史库存统计。
+                    </p>
                 )}
                 <TextArea
                     label="作废原因"
                     required
                     value={reason}
                     error={error}
-                    placeholder="例如：登记了错误数量 / 入库了错误型号"
+                    placeholder="例如：入库数量登记错误"
                     onChange={event => setReason(event.target.value)}
                 />
-                <p className="mt-2 text-13 text-muted">
-                    作废后这批数量会自动退回库存；记录保留作凭证，重新登记一条正确的就行。
-                </p>
+                <p className="mt-2 text-13 text-muted">作废记录仍保留在入库台账，可随后删除。</p>
             </form>
         </Modal>
     );
@@ -551,15 +537,11 @@ function DeleteInboundModal({
                 </>
             }
         >
-            <div className="flex items-start gap-3 rounded-panel border border-[#fecdca] bg-danger-soft/60 p-4">
-                <Icon name="alert" size={20} className="mt-0.5 shrink-0 text-danger" />
-                <div className="text-14 leading-6 text-td">
-                    即将删除已作废的入库记录 <span className="tnum font-semibold text-ink">{row.no}</span>（
-                    {row.bomCode} · {num(row.qty)} 个）。
-                    <p className="mt-1 font-medium text-danger">
-                        删除后该记录将从台账列表移除，7 天后系统自动彻底清除；操作将记入系统日志。
-                    </p>
-                </div>
+            <div className="rounded-panel border border-danger/20 bg-danger-soft/50 p-4">
+                <p className="text-14 font-semibold text-ink">删除后，这笔入库会立即从列表移除</p>
+                <p className="mt-1 text-13 leading-5 text-muted">
+                    已作废的 {num(row.qty)} 个不再计入库存。7 天后清理记录，操作日志保留。
+                </p>
             </div>
         </Modal>
     );
@@ -755,8 +737,9 @@ export function InboundPage() {
                                     }
                                 >
                                     <BomCell categories={snap.bomCategories} bom={bom} bomCode={row.bomCode} />
+                                    {/* 有工艺差异才挂警示条，与桌面表格「空值低调、非空警示」一致 */}
+                                    {!!bom?.remark?.trim() && <BomRemarkNote remark={bom.remark} className="mt-2" />}
                                     <div className="mt-2 flex flex-col gap-1.5">
-                                        <CardField label="BOM 备注" value={<BomRemarkText remark={bom?.remark} />} />
                                         <CardField label="入库数量" value={`${num(row.qty)} 个`} strong />
                                         <CardField label="登记人" value={row.inspector} />
                                     </div>
@@ -953,7 +936,7 @@ export function InboundPage() {
                                 onError: error => toast(error.message, true),
                                 onSuccess: updated => {
                                     setVoidTarget(null);
-                                    toast(`入库记录 ${updated.no} 已作废，库存已扣回`);
+                                    toast(`${updated.no} 已作废，${updated.bomCode} 库存减少 ${num(updated.qty)} 个`);
                                 },
                             },
                         )

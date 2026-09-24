@@ -291,8 +291,7 @@ function EditOrderModal({
     /* 已发货订单锁数量与交期（与后端口径一致），仅备注可改 */
     const locked = order.outbound > 0;
     const remarkDirty = remark !== order.remark;
-    /* 无删除权限（仅超级管理员）、已有发货或存在任何出库流水（含已作废，与后端口径
-     * 一致——曾发货又作废的订单不可删）时不显示删除入口，前端先挡一层误操作 */
+    /* 可见出库单（含已作废但未删除）仍需先处理；已软删除的出库单不再阻止订单删除。 */
     const canDelete = can("orders:delete") && order.outbound === 0 && !hasShipmentLedger;
     /* 归档（仅超级管理员）：发过货的订单与已取消的订单可归档；未发货的活跃订单走取消/删除 */
     const cancelled = order.lifecycleStatus === "cancelled";
@@ -467,15 +466,11 @@ function EditOrderModal({
                         </>
                     }
                 >
-                    <div className="flex items-start gap-3 rounded-panel border border-[#fecdca] bg-danger-soft/60 p-4">
-                        <Icon name="alert" size={20} className="mt-0.5 shrink-0 text-danger" />
-                        <div className="text-14 leading-6 text-td">
-                            即将删除订单 <span className="tnum font-semibold text-ink">{order.orderNo}</span>（
-                            {order.customer} · {num(order.qty)} 个）。该订单累计已发 0 个。
-                            <p className="mt-1 font-medium text-danger">
-                                删除后该订单将从系统永久移除，不可恢复。请确认它是手误创建的订单。
-                            </p>
-                        </div>
+                    <div className="rounded-panel border border-danger/20 bg-danger-soft/50 p-4">
+                        <p className="text-14 font-semibold text-ink">删除后，这张订单会立即从列表移除</p>
+                        <p className="mt-1 text-13 leading-5 text-muted">
+                            {num(order.qty)} 个的订单当前已发 0 个。7 天后清理记录，操作日志保留。
+                        </p>
                     </div>
                 </Modal>
             )}

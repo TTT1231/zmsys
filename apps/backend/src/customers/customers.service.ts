@@ -255,6 +255,7 @@ export class CustomersService {
                 where: {
                     customerId: current.id,
                     lifecycleStatus: "ACTIVE",
+                    deletedAt: null,
                     orderDate: { gte: this.cooperationWindowStart() },
                 },
                 select: { id: true },
@@ -275,7 +276,7 @@ export class CustomersService {
     private async cooperatingCustomerIds(db: Pick<PrismaService, "salesOrderTable">): Promise<Set<bigint>> {
         const rows = await db.salesOrderTable.groupBy({
             by: ["customerId"],
-            where: { lifecycleStatus: "ACTIVE", orderDate: { gte: this.cooperationWindowStart() } },
+            where: { lifecycleStatus: "ACTIVE", deletedAt: null, orderDate: { gte: this.cooperationWindowStart() } },
         });
         return new Set(rows.map(row => row.customerId));
     }

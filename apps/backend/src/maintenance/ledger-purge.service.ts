@@ -60,8 +60,10 @@ export class LedgerPurgeService implements OnApplicationBootstrap, OnApplication
         const cutoff = new Date(Date.now() - SOFT_DELETE_RETENTION_DAYS * 24 * 60 * 60 * 1000);
         try {
             const counts = await this.purge(cutoff);
-            if (counts.inbound > 0 || counts.outbound > 0) {
-                this.logger.log(`台账清理完成：入库 ${counts.inbound} 条、出库 ${counts.outbound} 条`);
+            if (counts.inbound > 0 || counts.outbound > 0 || counts.orders > 0) {
+                this.logger.log(
+                    `台账清理完成：入库 ${counts.inbound} 条、出库 ${counts.outbound} 条、订单 ${counts.orders} 条`,
+                );
             }
         } catch (error) {
             this.logger.error(`台账清理失败，将于下个调度周期重试: ${String(error)}`);
@@ -72,8 +74,11 @@ export class LedgerPurgeService implements OnApplicationBootstrap, OnApplication
      * 物理清理 deleted_at 早于截止时刻（cutoff）的已删单；cutoff 可注入，
      * 测试/真库验证传未来时刻即全部到期。返回各自清理的行数。
      */
-    async purge(cutoff: Date): Promise<{ inbound: number; outbound: number }> {
-        return { inbound: await this.purgeInbound(cutoff), outbound: await this.purgeOutbound(cutoff) };
+    async purge(cutoff: Date): Promise<{ inbound: number; outbound: number; orders: number }> {
+        const inbound = await this.purgeInbound(cutoff);
+        const outbound = await this.purgeOutbound(cutoff);
+        const orders = await this.purgeOrders(cutoff);
+        return { inbound, outbound, orders };
     }
 
     private async purgeInbound(cutoff: Date): Promise<number> {
@@ -119,6 +124,28 @@ export class LedgerPurgeService implements OnApplicationBootstrap, OnApplication
                 });
                 await tx.outboundLedger.deleteMany({ where: { shipmentId: { in: batch } } });
                 await tx.outboundShipment.deleteMany({ where: { id: { in: batch } } });
+            });
+            purged += batch.length;
+        }
+    }
+
+    /** 订单须先过保留期，且关联出库已物理清理；保留 op_log 删除快照。 */
+    private async purgeOrders(cutoff: Date): Promise<number> {
+        let purged = 0;
+        for (;;) {
+            const rows = await this.prisma.$queryRaw<Array<{ id: bigint }>>(
+                Prisma.sql`SELECT id FROM sales_order_table
+                    WHERE deleted_at IS NOT NULL AND deleted_at < ${cutoff}
+                      AND NOT EXISTS (
+                          SELECT 1 FROM outbound_shipment WHERE order_id = sales_order_table.id
+                      )
+                    ORDER BY id ASC LIMIT ${BATCH_SIZE}`,
+            );
+            if (rows.length === 0) return purged;
+            const batch = rows.map(row => row.id);
+            await this.txRunner.run(async (tx: Tx) => {
+                await tx.salesOrderChangeLog.deleteMany({ where: { orderId: { in: batch } } });
+                await tx.salesOrderTable.deleteMany({ where: { id: { in: batch } } });
             });
             purged += batch.length;
         }

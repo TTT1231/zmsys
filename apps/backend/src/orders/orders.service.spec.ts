@@ -89,6 +89,7 @@ const mkOrder = (overrides: Partial<OrderRow> = {}): OrderRow =>
         archivedAt: null,
         archivedBy: null,
         archiveReason: null,
+        deletedAt: null,
         rowVersion: 1n,
         requestKey: "req-order",
         createdBy: 1n,
@@ -178,7 +179,7 @@ const createStore = (store: Store) => {
                 async ({ where }: { where: { orderNo: string } }) =>
                     store.orders.find(o => o.orderNo === where.orderNo) ?? null,
             ),
-            findMany: vi.fn(async () => store.orders),
+            findMany: vi.fn(async () => store.orders.filter(order => order.deletedAt === null)),
             create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
                 const created = mkOrder(data as Partial<OrderRow>);
                 store.orders.push(created);
@@ -210,8 +211,10 @@ const createStore = (store: Store) => {
                     store.shipments.find(s => s.orderId === where.orderId && s.state === where.state) ?? null,
             ),
             count: vi.fn(
-                async ({ where }: { where: { orderId: bigint } }) =>
-                    store.shipments.filter(s => s.orderId === where.orderId).length,
+                async ({ where }: { where: { orderId: bigint; deletedAt?: null } }) =>
+                    store.shipments.filter(
+                        s => s.orderId === where.orderId && (where.deletedAt === undefined || s.deletedAt === null),
+                    ).length,
             ),
         },
         salesOrderChangeLog: {
@@ -690,7 +693,7 @@ describe("OrdersService.deleteOrder", () => {
         expect(ctx.tx.salesOrderTable.delete).not.toHaveBeenCalled();
     });
 
-    it("有效出库净额大于 0 或存在任意出库单（含已作废）均 409，台账引用保持完整", async () => {
+    it("有效出库净额大于 0 或存在未删除的作废出库单均 409；已软删除出库不阻止", async () => {
         store.outboundNet.set(500n, 20);
         await expect(ctx.service.deleteOrder("ZM260912001", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
             new ConflictException("订单已有发货记录，不可删除"),
@@ -698,19 +701,24 @@ describe("OrdersService.deleteOrder", () => {
 
         // 曾发货又作废：净额回到 0，但出库单（VOIDED）仍在——审计链不悬空，同样拒绝
         store.outboundNet.delete(500n);
-        store.shipments.push({ orderId: 500n, state: "VOIDED" } as OutboundShipment);
+        store.shipments.push({ orderId: 500n, state: "VOIDED", deletedAt: null } as OutboundShipment);
         await expect(ctx.service.deleteOrder("ZM260912001", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
-            new ConflictException("订单存在出库流水（含已作废），不可删除"),
+            new ConflictException("请先作废并删除关联出库单，再删除订单"),
         );
         expect(store.orders).toHaveLength(1);
+        store.shipments[0]!.deletedAt = new Date();
+        await expect(ctx.service.deleteOrder("ZM260912001", { expectedVersion: 1 }, actor, ID_KEY)).resolves.toBeNull();
+        expect(store.orders[0]!.deletedAt).toBeInstanceOf(Date);
     });
 
-    it("删除成功：订单与专属变更日志同事务清理，op_log 留快照，幂等重放归一为 null", async () => {
+    it("删除成功：订单软删除并保留变更日志和出库外键，列表隐藏，op_log 留快照", async () => {
         store.changeLogs.push({ orderId: 500n, eventType: "CREATE" });
         const result = await ctx.service.deleteOrder("ZM260912001", { expectedVersion: 1 }, actor, ID_KEY);
         expect(result).toBeNull();
-        expect(store.orders).toHaveLength(0);
-        expect(store.changeLogs).toHaveLength(0);
+        expect(store.orders).toHaveLength(1);
+        expect(store.orders[0]!.deletedAt).toBeInstanceOf(Date);
+        expect(store.changeLogs).toHaveLength(1);
+        expect(await ctx.service.listOrders()).toHaveLength(0);
         expect(store.opLogs.at(-1)).toMatchObject({
             action: "delete_order",
             targetCode: "ZM260912001",

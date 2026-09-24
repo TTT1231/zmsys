@@ -348,7 +348,9 @@ describe("InboundService.voidInbound", () => {
         const { service } = mkService(store);
         await expect(
             service.voidInbound("RK26091301", { expectedVersion: 1, reason: "整批退回" }, actor, ID_KEY),
-        ).rejects.toThrow(new ConflictException("作废后库存将小于 0，请先核对相关出库记录"));
+        ).rejects.toThrow(
+            new ConflictException("这笔入库作废后库存不足。请先到「成品出库」处理该成品的有效出库单，或核对库存调整"),
+        );
 
         store.stock.set(10n, 250);
         const voided = await service.voidInbound(
@@ -390,7 +392,9 @@ describe("InboundService.voidInbound", () => {
         store.stock.set(10n, 100);
         await expect(
             service.voidInbound("RK26091301", { expectedVersion: 1, reason: "跨天作废" }, crossDayActor, ID_KEY),
-        ).rejects.toThrow(new ConflictException("作废后库存将小于 0，请先核对相关出库记录"));
+        ).rejects.toThrow(
+            new ConflictException("这笔入库作废后库存不足。请先到「成品出库」处理该成品的有效出库单，或核对库存调整"),
+        );
 
         store.stock.set(10n, 250);
         const voided = await service.voidInbound(

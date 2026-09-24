@@ -137,33 +137,36 @@ function VoidOutboundModal({
         <Modal
             open
             onClose={close}
-            title="作废"
-            subtitle={row.no}
-            label="作废出库单"
+            title="作废出库单"
+            subtitle={`${row.no} · ${row.orderNo}`}
             width={440}
             footer={
                 <>
                     <Button variant="secondary" type="button" disabled={pending} onClick={close}>
                         取消
                     </Button>
-                    <Button type="submit" form={formId} disabled={pending}>
+                    <Button variant="danger" type="submit" form={formId} disabled={pending}>
                         {pending ? "正在作废…" : "确认作废"}
                     </Button>
                 </>
             }
         >
             <form id={formId} onSubmit={submit} aria-busy={pending}>
+                <div className="mb-4 rounded-panel border border-danger/20 bg-danger-soft/50 p-4">
+                    <p className="text-14 font-semibold text-ink">作废后，库存增加 {num(row.qty)} 个</p>
+                    <p className="mt-1 text-13 leading-5 text-muted">
+                        订单 {row.orderNo} 的已发数量同时减少 {num(row.qty)} 个。
+                    </p>
+                </div>
                 <TextArea
                     label="作废原因"
                     required
                     value={reason}
                     error={error}
-                    placeholder="例如：登记了错误数量 / 选错了产品型号"
+                    placeholder="例如：发货数量登记错误"
                     onChange={event => setReason(event.target.value)}
                 />
-                <p className="mt-2 text-13 text-muted">
-                    作废后这批货的数量会自动退回库存和订单；原单保留作凭证，重新登记一张正确的就行。
-                </p>
+                <p className="mt-2 text-13 text-muted">作废单仍保留在出库台账，可随后删除。</p>
             </form>
         </Modal>
     );
@@ -489,15 +492,11 @@ function DeleteOutboundModal({
                 </>
             }
         >
-            <div className="flex items-start gap-3 rounded-panel border border-[#fecdca] bg-danger-soft/60 p-4">
-                <Icon name="alert" size={20} className="mt-0.5 shrink-0 text-danger" />
-                <div className="text-14 leading-6 text-td">
-                    即将删除已作废的出库单 <span className="tnum font-semibold text-ink">{row.no}</span>（{row.orderNo}{" "}
-                    · {num(row.qty)} 个）。
-                    <p className="mt-1 font-medium text-danger">
-                        删除后该出库单将从台账列表移除，7 天后系统自动彻底清除；操作将记入系统日志。
-                    </p>
-                </div>
+            <div className="rounded-panel border border-danger/20 bg-danger-soft/50 p-4">
+                <p className="text-14 font-semibold text-ink">删除后，这张出库单会立即从列表移除</p>
+                <p className="mt-1 text-13 leading-5 text-muted">
+                    已作废的 {num(row.qty)} 个不再计入库存和订单。7 天后清理记录，操作日志保留。
+                </p>
             </div>
         </Modal>
     );
@@ -771,35 +770,36 @@ export function OutboundPage() {
 
                 <div className="mobile-records">
                     <ListState loading={isLoading} empty={!pageRows.length}>
-                        {pageRows.map(row => (
-                            <RecordCard
-                                key={row.no}
-                                title={row.no}
-                                subtitle={`${row.customer} · ${row.orderNo}`}
-                                voided={row.state === "voided"}
-                                badge={
-                                    <Badge tone={row.state === "voided" ? "danger" : "pending"}>
-                                        {outboundStateLabel(row)}
-                                    </Badge>
-                                }
-                                actions={
-                                    <Button variant="secondary" onClick={() => setDetail(row)}>
-                                        查看详情
-                                    </Button>
-                                }
-                            >
-                                <BomCell
-                                    categories={snap.bomCategories}
-                                    bom={bomByCode(snap, row.bomCode)}
-                                    bomCode={row.bomCode}
-                                />
-                                <div className="mt-2 flex flex-col gap-1.5">
-                                    <CardField label="出库数量" value={`${num(row.qty)} 个`} strong />
-                                    <CardField label="出库日期" value={row.date} />
-                                    <CardField label="操作人" value={row.operator} />
-                                </div>
-                            </RecordCard>
-                        ))}
+                        {pageRows.map(row => {
+                            const bom = bomByCode(snap, row.bomCode);
+                            return (
+                                <RecordCard
+                                    key={row.no}
+                                    title={row.no}
+                                    subtitle={`${row.customer} · ${row.orderNo}`}
+                                    voided={row.state === "voided"}
+                                    badge={
+                                        <Badge tone={row.state === "voided" ? "danger" : "pending"}>
+                                            {outboundStateLabel(row)}
+                                        </Badge>
+                                    }
+                                    actions={
+                                        <Button variant="secondary" onClick={() => setDetail(row)}>
+                                            查看详情
+                                        </Button>
+                                    }
+                                >
+                                    <BomCell categories={snap.bomCategories} bom={bom} bomCode={row.bomCode} />
+                                    {/* 有工艺差异才挂警示条，与入库台账移动卡片一致 */}
+                                    {!!bom?.remark?.trim() && <BomRemarkNote remark={bom.remark} className="mt-2" />}
+                                    <div className="mt-2 flex flex-col gap-1.5">
+                                        <CardField label="出库数量" value={`${num(row.qty)} 个`} strong />
+                                        <CardField label="出库日期" value={row.date} />
+                                        <CardField label="操作人" value={row.operator} />
+                                    </div>
+                                </RecordCard>
+                            );
+                        })}
                     </ListState>
                 </div>
                 <div className="hidden lg:block">
@@ -999,7 +999,9 @@ export function OutboundPage() {
                                 onError: error => toast(error.message, true),
                                 onSuccess: updated => {
                                     setVoidTarget(null);
-                                    toast(`出库单 ${updated.no} 已作废，数量已退回库存和订单`);
+                                    toast(
+                                        `${updated.no} 已作废，库存增加 ${num(updated.qty)} 个，订单已发减少 ${num(updated.qty)} 个`,
+                                    );
                                 },
                             },
                         )

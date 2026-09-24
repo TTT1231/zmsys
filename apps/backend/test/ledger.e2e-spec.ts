@@ -446,7 +446,7 @@ describe("成品出入库 (e2e)", () => {
             `e2e-led-${RUN}-void-neg`,
         );
         expect(negative.statusCode).toBe(409);
-        expect(negative.json().message).toBe("作废后库存将小于 0，请先核对相关出库记录");
+        expect(negative.json().message).toContain("请先到「成品出库」处理该成品的有效出库单");
 
         // 新入库 50 再作废：库存 50 → 0，允许
         const created = await post("/api/inbound", warehouseToken, inboundInput(BOM_CODE, 50), `e2e-led-${RUN}-in50`);
@@ -721,7 +721,7 @@ describe("成品出入库 (e2e)", () => {
         );
         expect(stockIn.statusCode).toBe(200);
 
-        // 新订单 40 件 → 发货 40 → 作废（订单已发恢复 0）→ 删除 → 物理清理 → 订单删除放行（明示规则）
+        // 新订单 40 件 → 发货 40 → 作废 → 删除出库 → 立即删除订单 → 保留期后统一清理
         // 交货日期早于其他用例的订单（§6.2 按交货日期升序分配共享库存池），保证补的库存先分给本单
         const orderRes = await post(
             "/api/orders",
@@ -760,7 +760,7 @@ describe("成品出入库 (e2e)", () => {
         });
         expect(stockLedgerBefore.statusCode).toBe(200);
         expect(stockLedgerBefore.json().data.flows.filter((flow: { no: string }) => flow.no === shipNo)).toHaveLength(
-            2,
+            0,
         );
 
         const shipDel = await post(
@@ -786,6 +786,20 @@ describe("成品出入库 (e2e)", () => {
         });
         expect(stockLedgerAfter.statusCode).toBe(200);
         expect(stockLedgerAfter.json().data.flows.some((flow: { no: string }) => flow.no === shipNo)).toBe(false);
+
+        // 出库单软删除后即可删除订单；业务列表立即隐藏，外键行保留至 7 天清理。
+        const orderDel = await post(
+            `/api/orders/${deloOrderNo}/delete`,
+            superToken,
+            { expectedVersion: 1 },
+            `e2e-led-${RUN}-delo-odel`,
+        );
+        expect(orderDel.statusCode).toBe(200);
+        expect(orderDel.json().data).toBeNull();
+        expect(await outboundOfOrder(deloOrderNo)).toBeUndefined();
+        expect(
+            (await prisma.salesOrderTable.findUnique({ where: { orderNo: deloOrderNo } }))?.deletedAt,
+        ).not.toBeNull();
 
         // 软删除行存在时 deleteBom 仍被流水校验挡住（与 FK RESTRICT 口径一致）
         const chainBom = await prisma.bomTable.findFirst({ where: { bomCode: { not: BOM_CODE } } });
@@ -830,10 +844,12 @@ describe("成品出入库 (e2e)", () => {
         const counts = await purgeService.purge(new Date(Date.now() + 60_000));
         expect(counts.inbound).toBeGreaterThanOrEqual(2);
         expect(counts.outbound).toBeGreaterThanOrEqual(1);
+        expect(counts.orders).toBeGreaterThanOrEqual(1);
         expect(await prisma.outboundShipment.findUnique({ where: { shipmentNo: shipNo } })).toBeNull();
         expect(await prisma.outboundLedger.count({ where: { shipmentId: shipmentRow!.id } })).toBe(0);
         expect(await prisma.outboundStateLog.count({ where: { shipmentId: shipmentRow!.id } })).toBe(0);
         expect(await prisma.inboundLedger.findUnique({ where: { entryNo: chainIn.json().data.no } })).toBeNull();
+        expect(await prisma.salesOrderTable.findUnique({ where: { orderNo: deloOrderNo } })).toBeNull();
         const deleteLog = await prisma.opLog.findFirst({ where: { action: "delete_outbound", targetCode: shipNo } });
         expect(deleteLog?.detailJson).toMatchObject({
             no: shipNo,
@@ -841,19 +857,6 @@ describe("成品出入库 (e2e)", () => {
             state: "voided",
             voidReason: "发货作废后删除",
         });
-        // 清理不改变订单已发（净额零和）
-        expect(await outboundOfOrder(deloOrderNo)).toBe(0);
-
-        // 出库全部"作废→删除→清理"后订单删除放行：净发货为零且过后悔期（roles.md 明示规则）
-        const orderDel = await post(
-            `/api/orders/${deloOrderNo}/delete`,
-            superToken,
-            { expectedVersion: 1 },
-            `e2e-led-${RUN}-delo-odel`,
-        );
-        expect(orderDel.statusCode).toBe(200);
-        expect(orderDel.json().data).toBeNull();
-
         // 清理后 BOM 的入库流水消失，删除放行——"入库→作废→删除→删 BOM"恢复链走通
         const bomDel = await post(
             `/api/boms/${chainBom!.bomCode}/delete`,

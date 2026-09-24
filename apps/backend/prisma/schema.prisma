@@ -475,6 +475,7 @@ model SalesOrderTable {
   archivedAt          DateTime?                  @map("archived_at") @db.DateTime(3)
   archivedBy          BigInt?                    @map("archived_by")
   archiveReason       String?                    @map("archive_reason") @db.VarChar(500)
+  deletedAt           DateTime?                  @map("deleted_at") @db.DateTime(3)
   rowVersion          BigInt                     @default(1) @map("row_version") @db.UnsignedBigInt
   requestKey          String                     @unique(map: "uk_sales_order_request") @map("request_key") @db.VarChar(128)
   createdBy           BigInt                     @map("created_by")
@@ -492,6 +493,7 @@ model SalesOrderTable {
 
   @@index([bomId, lifecycleStatus, deliverDate, orderNo], map: "idx_sales_order_bom_queue")
   @@index([customerId, orderDate], map: "idx_sales_order_customer_date")
+  @@index([deletedAt], map: "idx_sales_order_deleted")
   @@map("sales_order_table")
 }
 

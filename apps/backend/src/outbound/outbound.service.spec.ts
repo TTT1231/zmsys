@@ -53,6 +53,7 @@ const mkOrder = (overrides: Partial<OrderRow> = {}): OrderRow =>
         cancelledAt: null,
         cancelledBy: null,
         cancelReason: null,
+        deletedAt: null,
         rowVersion: 1n,
         requestKey: "req-order",
         createdBy: 1n,

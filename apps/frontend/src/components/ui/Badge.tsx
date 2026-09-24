@@ -47,7 +47,7 @@ export function Badge({ tone = "progress", children }: { tone?: string; children
 
 /* 主按钮 / 次按钮 */
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-    variant?: "primary" | "secondary";
+    variant?: "primary" | "secondary" | "danger";
     icon?: string;
 }
 
@@ -57,7 +57,9 @@ export function Button({ variant = "primary", icon, children, className = "", ..
     const styles =
         variant === "primary"
             ? "bg-primary text-white hover:bg-primary-hover"
-            : "border border-line-strong bg-surface text-ink hover:border-primary-border hover:text-primary-strong";
+            : variant === "danger"
+              ? "bg-danger text-white hover:bg-danger/90"
+              : "border border-line-strong bg-surface text-ink hover:border-primary-border hover:text-primary-strong";
     return (
         <button type="button" className={`${base} ${styles} ${className}`} {...rest}>
             {icon && <Icon name={icon} size={16} />}

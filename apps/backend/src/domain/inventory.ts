@@ -43,7 +43,7 @@ export async function computeShippableQty(
         SELECT o.id, o.qty, COALESCE(v.outbound_qty, 0) AS outbound_qty
         FROM sales_order_table AS o
         LEFT JOIN v_order_outbound_qty AS v ON v.order_id = o.id
-        WHERE o.bom_id = ${params.bomId} AND o.lifecycle_status = 'ACTIVE'
+        WHERE o.bom_id = ${params.bomId} AND o.lifecycle_status = 'ACTIVE' AND o.deleted_at IS NULL
         ORDER BY o.deliver_date ASC, o.order_no ASC
     `;
     let pool = await getStockQty(tx, params.bomId);
