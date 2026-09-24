@@ -483,7 +483,7 @@ function DeleteOutboundModal({
         >
             <DangerNote
                 impact="删除后，这张出库单会从列表移除"
-                note={`已作废的 ${num(row.qty)} 个不再计入库存和订单；7 天后清理记录，操作日志保留。`}
+                note={`已作废的 ${num(row.qty)} 个不再计入库存和订单；7 天后清理记录，日志保留。`}
             />
         </Modal>
     );
