@@ -27,7 +27,8 @@ const bom = (over: Partial<Bom> = {}): Bom => ({
         { materialId: "3003", groupKey: "silver-wire-thickness", groupName: "银丝厚度", name: "0.2", quantity: 1 },
     ],
     spec: "型号：M-100 · 银丝厚度：0.2",
-    created: "2026-01-01",
+    creator: "郭均",
+    created: "2026-01-01T02:00:00.000Z",
     unit: "个",
     ...over,
 });

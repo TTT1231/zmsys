@@ -9,7 +9,8 @@ export const detailBom: Bom = {
     spec: "底座：二脚底座（无挡脚） · 盖子：盖子 · 按钮：8.5mm · 支架：6.3支架：铜镀银 · 静片：6.3静片：铜镀银",
     remark: "",
     unit: "个",
-    created: "2026-09-13",
+    creator: "郭均",
+    created: "2026-09-13T02:13:00.000Z",
     items: [
         { materialId: "3101", groupKey: "base", groupName: "底座", name: "二脚底座（无挡脚）", quantity: 1 },
         { materialId: "3103", groupKey: "cover", groupName: "盖子", name: "盖子", quantity: 1 },

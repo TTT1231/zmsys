@@ -78,7 +78,8 @@ export interface Bom {
     items: BomItemView[]; // 选中物料集合（无数量，跌倒开关含微动物料）
     spec: string; // 摘要（"组名：物料名"以 " · " 连接）
     remark: string; // 建档备注（工艺差异，参与判重指纹）；空串 = 无备注
-    created: string;
+    creator: string; // 建档人姓名（sys_user.name）
+    created: string; // 建档时刻（ISO 8601 带时区）
     unit: string;
 }
 

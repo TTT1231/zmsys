@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
+import { formatDateTime } from "@/lib/date";
 import { copyText } from "@/lib/clipboard";
 import { useApp } from "@/context/useApp";
 import { isApiError } from "@/http";
@@ -101,6 +102,9 @@ export function BomDetailModal({
                     {bom.remark || "—"}
                 </p>
             </section>
+            <p className="mt-3 text-13 text-muted">
+                创建人 {bom.creator} · {formatDateTime(bom.created)}
+            </p>
         </Modal>
     );
 }
@@ -1046,6 +1050,8 @@ export function BomPage() {
                                             }
                                         />
                                         <CardField label="备注" value={bom.remark || "—"} />
+                                        <CardField label="创建人" value={bom.creator} />
+                                        <CardField label="创建时间" value={formatDateTime(bom.created)} />
                                     </div>
                                 </RecordCard>
                             ))}
@@ -1058,7 +1064,7 @@ export function BomPage() {
                     ) : (
                         <DataTable
                             tableId="bom"
-                            defaultWidths={[80, 160, 120, 360, 180, 100]}
+                            defaultWidths={[80, 160, 120, 360, 180, 100, 150, 100]}
                             recordCount={filtered.length}
                             identityColumn={1}
                             scrollRef={tableScrollRef}
@@ -1087,6 +1093,12 @@ export function BomPage() {
                                     <th className="px-3 py-2.5 font-semibold" style={{ width: "16%" }}>
                                         BOM 备注
                                     </th>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "8%" }}>
+                                        创建人
+                                    </th>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "12%" }}>
+                                        创建时间
+                                    </th>
                                     <th className="px-5 py-2.5 text-center font-semibold" style={{ width: "10%" }}>
                                         操作
                                     </th>
@@ -1095,7 +1107,7 @@ export function BomPage() {
                             <tbody>
                                 {pageRows.length === 0 && (
                                     <tr className="row-empty">
-                                        <td colSpan={6} className="px-5 py-10 text-center">
+                                        <td colSpan={8} className="px-5 py-10 text-center">
                                             <EmptyState
                                                 description={
                                                     usageUnavailable
@@ -1140,6 +1152,10 @@ export function BomPage() {
                                         </td>
                                         <td className="px-3 py-3">
                                             <RemarkCell remark={bom.remark} variant="warning" />
+                                        </td>
+                                        <td className="px-3 py-3 text-14 text-td">{bom.creator}</td>
+                                        <td className="tnum px-3 py-3 text-14 text-td">
+                                            {formatDateTime(bom.created)}
                                         </td>
                                         <td className="px-5 py-3 text-center">
                                             <TableLink onClick={() => setDetail(bom)}>查看详情</TableLink>
