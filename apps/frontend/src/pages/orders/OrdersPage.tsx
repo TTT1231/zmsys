@@ -23,6 +23,7 @@ import { nextSortState, type SortState } from "@/lib/tableSort";
 import { Field, TextArea, TextField, DateField } from "@/components/ui/Field";
 import {
     useArchiveOrder,
+    useCancelOrder,
     useCreateOrder,
     useDeleteOrder,
     useUpdateOrder,
@@ -266,8 +267,9 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
 }
 
 /* 编辑销售订单弹窗：已发货（累计出库>0）订单数量与交期锁定、仅可改备注；
- * 完全未发货的订单（含已取消）可由超级管理员删除；发过货的订单（已完成/
- * 部分发货/部分发货后取消）可由超级管理员归档，一件未发不归档 */
+ * 活跃且有剩余量的订单可取消（orders:cancel 普通权限，原因必填）；完全未发货
+ * 的订单（含已取消）可由超级管理员删除；发过货的订单（已完成/部分发货/部分
+ * 发货后取消）可由超级管理员归档，一件未发不归档 */
 function EditOrderModal({
     order,
     hasShipmentLedger,
@@ -279,6 +281,7 @@ function EditOrderModal({
 }) {
     const { can } = useApp();
     const updateOrder = useUpdateOrder();
+    const cancelOrder = useCancelOrder();
     const deleteOrder = useDeleteOrder();
     const archiveOrder = useArchiveOrder();
     const toast = useToast();
@@ -289,6 +292,9 @@ function EditOrderModal({
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [confirmArchive, setConfirmArchive] = useState(false);
     const [archiveRemark, setArchiveRemark] = useState("");
+    const [confirmCancel, setConfirmCancel] = useState(false);
+    const [cancelReason, setCancelReason] = useState("");
+    const [cancelError, setCancelError] = useState("");
     const cancelled = order.lifecycleStatus === "cancelled";
     /* 已发货订单锁数量与交期（与后端口径一致），仅备注可改；取消单后端全字段
      * 不可改，表单只读，弹窗仅承载归档/删除终端动作 */
@@ -299,6 +305,9 @@ function EditOrderModal({
     /* 归档（仅超级管理员）：仅发过货的订单可归档——已完成/部分发货/部分发货后取消
      * 三种形态；一件未发不归档（活跃走取消/删除，已取消的直接删除） */
     const canArchive = can("orders:archive") && order.outbound > 0;
+    /* 取消（orders:cancel 普通权限）：仅活跃且有剩余量——已完成后无剩余量可取消，
+     * 与后端 outbound >= qty 拒绝口径一致 */
+    const canCancelOrder = can("orders:cancel") && !cancelled && order.outbound < order.qty;
 
     const submit = () => {
         if (!order) return;
@@ -325,6 +334,27 @@ function EditOrderModal({
             {
                 onSuccess: () => {
                     toast(`订单 ${order.orderNo} 已更新`);
+                    onClose();
+                },
+                onError: error => toast(error.message, true),
+            },
+        );
+    };
+
+    const submitCancel = () => {
+        // 原因必填 2–500 字符，与后端 CancelOrderDto（数据库 CHECK）同口径
+        const reason = cancelReason.trim();
+        if (reason.length < 2 || reason.length > 500) {
+            setCancelError("取消原因为 2–500 个字符");
+            return;
+        }
+        if (cancelOrder.isPending) return;
+        cancelOrder.mutate(
+            { orderNo: order.orderNo, expectedVersion: order.version, reason },
+            {
+                onSuccess: () => {
+                    toast(`订单 ${order.orderNo} 已取消`);
+                    setConfirmCancel(false);
                     onClose();
                 },
                 onError: error => toast(error.message, true),
@@ -371,24 +401,38 @@ function EditOrderModal({
             width={520}
             footer={
                 <>
-                    {canArchive && (
-                        <button
-                            type="button"
-                            onClick={() => setConfirmArchive(true)}
-                            className="mr-auto min-h-10 rounded-btn px-2 text-14 font-medium text-muted transition hover:bg-soft hover:text-td-strong"
-                        >
-                            归档订单
-                        </button>
-                    )}
-                    {canDelete && (
-                        <button
-                            type="button"
-                            onClick={() => setConfirmDelete(true)}
-                            className={`${canArchive ? "" : "mr-auto"} min-h-10 rounded-btn px-2 text-14 font-medium text-danger transition hover:bg-danger-soft`}
-                        >
-                            删除订单
-                        </button>
-                    )}
+                    <div className="mr-auto flex flex-wrap items-center gap-1">
+                        {canCancelOrder && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setCancelError("");
+                                    setConfirmCancel(true);
+                                }}
+                                className="min-h-10 rounded-btn px-2 text-14 font-medium text-muted transition hover:bg-soft hover:text-td-strong"
+                            >
+                                取消订单
+                            </button>
+                        )}
+                        {canArchive && (
+                            <button
+                                type="button"
+                                onClick={() => setConfirmArchive(true)}
+                                className="min-h-10 rounded-btn px-2 text-14 font-medium text-muted transition hover:bg-soft hover:text-td-strong"
+                            >
+                                归档订单
+                            </button>
+                        )}
+                        {canDelete && (
+                            <button
+                                type="button"
+                                onClick={() => setConfirmDelete(true)}
+                                className="min-h-10 rounded-btn px-2 text-14 font-medium text-danger transition hover:bg-danger-soft"
+                            >
+                                删除订单
+                            </button>
+                        )}
+                    </div>
                     <button
                         type="button"
                         onClick={onClose}
@@ -495,6 +539,66 @@ function EditOrderModal({
                         <p className="mt-1 text-13 leading-5 text-muted">
                             {num(order.qty)} 个的订单当前已发 0 个。7 天后清理记录，操作日志保留。
                         </p>
+                    </div>
+                </Modal>
+            )}
+            {confirmCancel && order && (
+                <Modal
+                    open
+                    onClose={() => setConfirmCancel(false)}
+                    label="终态操作"
+                    title="取消销售订单"
+                    subtitle={`${order.orderNo} · ${order.customer}`}
+                    width={480}
+                    footer={
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => setConfirmCancel(false)}
+                                className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
+                            >
+                                取消
+                            </button>
+                            <button
+                                type="button"
+                                disabled={cancelOrder.isPending}
+                                onClick={submitCancel}
+                                className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white transition hover:bg-primary-hover disabled:opacity-60"
+                            >
+                                {cancelOrder.isPending ? "正在取消…" : "确认取消"}
+                            </button>
+                        </>
+                    }
+                >
+                    <div className="flex flex-col gap-3">
+                        <div className="flex items-start gap-3 rounded-panel border border-line bg-soft p-4">
+                            <Icon name="alert" size={20} className="mt-0.5 shrink-0 text-muted" />
+                            <div className="text-14 leading-6 text-td">
+                                即将取消订单 <span className="tnum font-semibold text-ink">{order.orderNo}</span>（
+                                {order.customer} · 订单 {num(order.qty)} 个 · 已发 {num(order.outbound)} 个）。
+                                {order.outbound > 0 ? (
+                                    <p className="mt-1 text-subtle">
+                                        已发 {num(order.outbound)} 个的交付记录保留，剩余{" "}
+                                        {num(order.qty - order.outbound)} 个欠量全部关闭，不再安排交付。
+                                    </p>
+                                ) : (
+                                    <p className="mt-1 text-subtle">全部数量关闭，不再安排交付。</p>
+                                )}
+                                <p className="mt-1 text-subtle">
+                                    取消后订单转为「已取消」状态，不可恢复为活跃；发过货的取消单可再归档留档。
+                                </p>
+                            </div>
+                        </div>
+                        <TextArea
+                            label="取消原因（必填）"
+                            placeholder="如：客户撤单、重复下单"
+                            value={cancelReason}
+                            error={cancelError}
+                            onChange={event => {
+                                setCancelReason(event.target.value.slice(0, 500));
+                                setCancelError("");
+                            }}
+                        />
                     </div>
                 </Modal>
             )}
