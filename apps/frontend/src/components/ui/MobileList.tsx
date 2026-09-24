@@ -123,6 +123,14 @@ export function OrderTaskCard({
                 <CardField label="交货日期" value={order.deliverDate} />
                 <CardField label="已发 / 订单" value={`${num(order.outbound)} / ${num(order.qty)} 个`} />
                 {!cancelled && !archived && <CardField label="待交数量" value={`${num(remaining)} 个`} strong />}
+                {archived && (
+                    <CardField
+                        label="归档时间"
+                        value={order.archivedAt ? new Date(order.archivedAt).toLocaleString() : "—"}
+                    />
+                )}
+                {archived && <CardField label="归档人" value={order.archivedBy || "—"} />}
+                {archived && <CardField label="归档备注" value={order.archiveReason || "—"} />}
                 <div className="flex flex-wrap justify-between gap-2">
                     {cancelled ? <span className="text-muted">已停止交付</span> : null}
                     {archived ? <span className="text-muted">已归档</span> : null}

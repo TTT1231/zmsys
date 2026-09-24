@@ -322,10 +322,11 @@ export class OrdersService {
 
     /**
      * 归档订单（契约 orders:archive，幂等，仅超级管理员，db-scheme.md §6.1）：
-     * 收尾已完成/部分发货/已取消的订单，使其退出活跃视图仅供查询。终态不可恢复；
-     * 未发货的 ACTIVE 订单不可归档（手误单走取消/删除）；存在已登记未打印的
-     * 出库单须先作废或打印。归档人/时间/备注（选填）随行落库供审计，change_log
-     * 记 ARCHIVE 事件（操作人与时间），op_log 另记里程碑与删除前同构快照。
+     * 收尾已完成/部分发货/部分发货后取消的订单，使其退出活跃视图仅供查询。终态
+     * 不可恢复；一件未发的订单不可归档——ACTIVE 走取消/删除，已取消的直接删除。
+     * 存在未作废出库单时直接放行（已发数量保留），归档后其出库单不可作废/删除。
+     * 归档人/时间/备注（选填）随行落库供审计，change_log 记 ARCHIVE 事件（操作人
+     * 与时间），op_log 另记里程碑快照。
      */
     async archiveOrder(
         orderNo: string,
@@ -359,11 +360,14 @@ export class OrdersService {
             if (current.lifecycleStatus === "ARCHIVED") {
                 throw new ConflictException("订单已归档");
             }
-            if (current.lifecycleStatus === "ACTIVE") {
-                const outbound = await this.outboundNetOf(tx, current.id);
-                if (outbound === 0) {
-                    throw new ConflictException("订单尚未发货，无需归档；手误订单请取消或删除");
-                }
+            const outbound = await this.outboundNetOf(tx, current.id);
+            if (outbound === 0) {
+                // 一件未发不归档：手误的活跃单走取消/删除，已取消的单直接删除
+                throw new ConflictException(
+                    current.lifecycleStatus === "ACTIVE"
+                        ? "订单尚未发货，无需归档；手误订单请取消或删除"
+                        : "订单取消时一件未发，无需归档；请直接删除订单",
+                );
             }
 
             const updated = await tx.salesOrderTable.update({

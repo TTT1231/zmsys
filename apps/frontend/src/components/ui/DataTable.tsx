@@ -106,6 +106,9 @@ function TableView({
     // 与当前列宽无关）：表头回答"这列是什么"，任何压缩下都必须完整可读；列内容在窄列下
     // 截断（title 悬停/详情弹窗兜底）。jsdom 测不出宽度（scrollWidth=0）时不写入，走 90 兜底。
     const [headerMins, setHeaderMins] = useState<Record<string, number>>({});
+    // 徽章列内容下限（.table-badge nowrap 不可截断，允许超过推荐宽），
+    // 与表头下限取 max 作为列 min —— 溢出压缩时徽章列保完整
+    const [badgeMins, setBadgeMins] = useState<Record<string, number>>({});
     const [preferences, setPreferences] = useState(() => readPreferences(storageKey));
     const [settings, setSettings] = useState(false);
     const [activeColumn, setActiveColumn] = useState<string | null>(null);
@@ -141,7 +144,7 @@ function TableView({
             label,
             key: label,
             width: recommended,
-            min: Math.min(recommended, headerMins[label] ?? 90),
+            min: Math.max(Math.min(recommended, headerMins[label] ?? 90), badgeMins[label] ?? 0),
             max: 800,
             grow: wide,
             fixed: index === headers.length - 1,
@@ -200,6 +203,9 @@ function TableView({
     // 表头最小宽测量：密度切换 / 列显隐 / 视口缩放（含字体缩放）后重测。
     // th.scrollWidth 是 max(列宽, 内容宽)，列宽大于文字时量不出内容固有宽——
     // 用 Range 量内容节点（跳过列宽拖拽手柄）的真实包围盒，加左右 padding。
+    // 单元格内的状态徽章（.table-badge）同样参与列 min：徽章 nowrap，被压缩
+    // 截断即不可读（fitTableWidths 溢出时会把自动列压到表头宽），最长徽章宽
+    // 与表头宽取 max 作为该列下限；文本列截断走 ellipsis 不受影响。
     useLayoutEffect(() => {
         const next: Record<string, number> = {};
         bodyRef.current?.querySelectorAll<HTMLElement>("thead th[aria-label]").forEach(th => {
@@ -225,12 +231,41 @@ function TableView({
                 Math.ceil(right - left + Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight)) +
                 2;
         });
+        // 徽章列内容下限：按 td 在行内的位置对回同列 th 的 aria-label（填充列与
+        // 跨列表头无 label 自动跳过；末列固定不参与压缩，错位无实际影响）
+        const badges: Record<string, number> = {};
+        bodyRef.current?.querySelectorAll<HTMLElement>("tbody td").forEach(td => {
+            const badge = td.querySelector(":scope > .table-badge");
+            if (!badge) return;
+            const row = td.parentElement;
+            const th = row
+                ? Array.from(td.closest("table")?.querySelectorAll<HTMLElement>("thead th") ?? [])[
+                      Array.from(row.children).indexOf(td)
+                  ]
+                : undefined;
+            const label = th?.getAttribute("aria-label");
+            if (!label) return;
+            const style = getComputedStyle(td);
+            const need = Math.ceil(
+                badge.getBoundingClientRect().width +
+                    Number.parseFloat(style.paddingLeft) +
+                    Number.parseFloat(style.paddingRight),
+            );
+            badges[label] = Math.max(badges[label] ?? 0, need);
+        });
         setHeaderMins(current => {
             const entries = Object.entries(next);
             const same =
                 entries.length === Object.keys(current).length &&
                 entries.every(([key, value]) => current[key] === value);
             return same ? current : next;
+        });
+        setBadgeMins(current => {
+            const entries = Object.entries(badges);
+            const same =
+                entries.length === Object.keys(current).length &&
+                entries.every(([key, value]) => current[key] === value);
+            return same ? current : badges;
         });
     }, [viewport, headers.length, compact]);
     useEffect(() => {

@@ -118,6 +118,9 @@ export class OutboundService {
             if (order.lifecycleStatus === "CANCELLED") {
                 throw new ConflictException("订单已取消，不能登记发货");
             }
+            if (order.lifecycleStatus === "ARCHIVED") {
+                throw new ConflictException("订单已归档，不能登记发货");
+            }
 
             // 可发量在 BOM+订单锁内重算，不信任任何前端传入的库存/已发数据
             await computeShippableQty(tx, {
@@ -232,6 +235,8 @@ export class OutboundService {
             if (current.state !== "REGISTERED") {
                 throw new ConflictException("出库单已作废，不能重复作废");
             }
+            // 归档单的出库记录是终态审计依据（已发口径随归档冻结），不可作废回退
+            await this.assertOrderNotArchived(tx, current, "不可作废");
             await this.appendCorrection(tx, current, dto.reason, actor, now);
 
             const updated = await tx.outboundShipment.update({
@@ -316,6 +321,8 @@ export class OutboundService {
             if (current.deletedAt !== null) {
                 throw new ConflictException("该出库单已删除");
             }
+            // 含归档前已作废的单：删除后 7 天物理清理会断归档审计链，一律保留
+            await this.assertOrderNotArchived(tx, current, "不可删除");
 
             await tx.outboundShipment.update({
                 where: { id: current.id },
@@ -429,6 +436,21 @@ export class OutboundService {
                 createdAt: now,
             },
         });
+    }
+
+    /**
+     * 归档订单的出库单守卫：作废/删除都会破坏归档终态——作废会回退已发净额
+     * （"已发 3/5"变 0/5），删除在后悔期物理清理后断审计链。调用前订单行已被
+     * lockShipmentForWrite 按锁序锁定，此处读到的状态无竞态。
+     */
+    private async assertOrderNotArchived(tx: Tx, shipment: ShipmentRow, action: string): Promise<void> {
+        const order = await tx.salesOrderTable.findUnique({
+            where: { id: shipment.orderId },
+            select: { lifecycleStatus: true },
+        });
+        if (order?.lifecycleStatus === "ARCHIVED") {
+            throw new ConflictException(`所属订单已归档，出库记录为审计依据，${action}`);
+        }
     }
 
     /**

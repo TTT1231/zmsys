@@ -634,16 +634,23 @@ describe("OrdersService.archiveOrder", () => {
         );
     });
 
-    it("已取消订单（含未发货取消）可归档：保留取消语境、备注留空存 null", async () => {
+    it("未发货取消的订单不可归档 409；部分发货后取消的订单可归档且保留取消语境", async () => {
         store.orders[0] = mkOrder({
             lifecycleStatus: "CANCELLED",
             cancelledAt: new Date("2026-09-13T10:00:00Z"),
             cancelReason: "客户撤单",
         });
+        // 一件未发的取消单不归档，直接删除
+        await expect(ctx.service.archiveOrder("ZM260912001", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException("订单取消时一件未发，无需归档；请直接删除订单"),
+        );
+
+        store.outboundNet.set(500n, 40);
         const archived = await ctx.service.archiveOrder("ZM260912001", { expectedVersion: 1 }, actor, ID_KEY);
         expect(archived).toMatchObject({
             lifecycleStatus: "archived",
             version: 2,
+            outbound: 40,
             cancelReason: "客户撤单",
         });
         expect(archived.archivedAt).toBeDefined();

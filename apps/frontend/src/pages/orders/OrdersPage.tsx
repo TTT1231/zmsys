@@ -39,7 +39,7 @@ import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { PageLoading } from "@/components/ui/PageLoading";
 import type { Order, Snapshot } from "@/api";
 
-const STATUS_OPTIONS = ["全部状态", "待备货", "可发货", "部分可发货", "部分发货", "已完成", "已取消", "部分发货后取消"];
+const STATUS_OPTIONS = ["全部状态", "待备货", "可发货", "部分可发货", "部分发货", "已完成"];
 const EMPTY_BOMS: Snapshot["boms"] = [];
 const EMPTY_CUSTOMERS: Snapshot["customers"] = [];
 
@@ -267,8 +267,9 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
     );
 }
 
-/* 编辑销售订单弹窗：已发货（累计出库>0）订单数量与交期锁定、仅可改备注；
- * 完全未发货的订单可由超级管理员删除；发过货或已取消的订单可由超级管理员归档 */
+/* 编辑销售订单弹窗：已发货（累计出库>0）订单数量与交期锁定、仅可改备注。
+ * 业务上没有"取消订单"动作：一件未发不要了直接删除（超级管理员）；发过货
+ * 不要了直接归档结案（超级管理员）——欠量随归档关闭 */
 function EditOrderModal({
     order,
     hasShipmentLedger,
@@ -290,14 +291,16 @@ function EditOrderModal({
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [confirmArchive, setConfirmArchive] = useState(false);
     const [archiveRemark, setArchiveRemark] = useState("");
-    /* 已发货订单锁数量与交期（与后端口径一致），仅备注可改 */
-    const locked = order.outbound > 0;
+    const cancelled = order.lifecycleStatus === "cancelled";
+    /* 已发货订单锁数量与交期（与后端口径一致），仅备注可改；历史取消单后端全
+     * 字段不可改，表单只读，弹窗仅承载归档/删除终端动作 */
+    const locked = order.outbound > 0 || cancelled;
     const remarkDirty = remark !== order.remark;
     /* 可见出库单（含已作废但未删除）仍需先处理；已软删除的出库单不再阻止订单删除。 */
     const canDelete = can("orders:delete") && order.outbound === 0 && !hasShipmentLedger;
-    /* 归档（仅超级管理员）：发过货的订单与已取消的订单可归档；未发货的活跃订单走取消/删除 */
-    const cancelled = order.lifecycleStatus === "cancelled";
-    const canArchive = can("orders:archive") && (order.outbound > 0 || cancelled);
+    /* 归档（仅超级管理员）：发过货的订单（已完成/部分发货）不要了直接归档结案；
+     * 一件未发不归档，直接删除 */
+    const canArchive = can("orders:archive") && order.outbound > 0;
 
     const submit = () => {
         if (!order) return;
@@ -370,24 +373,26 @@ function EditOrderModal({
             width={520}
             footer={
                 <>
-                    {canArchive && (
-                        <button
-                            type="button"
-                            onClick={() => setConfirmArchive(true)}
-                            className="mr-auto min-h-10 rounded-btn px-2 text-14 font-medium text-muted transition hover:bg-soft hover:text-td-strong"
-                        >
-                            归档订单
-                        </button>
-                    )}
-                    {canDelete && (
-                        <button
-                            type="button"
-                            onClick={() => setConfirmDelete(true)}
-                            className={`${canArchive ? "" : "mr-auto"} min-h-10 rounded-btn px-2 text-14 font-medium text-danger transition hover:bg-danger-soft`}
-                        >
-                            删除订单
-                        </button>
-                    )}
+                    <div className="mr-auto flex flex-wrap items-center gap-1">
+                        {canArchive && (
+                            <button
+                                type="button"
+                                onClick={() => setConfirmArchive(true)}
+                                className="min-h-10 rounded-btn px-2 text-14 font-medium text-muted transition hover:bg-soft hover:text-td-strong"
+                            >
+                                归档订单
+                            </button>
+                        )}
+                        {canDelete && (
+                            <button
+                                type="button"
+                                onClick={() => setConfirmDelete(true)}
+                                className="min-h-10 rounded-btn px-2 text-14 font-medium text-danger transition hover:bg-danger-soft"
+                            >
+                                删除订单
+                            </button>
+                        )}
+                    </div>
                     <button
                         type="button"
                         onClick={onClose}
@@ -395,14 +400,25 @@ function EditOrderModal({
                     >
                         取消
                     </button>
-                    <button
-                        type="button"
-                        disabled={updateOrder.isPending || (locked && !remarkDirty)}
-                        onClick={submit}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
-                    >
-                        {updateOrder.isPending ? "正在提交…" : "保存修改"}
-                    </button>
+                    {cancelled ? (
+                        // 取消单后端全字段不可改，无保存动作；弹窗仅承载归档/删除
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover"
+                        >
+                            完成
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            disabled={updateOrder.isPending || (locked && !remarkDirty)}
+                            onClick={submit}
+                            className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
+                        >
+                            {updateOrder.isPending ? "正在提交…" : "保存修改"}
+                        </button>
+                    )}
                 </>
             }
         >
@@ -426,11 +442,21 @@ function EditOrderModal({
                         onChange={event => setDeliverDate(event.target.value)}
                     />
                     <div className="sm:col-span-2">
-                        <TextArea label="订单备注" value={remark} onChange={event => setRemark(event.target.value)} />
+                        <TextArea
+                            label="订单备注"
+                            value={remark}
+                            disabled={cancelled}
+                            onChange={event => setRemark(event.target.value)}
+                        />
                     </div>
-                    {locked && (
+                    {locked && !cancelled && (
                         <p className="text-13 text-subtle sm:col-span-2">
                             该订单累计已发 {order.outbound} 个，数量与交货日期不可修改，仅可修改备注。
+                        </p>
+                    )}
+                    {cancelled && (
+                        <p className="text-13 text-subtle sm:col-span-2">
+                            该订单已取消，信息不可修改{order.outbound > 0 ? "；可归档留档" : "；可由超级管理员删除"}。
                         </p>
                     )}
                     {canDelete && (
@@ -503,9 +529,8 @@ function EditOrderModal({
                             <div className="text-14 leading-6 text-td">
                                 即将归档订单 <span className="tnum font-semibold text-ink">{order.orderNo}</span>（
                                 {order.customer} · 订单 {num(order.qty)} 个 · 已发 {num(order.outbound)} 个）。
-                                {cancelled && <p>该订单已取消，归档后保留取消语境。</p>}
                                 <p className="mt-1 text-subtle">
-                                    归档后订单将从销售订单列表移入「归档订单」，仅供查询，不可修改、取消或删除。
+                                    归档即结案：订单将从销售订单列表移入「归档订单」，仅供查询，不可修改或删除。
                                     {order.outbound > 0 && order.outbound < order.qty && " 剩余欠量不再安排交付。"}
                                 </p>
                                 <p className="mt-1 font-medium text-td-strong">归档为最终操作，不可恢复。</p>
@@ -1221,8 +1246,14 @@ export function OrdersPage() {
                 snap={snap}
                 onClose={() => setDetail(null)}
                 onEdit={
-                    // 已取消订单后端不可改，收入口避免打开表单后提交被 409 拒绝
-                    canEdit && detail && detail.lifecycleStatus === "active"
+                    // 已取消订单本身不可改，但发过货的可归档、一件未发的可删除（均仅
+                    // 超管），按终端动作放行入口；弹窗内表单对取消单全程只读
+                    canEdit &&
+                    detail &&
+                    (detail.lifecycleStatus === "active" ||
+                        (detail.lifecycleStatus === "cancelled" &&
+                            ((detail.outbound > 0 && can("orders:archive")) ||
+                                (detail.outbound === 0 && can("orders:delete")))))
                         ? () => setEditing(orders.find(order => order.orderNo === detail.orderNo) ?? detail)
                         : undefined
                 }

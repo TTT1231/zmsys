@@ -9,22 +9,23 @@ import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
 import { useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
-import { Button, StatusBadge, TableLink } from "@/components/ui/Badge";
+import { Button, ProgressTrack, StatusBadge, TableLink } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { CustomerCell, DateCell, QtyCell } from "@/components/ui/cells";
 import { SortTh } from "@/components/ui/SortTh";
 import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { nextSortState, type SortState } from "@/lib/tableSort";
 import { Field } from "@/components/ui/Field";
-import { EMPTY_SNAPSHOT, bomByCode, orderStatusOf } from "@/data/views";
+import { EMPTY_SNAPSHOT, bomByCode, orderStatusOf, remainingOf } from "@/data/views";
 import { formatDateTime } from "@/lib/date";
 import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import type { Order } from "@/api";
 
-/* 归档状态筛选：与 views.statusOf 的归档标签一一对应（按 label 全等比较） */
-const STATUS_OPTIONS = ["全部状态", "已完成后归档", "部分发货后归档", "取消后归档", "部分发货取消后归档"];
+/* 归档状态筛选：与销售订单口径一致（按 label 全等比较）；归档 = 结案标记，
+ * 状态徽章直接展示交付进度（已完成/部分发货），无"取消后归档"等专属形态 */
+const STATUS_OPTIONS = ["全部状态", "已完成", "部分发货"];
 
 /* 可排序列：订单号 / 数量 / 交期 / 归档时间；桌面表头与移动端排序下拉共用 */
 type ArchivedSortKey = "orderNo" | "qty" | "deliverDate" | "archivedAt";
@@ -301,7 +302,7 @@ export function ArchivedOrdersPage() {
                     ) : (
                         <DataTable
                             tableId="archived-orders"
-                            defaultWidths={[150, 160, 300, 110, 125, 140, 160, 145, 110]}
+                            defaultWidths={[140, 150, 260, 100, 115, 130, 155, 95, 150, 110, 105]}
                             recordCount={filtered.length}
                             identityColumn={0}
                             scrollRef={tableScrollRef}
@@ -314,12 +315,12 @@ export function ArchivedOrdersPage() {
                                         dir={sort.dir}
                                         onSort={() => applySort("orderNo")}
                                         className="px-5"
-                                        width="13%"
+                                        width="11%"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "14%" }}>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "12%" }}>
                                         客户
                                     </th>
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "20%" }}>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "16%" }}>
                                         成品 / BOM
                                     </th>
                                     <SortTh
@@ -328,7 +329,7 @@ export function ArchivedOrdersPage() {
                                         dir={sort.dir}
                                         onSort={() => applySort("qty")}
                                         className="px-3"
-                                        width="8%"
+                                        width="7%"
                                     />
                                     <SortTh
                                         label="交货日期"
@@ -336,9 +337,9 @@ export function ArchivedOrdersPage() {
                                         dir={sort.dir}
                                         onSort={() => applySort("deliverDate")}
                                         className="px-3"
-                                        width="11%"
+                                        width="9%"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "12%" }}>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "11%" }}>
                                         交付情况
                                     </th>
                                     <SortTh
@@ -347,9 +348,15 @@ export function ArchivedOrdersPage() {
                                         dir={sort.dir}
                                         onSort={() => applySort("archivedAt")}
                                         className="px-3"
-                                        width="12%"
+                                        width="11%"
                                     />
-                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "10%" }}>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "7%" }}>
+                                        归档人
+                                    </th>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "9%" }}>
+                                        归档备注
+                                    </th>
+                                    <th className="px-3 py-2.5 font-semibold" style={{ width: "8%" }}>
                                         状态
                                     </th>
                                     <th
@@ -363,8 +370,8 @@ export function ArchivedOrdersPage() {
                             <tbody>
                                 {pageRows.length === 0 && (
                                     <tr className="row-empty">
-                                        <td colSpan={9} className="px-5 py-10 text-center">
-                                            <EmptyState description="暂无归档订单；在销售订单的编辑弹窗中归档已完成或部分发货的订单后，会在这里显示" />
+                                        <td colSpan={11} className="px-5 py-10 text-center">
+                                            <EmptyState description="暂无归档订单；在销售订单的编辑弹窗中归档发过货的订单（已完成或部分发货）后，会在这里显示" />
                                         </td>
                                     </tr>
                                 )}
@@ -401,22 +408,40 @@ export function ArchivedOrdersPage() {
                                             <td className="px-3 py-4">
                                                 <DateCell date={order.deliverDate} />
                                             </td>
-                                            <td className="px-3 py-4">
+                                            <td className="delivery-cell px-3 py-4">
                                                 <div className="text-13 text-muted">
+                                                    {order.outbound >= order.qty ? (
+                                                        "已全部交付"
+                                                    ) : (
+                                                        <>
+                                                            待交 <QtyCell value={remainingOf(order)} />
+                                                        </>
+                                                    )}
+                                                </div>
+                                                <div className="delivery-shipped tnum mt-0.5 text-12 text-muted">
                                                     已发 {num(order.outbound)} / {num(order.qty)}
                                                 </div>
-                                                {order.outbound < order.qty && (
-                                                    <div className="mt-0.5 text-12 text-subtle">
-                                                        {order.cancelledAt ? "取消时关闭欠量" : "归档时关闭欠量"}
-                                                    </div>
-                                                )}
+                                                <div className="delivery-track mt-1.5">
+                                                    <ProgressTrack
+                                                        value={order.qty === 0 ? 0 : order.outbound / order.qty}
+                                                        done={order.outbound >= order.qty}
+                                                    />
+                                                </div>
                                             </td>
                                             <td className="px-3 py-4">
                                                 <div className="text-13 text-muted">
                                                     {order.archivedAt ? datetimeOf(order.archivedAt) : "—"}
                                                 </div>
-                                                <div className="mt-0.5 text-12 text-subtle">
-                                                    {order.archivedBy || "—"}
+                                            </td>
+                                            <td className="px-3 py-4">
+                                                <div className="text-13 text-muted">{order.archivedBy || "—"}</div>
+                                            </td>
+                                            <td className="px-3 py-4">
+                                                <div
+                                                    className="truncate text-13 text-muted"
+                                                    title={order.archiveReason || ""}
+                                                >
+                                                    {order.archiveReason || "—"}
                                                 </div>
                                             </td>
                                             <td className="px-3 py-4">
