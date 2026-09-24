@@ -15,7 +15,8 @@ const rotaryBom: Bom = {
     modelCode: "1-1",
     spec: "型号：1-1 · 银丝厚度：0.2 · A面：A面银点",
     remark: "",
-    created: "2026-09-13",
+    creator: "郭均",
+    created: "2026-09-13T02:13:00.000Z",
     unit: "个",
     items: [
         { materialId: "3001", groupKey: "model", groupName: "型号", name: "1-1", quantity: 1 },
@@ -30,7 +31,8 @@ const microBom: Bom = {
     modelCode: "",
     spec: "底座：二脚底座（无挡脚） · 盖子：盖子 · 按钮：8.5mm",
     remark: "",
-    created: "2026-09-13",
+    creator: "郭均",
+    created: "2026-09-13T02:13:00.000Z",
     unit: "个",
     items: [
         { materialId: "3101", groupKey: "base", groupName: "底座", name: "二脚底座（无挡脚）", quantity: 1 },

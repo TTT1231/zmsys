@@ -292,6 +292,12 @@ const createStore = (store: Store) => {
                     ) ?? null,
             ),
         },
+        sysUser: {
+            // 建档人姓名查询（deleteBom 快照用）：fixture 的 createdBy 恒为 actor（1n）
+            findUnique: vi.fn(async ({ where }: { where: { id: bigint } }) =>
+                where.id === 1n ? { name: actor.name } : null,
+            ),
+        },
         materialGroup: {
             findMany: vi.fn(
                 async ({ where }: { where: { categoryId: bigint } }) =>
@@ -421,6 +427,8 @@ const createStore = (store: Store) => {
                         return {
                             ...bom,
                             category: { id: category.id, name: category.name },
+                            // 建档人 fixture：createdBy=1n 对应 actor（郭均）
+                            creator: { name: bom.createdBy === 1n ? actor.name : "" },
                             items: store.bomItems.filter(item => item.bomId === bom.id),
                         };
                     }),
@@ -513,7 +521,7 @@ describe("BomsService", () => {
     });
 
     describe("listBoms", () => {
-        it("由冻结快照派生：position 排序、modelCode 取 model 组、摘要“组名：物料名”、北京日", async () => {
+        it("由冻结快照派生：position 排序、modelCode 取 model 组、摘要“组名：物料名”、创建人与建档时刻", async () => {
             store.boms = [mkBom({ id: 5000n, createdAt: new Date(Date.UTC(2026, 8, 1, 4)) })];
             store.bomItems = [
                 {
@@ -545,7 +553,8 @@ describe("BomsService", () => {
                 ],
                 spec: "型号：1-1 · 银丝厚度：0.2",
                 remark: "",
-                created: "2026-09-01",
+                creator: actor.name,
+                created: "2026-09-01T04:00:00.000Z",
                 unit: "个",
             });
         });

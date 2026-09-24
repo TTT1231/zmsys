@@ -6,7 +6,6 @@ import type { Tx } from "../prisma/transaction.runner";
 import { SnowflakeGenerator } from "../common/snowflake";
 import { materialSetHash } from "../common/bom-spec";
 import { bomItemViewsOf, bomItemsSnapshotOf } from "../common/bom-display";
-import { beijingDayKey } from "../common/beijing-day";
 import { IdempotencyService } from "../idempotency/idempotency.service";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
 import { recordOpLog } from "../domain/op-log";
@@ -34,6 +33,7 @@ type BomItemRow = {
 
 type BomRowWithItems = BomTable & {
     category: { name: string };
+    creator: { name: string };
     items: BomItemRow[];
 };
 
@@ -118,7 +118,7 @@ export class BomsService {
     async listBoms(): Promise<Bom[]> {
         const rows = await this.prisma.bomTable.findMany({
             orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-            include: { category: { select: { name: true } }, items: true },
+            include: { category: { select: { name: true } }, creator: { select: { name: true } }, items: true },
         });
         return rows.map(row => this.toBom(row));
     }
@@ -325,7 +325,8 @@ export class BomsService {
                 })),
                 spec: snapshot.spec,
                 remark: dto.remark ?? "",
-                created: beijingDayKey(now),
+                creator: actor.name,
+                created: now.toISOString(),
                 unit: "个",
             };
             // 审计清单：建档动作留档案快照（与 delete_bom 的详存风格一致）
@@ -392,13 +393,15 @@ export class BomsService {
                 throw new ConflictException("BOM 已有入库或库存调整流水，不可删除");
             }
 
-            const [category, items] = await Promise.all([
+            const [category, creator, items] = await Promise.all([
                 tx.bomCategory.findUnique({ where: { id: bom.categoryId }, select: { name: true } }),
+                tx.sysUser.findUnique({ where: { id: bom.createdBy }, select: { name: true } }),
                 tx.bomItem.findMany({ where: { bomId: bom.id } }),
             ]);
             const snapshot = this.toBom({
                 ...bom,
                 category: { name: category?.name ?? "" },
+                creator: { name: creator?.name ?? "" },
                 items,
             });
 
@@ -510,7 +513,8 @@ export class BomsService {
             items: bomItemViewsOf(row.items),
             spec: snapshot.spec,
             remark: row.remark,
-            created: beijingDayKey(row.createdAt),
+            creator: row.creator.name,
+            created: row.createdAt.toISOString(),
             unit: row.unit,
         };
     }
