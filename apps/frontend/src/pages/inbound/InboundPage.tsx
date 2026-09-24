@@ -459,7 +459,7 @@ function VoidInboundModal({
             onClose={close}
             title="作废入库单"
             subtitle={`${row.no} · ${row.bomCode}`}
-            width={440}
+            width={480}
             footer={
                 <>
                     <Button variant="secondary" type="button" disabled={pending} onClick={close}>

@@ -140,7 +140,7 @@ function VoidOutboundModal({
             onClose={close}
             title="作废出库单"
             subtitle={`${row.no} · ${row.orderNo}`}
-            width={440}
+            width={480}
             footer={
                 <>
                     <Button variant="secondary" type="button" disabled={pending} onClick={close}>
@@ -469,7 +469,7 @@ function DeleteOutboundModal({
             onClose={onClose}
             title="删除出库单"
             subtitle={`${row.no} · 已作废`}
-            width={440}
+            width={480}
             footer={
                 <>
                     <Button variant="secondary" type="button" onClick={onClose}>
