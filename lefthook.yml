@@ -46,6 +46,9 @@ pre-commit:
           glob: "*.{ts,tsx,mts,cts,mjs}"
           run: node_modules/.bin/tsx scripts/run-oxlint.ts --config .oxlintrc.staged.json --fix --no-error-on-unmatched-pattern {staged_files}
           stage_fixed: true
+        - name: theme guard (staged)
+          glob: "*.{ts,tsx}"
+          run: node_modules/.bin/tsx scripts/theme-guard.ts {staged_files}
         - name: oxfmt
           glob: "*.{js,jsx,ts,tsx,cjs,mjs,cts,mts,json,jsonc}"
           run: node_modules/.bin/oxfmt --no-error-on-unmatched-pattern {staged_files}
