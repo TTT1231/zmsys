@@ -475,7 +475,8 @@ function VoidInboundModal({
                 <DangerNote
                     className="mb-4"
                     impact={`作废后，${row.bomCode} 库存减少 ${num(row.qty)} 个`}
-                    note="库存不足时无法作废。"
+                    note="若成品已出库、库存不够扣"
+                    action="需先作废相关出库单，才能作废本单"
                 />
                 {crossDay && (
                     <p className="mb-4 flex items-start gap-2 text-13 leading-5 text-warning">
