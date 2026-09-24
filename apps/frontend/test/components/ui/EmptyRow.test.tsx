@@ -20,3 +20,14 @@ it("渲染 row-empty 行并按传入列数跨列", () => {
     expect(cell).toHaveClass("text-center");
     expect(cell?.parentElement).toHaveClass("row-empty");
 });
+
+it("imageSize 透传 EmptyState 插画尺寸", () => {
+    const { container } = render(
+        <table>
+            <tbody>
+                <EmptyRow colSpan={6} description="所选期间暂无订单" imageSize={120} />
+            </tbody>
+        </table>,
+    );
+    expect(container.querySelector("svg")).toHaveAttribute("width", "120");
+});

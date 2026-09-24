@@ -163,40 +163,25 @@ function StockLedgerModal({
                         <h3 className="text-14 font-semibold text-ink">有效库存流水</h3>
                         <p className="mb-2 mt-1 text-13 text-muted">已作废单据不计入库存，可在出入库台账查看。</p>
                         <div className="max-h-120 overflow-auto rounded-xl border border-line">
-                            <table className="w-full min-w-[780px] table-fixed border-separate border-spacing-0">
+                            <table className="data-table w-full min-w-[780px] table-fixed border-separate border-spacing-0">
                                 <thead>
-                                    <tr className="sticky top-0 z-1 bg-soft text-left text-13 font-semibold text-muted shadow-[inset_0_-1px_0_var(--color-line-strong)]">
-                                        <th className="px-3.5 py-2.5" style={{ width: "72px" }}>
-                                            类型
-                                        </th>
-                                        <th className="px-3 py-2.5" style={{ width: "190px" }}>
-                                            单号
-                                        </th>
-                                        <th className="px-3 py-2.5" style={{ width: "100px" }}>
-                                            日期
-                                        </th>
-                                        <th className="px-3 py-2.5" style={{ width: "96px" }}>
-                                            数量（个）
-                                        </th>
-                                        <th className="px-3 py-2.5" style={{ width: "96px" }}>
-                                            库存（个）
-                                        </th>
-                                        <th className="px-3 py-2.5" style={{ width: "80px" }}>
-                                            操作人
-                                        </th>
-                                        <th className="px-3.5 py-2.5">备注</th>
+                                    <tr className="text-left text-13 text-muted">
+                                        <th style={{ width: "72px" }}>类型</th>
+                                        <th style={{ width: "190px" }}>单号</th>
+                                        <th style={{ width: "100px" }}>日期</th>
+                                        <th style={{ width: "96px" }}>数量（个）</th>
+                                        <th style={{ width: "96px" }}>库存（个）</th>
+                                        <th style={{ width: "80px" }}>操作人</th>
+                                        <th>备注</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {flows.map(flow => (
-                                        <tr
-                                            key={`${flow.type}-${flow.no}`}
-                                            className="border-b border-line last:border-b-0"
-                                        >
-                                            <td className="px-3.5 py-3.5">
+                                        <tr key={`${flow.type}-${flow.no}`}>
+                                            <td>
                                                 <FlowTypeTag type={flow.type} />
                                             </td>
-                                            <td className="px-3 py-3.5">
+                                            <td>
                                                 {/* 单号 + 客户同行（baseline 对齐）：出库行不再两行堆叠抬高行高；
                                                     超长客户名截断，全文走 title */}
                                                 <span className="flex min-w-0 items-baseline gap-2">
@@ -213,18 +198,16 @@ function StockLedgerModal({
                                                     )}
                                                 </span>
                                             </td>
-                                            <td className="tnum px-3 py-3.5 text-14 text-muted">{flow.date}</td>
+                                            <td className="tnum text-14 text-muted">{flow.date}</td>
                                             <td
-                                                className={`tnum px-3 py-3.5 text-14 font-semibold ${flow.qty >= 0 ? "text-success" : "text-danger"}`}
+                                                className={`tnum text-14 font-semibold ${flow.qty >= 0 ? "text-success" : "text-danger"}`}
                                             >
                                                 {flow.qty >= 0 ? "+" : "−"}
                                                 {num(Math.abs(flow.qty))}
                                             </td>
-                                            <td className="tnum px-3 py-3.5 text-14 font-semibold text-ink">
-                                                {num(flow.balance)}
-                                            </td>
-                                            <td className="px-3 py-3.5 text-14 text-td">{flow.operator}</td>
-                                            <td className="px-3.5 py-3.5 text-14 text-muted">{flow.remark || "—"}</td>
+                                            <td className="tnum text-14 font-semibold text-ink">{num(flow.balance)}</td>
+                                            <td className="text-14 text-td">{flow.operator}</td>
+                                            <td className="text-14 text-muted">{flow.remark || "—"}</td>
                                         </tr>
                                     ))}
                                 </tbody>

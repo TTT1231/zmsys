@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useApp } from "@/context/useApp";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Modal } from "@/components/ui/Modal";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { EmptyRow } from "@/components/ui/EmptyRow";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
@@ -34,8 +34,8 @@ type Detail =
       }
     | { kind: "risk"; risk: "overdue" | "upcoming" };
 const percent = (done: number, total: number) => (total ? Math.round((done / total) * 100) : 0);
-const tableClass =
-    "w-full min-w-150 text-left text-14 [&_th]:bg-soft [&_th]:p-3 [&_th]:font-medium [&_th]:text-muted [&_td]:border-b [&_td]:border-line/70 [&_td]:p-3 [&_td]:tabular-nums";
+/* 明细弹窗表：data-table 基线（见 index.css @layer components）给出 th/td 内距、行线与悬停 */
+const tableClass = "data-table w-full min-w-150 text-left text-14 tnum";
 
 function Metric({
     title,
@@ -296,7 +296,7 @@ function OwnerWorkbench() {
                             <table className={tableClass}>
                                 <caption className="sr-only">型号与BOM规格交付明细</caption>
                                 <thead>
-                                    <tr>
+                                    <tr className="text-13 text-muted">
                                         {[
                                             "品类 / 型号 / 规格",
                                             "需求总量",
@@ -395,11 +395,7 @@ function OwnerWorkbench() {
                                     </tr>
                                 ))}
                                 {!ranking.length && (
-                                    <tr>
-                                        <td colSpan={6}>
-                                            <EmptyState description="所选期间暂无客户订单" imageSize={120} />
-                                        </td>
-                                    </tr>
+                                    <EmptyRow colSpan={6} description="所选期间暂无客户订单" imageSize={120} />
                                 )}
                             </tbody>
                         </table>
@@ -437,11 +433,7 @@ function OwnerWorkbench() {
                                     </tr>
                                 ))}
                                 {!detail.orders.length && (
-                                    <tr>
-                                        <td colSpan={5}>
-                                            <EmptyState description="所选期间暂无订单" imageSize={120} />
-                                        </td>
-                                    </tr>
+                                    <EmptyRow colSpan={5} description="所选期间暂无订单" imageSize={120} />
                                 )}
                             </tbody>
                         </table>
@@ -453,7 +445,7 @@ function OwnerWorkbench() {
                             <table className={tableClass}>
                                 <caption className="sr-only">交付风险订单明细</caption>
                                 <thead>
-                                    <tr>
+                                    <tr className="text-13 text-muted">
                                         {["订单 / 客户", "产品", "交期", "未发数量", "备货缺口"].map(label => (
                                             <th scope="col" key={label}>
                                                 {label}
@@ -481,11 +473,7 @@ function OwnerWorkbench() {
                                             </tr>
                                         ))}
                                     {!risks.some(order => order.kind === detail.risk) && (
-                                        <tr>
-                                            <td colSpan={5}>
-                                                <EmptyState description="当前没有此类交付风险" imageSize={120} />
-                                            </td>
-                                        </tr>
+                                        <EmptyRow colSpan={5} description="当前没有此类交付风险" imageSize={120} />
                                     )}
                                 </tbody>
                             </table>

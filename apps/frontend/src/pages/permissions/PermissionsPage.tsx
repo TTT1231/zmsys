@@ -179,24 +179,21 @@ function AccountsTab({
                     </ListState>
                 </div>
                 <div className="hidden overflow-x-auto lg:block">
-                    <table className="w-full min-w-180 border-collapse">
+                    <table className="data-table w-full min-w-180 border-collapse">
                         <thead>
-                            <tr className="bg-soft text-left text-13 text-muted">
-                                <th className="px-5 py-2.5 font-semibold">用户</th>
-                                <th className="px-3 py-2.5 font-semibold">角色</th>
-                                <th className="px-3 py-2.5 font-semibold">账号</th>
-                                <th className="px-3 py-2.5 font-semibold">状态</th>
-                                <th className="px-3 py-2.5 font-semibold">最近登录</th>
-                                <th className="px-5 py-2.5 text-right font-semibold">操作</th>
+                            <tr className="text-left text-13 text-muted">
+                                <th className="cell-pad-wide">用户</th>
+                                <th>角色</th>
+                                <th>账号</th>
+                                <th>状态</th>
+                                <th>最近登录</th>
+                                <th className="cell-pad-wide text-right">操作</th>
                             </tr>
                         </thead>
                         <tbody>
                             {users.map(user => (
-                                <tr
-                                    key={user.account}
-                                    className="border-t border-line/70 transition hover:bg-row-hover"
-                                >
-                                    <td className="px-5 py-3">
+                                <tr key={user.account}>
+                                    <td className="cell-pad-wide">
                                         <div className="flex items-center gap-2.5">
                                             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-soft text-14 font-semibold text-primary-strong">
                                                 {user.name.slice(0, 1)}
@@ -204,11 +201,11 @@ function AccountsTab({
                                             <span className="text-14 font-semibold text-ink">{user.name}</span>
                                         </div>
                                     </td>
-                                    <td className="px-3 py-3">
+                                    <td>
                                         <Badge tone="ready">{roleNameOf(user.role)}</Badge>
                                     </td>
-                                    <td className="px-3 py-3 tnum text-14 text-muted">{user.account}</td>
-                                    <td className="px-3 py-3">
+                                    <td className="tnum text-14 text-muted">{user.account}</td>
+                                    <td>
                                         <UserActiveToggle
                                             user={user}
                                             customers={customers}
@@ -216,8 +213,8 @@ function AccountsTab({
                                             asSwitch
                                         />
                                     </td>
-                                    <td className="px-3 py-3 tnum text-14 text-muted">{user.last}</td>
-                                    <td className="px-5 py-3 text-right whitespace-nowrap">
+                                    <td className="tnum text-14 text-muted">{user.last}</td>
+                                    <td className="cell-pad-wide text-right whitespace-nowrap">
                                         {user.role === "super" ? (
                                             <span className="text-13 text-subtle">内置账号</span>
                                         ) : (

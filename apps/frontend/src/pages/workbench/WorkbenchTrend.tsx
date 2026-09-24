@@ -191,21 +191,21 @@ export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
                 </p>
             ) : showTable ? (
                 <div className="mt-4 h-65 overflow-auto rounded-input border border-line">
-                    <table className="w-full text-right text-13">
+                    <table className="data-table w-full text-right text-13">
                         <caption className="sr-only">成品出入库趋势数据</caption>
-                        <thead className="sticky top-0 bg-soft">
-                            <tr>
-                                <th className="p-3 text-left">日期</th>
-                                <th className="p-3">入库（{data.unit}）</th>
-                                <th className="p-3">出库（{data.unit}）</th>
+                        <thead>
+                            <tr className="text-muted">
+                                <th>日期</th>
+                                <th className="text-right">入库（{data.unit}）</th>
+                                <th className="text-right">出库（{data.unit}）</th>
                             </tr>
                         </thead>
                         <tbody>
                             {rows.map(row => (
-                                <tr key={row.date} className="border-t border-line">
-                                    <td className="p-3 text-left">{row.date}</td>
-                                    <td className="p-3 tabular-nums">{num(row.inbound)}</td>
-                                    <td className="p-3 tabular-nums">{num(row.outbound)}</td>
+                                <tr key={row.date}>
+                                    <td className="text-left">{row.date}</td>
+                                    <td className="tnum">{num(row.inbound)}</td>
+                                    <td className="tnum">{num(row.outbound)}</td>
                                 </tr>
                             ))}
                         </tbody>
