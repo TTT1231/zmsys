@@ -59,7 +59,8 @@ it("取消订单不显示全部交付或逾期，正常完成与待交数量保�
     expect(rows[1]).not.toHaveTextContent("已全部交付");
     expect(rows[1]).not.toHaveTextContent("已逾期");
     expect(rows[1]).toHaveTextContent("已发 0 / 300");
-    expect(rows[2]).toHaveTextContent("已全部交付");
+    // 已全部交付按组件设计只留绿色满条，语义走悬停 title（见 OrdersPage 交付情况列注释）
+    expect(rows[2].querySelector(".delivery-track")).toHaveAttribute("title", "已全部交付");
     expect(rows[3]).toHaveTextContent("待交 100");
 });
 it("表格规格摘要共用同行详情入口，不额外增加规格按钮", () => {
