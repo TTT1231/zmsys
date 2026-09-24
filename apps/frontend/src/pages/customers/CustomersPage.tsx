@@ -4,7 +4,7 @@ import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
 import { useApp } from "@/context/useApp";
@@ -216,21 +216,24 @@ export function CustomerDetailModal({
     onClose: () => void;
     onEdit?: (customer: Customer) => void;
 }) {
-    const navigate = useNavigate();
     // 叠加在客户详情之上的订单详情；存 orderNo 渲染时回捞，刷新后数据保持同步
     const [orderNo, setOrderNo] = useState<string | null>(null);
-    // 切换查看的客户时在渲染期清掉上层订单详情，避免残留上一个客户的弹窗
+    // 最近订单默认 3 笔，“查看全部”就地展开完整时间线，不跳出当前弹窗
+    const [expanded, setExpanded] = useState(false);
+    // 切换查看的客户时在渲染期清掉上层订单详情与展开态，避免残留上一个客户的弹窗
     const viewedCode = customer?.code;
     const [lastViewedCode, setLastViewedCode] = useState(viewedCode);
     if (viewedCode !== lastViewedCode) {
         setLastViewedCode(viewedCode);
         setOrderNo(null);
+        setExpanded(false);
     }
     if (!customer) return null;
     const orders = snap.orders.filter(order => order.customerCode === customer.code);
     // 待交付口径与订单列表一致：已取消/已归档订单剩余按 0，不再计入
     const pendingQty = orders.reduce((sum, order) => sum + remainingOf(order), 0);
-    const timeline = [...orders].sort((a, b) => b.orderDate.localeCompare(a.orderDate)).slice(0, 3);
+    const byDateDesc = [...orders].sort((a, b) => b.orderDate.localeCompare(a.orderDate));
+    const timeline = expanded ? byDateDesc : byDateDesc.slice(0, 3);
     const orderDetail = orderNo ? (snap.orders.find(order => order.orderNo === orderNo) ?? null) : null;
 
     return (
@@ -357,20 +360,15 @@ export function CustomerDetailModal({
                                 );
                             })}
                         </ol>
-                        {orders.length > timeline.length && (
+                        {orders.length > 3 && (
                             <button
                                 type="button"
-                                onClick={() => {
-                                    onClose();
-                                    navigate({
-                                        pathname: "/orders",
-                                        search: `?q=${encodeURIComponent(customer.name)}`,
-                                    });
-                                }}
+                                onClick={() => setExpanded(value => !value)}
+                                aria-expanded={expanded}
                                 className="mt-3 inline-flex min-h-9 items-center gap-1 text-13 font-medium text-primary-strong transition hover:underline"
                             >
-                                查看全部 {orders.length} 笔订单
-                                <Icon name="chevron-right" size={14} />
+                                {expanded ? "收起" : `查看全部 ${orders.length} 笔订单`}
+                                <Icon name={expanded ? "chevron-up" : "chevron-down"} size={14} />
                             </button>
                         )}
                     </div>

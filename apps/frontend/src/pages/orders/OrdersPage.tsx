@@ -7,6 +7,7 @@ import { BomCell } from "@/components/bom/BomCell";
 import { RemarkCell } from "@/components/ui/RemarkCell";
 import { RecordFields, RecordProduct, RecordSummary } from "@/components/business/RecordDetails";
 import { DangerNote } from "@/components/business/DangerNote";
+import { CustomerDetailModal } from "@/pages/customers/CustomersPage";
 import { OutboundModal } from "@/pages/outbound/OutboundPage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -674,6 +675,8 @@ export function OrdersPage() {
     const [taskFilter, setTaskFilter] = useState(searchParams.get("task") ?? (role === "warehouse" ? "ready" : "all"));
     const [detail, setDetail] = useState<Order | null>(null);
     const [editing, setEditing] = useState<Order | null>(null);
+    // “客户/备注”列点客户名打开客户档案详情；存编码渲染时回捞，刷新后数据保持同步
+    const [customerDetailCode, setCustomerDetailCode] = useState<string | null>(null);
 
     /* 归档单分流到「归档订单」页，销售订单页只展示活跃与已取消订单 */
     const orders = snap.orders.filter(order => order.lifecycleStatus !== "archived");
@@ -1088,6 +1091,8 @@ export function OrdersPage() {
                                     const remaining = remainingOf(order);
                                     const cancelled = order.lifecycleStatus === "cancelled";
                                     const done = !cancelled && remaining === 0;
+                                    // 档案已删除的客户名不可点（快照里已无对应档案）
+                                    const customer = snap.customers.find(item => item.code === order.customerCode);
                                     return (
                                         <tr
                                             key={order.orderNo}
@@ -1103,7 +1108,15 @@ export function OrdersPage() {
                                                 </button>
                                             </td>
                                             <td className="px-3 py-4">
-                                                <CustomerCell name={order.customer} remark={order.remark} />
+                                                <CustomerCell
+                                                    name={order.customer}
+                                                    remark={order.remark}
+                                                    onClick={
+                                                        customer
+                                                            ? () => setCustomerDetailCode(customer.code)
+                                                            : undefined
+                                                    }
+                                                />
                                             </td>
                                             <td className="px-3 py-4 tnum text-12 text-muted">{order.customerCode}</td>
                                             <td className="px-3 py-4">
@@ -1204,6 +1217,13 @@ export function OrdersPage() {
                           }
                         : undefined
                 }
+            />
+            <CustomerDetailModal
+                customer={
+                    customerDetailCode ? (snap.customers.find(item => item.code === customerDetailCode) ?? null) : null
+                }
+                snap={snap}
+                onClose={() => setCustomerDetailCode(null)}
             />
             {ship !== null && <OutboundModal open initialOrderNo={ship} onClose={() => setShip(null)} />}
         </div>

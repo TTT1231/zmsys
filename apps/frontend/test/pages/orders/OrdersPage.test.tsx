@@ -1,14 +1,34 @@
 // @vitest-environment jsdom
-/* 订单表格预览结构化规格，并正确区分取消、完成与仍待交付的订单。 */
+/* 订单表格预览结构化规格，并正确区分取消、完成与仍待交付的订单；客户名点击打开客户档案详情。 */
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, expect, it, vi } from "vitest";
 import { OrdersPage } from "@/pages/orders/OrdersPage";
 import { detailBom, detailOrder, detailSnapshot } from "../../fixtures/recordDetails";
+import type { Customer } from "@/api";
+
+const customer: Customer = {
+    version: 1,
+    code: "CUS-0002",
+    name: "深圳市智造联调电子",
+    contact: "刘经理",
+    phone: "138****0002",
+    province: "广东省",
+    city: "深圳市",
+    district: "",
+    town: "",
+    address: "",
+    cooperation: "合作中",
+    owner: "销售甲",
+    ownerAccount: "sales01",
+    payTerms: "月结 30 天",
+    created: "2026-08-01",
+};
 const snapshot = {
     ...detailSnapshot,
     boms: [{ ...detailBom, remark: "按钮加弹簧垫片，发货前逐个抽检" }],
+    customers: [customer],
     orders: [
         {
             ...detailOrder,
@@ -63,4 +83,17 @@ it("成品/BOM 旁的 BOM 备注列展示建档备注", () => {
     const table = within(screen.getByRole("table"));
     expect(table.getByRole("columnheader", { name: "BOM 备注" })).toBeInTheDocument();
     expect(table.getAllByText("按钮加弹簧垫片，发货前逐个抽检")).toHaveLength(3);
+});
+it("点击客户名打开客户档案详情，时间线可继续叠加订单详情", () => {
+    render(
+        <MemoryRouter>
+            <OrdersPage />
+        </MemoryRouter>,
+    );
+    const table = within(screen.getByRole("table"));
+    fireEvent.click(table.getAllByRole("button", { name: "深圳市智造联调电子" })[0]);
+    const dialog = screen.getByRole("dialog", { name: "深圳市智造联调电子" });
+    expect(within(dialog).getByRole("button", { name: "查看订单 ZM260913001 详情" })).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "查看订单 ZM260913001 详情" }));
+    expect(screen.getByRole("dialog", { name: "ZM260913001" })).toBeInTheDocument();
 });

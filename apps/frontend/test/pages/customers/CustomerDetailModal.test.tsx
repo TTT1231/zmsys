@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
-/* 客户详情时间线：最近订单状态展示、点击订单号叠加订单详情逐层关闭、查看全部跳转订单页。 */
+/* 客户详情时间线：最近订单状态展示、点击订单号叠加订单详情逐层关闭、查看全部就地展开。 */
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter, useLocation } from "react-router";
 import { afterEach, expect, it, vi } from "vitest";
 import { CustomerDetailModal } from "@/pages/customers/CustomersPage";
 import { detailOrder, detailSnapshot } from "../../fixtures/recordDetails";
@@ -46,18 +45,8 @@ const orders: Order[] = [
 
 const snap: Snapshot = { ...detailSnapshot, customers: [customer], orders };
 
-const LocationProbe = () => {
-    const location = useLocation();
-    return <span data-testid="location">{`${location.pathname}${location.search}`}</span>;
-};
-
 const renderDetail = (onClose = vi.fn()) =>
-    render(
-        <MemoryRouter initialEntries={["/customers"]}>
-            <LocationProbe />
-            <CustomerDetailModal customer={customer} snap={snap} onClose={onClose} />
-        </MemoryRouter>,
-    );
+    render(<CustomerDetailModal customer={customer} snap={snap} onClose={onClose} />);
 
 it("时间线按下单日期倒序只取最近 3 笔，带状态徽章并提供查看全部入口", () => {
     renderDetail();
@@ -98,10 +87,15 @@ it("关闭订单详情后焦点回到所点的订单号按钮", () => {
     expect(trigger).toHaveFocus();
 });
 
-it("查看全部订单跳转订单页并携带客户名搜索", () => {
+it("查看全部就地展开完整时间线，弹窗保持打开，收起后回到最近 3 笔", () => {
     const onClose = vi.fn();
     renderDetail(onClose);
     fireEvent.click(screen.getByRole("button", { name: /查看全部 4 笔订单/ }));
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId("location")).toHaveTextContent(`/orders?q=${encodeURIComponent(customer.name)}`);
+    // 最早的 ZM260913001 就地出现且可点，弹窗不关闭、不跳转
+    expect(screen.getByRole("button", { name: "查看订单 ZM260913001 详情" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: customer.name })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "收起" }));
+    expect(screen.queryByRole("button", { name: "查看订单 ZM260913001 详情" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: customer.name })).toBeInTheDocument();
 });
