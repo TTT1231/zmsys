@@ -465,7 +465,7 @@ function EditOrderModal({
                 >
                     <DangerNote
                         impact="删除后，这张订单会从列表移除"
-                        note={`${num(order.qty)} 个的订单当前已发 0 个；7 天后清理记录，操作日志保留。`}
+                        note={`${num(order.qty)} 个的订单当前已发 0 个。删除后无恢复入口，记录由系统保留 7 天供审计，随后永久删除；操作日志始终保留。`}
                     />
                 </Modal>
             )}

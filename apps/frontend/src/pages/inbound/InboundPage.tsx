@@ -529,7 +529,7 @@ function DeleteInboundModal({
         >
             <DangerNote
                 impact="删除后，这笔入库单会从列表移除"
-                note={`已作废的 ${num(row.qty)} 个不再计入库存；7 天后清理记录，日志保留。`}
+                note={`已作废的 ${num(row.qty)} 个不再计入库存。删除后无恢复入口，记录由系统保留 7 天供审计，随后永久删除；操作日志始终保留。`}
             />
         </Modal>
     );
