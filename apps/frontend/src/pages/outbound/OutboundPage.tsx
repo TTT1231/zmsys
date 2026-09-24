@@ -646,7 +646,6 @@ export function OutboundPage() {
                 },
                 onSuccess: document => {
                     if (!win.closed) renderOutboundDocument(document, win);
-                    toast(`${row.no} 打印单据已生成`);
                 },
             },
         );
