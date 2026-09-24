@@ -540,7 +540,8 @@ function DeleteInboundModal({
             <div className="rounded-panel border border-danger/20 bg-danger-soft/50 p-4">
                 <p className="text-14 font-semibold text-ink">删除后，这笔入库会立即从列表移除</p>
                 <p className="mt-1 text-13 leading-5 text-muted">
-                    已作废的 {num(row.qty)} 个不再计入库存。7 天后清理记录，操作日志保留。
+                    已作废的 {num(row.qty)} 个不再计入库存。删除后无恢复入口，记录由系统保留 7
+                    天供审计，随后永久删除；操作日志始终保留。
                 </p>
             </div>
         </Modal>
