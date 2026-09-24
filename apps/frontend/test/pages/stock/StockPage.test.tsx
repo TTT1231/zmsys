@@ -69,11 +69,16 @@ const inOnlyLedger: BomStockLedger = {
     ],
 };
 
+/* 用例间可替换余量 map：默认两档非零，状态筛选用例注入已用完（0 余量）的行 */
+const stocksRef = vi.hoisted(() => ({
+    current: undefined as Record<string, number> | undefined,
+}));
+
 vi.mock("@/data/queries", () => ({
     useBoms: () => ({ data: [detailBom, otherBom, idleBom], isLoading: false, isFetching: false }),
     useBomCategories: () => ({ data: [], isLoading: false, isFetching: false }),
     useBomStocks: () => ({
-        data: { [detailBom.code]: 80, [otherBom.code]: 1520 },
+        data: stocksRef.current ?? { [detailBom.code]: 80, [otherBom.code]: 1520 },
         isLoading: false,
         isFetching: false,
     }),
@@ -91,7 +96,10 @@ const renderPage = () =>
             <StockPage />
         </MemoryRouter>,
     );
-afterEach(cleanup);
+afterEach(() => {
+    cleanup();
+    stocksRef.current = undefined;
+});
 
 it("仅列出存在流水的 BOM；表格渲染品类与库存数量，移动卡片同步展示", () => {
     renderPage();
@@ -154,6 +162,25 @@ it("品类下拉筛选库存，选项只含有流水的品类，清空条件恢�
     expect(table).not.toHaveTextContent(detailBom.code);
     fireEvent.click(screen.getByRole("button", { name: "清空条件" }));
     expect(table).toHaveTextContent(detailBom.code);
+});
+
+it("状态筛选：已用完只留余量为 0，未用完只留余量不为 0，清空条件恢复", () => {
+    stocksRef.current = { [detailBom.code]: 0, [otherBom.code]: 1520 };
+    renderPage();
+    const select = screen.getByLabelText("按库存状态筛选");
+
+    fireEvent.change(select, { target: { value: "已用完" } });
+    const table = screen.getByRole("table");
+    expect(table).toHaveTextContent(detailBom.code);
+    expect(table).not.toHaveTextContent(otherBom.code);
+
+    fireEvent.change(select, { target: { value: "未用完" } });
+    expect(table).not.toHaveTextContent(detailBom.code);
+    expect(table).toHaveTextContent(otherBom.code);
+
+    fireEvent.click(screen.getByRole("button", { name: "清空条件" }));
+    expect(table).toHaveTextContent(detailBom.code);
+    expect(table).toHaveTextContent(otherBom.code);
 });
 
 it("详情弹窗：流水倒序、有符号数量、结余与摘要卡，非零调整显示调整卡", () => {

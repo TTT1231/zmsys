@@ -560,6 +560,7 @@ export function InboundPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const [keyword, setKeyword] = useState("");
     const [category, setCategory] = useState("全部品类");
+    const [statusFilter, setStatusFilter] = useState("全部状态");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     // 列排序默认升序：默认按入库日期（同日以单号稳定排序）
@@ -580,10 +581,12 @@ export function InboundPage() {
     const filtered = useMemo(() => {
         const kw = keyword.trim().toLowerCase();
         return rows.filter(row => {
+            if (statusFilter !== "全部状态" && (row.status === "voided" ? "已作废" : "已入库") !== statusFilter)
+                return false;
             if (category !== "全部品类" && bomCategory.get(row.bomCode) !== category) return false;
             return !kw || `${row.no} ${row.bomCode} ${row.inspector}`.toLowerCase().includes(kw);
         });
-    }, [rows, keyword, category, bomCategory]);
+    }, [rows, keyword, category, statusFilter, bomCategory]);
 
     const sorted = useMemo(() => {
         const factor = sort.dir === "asc" ? 1 : -1;
@@ -622,13 +625,14 @@ export function InboundPage() {
         if (searchParams.get("new") === "inbound") setSearchParams({}, { replace: true });
     }, [searchParams, setSearchParams]);
 
-    // 清空条件只作用于筛选行（搜索/品类）；分页由用户自行操作
+    // 清空条件只作用于筛选行（搜索/状态/品类）；分页由用户自行操作
     const clearFilters = () => {
         setKeyword("");
         setCategory("全部品类");
+        setStatusFilter("全部状态");
         setPage(1);
     };
-    const filtersActive = !!keyword.trim() || category !== "全部品类";
+    const filtersActive = !!keyword.trim() || statusFilter !== "全部状态" || category !== "全部品类";
 
     return (
         <div className="flex flex-col gap-5">
@@ -649,6 +653,19 @@ export function InboundPage() {
                             className="w-full bg-transparent text-14 text-ink outline-none placeholder:text-subtle"
                         />
                     </label>
+                    <select
+                        value={statusFilter}
+                        onChange={event => {
+                            setStatusFilter(event.target.value);
+                            setPage(1);
+                        }}
+                        aria-label="按状态筛选"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
+                    >
+                        {["全部状态", "已入库", "已作废"].map(option => (
+                            <option key={option}>{option}</option>
+                        ))}
+                    </select>
                     <select
                         value={category}
                         onChange={event => {

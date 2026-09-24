@@ -833,18 +833,19 @@ export function BomPage() {
     const [keyword, setKeyword] = useState("");
     const [category, setCategory] = useState("全部品类");
     const [statusFilter, setStatusFilter] = useState("全部状态");
-    const showUnused = statusFilter === "未使用";
-    const usageUnavailable = showUnused && usageQuery.isError && usageQuery.data === undefined;
+    /* 未使用/正在使用都依赖使用关系数据，未加载完成前不参与筛选防误报 */
+    const usageFilterActive = statusFilter !== "全部状态";
+    const usageUnavailable = usageFilterActive && usageQuery.isError && usageQuery.data === undefined;
     const isLoading =
         bomsQuery.isLoading ||
         categoriesQuery.isLoading ||
         stocksQuery.isLoading ||
-        (showUnused && usageQuery.isLoading);
+        (usageFilterActive && usageQuery.isLoading);
     const isFetching =
         bomsQuery.isFetching ||
         categoriesQuery.isFetching ||
         stocksQuery.isFetching ||
-        (showUnused && usageQuery.isFetching);
+        (usageFilterActive && usageQuery.isFetching);
     // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
     const overlay = useDelayedFlag(isFetching && !isLoading);
     const [page, setPage] = useState(1);
@@ -899,7 +900,11 @@ export function BomPage() {
         const kw = keyword.trim().toLowerCase();
         return boms
             .filter(bom => category === "全部品类" || bom.name === category)
-            .filter(bom => statusFilter !== "未使用" || unusedCodes.has(bom.code))
+            .filter(bom => {
+                if (statusFilter === "全部状态") return true;
+                const unused = unusedCodes.has(bom.code);
+                return statusFilter === "未使用" ? unused : !unused;
+            })
             .filter(
                 bom =>
                     !kw ||
@@ -979,8 +984,9 @@ export function BomPage() {
                         className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
                         aria-label="按使用状态筛选"
                     >
-                        <option>全部状态</option>
-                        <option>未使用</option>
+                        {["全部状态", "正在使用", "未使用"].map(option => (
+                            <option key={option}>{option}</option>
+                        ))}
                     </select>
                     <button
                         type="button"
@@ -1109,8 +1115,8 @@ export function BomPage() {
                                                 description={
                                                     usageUnavailable
                                                         ? "使用状态加载失败，请刷新重试"
-                                                        : showUnused
-                                                          ? "没有未使用的 BOM"
+                                                        : statusFilter !== "全部状态"
+                                                          ? `没有${statusFilter}的 BOM`
                                                           : "暂无 BOM"
                                                 }
                                             />
