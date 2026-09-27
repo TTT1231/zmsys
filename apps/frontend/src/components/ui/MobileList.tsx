@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { Order, Snapshot } from "@/api";
 import { BomCell } from "@/components/bom/BomCell";
-import { bomByCode, maxShipOf, orderStatusOf, remainingOf } from "@/data/views";
+import { bomByCode, maxShipOf, orderStatusOf, remainingOf, stockOf } from "@/data/views";
 import { num } from "@/lib/format";
 import { todayIso } from "@/lib/date";
 import { Badge, Button, StatusBadge } from "./Badge";
@@ -123,6 +123,9 @@ export function OrderTaskCard({
                 <CardField label="交货日期" value={order.deliverDate} />
                 <CardField label="已发 / 订单" value={`${num(order.outbound)} / ${num(order.qty)} 个`} />
                 {!cancelled && !archived && <CardField label="待交数量" value={`${num(remaining)} 个`} strong />}
+                {!cancelled && !archived && (
+                    <CardField label="库存数量" value={`${num(stockOf(snap, order.bomCode))} 个`} />
+                )}
                 {archived && (
                     <CardField
                         label="归档时间"

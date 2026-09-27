@@ -62,6 +62,12 @@ it("取消订单不显示全部交付或逾期，正常完成与待交数量保�
     // 已全部交付按组件设计只留绿色满条，语义走悬停 title（见 OrdersPage 交付情况列注释）
     expect(rows[2].querySelector(".delivery-track")).toHaveAttribute("title", "已全部交付");
     expect(rows[3]).toHaveTextContent("待交 100");
+    // 移动端订单卡片：正常单展示 BOM 当前库存，取消单不展示（与待交数量同一守卫）
+    const cards = [...document.querySelectorAll<HTMLElement>(".mobile-records article")];
+    const cancelledCard = cards.find(node => node.textContent?.includes("CANCELLED"));
+    expect(within(cancelledCard!).queryByText("库存数量")).not.toBeInTheDocument();
+    const stockCard = cards.find(node => node.textContent?.includes("库存数量"));
+    expect(within(stockCard!).getByText("200 个")).toBeInTheDocument();
 });
 it("表格规格摘要共用同行详情入口，不额外增加规格按钮", () => {
     render(
