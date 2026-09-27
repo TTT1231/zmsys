@@ -26,7 +26,14 @@ const orderNos = () =>
     within(screen.getByRole("table"))
         .getAllByRole("row")
         .slice(1)
-        .map(row => within(row).getAllByRole("button")[0].textContent);
+        // 行内第一个按钮是拖拽手柄（无文本），取第一个有文本的即订单号按钮
+        .map(
+            row =>
+                within(row)
+                    .getAllByRole("button")
+                    .map(btn => btn.textContent)
+                    .filter(Boolean)[0],
+        );
 
 it("默认按销售订单号升序", () => {
     render(

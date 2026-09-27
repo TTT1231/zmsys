@@ -1009,7 +1009,7 @@ button:active:not(:disabled) {
 /* 空态占位行不是数据行：不参与行悬停底色（占位区跟着 hover 变色会被误读成可交互）。
    作废行同样排除：它的悬停底色由下方 row-voided 专属规则（danger 加深）负责，
    这里若命中会以更高特异性把作废底色盖回普通悬停色、高亮“消失” */
-.managed-table tbody tr:not(.row-empty):not(.row-voided):hover td {
+.managed-table tbody tr:not(.row-empty):not(.row-voided):not(.row-drag-source):hover td {
     background: var(--color-row-hover);
 }
 /* 仅剩空态占位行时表格撑满表体视口高度，占位行吃掉剩余空间——
@@ -1049,6 +1049,81 @@ button:active:not(:disabled) {
     color: var(--color-muted);
     font-weight: 400;
 }
+/* ── 行拖拽手动排序（订单页）：手柄列 / 插入线 / 落地反馈 ──
+   落点指示用"插入线"而非腾位：行全程不动，目标行上/下缘 2px 主色线（上缘=插到该行前），
+   只在松手时做一次落位——避免整表 transform 重排与固定列 sticky 的错位冲突 */
+.managed-table .data-table th.drag-col,
+.managed-table .data-table td.drag-col {
+    padding-inline: 0;
+}
+.row-drag-handle {
+    display: flex;
+    width: 100%;
+    min-height: 40px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--color-muted);
+    cursor: grab;
+    touch-action: none;
+}
+.row-drag-handle:not(:disabled):hover,
+.row-drag-handle:focus-visible {
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+    outline: none;
+}
+/* 行悬停时手柄同步提亮：常显 muted 灰保底可辨，悬停即明确"这行可以拖" */
+.managed-table .data-table tbody tr:not(.row-drag-source):hover .row-drag-handle:not(:disabled) {
+    color: var(--color-primary);
+}
+/* 生效排序下禁拖（顺序来源必须唯一，点表头取消排序后恢复） */
+.row-drag-handle:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+/* 被拖行原位弱化：不透明 soft 底保住固定列背景，内容降透明度 */
+.managed-table .data-table tbody tr.row-drag-source > td {
+    background: var(--color-soft);
+    opacity: 0.55;
+}
+/* 插入线（瞬时态，压过固定列的横向投影） */
+.managed-table .data-table tbody tr.row-drop-above > td {
+    box-shadow: inset 0 2px 0 var(--color-primary);
+}
+.managed-table .data-table tbody tr.row-drop-below > td {
+    box-shadow: inset 0 -2px 0 var(--color-primary);
+}
+/* 拖拽浮层（DragOverlay 传送门渲染，在 .managed-table 之外）：精简行快照 + 操作提示 */
+.drag-ghost {
+    border-radius: 12px;
+    border: 2px solid color-mix(in srgb, var(--color-primary) 55%, white);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-modal);
+    overflow: hidden;
+}
+.drag-ghost-hint {
+    padding: 0 12px 10px;
+    font-size: 12px;
+    color: var(--color-muted);
+}
+/* 落地/键盘移动的确认高亮：500ms 渐隐 */
+@keyframes row-flash {
+    from {
+        background: var(--color-primary-soft);
+    }
+}
+.managed-table .data-table tbody td.row-just-moved {
+    animation: row-flash 500ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+    .managed-table .data-table tbody td.row-just-moved {
+        animation: none;
+    }
+}
+
 .managed-table[data-resizing] {
     user-select: none;
     cursor: col-resize;

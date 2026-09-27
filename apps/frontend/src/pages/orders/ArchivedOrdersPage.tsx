@@ -150,7 +150,13 @@ export function ArchivedOrdersPage() {
                             <option key={option}>{option}</option>
                         ))}
                     </select>
-                    <MobileSortSelect columns={SORT_COLUMNS} value={sort} onChange={setSort} />
+                    <MobileSortSelect
+                        columns={SORT_COLUMNS}
+                        value={sort}
+                        onChange={next => {
+                            if (next) setSort(next);
+                        }}
+                    />
                     <details className="relative">
                         <summary
                             className={`flex h-10 list-none items-center gap-1.5 rounded-btn px-3 text-14 transition ${

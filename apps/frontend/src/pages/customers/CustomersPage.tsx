@@ -501,7 +501,13 @@ export function CustomersPage() {
                             <option key={option}>{option}</option>
                         ))}
                     </select>
-                    <MobileSortSelect columns={CUSTOMER_SORT_COLUMNS} value={sort} onChange={setSort} />
+                    <MobileSortSelect
+                        columns={CUSTOMER_SORT_COLUMNS}
+                        value={sort}
+                        onChange={next => {
+                            if (next) setSort(next);
+                        }}
+                    />
                     <button
                         type="button"
                         onClick={clearFilters}

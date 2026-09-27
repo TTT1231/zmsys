@@ -9,7 +9,14 @@ import { RecordFields, RecordProduct, RecordSummary } from "@/components/busines
 import { DangerNote } from "@/components/business/DangerNote";
 import { CustomerDetailModal } from "@/pages/customers/CustomersPage";
 import { OutboundModal } from "@/pages/outbound/OutboundPage";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type CSSProperties,
+    type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
@@ -21,7 +28,17 @@ import { Modal } from "@/components/ui/Modal";
 import { CustomerCell, DateCell, QtyCell } from "@/components/ui/cells";
 import { SortTh } from "@/components/ui/SortTh";
 import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
-import { nextSortState, type SortState } from "@/lib/tableSort";
+import {
+    DndContext,
+    PointerSensor,
+    useDraggable,
+    useSensor,
+    useSensors,
+    type DragMoveEvent,
+    type DragStartEvent,
+} from "@dnd-kit/core";
+import { cycleSortState, type SortState } from "@/lib/tableSort";
+import { mergeReordered, moveItem } from "@/lib/rowOrder";
 import { Field, TextArea, TextField, DateField } from "@/components/ui/Field";
 import {
     useArchiveOrder,
@@ -681,6 +698,7 @@ export function OrdersPage() {
     const { role, can } = useApp();
     const { data, isLoading, isFetching } = useWbSnapshot();
     const { refresh } = useWbRefresh();
+    const toast = useToast();
     // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
     const overlay = useDelayedFlag(isFetching && !isLoading);
     const snap = data ?? EMPTY_SNAPSHOT;
@@ -692,11 +710,29 @@ export function OrdersPage() {
     const [dateEnd, setDateEnd] = useState("");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
-    // 列排序默认升序：默认按订单号；仓管视角默认交货日期（按交期备货）
-    const [sort, setSort] = useState<SortState<OrderSortKey>>({
+    // 列排序默认升序：默认按订单号；仓管视角默认交货日期（按交期备货）。
+    // 三态循环（升→降→取消）：取消排序后列表回到数据顺序，行拖拽手动排序才可用
+    const [sort, setSort] = useState<SortState<OrderSortKey> | null>(() => ({
         key: role === "warehouse" ? "deliverDate" : "orderNo",
         dir: "asc",
-    });
+    }));
+    // 手动行序（纯前端）：拖拽/键盘提交的完整序，仅无排序时生效；排序、筛选、刷新即作废
+    const [manualOrder, setManualOrder] = useState<string[] | null>(null);
+    // 拖拽态：拖拽中的订单号 + 插入线下标（相对 pageRows，"插到该行前"，n=追加到末尾）
+    const [draggingNo, setDraggingNo] = useState<string | null>(null);
+    const [dropIndex, setDropIndex] = useState<number | null>(null);
+    // 落地/键盘移动的确认高亮（500ms 瞬时装饰）：直接操作单元格类，不经组件状态——
+    // 拖拽收尾的重渲染会整体重写 tr 的 className（抹掉手动类），但 td 的虚拟值未变
+    // 不会触发属性重写，类挂在 td 上天然存活于 React 渲染之外
+    const flashRow = (orderNo: string) => {
+        const tr = rowRefs.current.get(orderNo);
+        if (!tr) return;
+        const cells = [...tr.children];
+        cells.forEach(td => td.classList.remove("row-just-moved"));
+        void tr.offsetWidth; // 强制 reflow 重启动画
+        cells.forEach(td => td.classList.add("row-just-moved"));
+        window.setTimeout(() => cells.forEach(td => td.classList.remove("row-just-moved")), 500);
+    };
     // 深链 ?new=order 首帧即开弹窗（初始 state 直读）；effect 只负责清参数，不在副作用里开弹窗
     const [newOpen, setNewOpen] = useState(() => searchParams.get("new") === "order");
     const [ship, setShip] = useState<string | null>(null);
@@ -739,6 +775,7 @@ export function OrdersPage() {
     })();
 
     const sorted = (() => {
+        if (!sort) return filtered; // 取消排序：数据顺序，手动行序接管显示
         const factor = sort.dir === "asc" ? 1 : -1;
         return [...filtered].sort((a, b) => {
             const byKey =
@@ -755,7 +792,16 @@ export function OrdersPage() {
         });
     })();
 
-    const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize);
+    // 手动行序生效（无排序时）：已记录的行按手动序，未记录的新行（新建订单）按数据序补尾
+    const ordered = (() => {
+        if (sort || !manualOrder) return sorted;
+        const byNo = new Map(sorted.map(order => [order.orderNo, order]));
+        const ranked = manualOrder.map(no => byNo.get(no)).filter(Boolean) as Order[];
+        const rankedSet = new Set(ranked.map(order => order.orderNo));
+        return [...ranked, ...sorted.filter(order => !rankedSet.has(order.orderNo))];
+    })();
+
+    const pageRows = ordered.slice((page - 1) * pageSize, page * pageSize);
     const dateFilterActive = !!dateStart || !!dateEnd;
     const filtersActive =
         dateFilterActive || !!keyword.trim() || statusFilter !== "全部状态" || categoryFilter !== "全部品类";
@@ -781,12 +827,147 @@ export function OrdersPage() {
         if (searchParams.get("new") === "order") setSearchParams({}, { replace: true });
     }, [searchParams, setSearchParams]);
 
-    const applySort = (key: OrderSortKey) => setSort(current => nextSortState(current, key));
+    const applySort = (key: OrderSortKey) => {
+        setSort(current => cycleSortState(current, key));
+        setManualOrder(null); // 点表头排序即作废手动序（顺序来源互斥）
+    };
     // 排序或翻页后行序变化，滚动区回到顶部，避免误以为排错行
     const tableScrollRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
         if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
     }, [page, sort]);
+
+    /* ── 行拖拽手动排序（仅桌面表格，手机端卡片不参与）──
+       line 派落点指示：行全程不动，目标行上/下缘 2px 主色插入线，松手才一次落位；
+       dnd-kit 只做指针层（激活阈值 4px 区分手柄点击与拖拽），不用 sortable 腾位 */
+    const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+    const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
+    // 把 pageRows[from] 移到 insertBefore（"插到该下标行之前"，n=末尾），合流提交完整序
+    const submitMove = (from: number, insertBefore: number) => {
+        if (insertBefore === from || insertBefore === from + 1) return false;
+        const visibleNos = pageRows.map(order => order.orderNo);
+        const nextVisible = moveItem(visibleNos, from, insertBefore > from ? insertBefore - 1 : insertBefore);
+        setManualOrder(
+            mergeReordered(
+                ordered.map(order => order.orderNo),
+                visibleNos,
+                nextVisible,
+            ),
+        );
+        return true;
+    };
+    // 插入线落点：以浮层（精简行快照）几何中心越过目标行边缘判定（指针触发发糊、边缘最稳）
+    const onDragStart = (event: DragStartEvent) => {
+        const no = event.active.id as string;
+        const el = rowRefs.current.get(no);
+        if (el) {
+            const rect = el.getBoundingClientRect();
+            dragGhostRef.current = {
+                baseTop: rect.top,
+                height: rect.height,
+                left: rect.left,
+                centerY: rect.top + rect.height / 2,
+            };
+            setGhostTop(rect.top);
+        }
+        setDraggingNo(no);
+    };
+    /* 浮层几何自管理：DragOverlay 在 React 19 下不挂载（translated rect 恒 null），
+       改用 dnd-kit 的 delta 坐标自绘精简浮层，插入线以浮层中心越行缘判定 */
+    const dragGhostRef = useRef<{ baseTop: number; height: number; left: number; centerY: number } | null>(null);
+    const [ghostTop, setGhostTop] = useState(0);
+    const computeDrop = (centerY: number) => {
+        let index = pageRows.length;
+        for (let i = 0; i < pageRows.length; i++) {
+            const el = rowRefs.current.get(pageRows[i].orderNo);
+            if (!el) continue;
+            const rowRect = el.getBoundingClientRect();
+            if (centerY < rowRect.bottom) {
+                index = centerY > rowRect.top + rowRect.height / 2 ? i + 1 : i;
+                break;
+            }
+        }
+        setDropIndex(current => (current === index ? current : index));
+    };
+    const onDragMove = (event: DragMoveEvent) => {
+        const ghost = dragGhostRef.current;
+        if (!ghost) return;
+        const top = Math.min(window.innerHeight - ghost.height - 12, Math.max(8, ghost.baseTop + event.delta.y));
+        ghost.centerY = top + ghost.height / 2;
+        setGhostTop(current => (current === top ? current : top));
+        computeDrop(ghost.centerY);
+    };
+    const resetDrag = () => {
+        setDraggingNo(null);
+        setDropIndex(null);
+        dragGhostRef.current = null;
+    };
+    const onDragEnd = () => {
+        const from = draggingNo ? pageRows.findIndex(order => order.orderNo === draggingNo) : -1;
+        const moved = from >= 0 && dropIndex !== null && submitMove(from, dropIndex);
+        const landedNo = draggingNo;
+        resetDrag();
+        if (moved) {
+            toast("已调整显示顺序：仅当前视图有效，刷新或重新排序后恢复");
+            flashRow(landedNo!);
+        }
+    };
+    const onDragCancel = () => {
+        resetDrag();
+        toast("已取消本次拖拽");
+    };
+    // 插入线渲染目标（拖拽中才有）：dropIndex 指向行画上缘线，越界则末行画下缘线
+    const dropLineAbove =
+        draggingNo && dropIndex !== null && dropIndex < pageRows.length ? pageRows[dropIndex]?.orderNo : null;
+    const dropLineBelow = draggingNo && dropIndex === pageRows.length ? pageRows[pageRows.length - 1]?.orderNo : null;
+    // 键盘微调（无障碍）：手柄聚焦后 ↑/↓ 换行，与拖拽共用同一提交路径
+    const onHandleKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, orderNo: string) => {
+        if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+        event.preventDefault();
+        const from = pageRows.findIndex(order => order.orderNo === orderNo);
+        if (from < 0) return;
+        const insertBefore = event.key === "ArrowUp" ? from - 1 : from + 2;
+        if (insertBefore < 0 || insertBefore > pageRows.length) return;
+        if (submitMove(from, insertBefore)) {
+            toast(
+                `已移至第 ${(insertBefore > from ? insertBefore - 1 : insertBefore) + 1} 行，共 ${pageRows.length} 行`,
+            );
+            flashRow(orderNo);
+        }
+    };
+    // 拖到表格滚动区上下边缘时自动滚动：行屏幕位置随滚动变化，每帧重算插入线，
+    // 否则占位指示漂出视口与浮层脱钩（速度按深入感应区比例分档）
+    useEffect(() => {
+        if (!draggingNo) return;
+        let raf = 0;
+        const tick = () => {
+            const scroller = tableScrollRef.current;
+            const ghost = dragGhostRef.current;
+            if (scroller && ghost) {
+                const rect = scroller.getBoundingClientRect();
+                const EDGE = 72;
+                const MAX = 16;
+                let depth = 0;
+                let dir = 0;
+                if (ghost.centerY < rect.top + EDGE) {
+                    depth = (rect.top + EDGE - ghost.centerY) / EDGE;
+                    dir = -1;
+                } else if (ghost.centerY > rect.bottom - EDGE) {
+                    depth = (ghost.centerY - (rect.bottom - EDGE)) / EDGE;
+                    dir = 1;
+                }
+                if (depth > 0) {
+                    scroller.scrollTop += dir * Math.max(2, MAX * Math.min(1, depth));
+                    computeDrop(ghost.centerY);
+                }
+            }
+            raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(raf);
+        // 拖拽期间 pageRows 不变（翻页/筛选都会先结束拖拽），computeDrop 闭包安全
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [draggingNo]);
 
     // 清空条件只作用于筛选行（搜索/状态/品类/交期）；快捷 tab 由用户自行切换
     const clearFilters = () => {
@@ -827,6 +1008,7 @@ export function OrdersPage() {
                                 onClick={() => {
                                     setTaskFilter(item.key);
                                     setStatusFilter("全部状态");
+                                    setManualOrder(null);
                                     setPage(1);
                                 }}
                             >
@@ -860,6 +1042,7 @@ export function OrdersPage() {
                         value={statusFilter}
                         onChange={event => {
                             setStatusFilter(event.target.value);
+                            setManualOrder(null);
                             setPage(1);
                         }}
                         aria-label="按状态筛选"
@@ -873,6 +1056,7 @@ export function OrdersPage() {
                         value={categoryFilter}
                         onChange={event => {
                             setCategoryFilter(event.target.value);
+                            setManualOrder(null);
                             setPage(1);
                         }}
                         aria-label="按品类筛选"
@@ -883,7 +1067,12 @@ export function OrdersPage() {
                             <option key={item}>{item}</option>
                         ))}
                     </select>
-                    <MobileSortSelect columns={ORDER_SORT_COLUMNS} value={sort} onChange={setSort} />
+                    <MobileSortSelect
+                        columns={ORDER_SORT_COLUMNS}
+                        value={sort}
+                        onChange={setSort}
+                        noneLabel="默认顺序"
+                    />
                     <details className="relative">
                         <summary
                             className={`flex h-10 list-none items-center gap-1.5 rounded-btn px-3 text-14 transition ${
@@ -924,6 +1113,7 @@ export function OrdersPage() {
                                             onClick={() => {
                                                 setDateStart(item.start);
                                                 setDateEnd(item.end);
+                                                setManualOrder(null);
                                                 setPage(1);
                                             }}
                                             className={`min-h-8 rounded-full border px-3 text-13 font-medium transition ${
@@ -943,6 +1133,7 @@ export function OrdersPage() {
                                     value={dateStart}
                                     onChange={event => {
                                         setDateStart(event.target.value);
+                                        setManualOrder(null);
                                         setPage(1);
                                     }}
                                     className="w-full rounded-input border border-line-strong px-2.5 py-2 text-14"
@@ -954,6 +1145,7 @@ export function OrdersPage() {
                                     value={dateEnd}
                                     onChange={event => {
                                         setDateEnd(event.target.value);
+                                        setManualOrder(null);
                                         setPage(1);
                                     }}
                                     className="w-full rounded-input border border-line-strong px-2.5 py-2 text-14"
@@ -984,7 +1176,14 @@ export function OrdersPage() {
                     </button>
                     <div className="ml-auto">
                         <ToolbarMore>
-                            <Button variant="secondary" icon="refresh" onClick={refresh}>
+                            <Button
+                                variant="secondary"
+                                icon="refresh"
+                                onClick={() => {
+                                    setManualOrder(null); // 刷新即回到后端返回顺序（手动序不保存）
+                                    refresh();
+                                }}
+                            >
                                 刷新
                             </Button>
                             <Button
@@ -1048,160 +1247,210 @@ export function OrdersPage() {
                     {isLoading ? (
                         <PageLoading className="py-16" />
                     ) : (
-                        <DataTable
-                            tableId="orders"
-                            defaultWidths={[154, 260, 397, 150, 100, 100, 120, 140, 90, 150, 125, 100]}
-                            recordCount={filtered.length}
-                            identityColumn={0}
-                            pinnedStart={[0, 1, 2, 3]}
-                            scrollRef={tableScrollRef}
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={() => []}
+                            onDragStart={onDragStart}
+                            onDragMove={onDragMove}
+                            onDragEnd={onDragEnd}
+                            onDragCancel={onDragCancel}
                         >
-                            <thead>
-                                <tr className="text-13 text-muted">
-                                    <SortTh
-                                        label="销售订单号"
-                                        active={sort.key === "orderNo"}
-                                        dir={sort.dir}
-                                        onSort={() => applySort("orderNo")}
-                                        className="cell-pad-wide"
-                                        width="14%"
-                                    />
-                                    <th style={{ width: "14%" }}>客户 / 备注</th>
-                                    <th style={{ width: "24%" }}>成品 / BOM</th>
-                                    <th style={{ width: "12%" }}>BOM 备注</th>
-                                    <SortTh
-                                        label="订单数量"
-                                        active={sort.key === "qty"}
-                                        dir={sort.dir}
-                                        onSort={() => applySort("qty")}
-                                        width="8%"
-                                    />
-                                    <th style={{ width: "8%" }}>库存数量</th>
-                                    <SortTh
-                                        label="交货日期"
-                                        active={sort.key === "deliverDate"}
-                                        dir={sort.dir}
-                                        onSort={() => applySort("deliverDate")}
-                                        width="12%"
-                                    />
-                                    <SortTh
-                                        label="交付情况"
-                                        active={sort.key === "outbound"}
-                                        dir={sort.dir}
-                                        onSort={() => applySort("outbound")}
-                                        width="12%"
-                                    />
-                                    <th style={{ width: "7%" }}>创建人</th>
-                                    <SortTh
-                                        label="创建时间"
-                                        active={sort.key === "createdAt"}
-                                        dir={sort.dir}
-                                        onSort={() => applySort("createdAt")}
-                                        width="10%"
-                                    />
-                                    <th style={{ width: "8%" }}>状态</th>
-                                    <th className="min-w-28 cell-pad-wide text-center" style={{ width: "8%" }}>
-                                        操作
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {pageRows.length === 0 && <EmptyRow colSpan={12} description="没有找到匹配的订单" />}
-                                {pageRows.map(order => {
-                                    const bom = bomByCode(snap, order.bomCode);
-                                    const status = orderStatusOf(snap, order);
-                                    const remaining = remainingOf(order);
-                                    const cancelled = order.lifecycleStatus === "cancelled";
-                                    const done = !cancelled && remaining === 0;
-                                    // 档案已删除的客户名不可点（快照里已无对应档案）
-                                    const customer = snap.customers.find(item => item.code === order.customerCode);
-                                    return (
-                                        <tr key={order.orderNo}>
-                                            <td className="cell-pad-wide">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setDetail(order)}
-                                                    className="tnum text-14 font-semibold text-td-strong underline-offset-2 hover:text-primary-strong hover:underline"
-                                                >
-                                                    {order.orderNo}
-                                                </button>
-                                            </td>
-                                            <td>
-                                                <CustomerCell
-                                                    name={order.customer}
-                                                    remark={order.remark}
-                                                    onClick={
-                                                        customer
-                                                            ? () => setCustomerDetailCode(customer.code)
-                                                            : undefined
-                                                    }
-                                                />
-                                            </td>
-                                            <td>
-                                                <BomCell
-                                                    categories={snap.bomCategories}
-                                                    bom={bom}
-                                                    bomCode={order.bomCode}
-                                                />
-                                            </td>
-                                            <td>
-                                                <RemarkCell remark={bom?.remark} variant="warning" />
-                                            </td>
-                                            <td>
-                                                <QtyCell value={order.qty} />
-                                            </td>
-                                            <td>
-                                                <QtyCell value={stockOf(snap, order.bomCode)} />
-                                            </td>
-                                            <td>
-                                                <DateCell
-                                                    date={order.deliverDate}
-                                                    overdue={order.deliverDate < todayIso() && remaining > 0}
-                                                />
-                                            </td>
-                                            <td className="delivery-cell">
-                                                {/* 已全部交付只留绿色满条（悬停 title 兜底语义），
+                            <DataTable
+                                tableId="orders"
+                                defaultWidths={[44, 154, 260, 397, 150, 100, 100, 120, 140, 90, 150, 125, 100]}
+                                recordCount={filtered.length}
+                                identityColumn={1}
+                                pinnedStart={[0, 1, 2, 3, 4]}
+                                scrollRef={tableScrollRef}
+                            >
+                                <thead>
+                                    <tr className="text-13 text-muted">
+                                        {/* 拖拽手柄列：sr-only 文本供 DataTable 提取稳定列标识 */}
+                                        <th aria-label="拖拽调整顺序" className="drag-col">
+                                            <span className="sr-only">拖拽调整顺序</span>
+                                        </th>
+                                        <SortTh
+                                            label="销售订单号"
+                                            active={sort?.key === "orderNo"}
+                                            dir={sort?.dir ?? "asc"}
+                                            onSort={() => applySort("orderNo")}
+                                            className="cell-pad-wide"
+                                            width="14%"
+                                        />
+                                        <th style={{ width: "14%" }}>客户 / 备注</th>
+                                        <th style={{ width: "24%" }}>成品 / BOM</th>
+                                        <th style={{ width: "12%" }}>BOM 备注</th>
+                                        <SortTh
+                                            label="订单数量"
+                                            active={sort?.key === "qty"}
+                                            dir={sort?.dir ?? "asc"}
+                                            onSort={() => applySort("qty")}
+                                            width="8%"
+                                        />
+                                        <th style={{ width: "8%" }}>库存数量</th>
+                                        <SortTh
+                                            label="交货日期"
+                                            active={sort?.key === "deliverDate"}
+                                            dir={sort?.dir ?? "asc"}
+                                            onSort={() => applySort("deliverDate")}
+                                            width="12%"
+                                        />
+                                        <SortTh
+                                            label="交付情况"
+                                            active={sort?.key === "outbound"}
+                                            dir={sort?.dir ?? "asc"}
+                                            onSort={() => applySort("outbound")}
+                                            width="12%"
+                                        />
+                                        <th style={{ width: "7%" }}>创建人</th>
+                                        <SortTh
+                                            label="创建时间"
+                                            active={sort?.key === "createdAt"}
+                                            dir={sort?.dir ?? "asc"}
+                                            onSort={() => applySort("createdAt")}
+                                            width="10%"
+                                        />
+                                        <th style={{ width: "8%" }}>状态</th>
+                                        <th className="min-w-28 cell-pad-wide text-center" style={{ width: "8%" }}>
+                                            操作
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {pageRows.length === 0 && (
+                                        <EmptyRow colSpan={13} description="没有找到匹配的订单" />
+                                    )}
+                                    {pageRows.map(order => {
+                                        const bom = bomByCode(snap, order.bomCode);
+                                        const status = orderStatusOf(snap, order);
+                                        const remaining = remainingOf(order);
+                                        const cancelled = order.lifecycleStatus === "cancelled";
+                                        const done = !cancelled && remaining === 0;
+                                        // 档案已删除的客户名不可点（快照里已无对应档案）
+                                        const customer = snap.customers.find(item => item.code === order.customerCode);
+                                        return (
+                                            <tr
+                                                key={order.orderNo}
+                                                ref={el => {
+                                                    if (el) rowRefs.current.set(order.orderNo, el);
+                                                    else rowRefs.current.delete(order.orderNo);
+                                                }}
+                                                className={`${draggingNo === order.orderNo ? "row-drag-source" : ""} ${
+                                                    dropLineAbove === order.orderNo ? "row-drop-above" : ""
+                                                }${dropLineBelow === order.orderNo ? "row-drop-below" : ""}`}
+                                            >
+                                                <td className="drag-col">
+                                                    <RowDragHandle
+                                                        orderNo={order.orderNo}
+                                                        sortActive={!!sort}
+                                                        sortLabel={
+                                                            sort
+                                                                ? ORDER_SORT_COLUMNS.find(col => col.key === sort.key)
+                                                                      ?.label
+                                                                : undefined
+                                                        }
+                                                        onArrowKey={onHandleKeyDown}
+                                                    />
+                                                </td>
+                                                <td className="cell-pad-wide">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDetail(order)}
+                                                        className="tnum text-14 font-semibold text-td-strong underline-offset-2 hover:text-primary-strong hover:underline"
+                                                    >
+                                                        {order.orderNo}
+                                                    </button>
+                                                </td>
+                                                <td>
+                                                    <CustomerCell
+                                                        name={order.customer}
+                                                        remark={order.remark}
+                                                        onClick={
+                                                            customer
+                                                                ? () => setCustomerDetailCode(customer.code)
+                                                                : undefined
+                                                        }
+                                                    />
+                                                </td>
+                                                <td>
+                                                    <BomCell
+                                                        categories={snap.bomCategories}
+                                                        bom={bom}
+                                                        bomCode={order.bomCode}
+                                                    />
+                                                </td>
+                                                <td>
+                                                    <RemarkCell remark={bom?.remark} variant="warning" />
+                                                </td>
+                                                <td>
+                                                    <QtyCell value={order.qty} />
+                                                </td>
+                                                <td>
+                                                    <QtyCell value={stockOf(snap, order.bomCode)} />
+                                                </td>
+                                                <td>
+                                                    <DateCell
+                                                        date={order.deliverDate}
+                                                        overdue={order.deliverDate < todayIso() && remaining > 0}
+                                                    />
+                                                </td>
+                                                <td className="delivery-cell">
+                                                    {/* 已全部交付只留绿色满条（悬停 title 兜底语义），
                                                     未交付/已取消才展开文字明细 */}
-                                                {cancelled ? (
-                                                    <>
-                                                        <div className="text-13 text-muted">已停止交付</div>
-                                                        <div className="delivery-shipped tnum mt-0.5 text-12 text-muted">
-                                                            已发 {num(order.outbound)} / {num(order.qty)}
+                                                    {cancelled ? (
+                                                        <>
+                                                            <div className="text-13 text-muted">已停止交付</div>
+                                                            <div className="delivery-shipped tnum mt-0.5 text-12 text-muted">
+                                                                已发 {num(order.outbound)} / {num(order.qty)}
+                                                            </div>
+                                                        </>
+                                                    ) : done ? (
+                                                        <div className="delivery-track" title="已全部交付">
+                                                            <ProgressTrack value={1} done />
                                                         </div>
-                                                    </>
-                                                ) : done ? (
-                                                    <div className="delivery-track" title="已全部交付">
-                                                        <ProgressTrack value={1} done />
-                                                    </div>
-                                                ) : (
-                                                    <>
-                                                        <div className="text-13 text-muted">
-                                                            待交 <QtyCell value={remaining} />
-                                                        </div>
-                                                        <div className="delivery-shipped tnum mt-0.5 text-12 text-muted">
-                                                            已发 {num(order.outbound)} / {num(order.qty)}
-                                                        </div>
-                                                        <div className="delivery-track mt-1.5">
-                                                            <ProgressTrack
-                                                                value={order.qty === 0 ? 0 : order.outbound / order.qty}
-                                                            />
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </td>
-                                            <td className="text-14 text-td">{order.createdBy}</td>
-                                            <td className="tnum text-14 text-td">{formatDateTime(order.createdAt)}</td>
-                                            <td>
-                                                <StatusBadge status={status.key} label={status.label} />
-                                            </td>
-                                            <td className="min-w-28 cell-pad-wide text-center whitespace-nowrap">
-                                                <TableLink onClick={() => setDetail(order)}>查看详情</TableLink>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </DataTable>
+                                                    ) : (
+                                                        <>
+                                                            <div className="text-13 text-muted">
+                                                                待交 <QtyCell value={remaining} />
+                                                            </div>
+                                                            <div className="delivery-shipped tnum mt-0.5 text-12 text-muted">
+                                                                已发 {num(order.outbound)} / {num(order.qty)}
+                                                            </div>
+                                                            <div className="delivery-track mt-1.5">
+                                                                <ProgressTrack
+                                                                    value={
+                                                                        order.qty === 0 ? 0 : order.outbound / order.qty
+                                                                    }
+                                                                />
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </td>
+                                                <td className="text-14 text-td">{order.createdBy}</td>
+                                                <td className="tnum text-14 text-td">
+                                                    {formatDateTime(order.createdAt)}
+                                                </td>
+                                                <td>
+                                                    <StatusBadge status={status.key} label={status.label} />
+                                                </td>
+                                                <td className="min-w-28 cell-pad-wide text-center whitespace-nowrap">
+                                                    <TableLink onClick={() => setDetail(order)}>查看详情</TableLink>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </DataTable>
+                            {draggingNo
+                                ? (() => {
+                                      const order = pageRows.find(item => item.orderNo === draggingNo);
+                                      const ghost = dragGhostRef.current;
+                                      return order && ghost ? (
+                                          <DragGhost order={order} style={{ top: ghostTop, left: ghost.left }} />
+                                      ) : null;
+                                  })()
+                                : null}
+                        </DndContext>
                     )}
                 </div>
 
@@ -1261,6 +1510,64 @@ export function OrdersPage() {
                 onClose={() => setCustomerDetailCode(null)}
             />
             {ship !== null && <OutboundModal open initialOrderNo={ship} onClose={() => setShip(null)} />}
+        </div>
+    );
+}
+
+/* 行拖拽手柄：dnd-kit 指针层挂在此按钮（listeners 只挂手柄，避免与行内链接/文本选择冲突）；
+   生效排序下禁拖（顺序来源必须唯一），键盘 ↑/↓ 微调同一入口 */
+function RowDragHandle({
+    orderNo,
+    sortActive,
+    sortLabel,
+    onArrowKey,
+}: {
+    orderNo: string;
+    sortActive: boolean;
+    sortLabel?: string;
+    onArrowKey: (event: ReactKeyboardEvent<HTMLButtonElement>, orderNo: string) => void;
+}) {
+    const { attributes, listeners } = useDraggable({ id: orderNo, disabled: sortActive });
+    return (
+        <button
+            type="button"
+            className="row-drag-handle"
+            disabled={sortActive}
+            title={
+                sortActive && sortLabel
+                    ? `当前按「${sortLabel}」排序，点击表头取消排序后可手动调整`
+                    : "拖拽调整顺序：仅改变当前视图显示，刷新后恢复"
+            }
+            aria-label={`拖拽调整 ${orderNo} 的显示顺序，聚焦后可用上下方向键移动`}
+            onKeyDown={event => onArrowKey(event, orderNo)}
+            {...attributes}
+            {...listeners}
+        >
+            <Icon name="grip" size={14} />
+        </button>
+    );
+}
+
+/* 拖拽浮层：精简行快照（手柄/订单号/客户，宽度对齐表格前三列）+ 跟随操作提示。
+   宽表整行快照会遮住大半视线，Atlassian 同款只留关键信息 */
+function DragGhost({ order, style }: { order: Order; style?: CSSProperties }) {
+    return (
+        <div className="drag-ghost" style={{ position: "fixed", zIndex: 200, pointerEvents: "none", ...style }}>
+            <div className="flex items-center">
+                <div className="flex w-11 shrink-0 justify-center text-muted">
+                    <Icon name="grip" size={14} />
+                </div>
+                <div
+                    className="tnum shrink-0 truncate px-1 text-14 font-semibold whitespace-nowrap text-td-strong"
+                    style={{ width: 154 }}
+                >
+                    {order.orderNo}
+                </div>
+                <div className="truncate pr-3 text-14 font-medium whitespace-nowrap text-ink" style={{ width: 260 }}>
+                    {order.customer}
+                </div>
+            </div>
+            <span className="drag-ghost-hint">松手放置 · Esc 取消</span>
         </div>
     );
 }
