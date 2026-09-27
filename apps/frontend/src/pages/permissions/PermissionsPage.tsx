@@ -1046,8 +1046,10 @@ function RolesTab({ users }: { users: WbUser[] }) {
 function MatrixTab() {
     const { data } = useGrants();
     const grants = data ?? DEFAULT_GRANTS;
-    // 受保护菜单不进矩阵（仅 super 持有，不在普通角色的可授范围内）
-    const modules = MENU_CATALOG.filter(menu => !menu.onlyFor && !menu.protected && menu.key !== "workbench");
+    // 系统模块虽仅超管可用，也纳入矩阵作为授权举证；工作台是固定入口，不单独列模块。
+    const modules = MENU_CATALOG.filter(
+        menu => menu.group === "系统" || (!menu.onlyFor && !menu.protected && menu.key !== "workbench"),
+    );
     return (
         <section className="overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
             <div className="border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4">
@@ -1057,7 +1059,7 @@ function MatrixTab() {
                 <table className="w-full min-w-215 border-collapse">
                     <thead>
                         <tr className="bg-soft text-13 text-muted">
-                            <th className="border border-line px-3 py-2.5 text-left font-semibold">模块 \\ 角色</th>
+                            <th className="border border-line px-3 py-2.5 text-left font-semibold">模块</th>
                             {ROLES.map(role => (
                                 <th key={role.id} className="border border-line px-3 py-2.5 text-center font-semibold">
                                     {role.name}

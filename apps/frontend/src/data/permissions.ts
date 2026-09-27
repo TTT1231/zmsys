@@ -83,7 +83,7 @@ export const MENU_CATALOG: MenuNode[] = [
         onlyFor: ["warehouse"],
         note: "审计记录：业务创建、订单变更、入库修正、库存调整、出库作废及负责人移交均保留操作人与时间，不可删除、不可篡改。",
     },
-    /* 系统组：仅超级管理员可见的数据库备份/恢复入口（受保护，不参与授权勾选） */
+    /* 系统组：系统日志、数据库备份与恢复入口；备份/恢复仅超级管理员可见 */
     {
         key: "system-backup",
         label: "备份",
@@ -104,7 +104,7 @@ export const MENU_CATALOG: MenuNode[] = [
         key: "system-logs",
         label: "系统日志",
         icon: "log",
-        group: "业务导航",
+        group: "系统",
         to: "/system-logs",
         protected: true,
     },
