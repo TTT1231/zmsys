@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -6,6 +6,16 @@ import { Button } from "@/components/ui/Badge";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { useSystemLogs } from "@/data/queries";
 import type { SystemLogAction, SystemLogDomain, SystemLogEntry } from "@/api";
+
+/** 关键词防抖：输入停顿 300ms 才并入查询（避免逐字符触发请求） */
+function useDebouncedValue<T>(value: T, delay = 300): T {
+    const [debounced, setDebounced] = useState(value);
+    useEffect(() => {
+        const timer = setTimeout(() => setDebounced(value), delay);
+        return () => clearTimeout(timer);
+    }, [value, delay]);
+    return debounced;
+}
 
 /* ---------- 动作 / 域的展示元数据（颜色一律语义令牌；图标复用注册表） ---------- */
 
@@ -125,19 +135,32 @@ export function SystemLogsPage() {
     const [draftTo, setDraftTo] = useState("");
     const [applied, setApplied] = useState<{ from: string; to: string } | null>(null);
     const [dateError, setDateError] = useState("");
+    const debouncedKeyword = useDebouncedValue(keyword);
 
+    // 自定义范围未应用有效日期前不发起查询（缺 from/to 会被后端 400 拒绝）
+    const pendingCustom = range === "custom" && !applied;
     const filters = useMemo(
         () => ({
             ...(tab !== "all" ? { domain: tab as SystemLogDomain } : {}),
             ...(action !== "all" ? { action: action as SystemLogAction } : {}),
             range,
             ...(range === "custom" && applied ? { from: applied.from, to: applied.to } : {}),
-            ...(keyword.trim() ? { keyword: keyword.trim() } : {}),
+            ...(debouncedKeyword.trim() ? { keyword: debouncedKeyword.trim() } : {}),
             limit: 20,
         }),
-        [tab, action, range, applied, keyword],
+        [tab, action, range, applied, debouncedKeyword],
     );
-    const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useSystemLogs(filters);
+    const {
+        data,
+        isLoading,
+        isError,
+        error,
+        refetch,
+        isFetchingNextPage,
+        isFetchNextPageError,
+        hasNextPage,
+        fetchNextPage,
+    } = useSystemLogs(filters, !pendingCustom);
     const entries = data?.pages.flatMap(page => page.items) ?? [];
 
     const applyCustomRange = () => {
@@ -177,8 +200,9 @@ export function SystemLogsPage() {
         <div className="flex flex-col gap-5">
             <h1 className="sr-only">系统日志</h1>
             <section className="overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
-                <div className="list-toolbar flex flex-wrap items-center gap-2.5 border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4">
-                    {/* 业务域 tab：flex-wrap 响应，6 个 tab 用 task-tabs 模式（非等宽 SegmentedTabs） */}
+                {/* 筛选分两行：业务域 tab 独占一行（6 个 tab 挤一行会换行错乱），
+                    搜索与下拉在第二行 */}
+                <div className="list-card-primary">
                     <div className="task-tabs flex flex-wrap gap-1" aria-label="业务类型筛选">
                         {DOMAIN_TABS.map(item => (
                             <button
@@ -191,6 +215,9 @@ export function SystemLogsPage() {
                             </button>
                         ))}
                     </div>
+                    <TableHeaderActions className="ml-auto" />
+                </div>
+                <div className="list-toolbar flex flex-wrap items-center gap-2.5 border-b border-line bg-linear-to-b from-surface to-panel px-5 py-3">
                     <label className="flex h-10 min-w-45 flex-1 items-center gap-2 rounded-btn border border-line-strong bg-surface px-3 lg:max-w-90">
                         <Icon name="search" size={15} className="text-subtle" />
                         <input
@@ -235,7 +262,6 @@ export function SystemLogsPage() {
                     >
                         重置
                     </button>
-                    <TableHeaderActions className="ml-auto" />
                 </div>
 
                 {range === "custom" && (
@@ -277,8 +303,19 @@ export function SystemLogsPage() {
                 )}
 
                 <div className="px-5 py-4">
-                    {isLoading ? (
+                    {pendingCustom ? (
+                        <EmptyState description="请选择开始与结束日期，并点击「应用范围」后查看。" imageSize={120} />
+                    ) : isLoading ? (
                         <PageLoading className="py-16" />
+                    ) : isError ? (
+                        /* 查询失败（含首批）：与空态区分，提供重试入口 */
+                        <div className="flex flex-col items-center gap-3 py-12 text-center">
+                            <Icon name="alert" size={28} className="text-danger" />
+                            <p className="text-14 text-td">日志加载失败：{error?.message ?? "网络异常"}</p>
+                            <Button variant="secondary" icon="refresh" onClick={() => void refetch()}>
+                                重试
+                            </Button>
+                        </div>
                     ) : entries.length === 0 ? (
                         <EmptyState
                             description="没有找到对应记录，试试更换业务类型、操作类型或关键词。"
@@ -288,7 +325,7 @@ export function SystemLogsPage() {
                         <div className="flex flex-col gap-1">
                             {groups.map(([day, items]) => (
                                 <section key={day} aria-label={`${day} 的操作`}>
-                                    <div className="flex items-center gap-3 py-3 text-13 font-bold text-td">
+                                    <div className="flex items-center gap-3 py-2.5 text-13 font-bold text-td">
                                         <span>{dayHeadingOf(day)}</span>
                                         {/* 日标题右侧分隔线延伸至行尾（原型 day-heading:after） */}
                                         <span aria-hidden="true" className="h-px flex-1 bg-line" />
@@ -301,7 +338,7 @@ export function SystemLogsPage() {
                                 </section>
                             ))}
                             {hasNextPage && (
-                                <div className="flex justify-center py-4">
+                                <div className="flex flex-col items-center gap-1.5 py-4">
                                     <Button
                                         variant="secondary"
                                         disabled={isFetchingNextPage}
@@ -309,6 +346,11 @@ export function SystemLogsPage() {
                                     >
                                         {isFetchingNextPage ? "正在加载…" : "加载更多记录"}
                                     </Button>
+                                    {isFetchNextPageError && (
+                                        <p role="alert" className="text-12 text-danger">
+                                            加载更多失败，请重试
+                                        </p>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -328,22 +370,28 @@ export function SystemLogsPage() {
 function EventCard({ entry }: { entry: SystemLogEntry }) {
     const meta = ACTION_META[entry.action];
     const first = entry.changes?.[0];
+    // 明细惰性渲染：首次展开才创建字段节点（折叠态不预生成 DOM）
+    const [expanded, setExpanded] = useState(false);
+    const hasDetail = (entry.changes?.length ?? 0) > 0 || !!entry.reason;
     return (
-        <li className="relative mb-3 rounded-card border border-line bg-surface p-4 shadow-xs transition hover:border-primary-border/60">
+        <li className="relative mb-2 rounded-card border border-line bg-surface px-4 py-3 shadow-xs transition hover:border-primary-border/60">
             {/* 时间线圆点（动作色） */}
             <span
                 aria-hidden="true"
-                className={`absolute top-6 -left-[27px] h-2.5 w-2.5 rounded-full ring-3 ring-surface ${dotToneOf(entry.action)}`}
+                className={`absolute top-5 -left-[27px] h-2.5 w-2.5 rounded-full ring-3 ring-surface ${dotToneOf(entry.action)}`}
             />
             <div className="flex items-start gap-3">
-                <span className={`grid h-9.5 w-9.5 shrink-0 place-items-center rounded-btn ${meta.tone}`}>
-                    <Icon name={meta.icon} size={18} />
+                <span className={`grid h-8.5 w-8.5 shrink-0 place-items-center rounded-btn ${meta.tone}`}>
+                    <Icon name={meta.icon} size={17} />
                 </span>
                 <div className="min-w-0 flex-1">
                     <h3 className="flex flex-wrap items-center gap-1.5 text-14 leading-6 font-semibold text-ink">
                         <span>{entry.actor.name}</span>
                         <span className={textToneOf(entry.action)}>{meta.verb}</span>
                         {objectOf(entry) && <span>{objectOf(entry)}</span>}
+                        <span className="tnum ml-auto pl-2 text-12 font-normal text-muted">
+                            {beijingTimeOf(entry.occurredAt)}
+                        </span>
                     </h3>
                     <div className="mt-0.5 flex flex-wrap items-center gap-2 text-12 text-muted">
                         <span>{ROLE_LABELS[entry.actor.role] ?? entry.actor.role}</span>
@@ -351,65 +399,79 @@ function EventCard({ entry }: { entry: SystemLogEntry }) {
                         <span>{DOMAIN_LABELS[entry.domain]}</span>
                     </div>
                 </div>
-                <time className="tnum shrink-0 pl-2 text-12 text-muted">{beijingTimeOf(entry.occurredAt)}</time>
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2 pl-12.5">
+            {/* 目标行与首条变更合并为一行：域 chip + 编号 + 名称 + 预览 */}
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 pl-11.5">
                 <span className="rounded-md bg-soft px-1.5 py-0.5 text-11 font-semibold text-td-strong">
                     {DOMAIN_CHIPS[entry.domain]}
                 </span>
                 <span className="tnum text-12 font-bold text-primary-strong">{entry.targetCode}</span>
                 {entry.targetName && <span className="text-12 text-td">{entry.targetName}</span>}
-            </div>
-            {first && (
-                <div className="mt-3 flex flex-wrap items-center gap-1.5 pl-12.5">
-                    <span className="text-12 text-muted">{first.label}</span>
-                    {first.before !== null && (
-                        <span className="rounded-md bg-soft px-1.5 py-1 text-12 text-muted line-through">
-                            {first.before}
-                        </span>
-                    )}
-                    {first.before !== null && <Icon name="chevron-right" size={13} className="text-placeholder" />}
-                    <span className={`rounded-md px-1.5 py-1 text-12 font-semibold ${chipToneOf(entry.action)}`}>
-                        {first.after ?? "—"}
-                    </span>
-                </div>
-            )}
-            {entry.changes && entry.changes.length > 0 && (
-                <details className="group mt-3 border-t border-line pl-12.5">
-                    <summary className="inline-flex min-h-9.5 cursor-pointer list-none items-center gap-1.5 py-2 text-12 font-semibold text-primary-strong">
-                        查看变更详情
-                        <Icon name="chevron-down" size={14} className="transition-transform group-open:rotate-180" />
-                    </summary>
-                    <div className="pb-2">
-                        <p className="mb-2 text-11 font-semibold tracking-wide text-subtle">本次记录</p>
-                        {entry.changes.map(change => (
-                            <div
-                                key={change.label}
-                                className="flex items-start gap-3 border-b border-line/60 py-2 text-12 leading-6 last:border-b-0"
-                            >
-                                <span className="min-w-20 shrink-0 text-muted">{change.label}</span>
-                                <span className="wrap-break-word text-td">
-                                    {change.before === null ? (
-                                        "新建记录"
-                                    ) : (
-                                        <>
-                                            {change.before} <span aria-hidden="true">→</span>{" "}
-                                        </>
-                                    )}
-                                    <span className={`font-semibold ${textToneOf(entry.action)}`}>
-                                        {change.after ?? "—"}
-                                    </span>
-                                </span>
-                            </div>
-                        ))}
-                        {entry.reason && (
-                            <p className="mt-2 rounded-btn bg-soft px-3 py-2.5 text-12 leading-6 text-td">
-                                <strong className="font-semibold">操作原因：</strong>
-                                {entry.reason}
-                            </p>
+                {first && (
+                    <>
+                        <span aria-hidden="true" className="h-1 w-1 rounded-full bg-placeholder" />
+                        <span className="text-12 text-muted">{first.label}</span>
+                        {first.before !== null && (
+                            <span className="rounded-md bg-soft px-1.5 py-0.5 text-12 text-muted line-through">
+                                {first.before}
+                            </span>
                         )}
-                    </div>
-                </details>
+                        {first.before !== null && <Icon name="chevron-right" size={13} className="text-placeholder" />}
+                        <span className={`rounded-md px-1.5 py-0.5 text-12 font-semibold ${chipToneOf(entry.action)}`}>
+                            {first.after ?? "—"}
+                        </span>
+                    </>
+                )}
+            </div>
+            {hasDetail && (
+                <div className="mt-1.5 border-t border-line pl-11.5">
+                    <button
+                        type="button"
+                        aria-expanded={expanded}
+                        onClick={() => setExpanded(value => !value)}
+                        className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 text-12 font-semibold text-primary-strong"
+                    >
+                        查看变更详情
+                        <Icon
+                            name="chevron-down"
+                            size={14}
+                            className={`transition-transform ${expanded ? "rotate-180" : ""}`}
+                        />
+                    </button>
+                    {expanded && (
+                        <div className="pb-2">
+                            {(entry.changes?.length ?? 0) > 0 && (
+                                <p className="mb-1 text-11 font-semibold tracking-wide text-subtle">本次记录</p>
+                            )}
+                            {entry.changes?.map(change => (
+                                <div
+                                    key={change.label}
+                                    className="flex items-start gap-3 border-b border-line/60 py-1.5 text-12 leading-6 last:border-b-0"
+                                >
+                                    <span className="min-w-20 shrink-0 text-muted">{change.label}</span>
+                                    <span className="wrap-break-word text-td">
+                                        {change.before === null ? (
+                                            "新建记录"
+                                        ) : (
+                                            <>
+                                                {change.before} <span aria-hidden="true">→</span>{" "}
+                                            </>
+                                        )}
+                                        <span className={`font-semibold ${textToneOf(entry.action)}`}>
+                                            {change.after ?? "—"}
+                                        </span>
+                                    </span>
+                                </div>
+                            ))}
+                            {entry.reason && (
+                                <p className="mt-1.5 rounded-btn bg-soft px-3 py-2 text-12 leading-6 text-td">
+                                    <strong className="font-semibold">操作原因：</strong>
+                                    {entry.reason}
+                                </p>
+                            )}
+                        </div>
+                    )}
+                </div>
             )}
         </li>
     );

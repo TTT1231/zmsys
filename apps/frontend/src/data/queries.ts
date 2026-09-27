@@ -296,8 +296,9 @@ export const useResetUserPassword = () =>
 /* ---- 用户与权限 ---- */
 
 /** 系统日志时间线（仅 super）：筛选参数入 queryKey（变化即整页重查），
- *  分批为 (beforeAt, beforeId) 复合游标追加——游标经 pageParam 传递，筛选变更自动回到首批 */
-export function useSystemLogs(filters: Omit<SystemLogQuery, "beforeAt" | "beforeId">) {
+ *  分批为 (beforeAt, beforeId) 复合游标追加——游标经 pageParam 传递，筛选变更自动回到首批；
+ *  enabled=false 时挂起（自定义范围未应用有效日期前不发查询） */
+export function useSystemLogs(filters: Omit<SystemLogQuery, "beforeAt" | "beforeId">, enabled = true) {
     return useInfiniteQuery({
         queryKey: ["system-logs", filters],
         queryFn: ({ pageParam }: { pageParam: SystemLogCursor | null }) =>
@@ -307,6 +308,7 @@ export function useSystemLogs(filters: Omit<SystemLogQuery, "beforeAt" | "before
             }),
         initialPageParam: null,
         getNextPageParam: lastPage => lastPage.nextCursor,
+        enabled,
     });
 }
 
