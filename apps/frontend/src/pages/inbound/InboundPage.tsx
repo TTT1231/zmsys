@@ -688,7 +688,13 @@ export function InboundPage() {
                             <option key={item}>{item}</option>
                         ))}
                     </select>
-                    <MobileSortSelect columns={LEDGER_SORT_COLUMNS} value={sort} onChange={setSort} />
+                    <MobileSortSelect
+                        columns={LEDGER_SORT_COLUMNS}
+                        value={sort}
+                        onChange={next => {
+                            if (next) setSort(next);
+                        }}
+                    />
                     <button
                         type="button"
                         onClick={clearFilters}

@@ -38,6 +38,8 @@ const PATHS: Record<string, string[]> = {
     check: ["M5 12.5l4.5 4.5L19 7.5"],
     menu: ["M4 6.5h16", "M4 12h16", "M4 17.5h16"],
     more: ["M5 12h.4", "M12 12h.4", "M19 12h.4"],
+    /* 行拖拽手柄：两列三粒圆点（短横线 + 圆头线帽模拟圆点，同 more 的画法） */
+    grip: ["M9.5 7h.4", "M14.5 7h.4", "M9.5 12h.4", "M14.5 12h.4", "M9.5 17h.4", "M14.5 17h.4"],
     "chevron-left": ["M14.5 6 9 12l5.5 6"],
     "chevron-right": ["M9.5 6 15 12l-5.5 6"],
     "chevron-down": ["M6 9.5l6 5.5 6-5.5"],
