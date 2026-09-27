@@ -307,8 +307,10 @@ export function SystemLogsPage() {
                         <EmptyState description="请选择开始与结束日期，并点击「应用范围」后查看。" imageSize={120} />
                     ) : isLoading ? (
                         <PageLoading className="py-16" />
-                    ) : isError ? (
-                        /* 查询失败（含首批）：与空态区分，提供重试入口 */
+                    ) : isError && entries.length === 0 ? (
+                        /* 首批加载失败：与空态区分，提供重试入口。加载更多失败时
+                           isError 同样为真（v5 中 error 非空即 isError），但已加载
+                           的批次必须保留——仅在无数据时整页报错 */
                         <div className="flex flex-col items-center gap-3 py-12 text-center">
                             <Icon name="alert" size={28} className="text-danger" />
                             <p className="text-14 text-td">日志加载失败：{error?.message ?? "网络异常"}</p>

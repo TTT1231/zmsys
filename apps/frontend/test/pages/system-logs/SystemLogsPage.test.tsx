@@ -264,6 +264,28 @@ it("查询失败时显示错误态与重试入口，不误报为空结果", () =
     fireEvent.click(screen.getByRole("button", { name: /重试/ }));
 });
 
+it("加载更多失败时保留已加载列表（isError 与 isFetchNextPageError 同真组合）", () => {
+    useSystemLogs.mockReturnValue({
+        data: { pages: [pageOf([orderEdit])] },
+        isLoading: false,
+        // TanStack v5：fetchNextPage 失败同样置 error → isError 为真
+        isError: true,
+        error: new Error("下一批超时"),
+        refetch: vi.fn(),
+        isFetchingNextPage: false,
+        isFetchNextPageError: true,
+        hasNextPage: true,
+        fetchNextPage: vi.fn(),
+    });
+    renderPage();
+    // 已加载卡片仍在，不被整页错误态遮掉
+    expect(screen.getByText("SO-202609-018")).toBeInTheDocument();
+    expect(screen.queryByText(/日志加载失败/)).not.toBeInTheDocument();
+    // 末尾出现加载更多失败提示与重试按钮
+    expect(screen.getByRole("alert")).toHaveTextContent("加载更多失败，请重试");
+    expect(screen.getByRole("button", { name: "加载更多记录" })).toBeInTheDocument();
+});
+
 it("关键词防抖：输入停顿 300ms 后才并入查询", async () => {
     renderPage();
     fireEvent.change(screen.getByLabelText("关键词"), { target: { value: "华辰" } });
