@@ -23,3 +23,4 @@ export {
     resetUserPassword,
 } from "./users";
 export { fetchRoles, fetchGrants, saveRoleGrants, fetchGrantLog } from "./permissions";
+export { fetchSystemLogs } from "./system-logs";

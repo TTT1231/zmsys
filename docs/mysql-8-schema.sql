@@ -147,6 +147,7 @@ INSERT INTO sys_permission (code, kind, menu_key, action_id, label, protected) V
     ('menu:permissions-accounts', 'MENU', 'permissions-accounts', NULL, '账号管理', 1),
     ('menu:permissions-roles', 'MENU', 'permissions-roles', NULL, '角色与权限', 1),
     ('menu:permissions-matrix', 'MENU', 'permissions-matrix', NULL, '权限矩阵', 1),
+    ('menu:system-logs', 'MENU', 'system-logs', NULL, '系统日志', 1),
     ('orders:view', 'ACTION', 'orders', 'view', '查看', 0),
     ('orders:create', 'ACTION', 'orders', 'create', '新建订单', 0),
     ('orders:edit', 'ACTION', 'orders', 'edit', '编辑订单', 0),
@@ -171,7 +172,8 @@ INSERT INTO sys_permission (code, kind, menu_key, action_id, label, protected) V
     ('outbound:print', 'ACTION', 'outbound', 'print', '打印', 0),
     ('outbound:delete', 'ACTION', 'outbound', 'delete', '删除出库记录', 0),
     ('permissions:view', 'ACTION', 'permissions', 'view', '查看', 1),
-    ('permissions:manage', 'ACTION', 'permissions', 'manage', '用户与角色管理', 1);
+    ('permissions:manage', 'ACTION', 'permissions', 'manage', '用户与角色管理', 1),
+    ('system-logs:view', 'ACTION', 'system-logs', 'view', '查看', 1);
 
 CREATE TABLE sys_grant (
     role_code VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,

@@ -20,6 +20,8 @@ export interface MenuNode {
     labelByRole?: Partial<Record<RoleId, string>>;
     /** 仅对特定角色展示的固定项（不参与授权勾选） */
     onlyFor?: RoleId[];
+    /** 受保护菜单只能由超级管理员持有（服务端 protected=1 不播授权行），不参与授权勾选 */
+    protected?: boolean;
     children?: Array<{ key: string; label: string }>;
 }
 
@@ -52,6 +54,7 @@ export const MENU_CATALOG: MenuNode[] = [
         icon: "shield",
         group: "工作台",
         to: "/permissions",
+        protected: true,
         children: [
             { key: "permissions-accounts", label: "账号管理" },
             { key: "permissions-roles", label: "角色与权限" },
@@ -78,6 +81,14 @@ export const MENU_CATALOG: MenuNode[] = [
         group: "业务导航",
         onlyFor: ["warehouse"],
         note: "审计记录：业务创建、订单变更、入库修正、库存调整、出库作废及负责人移交均保留操作人与时间，不可删除、不可篡改。",
+    },
+    {
+        key: "system-logs",
+        label: "系统日志",
+        icon: "log",
+        group: "业务导航",
+        to: "/system-logs",
+        protected: true,
     },
 ];
 
@@ -121,6 +132,7 @@ export const ACTION_CATALOG = {
         { id: "view", label: "查看", protected: true },
         { id: "manage", label: "用户与角色管理", protected: true },
     ],
+    "system-logs": [{ id: "view", label: "查看", protected: true }],
 } as const satisfies Record<string, readonly ActionDef[]>;
 
 /** 权限码字面量联合（"outbound:print" 等），拼错编译期报错 */

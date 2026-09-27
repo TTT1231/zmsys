@@ -149,6 +149,9 @@
     --color-warning-soft: #fff7ed;
     --color-danger: #b42318;
     --color-danger-soft: #fef3f2;
+    /* 系统日志归档动作语义色（原型 violet）：仅时间线动作标识使用 */
+    --color-violet: #6941c6;
+    --color-violet-soft: #f4f3ff;
 
     --color-ink: #101828;
     /* 次要灰字 / 表格文字对齐 vben（muted-foreground #6e7075、foreground #32373c），去掉石板蓝调 */
@@ -356,6 +359,8 @@ html.dark {
     --color-warning-soft: rgba(251, 191, 36, 0.14);
     --color-danger: #f87171;
     --color-danger-soft: rgba(248, 113, 113, 0.14);
+    --color-violet: #a78bfa;
+    --color-violet-soft: rgba(167, 139, 250, 0.14);
 
     --color-ink: #f2f2f2;
     --color-muted: #a3a4a7;

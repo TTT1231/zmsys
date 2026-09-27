@@ -759,7 +759,10 @@ function RolesTab({ users }: { users: WbUser[] }) {
         edit(grant => {
             grant.menus = checked
                 ? MENU_CATALOG.flatMap(menu =>
-                      menu.onlyFor ? [] : [menu.key, ...(menu.children ?? []).map(child => child.key)],
+                      // 受保护菜单只能由超级管理员持有：全选写入同样跳过（含其子菜单）
+                      menu.onlyFor || menu.protected
+                          ? []
+                          : [menu.key, ...(menu.children ?? []).map(child => child.key)],
                   )
                 : [];
             grant.actions = Object.fromEntries(
@@ -879,7 +882,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                     type="checkbox"
                                     className="accent-primary"
                                     checked={MENU_CATALOG.every(
-                                        menu => menu.onlyFor || effective.menus.includes(menu.key),
+                                        menu => menu.onlyFor || menu.protected || effective.menus.includes(menu.key),
                                     )}
                                     onChange={event => toggleAll(event.target.checked)}
                                 />
@@ -887,7 +890,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
                             </label>
                         </div>
                         <div className="rounded-xl border border-line bg-panel px-3 py-2">
-                            {MENU_CATALOG.filter(menu => !menu.onlyFor).map(menu => (
+                            {MENU_CATALOG.filter(menu => !menu.onlyFor && !menu.protected).map(menu => (
                                 <div key={menu.key}>
                                     <label
                                         className={`flex min-h-10 cursor-pointer items-center gap-2.5 rounded-lg px-2 hover:bg-row-hover ${locked ? "pointer-events-none opacity-50" : ""}`}
@@ -1034,7 +1037,8 @@ function RolesTab({ users }: { users: WbUser[] }) {
 function MatrixTab() {
     const { data } = useGrants();
     const grants = data ?? DEFAULT_GRANTS;
-    const modules = MENU_CATALOG.filter(menu => !menu.onlyFor && menu.key !== "workbench");
+    // 受保护菜单不进矩阵（仅 super 持有，不在普通角色的可授范围内）
+    const modules = MENU_CATALOG.filter(menu => !menu.onlyFor && !menu.protected && menu.key !== "workbench");
     return (
         <section className="overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
             <div className="border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4">

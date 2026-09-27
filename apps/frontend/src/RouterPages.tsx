@@ -24,3 +24,6 @@ export const StockPage = lazy(() => import("./pages/stock/StockPage").then(m => 
 export const PermissionsPage = lazy(() =>
     import("./pages/permissions/PermissionsPage").then(m => ({ default: m.PermissionsPage })),
 );
+export const SystemLogsPage = lazy(() =>
+    import("./pages/system-logs/SystemLogsPage").then(m => ({ default: m.SystemLogsPage })),
+);

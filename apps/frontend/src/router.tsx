@@ -17,6 +17,7 @@ import {
     PermissionsPage,
     SearchPage,
     StockPage,
+    SystemLogsPage,
     WorkbenchPage,
 } from "./RouterPages";
 
@@ -48,6 +49,7 @@ export const router = createBrowserRouter([
                     { path: "/outbound", element: <OutboundPage /> },
                     { path: "/stock", element: <StockPage /> },
                     { path: "/permissions", element: <PermissionsPage /> },
+                    { path: "/system-logs", element: <SystemLogsPage /> },
                     { path: "*", element: <ErrorPage kind="not-found" /> },
                 ],
             },

@@ -169,6 +169,56 @@ export interface StockAdjustmentRow {
     relatedInboundNo?: string;
 }
 
+/* ---------- 系统日志（GET /system-logs，仅超级管理员） ---------- */
+
+export type SystemLogDomain = "customer" | "order" | "bom" | "inbound" | "outbound";
+
+export type SystemLogAction = "create" | "edit" | "transfer" | "archive" | "delete" | "void" | "ship" | "adjust";
+
+/** 单条字段变更（服务端产出中文 label 与展示值；before=null 表示新建记录） */
+export interface SystemLogChange {
+    label: string;
+    before: string | null;
+    after: string | null;
+}
+
+export interface SystemLogEntry {
+    /** 来源行雪花 id（十进制串，游标往返不能 Number 解析） */
+    id: string;
+    occurredAt: string;
+    actor: { name: string; role: string };
+    domain: SystemLogDomain;
+    action: SystemLogAction;
+    targetCode: string;
+    targetName: string | null;
+    changes: SystemLogChange[] | null;
+    reason: string | null;
+}
+
+/** 复合游标：本批末条 (occurredAt, id)；还有下一批时非空 */
+export interface SystemLogCursor {
+    at: string;
+    id: string;
+}
+
+export interface SystemLogPage {
+    items: SystemLogEntry[];
+    nextCursor: SystemLogCursor | null;
+}
+
+/** 系统日志查询参数（时间范围见 range；custom 时 from/to 必填且 from ≤ to） */
+export interface SystemLogQuery {
+    domain?: SystemLogDomain;
+    action?: SystemLogAction;
+    range: "today" | "7d" | "30d" | "custom";
+    from?: string;
+    to?: string;
+    keyword?: string;
+    limit?: number;
+    beforeAt?: string;
+    beforeId?: string;
+}
+
 /** 打印文档（GET /outbound/{no}/print 响应）：后端实时组装的纸质单快照，
  * 打印无副作用不落日志；state/voidReason 供打印件渲染作废标注 */
 export interface OutboundPrintDocument {
