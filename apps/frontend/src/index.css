@@ -1079,20 +1079,15 @@ button:active:not(:disabled) {
     cursor: grab;
     touch-action: none;
 }
-.row-drag-handle:not(:disabled):hover,
+.row-drag-handle:hover,
 .row-drag-handle:focus-visible {
     background: var(--color-primary-soft);
     color: var(--color-primary);
     outline: none;
 }
 /* 行悬停时手柄同步提亮：常显 muted 灰保底可辨，悬停即明确"这行可以拖" */
-.managed-table .data-table tbody tr:not(.row-drag-source):hover .row-drag-handle:not(:disabled) {
+.managed-table .data-table tbody tr:not(.row-drag-source):hover .row-drag-handle {
     color: var(--color-primary);
-}
-/* 生效排序下禁拖（顺序来源必须唯一，点表头取消排序后恢复） */
-.row-drag-handle:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
 }
 /* 被拖行原位弱化：不透明 soft 底保住固定列背景，内容降透明度 */
 .managed-table .data-table tbody tr.row-drag-source > td {

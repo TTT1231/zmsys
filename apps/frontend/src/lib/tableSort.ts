@@ -13,8 +13,8 @@ export function nextSortState<K extends string>(current: SortState<K>, key: K): 
 }
 
 /* 三态排序循环（升序 → 降序 → 取消）：仅供支持手动行拖拽的列表页（订单页）使用。
-   取消排序后列表回到数据顺序，手动拖拽才有落点——排序与手动序是互斥的两种顺序来源，
-   点表头排序即作废手动序（页面状态负责联动清理）。其余列表页继续用 nextSortState 两态。 */
+   点表头排序即重排一次并作废手动序；拖拽手动序则暂停当前排序——两种顺序来源
+   按最后一次操作生效（联动由页面状态负责）。其余列表页继续用 nextSortState 两态。 */
 export function cycleSortState<K extends string>(current: SortState<K> | null, key: K): SortState<K> | null {
     if (!current || current.key !== key) return { key, dir: "asc" };
     return current.dir === "asc" ? { key, dir: "desc" } : null;

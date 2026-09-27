@@ -677,12 +677,12 @@ export function OrdersPage() {
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     // 列排序默认升序：默认按订单号；仓管视角默认交货日期（按交期备货）。
-    // 三态循环（升→降→取消）：取消排序后列表回到数据顺序，行拖拽手动排序才可用
+    // 三态循环（升→降→取消）：点表头即按所选序重排一次；拖拽手动序会暂停当前排序，重新点表头才恢复
     const [sort, setSort] = useState<SortState<OrderSortKey> | null>(() => ({
         key: role === "warehouse" ? "deliverDate" : "orderNo",
         dir: "asc",
     }));
-    // 手动行序（纯前端）：拖拽/键盘提交的完整序，仅无排序时生效；排序、筛选、刷新即作废
+    // 手动行序（纯前端）：拖拽/键盘提交的完整序；提交时暂停当前排序，筛选、刷新、重新排序即作废
     const [manualOrder, setManualOrder] = useState<string[] | null>(null);
     // 拖拽态：拖拽中的订单号 + 插入线下标（相对 pageRows，"插到该行前"，n=追加到末尾）
     const [draggingNo, setDraggingNo] = useState<string | null>(null);
@@ -794,11 +794,17 @@ export function OrdersPage() {
 
     const applySort = (key: OrderSortKey) => {
         setSort(current => cycleSortState(current, key));
-        setManualOrder(null); // 点表头排序即作废手动序（顺序来源互斥）
+        setManualOrder(null); // 点表头排序即作废手动序（最后一次操作生效）
     };
-    // 排序或翻页后行序变化，滚动区回到顶部，避免误以为排错行
+    // 排序或翻页后行序变化，滚动区回到顶部，避免误以为排错行；
+    // 拖拽/键盘移动暂停排序的那一次跳过回顶（落点行就在眼前），标记由 submitMove 置位
     const tableScrollRef = useRef<HTMLDivElement>(null);
+    const skipScrollOnceRef = useRef(false);
     useEffect(() => {
+        if (skipScrollOnceRef.current) {
+            skipScrollOnceRef.current = false;
+            return;
+        }
         if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
     }, [page, sort]);
 
@@ -807,11 +813,15 @@ export function OrdersPage() {
        dnd-kit 只做指针层（激活阈值 4px 区分手柄点击与拖拽），不用 sortable 腾位 */
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
     const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
-    // 把 pageRows[from] 移到 insertBefore（"插到该下标行之前"，n=末尾），合流提交完整序
+    // 把 pageRows[from] 移到 insertBefore（"插到该下标行之前"，n=末尾），合流提交完整序；
+    // 有排序时提交即暂停排序（最后一次操作生效：拖动只改变顺序，排序不再参与，点表头才恢复）
     const submitMove = (from: number, insertBefore: number) => {
         if (insertBefore === from || insertBefore === from + 1) return false;
         const visibleNos = pageRows.map(order => order.orderNo);
         const nextVisible = moveItem(visibleNos, from, insertBefore > from ? insertBefore - 1 : insertBefore);
+        // 仅在排序真被暂停的这次置位，否则排序为 null 时 setSort 是空操作，标记会残留误跳下一次回顶
+        if (sort) skipScrollOnceRef.current = true;
+        setSort(null);
         setManualOrder(
             mergeReordered(
                 ordered.map(order => order.orderNo),
@@ -834,13 +844,16 @@ export function OrdersPage() {
                 centerY: rect.top + rect.height / 2,
             };
             setGhostTop(rect.top);
+            setGhostLeft(rect.left);
         }
         setDraggingNo(no);
     };
     /* 浮层几何自管理：DragOverlay 在 React 19 下不挂载（translated rect 恒 null），
        改用 dnd-kit 的 delta 坐标自绘精简浮层，插入线以浮层中心越行缘判定 */
     const dragGhostRef = useRef<{ baseTop: number; height: number; left: number; centerY: number } | null>(null);
+    // 浮层渲染位置走 state（渲染期不读 ref）：left 拖拽中不变，top 逐帧跟随
     const [ghostTop, setGhostTop] = useState(0);
+    const [ghostLeft, setGhostLeft] = useState(0);
     const computeDrop = (centerY: number) => {
         let index = pageRows.length;
         for (let i = 0; i < pageRows.length; i++) {
@@ -854,6 +867,12 @@ export function OrdersPage() {
         }
         setDropIndex(current => (current === index ? current : index));
     };
+    // 边缘自动滚动的 rAF effect 只挂 draggingNo：拖拽中逐帧重渲染，不能把随帧变化的
+    // computeDrop 拖进依赖重启循环，经 ref 取最新闭包
+    const computeDropRef = useRef(computeDrop);
+    useEffect(() => {
+        computeDropRef.current = computeDrop;
+    });
     const onDragMove = (event: DragMoveEvent) => {
         const ghost = dragGhostRef.current;
         if (!ghost) return;
@@ -923,15 +942,13 @@ export function OrdersPage() {
                 }
                 if (depth > 0) {
                     scroller.scrollTop += dir * Math.max(2, MAX * Math.min(1, depth));
-                    computeDrop(ghost.centerY);
+                    computeDropRef.current(ghost.centerY);
                 }
             }
             raf = requestAnimationFrame(tick);
         };
         raf = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(raf);
-        // 拖拽期间 pageRows 不变（翻页/筛选都会先结束拖拽），computeDrop 闭包安全
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [draggingNo]);
 
     // 清空条件只作用于筛选行（搜索/状态/品类/交期）；快捷 tab 由用户自行切换
@@ -1035,7 +1052,10 @@ export function OrdersPage() {
                     <MobileSortSelect
                         columns={ORDER_SORT_COLUMNS}
                         value={sort}
-                        onChange={setSort}
+                        onChange={next => {
+                            setSort(next);
+                            setManualOrder(null); // 与桌面表头一致：重新选择排序（含回到默认顺序）即作废手动序
+                        }}
                         noneLabel="默认顺序"
                     />
                     <details className="relative">
@@ -1306,7 +1326,6 @@ export function OrdersPage() {
                                                 <td className="drag-col">
                                                     <RowDragHandle
                                                         orderNo={order.orderNo}
-                                                        sortActive={!!sort}
                                                         sortLabel={
                                                             sort
                                                                 ? ORDER_SORT_COLUMNS.find(col => col.key === sort.key)
@@ -1401,9 +1420,8 @@ export function OrdersPage() {
                             {draggingNo
                                 ? (() => {
                                       const order = pageRows.find(item => item.orderNo === draggingNo);
-                                      const ghost = dragGhostRef.current;
-                                      return order && ghost ? (
-                                          <DragGhost order={order} style={{ top: ghostTop, left: ghost.left }} />
+                                      return order ? (
+                                          <DragGhost order={order} style={{ top: ghostTop, left: ghostLeft }} />
                                       ) : null;
                                   })()
                                 : null}
@@ -1465,28 +1483,25 @@ export function OrdersPage() {
 }
 
 /* 行拖拽手柄：dnd-kit 指针层挂在此按钮（listeners 只挂手柄，避免与行内链接/文本选择冲突）；
-   生效排序下禁拖（顺序来源必须唯一），键盘 ↑/↓ 微调同一入口 */
+   有排序时也可拖——拖动即暂停该排序（最后一次操作生效），键盘 ↑/↓ 微调同一入口 */
 function RowDragHandle({
     orderNo,
-    sortActive,
     sortLabel,
     onArrowKey,
 }: {
     orderNo: string;
-    sortActive: boolean;
     sortLabel?: string;
     onArrowKey: (event: ReactKeyboardEvent<HTMLButtonElement>, orderNo: string) => void;
 }) {
-    const { attributes, listeners } = useDraggable({ id: orderNo, disabled: sortActive });
+    const { attributes, listeners } = useDraggable({ id: orderNo });
     return (
         <button
             type="button"
             className="row-drag-handle"
-            disabled={sortActive}
             title={
-                sortActive && sortLabel
-                    ? `当前按「${sortLabel}」排序，点击表头取消排序后可手动调整`
-                    : "拖拽调整顺序：仅改变当前视图显示，刷新后恢复"
+                sortLabel
+                    ? `当前按「${sortLabel}」排序，拖拽调整将暂停该排序，点击表头可重新排序`
+                    : "拖拽调整顺序：仅改变当前视图显示，刷新或重新排序后恢复"
             }
             aria-label={`拖拽调整 ${orderNo} 的显示顺序，聚焦后可用上下方向键移动`}
             onKeyDown={event => onArrowKey(event, orderNo)}

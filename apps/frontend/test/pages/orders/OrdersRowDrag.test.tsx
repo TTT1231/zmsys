@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-/* 行拖拽手动排序：生效排序下手柄禁用；三击表头取消排序后启用；键盘 ↑/↓ 换行与行位播报；
-   重新点表头排序即作废手动序。指针拖拽链路（dnd-kit + 插入线几何）依赖真实布局，
-   属运行时验证项；键盘路径与拖拽共用同一提交函数，此处覆盖该路径。 */
+/* 行拖拽手动排序：排序生效时手柄同样可用，拖拽/键盘提交即暂停当前排序（最后一次操作生效）；
+   重新点表头排序恢复排序并作废手动序；键盘 ↑/↓ 换行与行位播报。
+   指针拖拽链路（dnd-kit + 插入线几何）依赖真实布局，属运行时验证项；
+   键盘路径与拖拽共用同一提交函数，此处覆盖该路径。 */
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
@@ -43,62 +44,59 @@ const orderNos = () =>
         );
 const handleOf = (orderNo: string) =>
     screen.getByRole("button", { name: `拖拽调整 ${orderNo} 的显示顺序，聚焦后可用上下方向键移动` });
+const orderNoSortState = () => screen.getByRole("columnheader", { name: /销售订单号/ }).getAttribute("aria-sort");
 
-const cancelSort = () => {
-    // 三态循环：默认升序 → 降序 → 取消（列表回到数据顺序，手柄才可用）
-    const header = screen.getByRole("button", { name: /销售订单号/ });
-    fireEvent.click(header);
-    fireEvent.click(header);
-};
-
-it("默认带排序时手柄禁用，悬停提示先取消排序", () => {
+it("排序生效时手柄同样可用，悬停提示拖拽将暂停排序", () => {
     render(
         <MemoryRouter>
             <OrdersPage />
         </MemoryRouter>,
     );
-    expect(handleOf("SO-001")).toBeDisabled();
-    expect(handleOf("SO-001")).toHaveAttribute("title", "当前按「销售订单号」排序，点击表头取消排序后可手动调整");
+    expect(handleOf("SO-001")).toBeEnabled();
+    expect(handleOf("SO-001")).toHaveAttribute(
+        "title",
+        "当前按「销售订单号」排序，拖拽调整将暂停该排序，点击表头可重新排序",
+    );
 });
 
-it("取消排序后手柄启用，键盘 ↓/↑ 换行并播报行位", () => {
+it("排序生效下键盘移动即暂停排序，落位按当前显示序", () => {
     render(
         <MemoryRouter>
             <OrdersPage />
         </MemoryRouter>,
     );
-    cancelSort();
-    expect(handleOf("SO-001")).toBeEnabled();
     fireEvent.keyDown(handleOf("SO-001"), { key: "ArrowDown" });
     expect(orderNos()).toEqual(["SO-002", "SO-001", "SO-003"]);
     expect(toastSpy).toHaveBeenCalledWith("已移至第 2 行，共 3 行");
+    // 排序被暂停：aria-sort 回到 none，手柄提示切回手动序文案；此后仍可继续微调
+    expect(orderNoSortState()).toBe("none");
+    expect(handleOf("SO-001")).toHaveAttribute("title", "拖拽调整顺序：仅改变当前视图显示，刷新或重新排序后恢复");
     fireEvent.keyDown(handleOf("SO-001"), { key: "ArrowUp" });
     expect(orderNos()).toEqual(["SO-001", "SO-002", "SO-003"]);
 });
 
-it("首位再上移、末位再下移均为原地不动", () => {
+it("暂停排序后重新点表头即恢复排序，作废手动序", () => {
     render(
         <MemoryRouter>
             <OrdersPage />
         </MemoryRouter>,
     );
-    cancelSort();
-    fireEvent.keyDown(handleOf("SO-001"), { key: "ArrowUp" });
-    fireEvent.keyDown(handleOf("SO-003"), { key: "ArrowDown" });
-    expect(orderNos()).toEqual(["SO-001", "SO-002", "SO-003"]);
-    expect(toastSpy).not.toHaveBeenCalled();
-});
-
-it("重新点表头排序即作废手动序，手柄回到禁用", () => {
-    render(
-        <MemoryRouter>
-            <OrdersPage />
-        </MemoryRouter>,
-    );
-    cancelSort();
     fireEvent.keyDown(handleOf("SO-001"), { key: "ArrowDown" });
     expect(orderNos()).toEqual(["SO-002", "SO-001", "SO-003"]);
     fireEvent.click(screen.getByRole("button", { name: /销售订单号/ }));
     expect(orderNos()).toEqual(["SO-001", "SO-002", "SO-003"]);
-    expect(handleOf("SO-001")).toBeDisabled();
+    expect(orderNoSortState()).toBe("ascending");
+});
+
+it("首位再上移、末位再下移均为原地不动，不播报也不暂停排序", () => {
+    render(
+        <MemoryRouter>
+            <OrdersPage />
+        </MemoryRouter>,
+    );
+    fireEvent.keyDown(handleOf("SO-001"), { key: "ArrowUp" });
+    fireEvent.keyDown(handleOf("SO-003"), { key: "ArrowDown" });
+    expect(orderNos()).toEqual(["SO-001", "SO-002", "SO-003"]);
+    expect(toastSpy).not.toHaveBeenCalled();
+    expect(orderNoSortState()).toBe("ascending");
 });
