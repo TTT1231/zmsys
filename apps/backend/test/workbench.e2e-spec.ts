@@ -35,7 +35,6 @@ describe("工作台聚合 (e2e)", () => {
     let superToken: string;
     let warehouseToken: string;
     let orderNo: string;
-    let cancelledOrderNo: string;
     let shipmentNo: string;
     let baseline: { stock: number; inbound: number; outbound: number };
 
@@ -148,7 +147,7 @@ describe("工作台聚合 (e2e)", () => {
             });
         }
 
-        // 测试客户与两笔订单（100 件主流程 + 30 件待取消）
+        // 测试客户与主流程订单（100 件）
         const customerRes = await post(
             "/api/customers",
             superToken,
@@ -184,22 +183,6 @@ describe("工作台聚合 (e2e)", () => {
         );
         expect(orderRes.statusCode).toBe(200);
         orderNo = orderRes.json().data.orderNo;
-
-        const cancelledRes = await post(
-            "/api/orders",
-            superToken,
-            {
-                customerCode,
-                bomCode: BOM_CODE,
-                qty: 30,
-                deliverDate: "2027-06-30",
-                orderDate: today(),
-                remark: `e2e 工作台取消订单 ${RUN}`,
-            },
-            `e2e-wb-${RUN}-order2`,
-        );
-        expect(cancelledRes.statusCode).toBe(200);
-        cancelledOrderNo = cancelledRes.json().data.orderNo;
 
         baseline = snapshotOf(await overview());
     });
@@ -251,7 +234,6 @@ describe("工作台聚合 (e2e)", () => {
         const data = await overview();
         const order = data.orders.find(item => item.no === orderNo);
         expect(order).toMatchObject({ no: orderNo, bomCode: BOM_CODE, qty: 100, shipped: 40 });
-        expect(order?.cancelled).toBeUndefined();
         expect(data.products.find(item => item.code === BOM_CODE)?.stock).toBe(baseline.stock + 60 - 40);
 
         const movement = data.movements.find(row => row.bomCode === BOM_CODE && row.date === today());
@@ -272,23 +254,5 @@ describe("工作台聚合 (e2e)", () => {
         expect(data.products.find(item => item.code === BOM_CODE)?.stock).toBe(baseline.stock + 60);
         const movement = data.movements.find(row => row.bomCode === BOM_CODE && row.date === today());
         expect(movement).toMatchObject({ inbound: baseline.inbound + 60, outbound: baseline.outbound });
-    });
-
-    it("取消订单在总览中带 cancelled 标记", async () => {
-        const cancelled = await post(
-            `/api/orders/${cancelledOrderNo}/cancel`,
-            superToken,
-            { expectedVersion: 1, reason: "客户临时撤单" },
-            `e2e-wb-${RUN}-cancel`,
-        );
-        expect(cancelled.statusCode).toBe(200);
-
-        const data = await overview();
-        expect(data.orders.find(item => item.no === cancelledOrderNo)).toMatchObject({
-            no: cancelledOrderNo,
-            qty: 30,
-            shipped: 0,
-            cancelled: true,
-        });
     });
 });

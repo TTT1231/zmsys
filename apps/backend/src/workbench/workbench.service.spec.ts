@@ -1,4 +1,4 @@
-// WorkbenchService 真实聚合映射：产品快照派生与缺行库存、订单净额缺行与取消标记、
+// WorkbenchService 真实聚合映射：产品快照派生与缺行库存、订单净额缺行与归档标记、
 // 出入库按业务日合并（同日出入一行、跨日冲销净额）、单位推导（唯一/混合）
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkbenchService } from "./workbench.service";
@@ -26,7 +26,7 @@ interface OrderFixture {
     id: bigint;
     orderNo: string;
     qty: number;
-    lifecycleStatus: "ACTIVE" | "CANCELLED" | "ARCHIVED";
+    lifecycleStatus: "ACTIVE" | "ARCHIVED";
     orderDate: Date;
     deliverDate: Date;
     customer: { customerCode: string; name: string };
@@ -58,7 +58,7 @@ const orders: OrderFixture[] = [
         id: 22n,
         orderNo: "ZM2609120002",
         qty: 500,
-        lifecycleStatus: "CANCELLED",
+        lifecycleStatus: "ACTIVE",
         orderDate: day("2026-09-02"),
         deliverDate: day("2026-09-16"),
         customer: { customerCode: "CUS-0002", name: "宁波方太厨具有限公司" },
@@ -139,7 +139,7 @@ describe("WorkbenchService.getOverview", () => {
         ]);
     });
 
-    it("订单 shipped 取视图净额（缺行 0），取消/归档订单分别带 cancelled/archived 标记，日期为 yyyy-MM-dd", () => {
+    it("订单 shipped 取视图净额（缺行 0），归档订单带 archived 标记，日期为 yyyy-MM-dd", () => {
         expect(data.orders).toEqual([
             {
                 no: "ZM2609120001",
@@ -160,7 +160,6 @@ describe("WorkbenchService.getOverview", () => {
                 due: "2026-09-16",
                 qty: 500,
                 shipped: 120,
-                cancelled: true,
             },
             {
                 no: "ZM2609120003",

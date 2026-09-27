@@ -23,7 +23,6 @@ export const PERMISSIONS = {
     ORDERS_VIEW: "orders:view",
     ORDERS_CREATE: "orders:create",
     ORDERS_EDIT: "orders:edit",
-    ORDERS_CANCEL: "orders:cancel",
     ORDERS_DELETE: "orders:delete", // 受保护
     ORDERS_ARCHIVE: "orders:archive", // 受保护
 

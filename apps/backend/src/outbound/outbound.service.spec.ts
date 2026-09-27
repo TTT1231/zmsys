@@ -50,9 +50,6 @@ const mkOrder = (overrides: Partial<OrderRow> = {}): OrderRow =>
         bomModelSnapshot: "",
         bomSpecSnapshot: BOM_SNAPSHOT,
         lifecycleStatus: "ACTIVE",
-        cancelledAt: null,
-        cancelledBy: null,
-        cancelReason: null,
         deletedAt: null,
         rowVersion: 1n,
         requestKey: "req-order",
@@ -264,14 +261,9 @@ describe("OutboundService.createOutbound", () => {
         ({ service } = mkService(store));
     });
 
-    it("订单不存在 404；已取消订单 409；可发量不足 409", async () => {
+    it("订单不存在 404；可发量不足 409", async () => {
         await expect(service.createOutbound({ ...shipInput, orderNo: "ZM999999999" }, actor, ID_KEY)).rejects.toThrow(
             new NotFoundException("订单不存在"),
-        );
-
-        store.orders[0] = mkOrder({ lifecycleStatus: "CANCELLED" });
-        await expect(service.createOutbound(shipInput, actor, ID_KEY)).rejects.toThrow(
-            new ConflictException("订单已取消，不能登记发货"),
         );
 
         // 归档是终态：不再接收任何发货（显式拦截给出准确文案，不经可发量兜底）
@@ -460,9 +452,9 @@ describe("OutboundService.printOutboundDocument", () => {
         expect(store.shipments[0]).toMatchObject({ state: "VOIDED", rowVersion: 2n });
     });
 
-    it("订单已取消的出库单仍可打印（打印不校验订单状态）", async () => {
+    it("订单已归档的出库单仍可打印（打印不校验订单状态）", async () => {
         const store = emptyStore();
-        store.shipments.push(mkShipment({ order: mkOrder({ lifecycleStatus: "CANCELLED" }) }));
+        store.shipments.push(mkShipment({ order: mkOrder({ lifecycleStatus: "ARCHIVED" }) }));
         const { service } = mkService(store);
         const document = await service.printOutboundDocument("CK26091301", actor);
         expect(document).toMatchObject({ state: "registered", no: "CK26091301" });

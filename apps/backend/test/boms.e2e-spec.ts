@@ -241,7 +241,7 @@ describe("BOM/成品档案 (e2e)", () => {
         const created = res.json().data;
         expect(created.code).toBe(`XK2${String(rotaryBefore + 1).padStart(3, "0")}`);
         expect(created).toMatchObject({ name: "旋转XK2", modelCode: "1-1", unit: "个" });
-        expect(created.created).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(created.created).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
         expect(created.items.map((item: { name: string }) => item.name)).toEqual(["1-1", "正面", "三脚银点", "0.5"]);
         expect(created.spec).toBe("型号：1-1 · 方向：正面 · A面：三脚银点 · 弹簧：0.5");
 

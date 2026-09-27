@@ -81,9 +81,6 @@ const mkOrder = (overrides: Partial<SalesOrderTable>): SalesOrderTable =>
         bomNameSnapshot: "新微动",
         bomModelSnapshot: "KW",
         bomSpecSnapshot: {},
-        cancelledAt: null,
-        cancelledBy: null,
-        cancelReason: null,
         rowVersion: 1n,
         requestKey: "req",
         createdBy: 1n,
@@ -286,7 +283,7 @@ describe("CustomersService.listCustomers", () => {
         const store: Store = {
             users: new Map(),
             customers: [mkCustomer(900n, 200n)],
-            orders: [mkOrder({ customerId: 900n, orderDate: new Date(), lifecycleStatus: "CANCELLED" as const })],
+            orders: [mkOrder({ customerId: 900n, orderDate: new Date(), lifecycleStatus: "ARCHIVED" as const })],
             ownerHistories: [],
             opLogs: [],
         };

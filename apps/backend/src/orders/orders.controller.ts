@@ -5,15 +5,14 @@ import { PERMISSIONS } from "../constants";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { CreateOrderDto } from "./dto/create-order.dto";
 import { UpdateOrderDto } from "./dto/update-order.dto";
-import { CancelOrderDto } from "./dto/cancel-order.dto";
 import { ArchiveOrderDto } from "./dto/archive-order.dto";
 import { DeleteOrderDto } from "./dto/delete-order.dto";
 import type { AuthUser } from "../common/types/auth-user";
 import type { Order } from "./types";
 
-/** 销售订单（openapi orders tag）：取消/归档均为生命周期终态；净发货为零且
+/** 销售订单（openapi orders tag）：归档为生命周期终态；净发货为零且
  * 关联出库单已删除的订单可由超级管理员软删除（专用端点 :orderNo/delete）；
- * 已完成/部分发货/已取消的订单由超级管理员归档（:orderNo/archive）退出活跃视图 */
+ * 已完成/部分发货的订单由超级管理员归档（:orderNo/archive）退出活跃视图 */
 @Controller("orders")
 export class OrdersController {
     constructor(private readonly ordersService: OrdersService) {}
@@ -43,18 +42,6 @@ export class OrdersController {
         @CurrentUser() actor: AuthUser,
     ): Promise<Order> {
         return this.ordersService.updateOrder(orderNo, dto, actor);
-    }
-
-    @Post(":orderNo/cancel")
-    @Permissions([PERMISSIONS.ORDERS_CANCEL], "无权取消订单")
-    @HttpCode(HttpStatus.OK)
-    async cancelOrder(
-        @Param("orderNo") orderNo: string,
-        @Body() dto: CancelOrderDto,
-        @CurrentUser() actor: AuthUser,
-        @Headers("idempotency-key") idempotencyKey: string | undefined,
-    ): Promise<Order> {
-        return this.ordersService.cancelOrder(orderNo, dto, actor, idempotencyKey);
     }
 
     @Post(":orderNo/archive")

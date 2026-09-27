@@ -46,10 +46,10 @@ enum ApiIdempotencyState {
   SUCCEEDED
 }
 
-/// sales_order_table.lifecycle_status：活动订单、已取消订单与已归档订单（归档为最终终态）
+/// sales_order_table.lifecycle_status：活动订单与已归档订单（归档为最终终态；
+/// 一件未发不要了直接删除，发过货不要了归档结案——没有取消生命周期）
 enum SalesOrderLifecycleStatus {
   ACTIVE
-  CANCELLED
   ARCHIVED
 }
 
@@ -57,7 +57,6 @@ enum SalesOrderLifecycleStatus {
 enum SalesOrderChangeEventType {
   CREATE
   UPDATE
-  CANCEL
   ARCHIVE
 }
 
@@ -167,7 +166,6 @@ model SysUser {
   ownerHistoryFrom      CustomerOwnerHistory[] @relation("OwnerHistoryFrom")
   ownerHistoryTo        CustomerOwnerHistory[] @relation("OwnerHistoryTo")
   ownerHistoryOperator  CustomerOwnerHistory[] @relation("OwnerHistoryOperator")
-  cancelledOrders       SalesOrderTable[]      @relation("SalesOrderCanceller")
   archivedOrders        SalesOrderTable[]      @relation("SalesOrderArchiver")
   createdOrders         SalesOrderTable[]      @relation("SalesOrderCreator")
   updatedOrders         SalesOrderTable[]      @relation("SalesOrderUpdater")
@@ -454,7 +452,7 @@ model CustomerOwnerHistory {
   @@map("customer_owner_history")
 }
 
-/// 销售订单：下单即冻结客户/BOM 快照；取消为生命周期终态，不物理删除
+/// 销售订单：下单即冻结客户/BOM 快照；归档为生命周期终态，不物理删除
 model SalesOrderTable {
   id                  BigInt                     @id
   orderNo             String                     @unique(map: "uk_sales_order_no") @map("order_no") @db.VarChar(24)
@@ -469,9 +467,6 @@ model SalesOrderTable {
   bomNameSnapshot     String                     @map("bom_name_snapshot") @db.VarChar(64)
   bomModelSnapshot    String                     @map("bom_model_snapshot") @db.VarChar(64)
   bomSpecSnapshot     Json                       @map("bom_spec_snapshot")
-  cancelledAt         DateTime?                  @map("cancelled_at") @db.DateTime(3)
-  cancelledBy         BigInt?                    @map("cancelled_by")
-  cancelReason        String?                    @map("cancel_reason") @db.VarChar(500)
   archivedAt          DateTime?                  @map("archived_at") @db.DateTime(3)
   archivedBy          BigInt?                    @map("archived_by")
   archiveReason       String?                    @map("archive_reason") @db.VarChar(500)
@@ -484,7 +479,6 @@ model SalesOrderTable {
   updatedAt           DateTime                   @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
   customer            CustomTable                @relation(fields: [customerId], references: [id])
   bom                 BomTable                   @relation(fields: [bomId], references: [id])
-  canceller           SysUser?                   @relation("SalesOrderCanceller", fields: [cancelledBy], references: [id])
   archiver            SysUser?                   @relation("SalesOrderArchiver", fields: [archivedBy], references: [id])
   creator             SysUser                    @relation("SalesOrderCreator", fields: [createdBy], references: [id])
   updater             SysUser                    @relation("SalesOrderUpdater", fields: [updatedBy], references: [id])
@@ -497,7 +491,7 @@ model SalesOrderTable {
   @@map("sales_order_table")
 }
 
-/// 订单变更日志：CREATE/CANCEL 必带 request_key（幂等键回写业务行）
+/// 订单变更日志：CREATE/ARCHIVE 必带 request_key（幂等键回写业务行）
 model SalesOrderChangeLog {
   id             BigInt                    @id
   orderId        BigInt                    @map("order_id")
