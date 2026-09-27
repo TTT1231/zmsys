@@ -96,7 +96,8 @@ const EMPTY_ARM = Prisma.sql`SELECT NULL AS id, NULL AS created_at, NULL AS acto
 
 /**
  * 系统日志聚合查询（契约 system-logs:view，仅 super）：四来源 UNION ALL——
- * op_log（13 动作全量；customer 域唯一卡片源，离岗批量移交亦写 op_log）、
+ * op_log（13 种业务动作；db_backup/db_restore 为系统审计，不进入业务时间线；
+ * customer 域唯一卡片源，离岗批量移交亦写 op_log）、
  * sales_order_change_log（仅 UPDATE；CREATE/ARCHIVE 由 op_log 出，天然去重；
  * 订单物理清理时同事务先删日志，FK 保证无孤儿行，直接 INNER JOIN）、
  * inbound_change_log（仅 UPDATE，当天窗口修正台账）、stock_adjustment（追加表
@@ -177,7 +178,7 @@ export class SystemLogsService {
         return base;
     }
 
-    /** 臂一：op_log 全量动作（update_customer 按 ownerChanged 拆分 transfer/edit） */
+    /** 臂一：op_log 业务动作（update_customer 按 ownerChanged 拆分 transfer/edit） */
     private opLogArm(
         query: SystemLogsQueryDto,
         window: { start: Date; end: Date },
@@ -204,7 +205,10 @@ export class SystemLogsService {
                 "JSON_UNQUOTE(JSON_EXTRACT(o.detail_json, '$.name')), " +
                 "JSON_UNQUOTE(JSON_EXTRACT(o.detail_json, '$.after.name')))",
         );
-        const filters: Prisma.Sql[] = [this.rangeFilters("o", window, cursorAt, cursorId)];
+        const filters: Prisma.Sql[] = [
+            this.rangeFilters("o", window, cursorAt, cursorId),
+            Prisma.sql` AND o.action IN (${Prisma.join(Object.keys(OP_LOG_DOMAIN))})`,
+        ];
         if (query.domain !== undefined) {
             filters.push(Prisma.sql` AND o.action IN (${Prisma.raw(actionsOfDomain(query.domain))})`);
         }

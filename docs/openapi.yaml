@@ -836,12 +836,13 @@ paths:
             operationId: listSystemLogs
             summary: 系统日志时间线（分批追加）
             description: |
-                受保护权限 `system-logs:view`，仅 super。聚合四来源为统一事件流：op_log
+                受保护权限 `system-logs:view`，仅 super。聚合四来源为统一业务事件流：op_log
                 （订单创建/归档/删除、客户创建/编辑/负责人移交（含离岗批量移交）、BOM
                 创建/删除、入库创建/作废/删除、出库登记发货/作废/删除）、
                 sales_order_change_log（仅 UPDATE 的编辑明细）、inbound_change_log（仅
                 UPDATE 的当天修正）、stock_adjustment（库存调整，domain=inbound、
-                action=adjust）。当前留存策略下的全量覆盖——订单/入库的编辑明细日志随
+                action=adjust）。同表的 db_backup/db_restore 是系统审计动作，不进入此业务时间线。
+                上述业务动作在当前留存策略下全量覆盖——订单/入库的编辑明细日志随
                 订单物理清理而消失，属有限留存而非永久历史审计。
 
                 分批为 (occurredAt, id) 复合游标（加载更多语义）：首批不带游标，后续
@@ -907,6 +908,7 @@ paths:
             operationId: getBackupCatalog
             summary: 备份分组目录
             description: |
+                受保护权限 `system-backup:run`，仅 super；单独持有备份菜单码无权访问。
                 返回业务域分组（key/label/tables/dependsOn）与全部分组键。完整备份＝
                 目录全集（动态计算）；恢复维护期间放行（只读白名单）。
             responses:
@@ -938,6 +940,7 @@ paths:
             operationId: runBackup
             summary: 执行备份并流式下载
             description: |
+                受保护权限 `system-backup:run`，仅 super。
                 按分组闭包导出数据快照（zmsys-backup v1 格式，仅数据不含 DDL），
                 以 application/sql 或 application/gzip 附件流式返回。响应头
                 content-disposition 携带文件名。先写「发起备份」op_log(db_backup)
@@ -973,6 +976,7 @@ paths:
             operationId: previewRestore
             summary: 恢复文件预检
             description: |
+                受保护权限 `system-restore:run`，仅 super；单独持有恢复菜单码无权访问。
                 上传统一格式备份文件（512MiB 上限，gzip 按魔数识别），完整校验
                 checksum/文法/schema 指纹/迁移基线后返回 meta 与 canReplace。
                 只读不落任何业务数据。
@@ -1002,6 +1006,7 @@ paths:
             operationId: runRestore
             summary: 提交恢复任务（异步）
             description: |
+                受保护权限 `system-restore:run`，仅 super。
                 multipart 字段须置于文件之前：mode=merge|replace、ack（merge 须 RESTORE /
                 replace 须 REPLACE）、requestKey（8-64 位提交身份）。requestKey 为幂等身份：
                 同 key 同文件同模式重提返回 200 原终态；异文件/模式 409。受理返回 202 后
@@ -1043,6 +1048,7 @@ paths:
             tags: [system]
             operationId: getRestoreJob
             summary: 按 jobId 查询恢复任务
+            description: 受保护权限 `system-restore:run`，仅 super；维护期可查询。
             parameters:
                 - name: id
                   in: path
@@ -1064,6 +1070,7 @@ paths:
             operationId: getRestoreJobByKey
             summary: 凭 requestKey 查询恢复任务（维护期放行）
             description: |
+                受保护权限 `system-restore:run`，仅 super；单独持有恢复菜单码无权访问。
                 断线/刷新/重登录后凭客户端自存的 requestKey 查询。恢复维护期间该端点
                 放行（只读白名单）。返回 UNKNOWN 表示提交结果核实中（保持维护，禁止重跑）。
             parameters:

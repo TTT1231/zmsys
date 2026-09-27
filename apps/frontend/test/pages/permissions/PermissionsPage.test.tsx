@@ -2,11 +2,11 @@
 /* 权限页受保护菜单一致性：全选与保存不写入 protected 菜单及其子菜单
  * （勾给普通角色必被后端拒绝，前后端口径必须一致）。 */
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { PermissionsPage } from "@/pages/permissions/PermissionsPage";
-import { DEFAULT_GRANTS } from "@/data/permissions";
+import { DEFAULT_GRANTS, MENU_CATALOG } from "@/data/permissions";
 import type { GrantMap, RoleGrant } from "@/data/permissions";
 
 const mutate = vi.fn();
@@ -73,4 +73,33 @@ it("菜单勾选区不渲染受保护菜单（不可勾给普通角色）", () =
     expect(menuSection.textContent).not.toContain("系统日志");
     expect(menuSection.textContent).not.toContain("用户与权限");
     expect(screen.queryByLabelText("权限矩阵")).toBeNull();
+});
+
+it("系统组矩阵不把普通角色的脏菜单授权显示为可访问", () => {
+    const probeKey = "system-evidence-test";
+    MENU_CATALOG.push({ key: probeKey, label: "系统权限验证", icon: "log", group: "系统" });
+    const originalSuperGrant = DEFAULT_GRANTS.super;
+    const originalStaffGrant = DEFAULT_GRANTS.staff;
+    DEFAULT_GRANTS.super = { ...originalSuperGrant, menus: [...originalSuperGrant.menus, probeKey] };
+    DEFAULT_GRANTS.staff = {
+        ...originalStaffGrant,
+        menus: [...originalStaffGrant.menus, probeKey],
+    };
+    try {
+        render(
+            <MemoryRouter>
+                <PermissionsPage />
+            </MemoryRouter>,
+        );
+        fireEvent.click(screen.getByRole("tab", { name: "权限矩阵" }));
+        const row = screen.getByRole("row", { name: /系统权限验证/ });
+        const cells = within(row).getAllByRole("cell");
+        expect(cells).toHaveLength(5);
+        expect(cells[0]).toHaveTextContent("可见");
+        expect(cells[4]).toHaveTextContent("—");
+    } finally {
+        MENU_CATALOG.pop();
+        DEFAULT_GRANTS.super = originalSuperGrant;
+        DEFAULT_GRANTS.staff = originalStaffGrant;
+    }
 });

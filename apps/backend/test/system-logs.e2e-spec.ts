@@ -346,6 +346,31 @@ describe("系统日志 (e2e)", () => {
         expect(denied.message).toBe("仅超级管理员可查看系统日志");
     });
 
+    it("备份与恢复审计留在 op_log，不混入业务时间线", async () => {
+        const targetCode = `e2e-system-audit-${RUN}`;
+        await prisma.opLog.createMany({
+            data: (["db_backup", "db_restore"] as const).map(action => ({
+                id: snowflake.next(),
+                operatorId: 1n,
+                operatorNameSnapshot: "郭均",
+                operatorRoleSnapshot: "super",
+                action,
+                targetType: "system",
+                targetId: 0n,
+                targetCode,
+                detailJson: {},
+                createdAt: new Date(),
+            })),
+        });
+        try {
+            const page = await logs(superToken, `?keyword=${targetCode}&limit=100`);
+            expect(page.statusCode).toBe(200);
+            expect(entriesOf(page)).toEqual([]);
+        } finally {
+            await prisma.opLog.deleteMany({ where: { targetCode } });
+        }
+    });
+
     it("订单域聚合：create/edit/archive 三来源（op_log×2 + change_log）且字段形态完整", async () => {
         const page = await logs(superToken, `?domain=order&keyword=${orderNo}&limit=100`);
         expect(page.statusCode).toBe(200);

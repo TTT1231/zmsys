@@ -1,6 +1,6 @@
 /**
- * 系统备份/恢复端点（实施计划 §4）：全部业务端点检查 protected ACTION 权限
- * （menu 码用于只读查询），前端 onlyFor 仅控制展示。
+ * 系统备份/恢复端点：全部端点检查受保护的执行权限，
+ * 包括目录、预检和任务查询；前端 onlyFor 仅控制展示。
  *
  * - POST system/backup/run：流式下载（@Res + reply.send），先写「发起备份」op_log；
  * - POST system/restore/preview|run：multipart（mode + ack + requestKey + file），
@@ -68,7 +68,7 @@ export class SystemController {
     constructor(private readonly systemService: SystemService) {}
 
     @Get("backup/catalog")
-    @Permissions([PERMISSIONS.MENU_SYSTEM_BACKUP], "无权查看备份目录")
+    @Permissions([PERMISSIONS.SYSTEM_BACKUP_RUN], "无权查看备份目录")
     async getCatalog() {
         return this.systemService.getBackupCatalog();
     }
@@ -81,7 +81,7 @@ export class SystemController {
     }
 
     @Post("restore/preview")
-    @Permissions([PERMISSIONS.MENU_SYSTEM_RESTORE], "无权预检恢复文件")
+    @Permissions([PERMISSIONS.SYSTEM_RESTORE_RUN], "无权预检恢复文件")
     @HttpCode(HttpStatus.OK)
     async previewRestore(@Req() request: RequestLike) {
         const { temp } = await this.consumeUpload(request);
@@ -113,7 +113,7 @@ export class SystemController {
     }
 
     @Get("restore/jobs/key/:requestKey")
-    @Permissions([PERMISSIONS.MENU_SYSTEM_RESTORE], "无权查询恢复任务")
+    @Permissions([PERMISSIONS.SYSTEM_RESTORE_RUN], "无权查询恢复任务")
     async getJobByKey(@Param("requestKey") requestKey: string) {
         const job = await this.systemService.getJobByKey(requestKey);
         if (!job) {
@@ -123,7 +123,7 @@ export class SystemController {
     }
 
     @Get("restore/jobs/:id")
-    @Permissions([PERMISSIONS.MENU_SYSTEM_RESTORE], "无权查询恢复任务")
+    @Permissions([PERMISSIONS.SYSTEM_RESTORE_RUN], "无权查询恢复任务")
     async getJobById(@Param("id") id: string) {
         const job = await this.systemService.getJobById(id);
         if (!job) {

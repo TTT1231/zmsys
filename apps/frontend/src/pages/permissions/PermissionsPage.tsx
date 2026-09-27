@@ -1073,7 +1073,11 @@ function MatrixTab() {
                                 </th>
                                 {ROLES.map(role => {
                                     const grant = grants[role.id];
-                                    if (!grant.menus.includes(menu.key)) {
+                                    // 系统接口按受保护动作校验；普通角色即使出现脏菜单授权行也无访问权。
+                                    if (
+                                        (menu.group === "系统" && role.id !== "super") ||
+                                        !grant.menus.includes(menu.key)
+                                    ) {
                                         return (
                                             <td
                                                 key={role.id}

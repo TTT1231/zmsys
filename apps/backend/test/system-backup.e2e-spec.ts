@@ -248,6 +248,33 @@ describe("应用内备份/恢复 (e2e)", () => {
         expect(denied.status).toBe(403);
     });
 
+    it("普通角色即使持有系统菜单码，也不能读取备份目录或恢复任务", async () => {
+        const codes = ["menu:system-backup", "menu:system-restore"];
+        await prisma.sysGrant.createMany({
+            data: codes.map(permissionCode => ({
+                roleCode: "staff",
+                permissionCode,
+                grantSource: "USER" as const,
+                grantedBy: 1n,
+                grantedAt: new Date(),
+            })),
+        });
+        try {
+            const token = await login("test", "123456");
+            for (const [method, url] of [
+                ["GET", "/api/system/backup/catalog"],
+                ["POST", "/api/system/restore/preview"],
+                ["GET", `/api/system/restore/jobs/key/${newKey()}`],
+                ["GET", "/api/system/restore/jobs/1"],
+            ] as const) {
+                const res = await app.inject({ method, url, headers: { authorization: `Bearer ${token}` } });
+                expect(res.statusCode).toBe(403);
+            }
+        } finally {
+            await prisma.sysGrant.deleteMany({ where: { roleCode: "staff", permissionCode: { in: codes } } });
+        }
+    });
+
     it("catalog 返回目录全集且互依成对出现", async () => {
         const res = await app.inject({
             method: "GET",
