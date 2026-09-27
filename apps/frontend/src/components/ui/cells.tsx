@@ -54,10 +54,26 @@ export function CustomerCell({
     );
 }
 
-/* 数量单元格 */
-export function QtyCell({ value, unit, danger }: { value: number; unit?: string; danger?: boolean }) {
+/* 数量单元格：tone 是可选语义字色档（如订单库存列 缺货/不足/充裕），不传保持正文色 */
+export function QtyCell({
+    value,
+    unit,
+    tone,
+}: {
+    value: number;
+    unit?: string;
+    tone?: "success" | "warning" | "danger";
+}) {
+    const toneClass =
+        tone === "success"
+            ? "text-success"
+            : tone === "warning"
+              ? "text-warning"
+              : tone === "danger"
+                ? "text-danger"
+                : "text-ink";
     return (
-        <span className={`tnum text-14 font-bold ${danger ? "text-danger" : "text-ink"}`}>
+        <span className={`tnum text-14 font-bold ${toneClass}`}>
             {num(value)}
             {unit && <i className="ml-0.5 text-12 font-normal text-subtle not-italic">{unit}</i>}
         </span>

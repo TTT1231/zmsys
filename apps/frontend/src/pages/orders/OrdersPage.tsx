@@ -1310,6 +1310,10 @@ export function OrdersPage() {
                                         const status = orderStatusOf(snap, order);
                                         const remaining = remainingOf(order);
                                         const done = remaining === 0;
+                                        // 库存列三档字色：0 即缺货；盖不住本单剩余待交为不足；其余充裕
+                                        const stock = stockOf(snap, order.bomCode);
+                                        const stockTone =
+                                            stock === 0 ? "danger" : stock < remaining ? "warning" : "success";
                                         // 档案已删除的客户名不可点（快照里已无对应档案）
                                         const customer = snap.customers.find(item => item.code === order.customerCode);
                                         return (
@@ -1369,7 +1373,7 @@ export function OrdersPage() {
                                                     <QtyCell value={order.qty} />
                                                 </td>
                                                 <td>
-                                                    <QtyCell value={stockOf(snap, order.bomCode)} />
+                                                    <QtyCell value={stock} tone={stockTone} />
                                                 </td>
                                                 <td>
                                                     <DateCell
