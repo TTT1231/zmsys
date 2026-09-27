@@ -24,3 +24,5 @@ export const StockPage = lazy(() => import("./pages/stock/StockPage").then(m => 
 export const PermissionsPage = lazy(() =>
     import("./pages/permissions/PermissionsPage").then(m => ({ default: m.PermissionsPage })),
 );
+export const BackupPage = lazy(() => import("./pages/system/BackupPage").then(m => ({ default: m.BackupPage })));
+export const RestorePage = lazy(() => import("./pages/system/RestorePage").then(m => ({ default: m.RestorePage })));

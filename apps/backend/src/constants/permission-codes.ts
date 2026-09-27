@@ -56,6 +56,12 @@ export const PERMISSIONS = {
     // ---- 用户与权限（受保护，仅 super）----
     PERMISSIONS_VIEW: "permissions:view",
     PERMISSIONS_MANAGE: "permissions:manage",
+
+    // ---- 系统（备份/恢复，受保护，仅 super）----
+    MENU_SYSTEM_BACKUP: "menu:system-backup",
+    MENU_SYSTEM_RESTORE: "menu:system-restore",
+    SYSTEM_BACKUP_RUN: "system-backup:run", // 受保护
+    SYSTEM_RESTORE_RUN: "system-restore:run", // 受保护
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

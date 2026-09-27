@@ -24,6 +24,7 @@ import {
     ACTION_CATALOG,
     DEFAULT_GRANTS,
     MENU_CATALOG,
+    ONLY_FOR_ACTION_GROUPS,
     ROLES,
     actionsOf,
     diffGrants,
@@ -930,69 +931,77 @@ function RolesTab({ users }: { users: WbUser[] }) {
                             灰色不可勾选项为受保护权限（如删除订单、删除 BOM），仅超级管理员持有， 不能授权给其他角色。
                         </p>
                         <div className="rounded-xl border border-line bg-panel px-4 py-1">
-                            {Object.entries(ACTION_CATALOG).map(([menuKey, actions]) => {
-                                const menuOn = effective.menus.includes(menuKey);
-                                const chosen = effective.actions[menuKey] ?? [];
-                                return (
-                                    <div
-                                        key={menuKey}
-                                        className={`border-b border-dashed border-line py-3 last:border-b-0 ${menuOn && !locked ? "" : "pointer-events-none opacity-45"}`}
-                                    >
-                                        <div className="mb-2 flex items-center gap-2">
-                                            <Icon
-                                                name={MENU_CATALOG.find(menu => menu.key === menuKey)?.icon ?? "grid"}
-                                                size={15}
-                                                className="text-muted"
-                                            />
-                                            <span className="text-14 font-semibold text-ink">
-                                                {MENU_CATALOG.find(menu => menu.key === menuKey)?.label ?? menuKey}
-                                            </span>
-                                            {!menuOn && <span className="text-12 text-subtle">（菜单未授权）</span>}
-                                        </div>
-                                        <div className="flex flex-wrap gap-2">
-                                            {actions.map(action => {
-                                                const checked = chosen.includes(action.id);
-                                                const isProtected = "protected" in action && action.protected;
-                                                return (
-                                                    <label
-                                                        key={action.id}
-                                                        title={
-                                                            isProtected
-                                                                ? "受保护权限：仅超级管理员持有，不可授权"
-                                                                : undefined
-                                                        }
-                                                        className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 text-13 transition ${
-                                                            isProtected
-                                                                ? "cursor-not-allowed border-line bg-soft text-subtle opacity-60"
-                                                                : "cursor-pointer " +
-                                                                  (checked
-                                                                      ? "border-primary-border bg-primary-soft font-semibold text-primary-strong"
-                                                                      : "border-line bg-surface text-td")
-                                                        }`}
-                                                    >
-                                                        <input
-                                                            type="checkbox"
-                                                            className="sr-only"
-                                                            checked={checked}
-                                                            disabled={isProtected}
-                                                            onChange={event =>
-                                                                toggleAction(menuKey, action.id, event.target.checked)
+                            {Object.entries(ACTION_CATALOG)
+                                .filter(([menuKey]) => !ONLY_FOR_ACTION_GROUPS.has(menuKey))
+                                .map(([menuKey, actions]) => {
+                                    const menuOn = effective.menus.includes(menuKey);
+                                    const chosen = effective.actions[menuKey] ?? [];
+                                    return (
+                                        <div
+                                            key={menuKey}
+                                            className={`border-b border-dashed border-line py-3 last:border-b-0 ${menuOn && !locked ? "" : "pointer-events-none opacity-45"}`}
+                                        >
+                                            <div className="mb-2 flex items-center gap-2">
+                                                <Icon
+                                                    name={
+                                                        MENU_CATALOG.find(menu => menu.key === menuKey)?.icon ?? "grid"
+                                                    }
+                                                    size={15}
+                                                    className="text-muted"
+                                                />
+                                                <span className="text-14 font-semibold text-ink">
+                                                    {MENU_CATALOG.find(menu => menu.key === menuKey)?.label ?? menuKey}
+                                                </span>
+                                                {!menuOn && <span className="text-12 text-subtle">（菜单未授权）</span>}
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {actions.map(action => {
+                                                    const checked = chosen.includes(action.id);
+                                                    const isProtected = "protected" in action && action.protected;
+                                                    return (
+                                                        <label
+                                                            key={action.id}
+                                                            title={
+                                                                isProtected
+                                                                    ? "受保护权限：仅超级管理员持有，不可授权"
+                                                                    : undefined
                                                             }
-                                                        />
-                                                        <span
-                                                            className={`h-1.5 w-1.5 rounded-full ${checked ? "bg-primary" : "bg-line-strong"}`}
-                                                        />
-                                                        {action.label}
-                                                        {isProtected && (
-                                                            <span className="sr-only">（仅超级管理员）</span>
-                                                        )}
-                                                    </label>
-                                                );
-                                            })}
+                                                            className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 text-13 transition ${
+                                                                isProtected
+                                                                    ? "cursor-not-allowed border-line bg-soft text-subtle opacity-60"
+                                                                    : "cursor-pointer " +
+                                                                      (checked
+                                                                          ? "border-primary-border bg-primary-soft font-semibold text-primary-strong"
+                                                                          : "border-line bg-surface text-td")
+                                                            }`}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                className="sr-only"
+                                                                checked={checked}
+                                                                disabled={isProtected}
+                                                                onChange={event =>
+                                                                    toggleAction(
+                                                                        menuKey,
+                                                                        action.id,
+                                                                        event.target.checked,
+                                                                    )
+                                                                }
+                                                            />
+                                                            <span
+                                                                className={`h-1.5 w-1.5 rounded-full ${checked ? "bg-primary" : "bg-line-strong"}`}
+                                                            />
+                                                            {action.label}
+                                                            {isProtected && (
+                                                                <span className="sr-only">（仅超级管理员）</span>
+                                                            )}
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
-                                    </div>
-                                );
-                            })}
+                                    );
+                                })}
                         </div>
                     </div>
 

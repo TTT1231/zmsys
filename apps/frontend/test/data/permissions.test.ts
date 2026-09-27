@@ -130,8 +130,9 @@ describe("buildNavSections", () => {
         expect(buildNavSections("super", grantOf("super")).map(section => section.group)).toEqual([
             "工作台",
             "业务导航",
+            "系统",
         ]);
-        // 管理员无「用户与权限」授权，但工作台组仍有工作台/归档订单两项
+        // 管理员无「用户与权限」授权，但工作台组仍有工作台/归档订单两项；非 super 无系统组
         expect(buildNavSections("admin", grantOf("admin")).map(section => section.group)).toEqual([
             "工作台",
             "业务导航",
@@ -143,7 +144,7 @@ describe("buildNavSections", () => {
 
     it("carries group icon for rail and horizontal menus", () => {
         const sections = buildNavSections("super", grantOf("super"));
-        expect(sections.map(section => section.icon)).toEqual(["chart", "cube"]);
+        expect(sections.map(section => section.icon)).toEqual(["chart", "cube", "database"]);
     });
 
     it("hides customer menu from warehouse nav", () => {

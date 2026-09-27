@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { LedgerPurgeService } from "./ledger-purge.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { TransactionRunner } from "../prisma/transaction.runner";
+import { MaintenanceState } from "../domain/maintenance-state";
 
 /* 手写假件：$queryRaw 按批次队列返回候选 id；deleteMany 记录调用序列供顺序断言 */
 
@@ -65,7 +66,8 @@ const mkService = (inboundBatches: bigint[][], outboundBatches: bigint[][], orde
     const txRunner = {
         run: vi.fn(async (fn: (client: typeof tx) => Promise<unknown>) => fn(tx)),
     } as unknown as TransactionRunner;
-    return { service: new LedgerPurgeService(prisma, txRunner), ops, queryRaw };
+    const maintenance = new MaintenanceState();
+    return { service: new LedgerPurgeService(prisma, txRunner, maintenance), ops, queryRaw, maintenance };
 };
 
 describe("LedgerPurgeService.purge", () => {

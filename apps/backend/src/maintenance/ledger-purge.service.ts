@@ -3,6 +3,7 @@ import { Prisma } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { TransactionRunner } from "../prisma/transaction.runner";
 import type { Tx } from "../prisma/transaction.runner";
+import { MaintenanceState } from "../domain/maintenance-state";
 
 /** 软删除保留期（天）：过期后物理清理，op_log 的 delete 快照成为唯一残留 */
 const SOFT_DELETE_RETENTION_DAYS = 7;
@@ -31,6 +32,7 @@ export class LedgerPurgeService implements OnApplicationBootstrap, OnApplication
     constructor(
         private readonly prisma: PrismaService,
         private readonly txRunner: TransactionRunner,
+        private readonly maintenance: MaintenanceState,
     ) {}
 
     onApplicationBootstrap(): void {
@@ -57,6 +59,11 @@ export class LedgerPurgeService implements OnApplicationBootstrap, OnApplication
 
     /** 定时入口：按保留期计算截止时刻；调度错误记录后不中断后续调度 */
     private async runScheduledPurge(): Promise<void> {
+        // 恢复维护期间不启动新批次（实施计划 §4：另等 purgeActive=false）
+        if (this.maintenance.isActive()) {
+            return;
+        }
+        this.maintenance.purgeActive = true;
         const cutoff = new Date(Date.now() - SOFT_DELETE_RETENTION_DAYS * 24 * 60 * 60 * 1000);
         try {
             const counts = await this.purge(cutoff);
@@ -67,6 +74,8 @@ export class LedgerPurgeService implements OnApplicationBootstrap, OnApplication
             }
         } catch (error) {
             this.logger.error(`台账清理失败，将于下个调度周期重试: ${String(error)}`);
+        } finally {
+            this.maintenance.purgeActive = false;
         }
     }
 

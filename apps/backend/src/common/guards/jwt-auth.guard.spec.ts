@@ -32,4 +32,18 @@ describe("JwtAuthGuard", () => {
         const user = { id: "1", isSuper: true };
         expect(guard.handleRequest(null, user)).toBe(user);
     });
+
+    it("策略抛出的非鉴权异常（数据库故障等）原样透传，不误报 401", () => {
+        const { guard } = createContext(false);
+        const dbError = new Error("ECONNREFUSED");
+        expect(() => guard.handleRequest(dbError, undefined)).toThrow(dbError);
+        const prismaError = Object.assign(new Error("prisma P1001"), { code: "P1001" });
+        expect(() => guard.handleRequest(prismaError, undefined)).toThrow(prismaError);
+    });
+
+    it("策略抛出的凭据失效（UnauthorizedException）维持 401 语义", () => {
+        const { guard } = createContext(false);
+        const expired = new UnauthorizedException("登录已过期，请重新登录");
+        expect(() => guard.handleRequest(expired, undefined)).toThrow(expired);
+    });
 });

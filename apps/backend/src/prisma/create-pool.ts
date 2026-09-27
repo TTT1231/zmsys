@@ -35,3 +35,35 @@ export const createMariadbPool = (config: MariadbPoolConfig): mariadb.Pool =>
         sessionVariables: { time_zone: "+00:00" },
         initSql: "SET SESSION transaction_isolation = 'READ-COMMITTED'",
     });
+
+/**
+ * 备份/恢复专用一次性连接（不入池，用后销毁）。在基础纪律（UTC + 会话时区）之上固定：
+ * - bigIntAsNumber:false / decimalAsNumber:false：BIGINT/DECIMAL 保持 bigint/字符串；
+ * - jsonStrings:true / dateStrings:true：JSON 与 DATE/DATETIME 保持数据库原文。
+ * 业务 JSON 列因此不经 JS 解析（大整数保真），日期不经本地 Date 往返（V1.2 探针结论）。
+ * sql_mode 去掉 NO_BACKSLASH_ESCAPES 以兼容反斜杠转义字面量（参数化路径不依赖，
+ * 仅为与 mysql 客户端 scratch 验证口径一致）。独立 CLI 入口同样必须先初始化进程 UTC。
+ */
+export async function createBackupConnection(
+    config: Omit<MariadbPoolConfig, "connectionLimit">,
+): Promise<mariadb.Connection> {
+    // jsonStrings 运行时受支持（lib/config/connection-options.js）但 3.4.5 d.ts 未声明，
+    // 以断言补齐 typings 缺口；foundRows:false 让 affectedRows 反映真实变更行数
+    // （biz_sequence 的 GREATEST 无变化应计 0，否则幂等 merge 会被误计为插入）
+    const connection = await mariadb.createConnection({
+        host: config.host,
+        port: config.port,
+        user: config.user,
+        password: config.password,
+        database: config.name,
+        timezone: "Z",
+        sessionVariables: { time_zone: "+00:00" },
+        bigIntAsNumber: false,
+        decimalAsNumber: false,
+        jsonStrings: true,
+        dateStrings: true,
+        foundRows: false,
+    } as mariadb.ConnectionConfig);
+    await connection.query("SET SESSION sql_mode = (SELECT REPLACE(@@sql_mode, 'NO_BACKSLASH_ESCAPES', ''))");
+    return connection;
+}

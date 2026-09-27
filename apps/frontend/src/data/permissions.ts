@@ -11,14 +11,14 @@ export interface MenuNode {
     key: string;
     label: string;
     icon: string;
-    group: "工作台" | "业务导航";
+    group: "工作台" | "业务导航" | "系统";
     to?: string;
     end?: boolean;
     /** 说明型入口（无路由），点击弹出说明 */
     note?: string;
     /** 角色别名的菜单名，如仓管的订单页叫「待发货订单」 */
     labelByRole?: Partial<Record<RoleId, string>>;
-    /** 仅对特定角色展示的固定项（不参与授权勾选） */
+    /** 仅对特定角色展示的固定项（不参与授权勾选）；带 to 的仍可导航 */
     onlyFor?: RoleId[];
     children?: Array<{ key: string; label: string }>;
 }
@@ -35,6 +35,7 @@ export interface ActionDef {
 export const NAV_GROUPS = [
     { group: "工作台", icon: "chart" },
     { group: "业务导航", icon: "cube" },
+    { group: "系统", icon: "database" },
 ] as const;
 
 export const MENU_CATALOG: MenuNode[] = [
@@ -79,6 +80,23 @@ export const MENU_CATALOG: MenuNode[] = [
         onlyFor: ["warehouse"],
         note: "审计记录：业务创建、订单变更、入库修正、库存调整、出库作废及负责人移交均保留操作人与时间，不可删除、不可篡改。",
     },
+    /* 系统组：仅超级管理员可见的数据库备份/恢复入口（受保护，不参与授权勾选） */
+    {
+        key: "system-backup",
+        label: "备份",
+        icon: "database",
+        group: "系统",
+        to: "/system/backup",
+        onlyFor: ["super"],
+    },
+    {
+        key: "system-restore",
+        label: "恢复",
+        icon: "upload",
+        group: "系统",
+        to: "/system/restore",
+        onlyFor: ["super"],
+    },
 ];
 
 /* 操作字典：id 同时用于后端接口授权和页面按钮；即使页面入口尚未上线，
@@ -122,7 +140,18 @@ export const ACTION_CATALOG = {
         { id: "view", label: "查看", protected: true },
         { id: "manage", label: "用户与角色管理", protected: true },
     ],
+    /* 系统组动作（受保护，仅 super）：不参与普通角色的授权编辑，此处登记仅为
+     * 固定权限码字面量与前端 can() 判断 */
+    "system-backup": [{ id: "run", label: "执行备份", protected: true }],
+    "system-restore": [{ id: "run", label: "执行恢复", protected: true }],
 } as const satisfies Record<string, readonly ActionDef[]>;
+
+/* 仅限特定角色的动作组（组级 onlyFor）：不出现在权限编辑器，也不进入
+ * 普通角色的默认授权——受保护动作本就只有 super 能持有 */
+export const ONLY_FOR_ACTION_GROUPS: ReadonlyMap<string, readonly RoleId[]> = new Map([
+    ["system-backup", ["super"]],
+    ["system-restore", ["super"]],
+]);
 
 /** 权限码字面量联合（"outbound:print" 等），拼错编译期报错 */
 export type PermCode = {
@@ -160,8 +189,9 @@ export function buildDefaultGrants(): GrantMap {
     return {
         super: {
             version: 1,
+            // 说明型 onlyFor 项（无路由）不占权限码；系统组备份/恢复菜单 super 实际持有
             menus: MENU_CATALOG.flatMap(menu =>
-                menu.onlyFor ? [] : [menu.key, ...(menu.children ?? []).map(child => child.key)],
+                menu.onlyFor && !menu.to ? [] : [menu.key, ...(menu.children ?? []).map(child => child.key)],
             ),
             actions: Object.fromEntries(
                 (Object.keys(ACTION_CATALOG) as Array<keyof typeof ACTION_CATALOG>).map(menu => [
@@ -255,6 +285,8 @@ const ACTION_SHORT: Record<string, string> = {
 /** 侧边栏 / 预览用的权限摘要标签 */
 export function menuTagFor(menuKey: string, grant: RoleGrant): string {
     if (menuKey === "workbench") return "专属视图";
+    // 系统组动作全部受保护（无 view 基线），不适用「只读/全部权限」口径
+    if (ONLY_FOR_ACTION_GROUPS.has(menuKey)) return "超管专属";
     const actions = actionsOf(menuKey);
     if (!actions) return "";
     const chosen = grant.actions[menuKey] ?? [];
@@ -282,7 +314,8 @@ export interface NavSection {
     items: NavItem[];
 }
 
-/** 按角色 + 授权生成侧边栏二级导航（一级分组 + 二级页面，含仓管固定说明项「变更记录」） */
+/** 按角色 + 授权生成侧边栏二级导航（一级分组 + 二级页面，含仓管固定说明项「变更记录」
+ * 与 super 专属的系统组可导航入口） */
 export function buildNavSections(role: RoleId, grant: RoleGrant): NavSection[] {
     const sections: NavSection[] = [];
     for (const { group, icon } of NAV_GROUPS) {
@@ -291,7 +324,18 @@ export function buildNavSections(role: RoleId, grant: RoleGrant): NavSection[] {
             if (menu.group !== group) continue;
             if (menu.onlyFor) {
                 if (menu.onlyFor.includes(role)) {
-                    items.push({ label: menu.label, icon: menu.icon, note: menu.note, tag: "说明" });
+                    if (menu.to) {
+                        // 带路由的 onlyFor 项（系统组备份/恢复）：super 可导航
+                        items.push({
+                            label: menu.label,
+                            icon: menu.icon,
+                            to: menu.to,
+                            end: menu.end,
+                            tag: menuTagFor(menu.key, grant),
+                        });
+                    } else {
+                        items.push({ label: menu.label, icon: menu.icon, note: menu.note, tag: "说明" });
+                    }
                 }
                 continue;
             }
