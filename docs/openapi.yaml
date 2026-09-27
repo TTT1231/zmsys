@@ -14,10 +14,10 @@ info:
 
         ## 数据一致性
         - 响应统一为 `{code, data, message}`；成功 `code=0`，失败 code 与 HTTP 4xx/5xx 一致。
-        - 创建、取消、删除、作废与库存调整类 POST 必须携带 `Idempotency-Key`。同一用户、操作和 key 的相同请求重放原成功响应；请求体不同返回 409。
+        - 创建、归档、删除、作废与库存调整类 POST 必须携带 `Idempotency-Key`。同一用户、操作和 key 的相同请求重放原成功响应；请求体不同返回 409。
         - 可变资源使用 `expectedVersion` 做乐观锁；版本或并发业务状态冲突返回 409。
         - 业务编码由后端通过 `biz_sequence` 事务取号，禁止使用 `MAX(code)+1`。
-        - 库存 = 有效入库合计 + 库存调整合计 - 有效出库净额。出库登记、作废与订单取消按固定顺序加行锁并在一个事务提交；打印为纯读输出无副作用。
+        - 库存 = 有效入库合计 + 库存调整合计 - 有效出库净额。出库登记、作废与订单归档/删除按固定顺序加行锁并在一个事务提交；打印为纯读输出无副作用。
         - 业务日期使用 `yyyy-MM-dd`；系统时间使用带时区 ISO 8601，数据库保存 UTC。
         - 工作台数据由 `/workbench/overview` 聚合端点统一供给（订单/台账契约当前无分页，仍返回完整计算窗口）；后续启用服务端分页时，不能以分页局部数据在派生侧计算全局库存。
 servers:
@@ -30,7 +30,7 @@ tags:
     - name: auth
       description: JWT 会话与个人资料
     - name: orders
-      description: 销售订单、取消与删除
+      description: 销售订单、归档与删除
     - name: customers
       description: 客户档案与负责人候选
     - name: boms
@@ -111,7 +111,7 @@ paths:
             tags: [orders]
             operationId: listOrders
             summary: 销售订单列表
-            description: 权限 `orders:view`。取消订单仍返回用于历史审计。
+            description: 权限 `orders:view`。归档订单仍返回用于历史审计。
             responses:
                 "200":
                     description: 成功
@@ -146,7 +146,7 @@ paths:
             tags: [orders]
             operationId: updateOrder
             summary: 修改销售订单
-            description: 权限 `orders:edit`。未发货订单可改数量/交货日期/备注，新数量不得小于该订单有效出库净额；已发货（有效出库净额 > 0）订单数量与交货日期锁定，仅可修改备注；已取消/已归档订单不可修改。删除走专用端点 POST /orders/{orderNo}/delete，归档走 POST /orders/{orderNo}/archive。
+            description: 权限 `orders:edit`。未发货订单可改数量/交货日期/备注，新数量不得小于该订单有效出库净额；已发货（有效出库净额 > 0）订单数量与交货日期锁定，仅可修改备注；已归档订单不可修改。删除走专用端点 POST /orders/{orderNo}/delete，归档走 POST /orders/{orderNo}/archive。
             parameters:
                 - $ref: "#/components/parameters/OrderNo"
             requestBody:
@@ -165,37 +165,12 @@ paths:
                 "404": { $ref: "#/components/responses/NotFound" }
                 "409": { $ref: "#/components/responses/Conflict" }
 
-    /orders/{orderNo}/cancel:
-        post:
-            tags: [orders]
-            operationId: cancelOrder
-            summary: 取消全部剩余未发数量
-            description: 权限 `orders:cancel`。保留已发数量；存在未作废出库单时直接放行（已发口径不变）。已全部发货的订单没有剩余量可取消。取消后不再参与欠量、合作状态或库存分配。
-            parameters:
-                - $ref: "#/components/parameters/OrderNo"
-                - $ref: "#/components/parameters/IdempotencyKey"
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema: { $ref: "#/components/schemas/CancelOrderInput" }
-            responses:
-                "200":
-                    description: 成功
-                    content:
-                        application/json:
-                            schema: { $ref: "#/components/schemas/OrderEnvelope" }
-                "400": { $ref: "#/components/responses/BadRequest" }
-                "403": { $ref: "#/components/responses/Forbidden" }
-                "404": { $ref: "#/components/responses/NotFound" }
-                "409": { $ref: "#/components/responses/Conflict" }
-
     /orders/{orderNo}/archive:
         post:
             tags: [orders]
             operationId: archiveOrder
             summary: 归档订单（终态）
-            description: 受保护权限 `orders:archive`，仅 super。收尾已完成、部分发货或部分发货后取消的订单使其退出活跃视图：归档后订单从销售订单页移入归档订单页，仅供查询，不可修改/取消/删除，剩余欠量（若有）不再安排交付。一件未发的订单不可归档（ACTIVE 手误单走取消/删除，已取消的直接删除）；存在未作废出库单时归档直接放行，已发数量保留。归档为最终终态，不可恢复，且冻结依赖链：该订单的出库单不可作废/删除（审计依据），被引用 BOM 不可删除。归档人、归档时间与备注（选填）随行落库并写 change_log ARCHIVE 事件与 op_log 供审计。幂等（Idempotency-Key）。
+            description: 受保护权限 `orders:archive`，仅 super。收尾已完成或部分发货的订单使其退出活跃视图：归档后订单从销售订单页移入归档订单页，仅供查询，不可修改/删除，剩余欠量（若有）不再安排交付。一件未发的订单不可归档（手误单走删除）；存在未作废出库单时归档直接放行，已发数量保留。归档为最终终态，不可恢复，且冻结依赖链：该订单的出库单不可作废/删除（审计依据），被引用 BOM 不可删除。归档人、归档时间与备注（选填）随行落库并写 change_log ARCHIVE 事件与 op_log 供审计。幂等（Idempotency-Key）。
             parameters:
                 - $ref: "#/components/parameters/OrderNo"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -220,7 +195,7 @@ paths:
             tags: [orders]
             operationId: deleteOrder
             summary: 删除净发货为零且无可见出库单的销售订单
-            description: 受保护权限 `orders:delete`，仅 super。累计已发必须为 0，且关联出库单均已作废并软删除；仍可见的已作废出库单也会阻止删除。成功后订单打 `deleted_at` 标记并立即退出列表和可发量分配，`op_log` 保存删除前快照；7 天后且关联出库单已物理清理时，维护任务清理订单及其变更日志。删除与取消、出库登记竞争同一订单锁。
+            description: 受保护权限 `orders:delete`，仅 super。累计已发必须为 0，且关联出库单均已作废并软删除；仍可见的已作废出库单也会阻止删除。成功后订单打 `deleted_at` 标记并立即退出列表和可发量分配，`op_log` 保存删除前快照；7 天后且关联出库单已物理清理时，维护任务清理订单及其变更日志。删除与出库登记竞争同一订单锁。
             parameters:
                 - $ref: "#/components/parameters/OrderNo"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -378,7 +353,7 @@ paths:
             tags: [boms]
             operationId: deleteBom
             summary: 删除未被引用的 BOM
-            description: 受保护权限 `bom:delete`，仅 super。用于清理手误建档：不得被任何销售订单引用（含已取消订单），且不得存在入库或库存调整流水，否则返回 409。删除为物理移除：明细行与 BOM 行同事务删除，`op_log` 记录 delete_bom 事件与删除前档案快照；删除后档案不再出现在列表中。删除与订单新建、入库登记竞争同一 BOM 行锁，先提交者生效。BOM 建档后不可修改，无乐观锁版本，请求体为空。
+            description: 受保护权限 `bom:delete`，仅 super。用于清理手误建档：不得被任何销售订单引用（含已归档订单），且不得存在入库或库存调整流水，否则返回 409。删除为物理移除：明细行与 BOM 行同事务删除，`op_log` 记录 delete_bom 事件与删除前档案快照；删除后档案不再出现在列表中。删除与订单新建、入库登记竞争同一 BOM 行锁，先提交者生效。BOM 建档后不可修改，无乐观锁版本，请求体为空。
             parameters:
                 - $ref: "#/components/parameters/BomCode"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -1065,12 +1040,9 @@ components:
                 orderDate: { type: string, format: date }
                 deliverDate: { type: string, format: date, description: 交货日期（单个日历日，排序/逾期口径） }
                 remark: { type: string }
-                lifecycleStatus: { type: string, enum: [active, cancelled, archived] }
+                lifecycleStatus: { type: string, enum: [active, archived] }
                 createdBy: { type: string, description: 创建人姓名（审计展示，不随编辑变化） }
                 createdAt: { type: string, format: date-time, description: 创建时刻 }
-                cancelledAt: { type: string, format: date-time, description: 实际取消过才返回（含取消后归档的订单） }
-                cancelledBy: { type: string }
-                cancelReason: { type: string }
                 archivedAt: { type: string, format: date-time, description: 仅归档终态返回 }
                 archivedBy: { type: string, description: 归档操作人姓名 }
                 archiveReason: { type: string, description: 归档备注（选填） }
@@ -1097,14 +1069,6 @@ components:
                 qty: { type: integer, minimum: 1 }
                 deliverDate: { type: string, format: date }
                 remark: { type: string, maxLength: 2000 }
-
-        CancelOrderInput:
-            type: object
-            additionalProperties: false
-            required: [expectedVersion, reason]
-            properties:
-                expectedVersion: { type: integer, minimum: 1 }
-                reason: { type: string, minLength: 2, maxLength: 500 }
 
         ArchiveOrderInput:
             type: object
@@ -1632,7 +1596,7 @@ components:
                 due: { type: string, format: date, description: 交货日期 }
                 qty: { type: integer, minimum: 1 }
                 shipped: { type: integer, minimum: 0, description: 有效出库净额（v_order_outbound_qty） }
-                cancelled: { type: boolean, description: 仅已取消订单携带 }
+                archived: { type: boolean, description: 仅已归档订单携带 }
         WorkbenchMovement:
             type: object
             required: [date, bomCode, inbound, outbound]
