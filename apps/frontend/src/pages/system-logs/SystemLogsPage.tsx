@@ -49,11 +49,11 @@ interface ActionMeta {
 const ACTION_META: Record<SystemLogAction, ActionMeta> = {
     create: { label: "新建", verb: "新建了", icon: "plus", tone: "bg-success-soft text-success" },
     edit: { label: "编辑", verb: "编辑了", icon: "edit", tone: "bg-primary-soft text-primary-strong" },
-    transfer: { label: "负责人移交", verb: "移交了客户负责人", icon: "transfer", tone: "bg-accent-soft text-accent" },
+    transfer: { label: "负责人移交", verb: "移交了客户负责人", icon: "transfer", tone: "bg-teal-soft text-teal" },
     archive: { label: "归档", verb: "归档了", icon: "archive", tone: "bg-violet-soft text-violet" },
     delete: { label: "删除", verb: "删除了", icon: "trash", tone: "bg-danger-soft text-danger" },
     void: { label: "作废", verb: "作废了", icon: "cancel", tone: "bg-warning-soft text-warning" },
-    ship: { label: "登记发货", verb: "登记了发货", icon: "truck", tone: "bg-accent-soft text-accent" },
+    ship: { label: "登记发货", verb: "登记了发货", icon: "truck", tone: "bg-teal-soft text-teal" },
     adjust: { label: "库存调整", verb: "调整了库存", icon: "minus", tone: "bg-primary-soft text-primary-strong" },
 };
 
@@ -420,11 +420,11 @@ function dotToneOf(action: SystemLogAction): string {
     const map: Record<SystemLogAction, string> = {
         create: "bg-success",
         edit: "bg-primary",
-        transfer: "bg-accent",
+        transfer: "bg-teal",
         archive: "bg-violet",
         delete: "bg-danger",
         void: "bg-warning",
-        ship: "bg-accent",
+        ship: "bg-teal",
         adjust: "bg-primary",
     };
     return map[action];
@@ -434,11 +434,11 @@ function textToneOf(action: SystemLogAction): string {
     const map: Record<SystemLogAction, string> = {
         create: "text-success",
         edit: "text-primary-strong",
-        transfer: "text-accent",
+        transfer: "text-teal",
         archive: "text-violet",
         delete: "text-danger",
         void: "text-warning",
-        ship: "text-accent",
+        ship: "text-teal",
         adjust: "text-primary-strong",
     };
     return map[action];
@@ -448,11 +448,11 @@ function chipToneOf(action: SystemLogAction): string {
     const map: Record<SystemLogAction, string> = {
         create: "bg-success-soft text-success",
         edit: "bg-primary-soft text-primary-strong",
-        transfer: "bg-accent-soft text-accent",
+        transfer: "bg-teal-soft text-teal",
         archive: "bg-violet-soft text-violet",
         delete: "bg-danger-soft text-danger",
         void: "bg-warning-soft text-warning",
-        ship: "bg-accent-soft text-accent",
+        ship: "bg-teal-soft text-teal",
         adjust: "bg-primary-soft text-primary-strong",
     };
     return map[action];
