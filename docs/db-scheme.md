@@ -263,6 +263,10 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 - 入库当天修改由 `inbound_change_log` 形成审计链；库存调整和出库冲销由追加事件本身形成记录；负责人移交和订单变更分别使用专表记录。`op_log` 快照自包含（含操作人姓名/角色快照），业务行被清理后仍可独立还原"删除时刻的单据终态 + 作废原因"。
 - 所有日志、库存调整和出库数量事件不提供人工 UPDATE/DELETE；入库只允许业务服务执行带当天窗口（或跨天作废权限）、版本和日志约束的 UPDATE，以及删除接口对 `VOIDED` 行的 `deleted_at` 标记 UPDATE。订单与出入库单由用户软删除，维护任务在保留期后清理；BOM 无引用时可由超级管理员物理删除，所有删除动作均在 `op_log` 留快照。
 - 操作日志保留 `operator_id`，同时保存操作发生时的姓名和角色快照，避免用户改名/改角色后历史展示变化。
+- **系统日志聚合端点（`GET /system-logs`，受保护权限 `system-logs:view` 仅 super）**：四来源 UNION ALL——`op_log`（13 动作全量，含离岗批量移交补写的 `update_customer`；`customer_owner_history` 仍作归属变更业务表保留但不进聚合）、`sales_order_change_log`（仅 UPDATE，CREATE/ARCHIVE 由 op_log 出，天然去重；订单物理清理时同事务先删日志，FK 保证无孤儿行）、`inbound_change_log`（仅 UPDATE）、`stock_adjustment`（adjust 动作，domain 归 inbound）。分批为 `(occurredAt, id)` 复合游标（业务先取 now 后生成雪花 id，并发事务中两者顺序可能倒置）。
+- 历史身份漂移口径：op_log 来源展示操作时姓名/角色**快照**；change_log/调整来源的操作人 join `sys_user` 展示**当前**姓名与角色，随改名/改角色漂移属可接受（不加快照列，避免过度设计）。
+- 关键词按操作人姓名、目标编号、目标名称三项 LIKE。名称命中依赖快照存在——存量 `create_order`/`ship` 等旧日志无名称快照，按名称搜不到属预期降级（按编号/操作人仍可命中），不做历史回填；新事件（2026-09 起）写入时携带名称快照。
+- 系统日志为当前留存策略下的全量覆盖：订单/入库的编辑明细日志随订单物理清理而消失，属有限留存而非永久历史审计。`sys_grant_log`/`sys_user_change_log`（权限域已有专页）、`outbound_state_log`（ship/void 已由 op_log 覆盖）不进聚合。
 
 ## 9. API 与查询索引
 

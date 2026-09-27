@@ -138,7 +138,13 @@ export class OrdersService {
                 targetType: "order",
                 targetId: id,
                 targetCode: orderNo,
-                detail: { customerCode: dto.customerCode, bomCode: dto.bomCode, qty: dto.qty },
+                // 完整快照对齐 archive_order 写法（系统日志页的创建卡片直接展示）
+                detail: {
+                    ...(this.orderSnapshot(created) as Record<string, unknown>),
+                    customer: customer.name,
+                    customerCode: customer.customerCode,
+                    bomCode: bom.bomCode,
+                } as unknown as Prisma.InputJsonValue,
                 now,
             });
 

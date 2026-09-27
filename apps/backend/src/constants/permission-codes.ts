@@ -18,6 +18,7 @@ export const PERMISSIONS = {
     MENU_PERMISSIONS_ACCOUNTS: "menu:permissions-accounts",
     MENU_PERMISSIONS_ROLES: "menu:permissions-roles",
     MENU_PERMISSIONS_MATRIX: "menu:permissions-matrix",
+    MENU_SYSTEM_LOGS: "menu:system-logs",
 
     // ---- 订单 ----
     ORDERS_VIEW: "orders:view",
@@ -55,6 +56,9 @@ export const PERMISSIONS = {
     // ---- 用户与权限（受保护，仅 super）----
     PERMISSIONS_VIEW: "permissions:view",
     PERMISSIONS_MANAGE: "permissions:manage",
+
+    // ---- 系统日志（受保护，仅 super）----
+    SYSTEM_LOGS_VIEW: "system-logs:view",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

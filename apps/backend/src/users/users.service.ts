@@ -9,6 +9,7 @@ import { IdempotencyService } from "../idempotency/idempotency.service";
 import { toWbUser, userSnapshot } from "../access-control/wb-user";
 import type { WbUser } from "../access-control/types";
 import { SUPER_ROLE_CODE } from "../constants";
+import { recordOpLog } from "../domain/op-log";
 import type { AuthUser } from "../common/types/auth-user";
 import type { SysUser } from "../generated/prisma/client";
 import type { CreateUserDto } from "./dto/create-user.dto";
@@ -329,6 +330,22 @@ export class UsersService {
                     reason: dto.transferReason,
                     createdAt: now,
                 },
+            });
+            // 离岗移交补写 op_log（与 updateCustomer 的 ownerChanged 写法对齐，带客户名
+            // 快照——系统日志页按名称搜索移交事件依赖此字段；弥补此前只写归属历史不写
+            // 操作日志的审计缺口）
+            await recordOpLog(tx, this.snowflake, actor, {
+                action: "update_customer",
+                targetType: "customer",
+                targetId: customer.id,
+                targetCode: customer.customerCode,
+                detail: {
+                    name: customer.name,
+                    ownerChanged: { from: fromUser.name, to: replacement.name },
+                    batchId: batchId.toString(),
+                    reason: dto.transferReason,
+                },
+                now,
             });
         }
         return customers.length;

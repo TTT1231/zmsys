@@ -179,7 +179,13 @@ export class OutboundService {
                 targetType: "outbound",
                 targetId: shipmentId,
                 targetCode: shipmentNo,
-                detail: { orderNo: order.orderNo, qty: dto.qty, remark: dto.remark },
+                // customer 名快照：系统日志页按名称搜索发货事件依赖此字段
+                detail: {
+                    orderNo: order.orderNo,
+                    qty: dto.qty,
+                    remark: dto.remark,
+                    customer: order.customerNameSnapshot,
+                },
                 now,
             });
 

@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 // 业务模块目录清单：新增业务模块时在此登记
-const BUSINESS_MODULES = ["auth", "roles", "users"] as const;
+const BUSINESS_MODULES = ["auth", "roles", "users", "system-logs"] as const;
 
 const SRC_ROOT = join(__dirname, "..", "src");
 

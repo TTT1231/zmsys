@@ -45,6 +45,8 @@ tags:
       description: 固定角色、实时授权与授权日志
     - name: workbench
       description: 工作台经营总览聚合
+    - name: system-logs
+      description: 系统日志时间线聚合（仅超级管理员）
 
 paths:
     /auth/login:
@@ -246,7 +248,7 @@ paths:
                 "403": { $ref: "#/components/responses/Forbidden" }
                 "409": { $ref: "#/components/responses/Conflict" }
 
-    /customers/{code}:
+    /customers/{code}/phone:
         get:
             tags: [customers]
             operationId: revealCustomerPhone
@@ -262,6 +264,8 @@ paths:
                             schema: { $ref: "#/components/schemas/CustomerPhoneEnvelope" }
                 "403": { $ref: "#/components/responses/Forbidden" }
                 "404": { $ref: "#/components/responses/NotFound" }
+
+    /customers/{code}:
         put:
             tags: [customers]
             operationId: updateCustomer
@@ -823,6 +827,77 @@ paths:
                         application/json:
                             schema: { $ref: "#/components/schemas/WorkbenchOverviewEnvelope" }
                 "401": { $ref: "#/components/responses/Unauthorized" }
+
+    /system-logs:
+        get:
+            tags: [system-logs]
+            operationId: listSystemLogs
+            summary: 系统日志时间线（分批追加）
+            description: |
+                受保护权限 `system-logs:view`，仅 super。聚合四来源为统一事件流：op_log
+                （订单创建/归档/删除、客户创建/编辑/负责人移交（含离岗批量移交）、BOM
+                创建/删除、入库创建/作废/删除、出库登记发货/作废/删除）、
+                sales_order_change_log（仅 UPDATE 的编辑明细）、inbound_change_log（仅
+                UPDATE 的当天修正）、stock_adjustment（库存调整，domain=inbound、
+                action=adjust）。当前留存策略下的全量覆盖——订单/入库的编辑明细日志随
+                订单物理清理而消失，属有限留存而非永久历史审计。
+
+                分批为 (occurredAt, id) 复合游标（加载更多语义）：首批不带游标，后续
+                携带上一批 nextCursor 的 at+id；两批无重叠、合集与全量一致。雪花 id 以
+                十进制字符串往返（超 ±2^53 精度），不能 Number 解析。
+
+                关键词匹配操作人姓名、目标编号、目标名称三项（LIKE）。名称命中依赖
+                快照存在——存量 create_order/ship 等旧日志无名称快照，按名称搜不到属
+                预期降级；按编号/操作人仍可命中，不做历史回填。时间范围按北京日界：
+                today 为今天，7d/30d 均含今天共 N 个自然日，custom 含起止日期。
+            parameters:
+                - name: domain
+                  in: query
+                  required: false
+                  schema: { type: string, enum: [customer, order, bom, inbound, outbound] }
+                - name: action
+                  in: query
+                  required: false
+                  schema:
+                      type: string
+                      enum: [create, edit, transfer, archive, delete, void, ship, adjust]
+                - name: range
+                  in: query
+                  required: false
+                  schema: { type: string, enum: [today, 7d, 30d, custom], default: today }
+                - name: from
+                  in: query
+                  required: false
+                  schema: { type: string, format: date, description: 自定义范围开始（含，北京日界） }
+                - name: to
+                  in: query
+                  required: false
+                  schema: { type: string, format: date, description: 自定义范围结束（含） }
+                - name: keyword
+                  in: query
+                  required: false
+                  schema: { type: string, maxLength: 64, description: 操作人、编号或名称 }
+                - name: limit
+                  in: query
+                  required: false
+                  schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+                - name: beforeAt
+                  in: query
+                  required: false
+                  schema: { type: string, description: 游标：上一批末条 occurredAt（ISO 时刻） }
+                - name: beforeId
+                  in: query
+                  required: false
+                  schema: { type: string, pattern: '^[0-9]+$', description: 游标：上一批末条雪花 id（十进制串） }
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/SystemLogPageEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "403": { $ref: "#/components/responses/Forbidden" }
 
 components:
     securitySchemes:
@@ -1474,7 +1549,7 @@ components:
             allOf:
                 - $ref: "#/components/schemas/Envelope"
                 - type: object
-                properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/BomStockLedger" }, message: { const: ok } }
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/BomStockLedger" }, message: { const: ok } }
         BomStockLedger:
             type: object
             description: 单个 BOM 的出入库流水；flows 按业务日升序，stockQty 与末笔 balance 一致
@@ -1565,6 +1640,55 @@ components:
                 - $ref: "#/components/schemas/Envelope"
                 - type: object
                   properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/WorkbenchData" }, message: { const: ok } }
+        SystemLogPageEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/SystemLogPage" }, message: { const: ok } }
+        SystemLogPage:
+            type: object
+            required: [items, nextCursor]
+            properties:
+                items: { type: array, items: { $ref: "#/components/schemas/SystemLogEntry" } }
+                nextCursor:
+                    oneOf:
+                        - $ref: "#/components/schemas/SystemLogCursor"
+                        - value: { type: "null" }
+                    description: 取本批末条；还有下一批时非空，否则 null
+        SystemLogCursor:
+            type: object
+            required: [at, id]
+            properties:
+                at: { type: string, description: 末条 occurredAt（ISO 时刻） }
+                id: { type: string, pattern: '^[0-9]+$', description: 末条来源行雪花 id（十进制串） }
+        SystemLogEntry:
+            type: object
+            required: [id, occurredAt, actor, domain, action, targetCode, targetName, changes, reason]
+            properties:
+                id: { type: string, pattern: '^[0-9]+$', description: 来源行雪花 id（十进制串） }
+                occurredAt: { type: string, format: date-time }
+                actor:
+                    type: object
+                    required: [name, role]
+                    properties:
+                        name: { type: string, description: 操作人姓名（op_log 来源为快照；其余来源为当前姓名） }
+                        role: { type: string, description: 角色 code（super/admin/warehouse/sales/staff） }
+                domain: { type: string, enum: [customer, order, bom, inbound, outbound] }
+                action: { type: string, enum: [create, edit, transfer, archive, delete, void, ship, adjust] }
+                targetCode: { type: string, description: 订单号/客户编码/BOM 编码/单号 }
+                targetName: { type: [string, "null"], description: 目标名称快照；无名称路径的事件为 null }
+                changes:
+                    type: [array, "null"]
+                    items: { $ref: "#/components/schemas/SystemLogChange" }
+                    description: 字段级变更（before=null 表示新建记录）；无变更语义的事件为 null
+                reason: { type: [string, "null"], description: 操作原因（未填为 null） }
+        SystemLogChange:
+            type: object
+            required: [label, before, after]
+            properties:
+                label: { type: string, description: 中文标签（订单数量/交货日期等） }
+                before: { type: [string, "null"] }
+                after: { type: [string, "null"] }
         WorkbenchData:
             type: object
             required: [asOf, unit, products, orders, movements]
