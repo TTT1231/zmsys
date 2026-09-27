@@ -6,8 +6,10 @@
 # 用 debian slim 而非 alpine：typescript 原生二进制对 musl 的支持不稳定
 FROM node:24-slim
 
-# npmmirror：npmjs 完整只读镜像、公网可达（服务器直连官方源仅几十 KiB/s）
-ARG NPM_REGISTRY=https://registry.npmmirror.com/
+# 华为云镜像：npmjs 完整只读镜像、integrity 由 lockfile 锁定。09-27 实测本机
+# 到 npmmirror CDN 仅 ~280 KB/s、到华为云 5 MB/s+，故默认华为云；服务器直连
+# 官方源只有几十 KiB/s
+ARG NPM_REGISTRY=https://mirrors.huaweicloud.com/repository/npm/
 ENV NPM_CONFIG_REGISTRY=$NPM_REGISTRY
 # 与根 package.json packageManager 对齐，保证 lockfile 解析行为一致
 RUN npm install -g pnpm@12.4.2
@@ -35,7 +37,7 @@ COPY apps/backend/prisma/schema.prisma ./apps/backend/prisma/schema.prisma
 # 冷校验（逐条拉取包元数据，慢网下要 30s+）；内容完整性仍由 frozen-lockfile
 # 的 integrity 锁定。
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-    pnpm --config.minimum-release-age=0 install \
+    pnpm --config.minimum-release-age=0 --registry="$NPM_REGISTRY" install \
         --filter ./apps/backend... --prod --frozen-lockfile
 
 # 迁移目录与 seed 随产物层进镜像（容器启动时 migrate deploy 才读）。

@@ -230,7 +230,8 @@ fi`;
     const execute = spawnSync("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15", SSH_HOST, "bash", "-s"], {
         input: Buffer.from(remoteScript, "utf8"),
         stdio: ["pipe", "inherit", "inherit"],
-        timeout: 600000,
+        // 首次依赖层缓存未命中时，大包下载可能超过 10 分钟；留足时间完成构建与健康检查。
+        timeout: 3600000,
     });
     if (execute.status !== 0) {
         throw new Error(`远端执行失败（exit=${execute.status}），可稍等后重跑 pnpm deploy 续跑（各步骤幂等）`);
