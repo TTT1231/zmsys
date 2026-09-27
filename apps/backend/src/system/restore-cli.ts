@@ -13,7 +13,7 @@
  *   并记用户变更日志（救援场景 operator 记为目标用户本人）。
  */
 import "../process-tz";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -145,8 +145,15 @@ const main = async (): Promise<void> => {
 
     const tempDir = join(tmpdir(), "zmsys-restore-cli");
     await mkdir(tempDir, { recursive: true });
-    const tempPath = join(tempDir, `restore-${options.requestKey}.part`);
-    const { sha256 } = await readStdinToFile(tempPath);
+    // 随机独占命名：两个同 key 的 CLI 进程不会互相覆盖/误删对方的输入文件
+    const tempPath = join(tempDir, `restore-${randomUUID().slice(0, 12)}.part`);
+    let sha256: string;
+    try {
+        sha256 = (await readStdinToFile(tempPath)).sha256;
+    } catch (error) {
+        await unlink(tempPath).catch(() => undefined);
+        throw error;
+    }
     try {
         await runRestoreFromTemp(tempPath, sha256, database, options);
     } finally {
@@ -275,39 +282,53 @@ const resetPassword = async (account: string, database: string): Promise<void> =
             throw new Error("恢复锁被占用：旧恢复会话尚未结束");
         }
         lockHeld = true;
-        const before = (await connection.query(
-            "SELECT id, account, name, role_code, status, token_version, row_version FROM sys_user WHERE account = ? FOR UPDATE",
-            [account],
-        )) as Array<Record<string, unknown>>;
-        if (before.length === 0) {
-            throw new Error(`账号不存在：${account}`);
+        // 密码更新与变更日志同事务：日志失败回滚，不留下无审计的改密；
+        // FOR UPDATE 在 autocommit 下锁立即释放，必须先开事务再锁行
+        await connection.query("START TRANSACTION");
+        try {
+            const before = (await connection.query(
+                "SELECT id, account, name, role_code, status, token_version, row_version FROM sys_user WHERE account = ? FOR UPDATE",
+                [account],
+            )) as Array<Record<string, unknown>>;
+            if (before.length === 0) {
+                throw new Error(`账号不存在：${account}`);
+            }
+            const user = before[0]!;
+            const snapshot = {
+                account: user.account,
+                name: user.name,
+                role: user.role_code,
+                status: user.status === 1,
+            };
+            const passwordHash = await bcrypt.hash(password, 10);
+            const utcNow = new Date().toISOString().slice(0, 23).replace("T", " ");
+            await connection.query(
+                `UPDATE sys_user
+                 SET password_hash = ?, password_changed_at = ?, token_version = token_version + 1, row_version = row_version + 1
+                 WHERE account = ?`,
+                [passwordHash, utcNow, account],
+            );
+            const afterVersion = Number(user.row_version) + 1;
+            await connection.query(
+                `INSERT INTO sys_user_change_log
+                     (id, user_id, operator_id, event_type, before_version, after_version, reason, before_json, after_json, created_at)
+                 VALUES (?, ?, ?, 'PASSWORD_RESET', ?, ?, '恢复 CLI 救援改密', CAST(? AS JSON), CAST(? AS JSON), ?)`,
+                [
+                    nextCliId(),
+                    user.id,
+                    user.id,
+                    Number(user.row_version),
+                    afterVersion,
+                    JSON.stringify(snapshot),
+                    JSON.stringify(snapshot),
+                    utcNow,
+                ],
+            );
+            await connection.query("COMMIT");
+        } catch (error) {
+            await connection.query("ROLLBACK").catch(() => undefined);
+            throw error;
         }
-        const user = before[0]!;
-        const snapshot = { account: user.account, name: user.name, role: user.role_code, status: user.status === 1 };
-        const passwordHash = await bcrypt.hash(password, 10);
-        const utcNow = new Date().toISOString().slice(0, 23).replace("T", " ");
-        await connection.query(
-            `UPDATE sys_user
-             SET password_hash = ?, password_changed_at = ?, token_version = token_version + 1, row_version = row_version + 1
-             WHERE account = ?`,
-            [passwordHash, utcNow, account],
-        );
-        const afterVersion = Number(user.row_version) + 1;
-        await connection.query(
-            `INSERT INTO sys_user_change_log
-                 (id, user_id, operator_id, event_type, before_version, after_version, reason, before_json, after_json, created_at)
-             VALUES (?, ?, ?, 'PASSWORD_RESET', ?, ?, '恢复 CLI 救援改密', CAST(? AS JSON), CAST(? AS JSON), ?)`,
-            [
-                nextCliId(),
-                user.id,
-                user.id,
-                Number(user.row_version),
-                afterVersion,
-                JSON.stringify(snapshot),
-                JSON.stringify(snapshot),
-                utcNow,
-            ],
-        );
         process.stdout.write(`${JSON.stringify({ result: "PASSWORD_RESET", account })}\n`);
         process.stdout.write("救援改密完成：该账号旧 JWT 已失效，请用新密码重新登录。\n");
     } finally {

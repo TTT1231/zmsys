@@ -6,6 +6,7 @@ import { PageHeading } from "@/components/ui/PageHeading";
 import { fetchRestoreJobByKey, previewRestore, runRestore } from "@/api";
 import { useToast } from "@/components/ui/toastContexts";
 import { useApp } from "@/context/useApp";
+import { isApiError } from "@/http/errors";
 import type { BackupPreviewResult, RestoreJob, RestoreMode } from "@/api";
 
 /** localStorage 持久化的待核实提交（刷新/断线/401 后凭同一 key 继续） */
@@ -76,18 +77,21 @@ export function RestorePage() {
         setPending(null);
         setJob(null);
         setNotFound(false);
+        localStorage.removeItem(PENDING_KEY);
     }, []);
 
     const submitMutation = useMutation({
         mutationFn: async (input: { file: File; mode: RestoreMode; ack: string }) => {
-            // 发请求前持久化 requestKey：断线/超时/401 后凭同一 key 查询或重提
+            // 发请求前【同步】持久化 requestKey：effect 异步写入存在刷新丢 key 的窗口
             const requestKey = pending?.requestKey ?? newRequestKey();
-            setPending({
+            const record: PendingSubmission = {
                 requestKey,
                 fileName: input.file.name,
                 mode: input.mode,
                 submittedAt: new Date().toISOString(),
-            });
+            };
+            localStorage.setItem(PENDING_KEY, JSON.stringify(record));
+            setPending(record);
             return runRestore({ file: input.file, mode: input.mode, ack: input.ack, requestKey });
         },
         onSuccess: outcome => {
@@ -103,7 +107,14 @@ export function RestorePage() {
             toast("恢复任务已受理，执行期间系统进入维护态");
         },
         onError: (error: Error) => {
-            // 400/413/409 为确定拒绝；网络错误/超时保留原 key 继续查询
+            // 确定性拒绝（400 预检/409 冲突/413 超限/404 路由）：回提交表单纠错重试；
+            // 网络错误/超时/-1 保留原 key 继续轮询（结果不明不得换 key）
+            const code = isApiError(error) ? error.code : -1;
+            if (code === 400 || code === 409 || code === 413 || code === 404) {
+                clearSubmission();
+                toast(error.message || "提交被拒绝，请调整后重试", true);
+                return;
+            }
             toast(error.message || "提交失败（requestKey 已保留，可稍后重查）", true);
         },
     });
@@ -116,7 +127,9 @@ export function RestorePage() {
                 setJob(current);
                 setNotFound(false);
                 if (TERMINAL.has(current.status)) {
-                    clearSubmission();
+                    // 终态只释放持久化 key（允许后续新 key 新提交），保留结果展示，
+                    // 由用户点击「完成」清理界面
+                    localStorage.removeItem(PENDING_KEY);
                     if (pollTimer.current !== null) {
                         window.clearInterval(pollTimer.current);
                         pollTimer.current = null;
@@ -203,6 +216,26 @@ export function RestorePage() {
                         <div className="mt-3 rounded-xl bg-soft px-3.5 py-2.5 text-13 leading-5 text-td">
                             当前未查到该 key 的持久记录（原请求可能仍在上传或预检，不代表终态）。 可稍候继续查询，或以
                             <b>同一文件 / 同一模式 / 同一 requestKey</b> 重新提交。
+                            {file && (
+                                <span className="mt-2 flex flex-wrap gap-2">
+                                    <Button
+                                        className="min-h-8 px-3 text-13"
+                                        disabled={submitMutation.isPending}
+                                        onClick={() =>
+                                            submitMutation.mutate({
+                                                file,
+                                                mode: pending.mode,
+                                                ack: pending.mode === "merge" ? "RESTORE" : "REPLACE",
+                                            })
+                                        }
+                                    >
+                                        重新提交（{pending.fileName}）
+                                    </Button>
+                                    <Button className="min-h-8 px-3 text-13" onClick={clearSubmission}>
+                                        放弃本次提交
+                                    </Button>
+                                </span>
+                            )}
                         </div>
                     )}
                     {job?.status === "FAILED" && job.errorText && (

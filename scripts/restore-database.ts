@@ -16,7 +16,7 @@
  */
 import { config } from "dotenv";
 import "../apps/backend/src/process-tz.js";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { existsSync } from "node:fs";
 import { createInterface } from "node:readline";
@@ -113,7 +113,7 @@ const main = async (): Promise<void> => {
             await runLocalRescuePassword(resetPassword);
             return;
         }
-        await runRemoteEntry([], [], resetPassword, true);
+        await runRemoteEntry({ type: "reset-password", account: resetPassword }, yes);
         return;
     }
 
@@ -127,12 +127,9 @@ const main = async (): Promise<void> => {
         throw new Error("--request-key 须为 8-64 位字母数字与 ._-= 字符");
     }
     console.log(`目标：${isLocal ? "本地" : "远程"} · 模式：${mode} · requestKey：${requestKey} · 文件：${filePath}`);
-    if (!yes) {
-        const answer = await ask(
-            isLocal
-                ? `确认：已停止本地 backend 等写入进程，将对本地库执行 ${mode} 恢复？(输入 yes 继续) `
-                : `确认：已停止远程 backend 并暂停部署/迁移，将对远程库执行 ${mode} 恢复？(输入 yes 继续) `,
-        );
+    // 远程模式的确认（含目标库校验信息）在 runRemoteEntry 内完成，避免双重询问
+    if (isLocal && !yes) {
+        const answer = await ask(`确认：已停止本地 backend 等写入进程，将对本地库执行 ${mode} 恢复？(输入 yes 继续) `);
         if (answer !== "yes") {
             console.log("已取消");
             return;
@@ -142,7 +139,7 @@ const main = async (): Promise<void> => {
     if (isLocal) {
         await runLocalRestore(filePath, mode, requestKey);
     } else {
-        await runRemoteEntry(["--mode", mode, "--request-key", requestKey], [filePath], undefined, yes);
+        await runRemoteEntry({ type: "restore", filePath, mode, requestKey }, yes);
     }
 };
 
@@ -192,11 +189,12 @@ async function runLocalRescuePassword(account: string): Promise<void> {
     }
 }
 
-/** 远程入口：探测（backend 已停 + 目标库确认）→ 单连接流式执行 */
+/** 远程入口：单次 SSH 完成「backend 已停检查 + 目标库校验 + 容器执行」，
+ * 命令作为 argv 传递（stdin 不被脚本占用，全程流式喂备份字节/救援密码） */
 async function runRemoteEntry(
-    restoreArgs: string[],
-    files: string[],
-    resetPassword: string | undefined,
+    input:
+        | { type: "restore"; filePath: string; mode: string; requestKey: string }
+        | { type: "reset-password"; account: string },
     skipConfirm: boolean,
 ): Promise<void> {
     const SSH_HOST = process.env.DEPLOY_SSH_HOST;
@@ -215,81 +213,61 @@ async function runRemoteEntry(
         }
     }
 
-    const ssh = (
-        script: string,
-        label: string,
-        input?: Buffer,
-        timeout = 1_800_000,
-    ): { stdout: Buffer; stderr: string } => {
-        const res = spawnSync("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15", SSH_HOST, "bash", "-s"], {
-            input: input ? Buffer.concat([Buffer.from(script, "utf8"), input]) : Buffer.from(script, "utf8"),
-            encoding: "buffer",
-            maxBuffer: 64 * 1024 * 1024,
-            timeout,
-        });
-        if (res.error) {
-            throw new Error(`${label}：无法启动 ssh（${res.error.message}）`);
-        }
-        if (res.status !== 0) {
-            throw new Error(`${label}：远端执行失败（exit=${res.status}）\n${res.stderr.toString()}`);
-        }
-        return { stdout: res.stdout, stderr: res.stderr.toString("utf8") };
-    };
-
-    // ① 探测：backend 已停 + 打印实际目标库
-    console.log(`[1/2] 检查远端（${SSH_HOST}:${REMOTE_DIR}）：backend 状态与目标库`);
-    const probe = ssh(
-        `set -euo pipefail
+    const cliArgs =
+        input.type === "restore"
+            ? ["--mode", input.mode, "--request-key", input.requestKey]
+            : ["--reset-password", input.account];
+    // 白名单校验后的参数单引号拼接（mode/requestKey/account 字符集均不含引号）
+    const quotedArgs = cliArgs.map(value => `'${value}'`).join(" ");
+    const remoteCommand = `set -euo pipefail
 cd ${REMOTE_DIR}
 RUNNING=$(docker compose ps --status running --services backend | grep -c '^backend$' || true)
 if [ "$RUNNING" != "0" ]; then
-  echo "BACKEND_RUNNING" >&2
+  echo "BACKEND_RUNNING（先停 backend 再恢复）" >&2
   exit 3
 fi
-docker compose run --rm -T --no-deps backend node dist/system/restore-cli.js --print-target --mode merge
-`,
-        "远端检查",
-        undefined,
-        120_000,
-    );
-    const targetLine = probe.stdout.toString("utf8").trim().split("\n").pop() ?? "";
-    const target = JSON.parse(targetLine) as { database: string; mode: string };
-    if (target.database !== EXPECTED_DB) {
-        throw new Error(`远端实际目标库 ${target.database} 与本地确认值 ${EXPECTED_DB} 不一致，拒绝执行`);
-    }
-    console.log(`      backend 已停 ✓ 目标库 ${target.database} ✓`);
+TARGET=$(docker compose run --rm -T --no-deps backend node dist/system/restore-cli.js --print-target --mode merge | tail -n 1)
+echo "远端目标库：$TARGET" >&2
+echo "$TARGET" | grep -q '"database":"${EXPECTED_DB}"' || { echo "TARGET_MISMATCH（与本地确认值不符）" >&2; exit 4; }
+docker compose run --rm -T --no-deps backend node dist/system/restore-cli.js ${quotedArgs}
+`;
 
+    console.log(`[remote] ${SSH_HOST}:${REMOTE_DIR} → 目标库 ${EXPECTED_DB} · ${cliArgs.join(" ")}`);
     if (!skipConfirm) {
-        const answer = await ask("确认在远程执行？(输入 yes 继续) ");
+        const answer = await ask(
+            input.type === "restore"
+                ? `确认：已停止远程 backend 并暂停部署/迁移，将对 ${EXPECTED_DB} 执行 ${input.mode} 恢复？(输入 yes 继续) `
+                : `确认：已停止远程 backend，将对 ${input.account} 执行救援改密？(输入 yes 继续) `,
+        );
         if (answer !== "yes") {
             console.log("已取消");
             return;
         }
     }
 
-    // ② 执行：stdin 专用于备份字节（或救援密码单行）
-    const args = resetPassword !== undefined ? ["--reset-password", resetPassword] : restoreArgs;
-    const script = `set -euo pipefail
-cd ${REMOTE_DIR}
-docker compose run --rm -T --no-deps backend node dist/system/restore-cli.js ${args.map(value => `'${value}'`).join(" ")}
-`;
-    const input =
-        resetPassword !== undefined
-            ? Buffer.from(`${await askHidden("新密码（6-128 位，经 stdin 传入远端，不记录）：")}\n`)
-            : files[0]
-              ? await new Promise<Buffer>((resolveInput, rejectInput) => {
-                    const chunks: Buffer[] = [];
-                    const stream = createReadStream(files[0]);
-                    stream.on("data", chunk => chunks.push(chunk as Buffer));
-                    stream.on("end", () => resolveInput(Buffer.concat(chunks)));
-                    stream.on("error", rejectInput);
-                })
-              : Buffer.alloc(0);
-    console.log("[2/2] 传输备份字节并执行恢复（远端入口非交互，进度见返回结果）");
-    const run = ssh(script, "远端恢复", input);
-    process.stdout.write(run.stdout.toString("utf8"));
-    if (run.stderr.trim()) {
-        process.stderr.write(run.stderr);
+    // stdin 专用于数据流：备份文件流式直传（不整份驻留内存）或救援密码单行
+    const stdinSource: NodeJS.ReadableStream =
+        input.type === "restore"
+            ? createReadStream(input.filePath)
+            : Readable.from([`${await askHidden("新密码（6-128 位，经 stdin 传入远端，不记录）：")}\n`]);
+
+    const child = spawn("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15", SSH_HOST, remoteCommand], {
+        stdio: ["pipe", "inherit", "inherit"],
+    });
+    const exited = new Promise<number | null>(resolve => child.on("exit", code => resolve(code)));
+    await pipeline(stdinSource, child.stdin).catch(() => undefined);
+    const code = await exited;
+    if (code === 3) {
+        throw new Error("远端 backend 仍在运行：先停 backend（停写前提）再执行");
+    }
+    if (code === 4) {
+        throw new Error("远端实际目标库与本地确认值不一致，已拒绝执行");
+    }
+    if (code !== 0 && code !== null) {
+        throw new Error(`远程执行失败（exit=${code}）`);
+    }
+    if (code === null) {
+        throw new Error("远程执行被信号终止");
     }
 }
 

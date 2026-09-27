@@ -34,6 +34,10 @@ export class WriteRegistrationInterceptor implements NestInterceptor {
         if (typeof generation !== "number" || !this.state.tryRegisterWrite(generation)) {
             throw new ServiceUnavailableException("系统恢复维护中，暂时无法处理请求，请稍后重试");
         }
+        // 释放语义：finalize 覆盖 complete/error/unsubscribe。Nest + Fastify 管线中
+        // HTTP 客户端断线不会取消 handler 的 observable（handler 继续执行至自身收尾，
+        // 例：流式备份 await done 后才返回），因此这里不会因断线提前释放；unsubscribe
+        // 分支仅覆盖上游运算符主动取消的防御场景
         return next.handle().pipe(finalize(() => this.state.releaseWrite()));
     }
 }

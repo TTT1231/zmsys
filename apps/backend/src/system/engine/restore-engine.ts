@@ -252,6 +252,21 @@ export async function validateBackup(
     mode: RestoreMode,
 ): Promise<ValidatedBackup> {
     const stream = await openDecompressed(openStream);
+    try {
+        return await validateBackupStream(q, database, stream, mode);
+    } finally {
+        // 校验早退（任何拒绝路径）也必须销毁底层流：Windows 下句柄滞留会让
+        // 后续临时文件删除失败（EBUSY/EPERM）
+        stream.destroy();
+    }
+}
+
+async function validateBackupStream(
+    q: SqlExecutor,
+    database: string,
+    stream: Readable,
+    mode: RestoreMode,
+): Promise<ValidatedBackup> {
     const lines = readLines(stream);
     const hash = createChecksumHash();
 
@@ -564,10 +579,8 @@ export async function executeRestore(
     let preTokenVersions = new Map<string, bigint>();
 
     if (mode === "replace") {
-        // ① 范围外表引用预检（FK 图 + EXISTS；可清理运行表除外）
+        // ① 范围外表引用预检（FK 图 + EXISTS；可清理运行表除外）——只读预检在事务外
         await precheckOutsideReferences(executor, database, validated);
-        // 恢复前用户 token_version（replace 会话例外的基准）
-        preTokenVersions = await readTokenVersions(executor);
     }
 
     let inTransaction = false;
@@ -577,6 +590,8 @@ export async function executeRestore(
         faultExit("exit-in-transaction");
 
         if (mode === "replace") {
+            // ② 事务内保存恢复前用户 token_version（replace 会话例外的基准；§10.2）
+            preTokenVersions = await readTokenVersions(executor);
             const purged = await executor.query<Array<{ n: number | bigint }>>(
                 "SELECT COUNT(*) AS n FROM api_idempotency",
             );
@@ -592,79 +607,11 @@ export async function executeRestore(
 
         // 数据插回/补插：按文件序流式读取（校验已确认父先子后与列序一致）
         const stream = await openDecompressed(openStream);
-        const lines = readLines(stream);
-        interface InsertSection {
-            table: string;
-            schema: TableSchema;
-            columns: string[];
-            report: TableReport;
-            tokenOverride: TokenOverride | null;
+        try {
+            tokenVersionsRaised = await insertPass(executor, stream, validated, mode, preTokenVersions, reports);
+        } finally {
+            stream.destroy();
         }
-        let section: InsertSection | null = null;
-        let batchRows: ParsedValue[][] = [];
-
-        const flushBatch = async (): Promise<void> => {
-            const active = section;
-            if (active === null || batchRows.length === 0) {
-                return;
-            }
-            if (active.table === "biz_sequence") {
-                for (const row of batchRows) {
-                    await insertSequenceRow(executor, active.columns, row, active.report);
-                }
-            } else {
-                await insertBatchWithDuplicateHandling(
-                    executor,
-                    active.table,
-                    active.columns,
-                    batchRows,
-                    active.schema,
-                    active.report,
-                    active.tokenOverride,
-                );
-            }
-            batchRows = [];
-        };
-
-        for (;;) {
-            const raw = await nextLine(lines);
-            if (raw === undefined) break;
-            const line = raw.toString("utf8");
-            if (line.startsWith(TABLE_PREFIX)) {
-                await flushBatch();
-                const table = line.slice(TABLE_PREFIX.length).trim();
-                const tableSchema = validated.schema.get(table)!;
-                const columns = tableSchema.columns.map(column => column.name);
-                const report: TableReport = { name: table, inserted: 0, skipped: 0, sequenceRaised: 0 };
-                reports.push(report);
-                let tokenOverride: TokenOverride | null = null;
-                if (mode === "replace" && table === "sys_user") {
-                    const tokenVersionIndex = columns.indexOf("token_version");
-                    const idIndex =
-                        tableSchema.primaryKey.length === 1 ? columns.indexOf(tableSchema.primaryKey[0]) : -1;
-                    if (tokenVersionIndex >= 0 && idIndex >= 0) {
-                        tokenOverride = {
-                            preTokenVersions,
-                            idIndex,
-                            tokenVersionIndex,
-                            onRaised: () => {
-                                tokenVersionsRaised += 1;
-                            },
-                        };
-                    }
-                }
-                section = { table, schema: tableSchema, columns, report, tokenOverride };
-                continue;
-            }
-            if (line.startsWith("INSERT INTO ")) {
-                const parsed = parseInsertLine(line);
-                batchRows.push(...parsed.rows);
-                if (batchRows.length >= INSERT_BATCH_ROWS) {
-                    await flushBatch();
-                }
-            }
-        }
-        await flushBatch();
 
         if (mode === "replace") {
             await verifyNoOrphans(executor, validated.schema);
@@ -712,6 +659,92 @@ export async function executeRestore(
                   error,
               );
     }
+}
+
+/** 数据插回/补插：按文件序流式读取并分批参数化插入（biz_sequence 走 GREATEST，
+ * sys_user 在 replace 下按 token_version 规则覆写）。返回被抬升的会话版本数 */
+async function insertPass(
+    executor: SqlExecutor,
+    stream: Readable,
+    validated: ValidatedBackup,
+    mode: RestoreMode,
+    preTokenVersions: Map<string, bigint>,
+    reports: TableReport[],
+): Promise<number> {
+    const lines = readLines(stream);
+    interface InsertSection {
+        table: string;
+        schema: TableSchema;
+        columns: string[];
+        report: TableReport;
+        tokenOverride: TokenOverride | null;
+    }
+    let section: InsertSection | null = null;
+    let batchRows: ParsedValue[][] = [];
+    let tokenVersionsRaised = 0;
+
+    const flushBatch = async (): Promise<void> => {
+        const active = section;
+        if (active === null || batchRows.length === 0) {
+            return;
+        }
+        if (active.table === "biz_sequence") {
+            for (const row of batchRows) {
+                await insertSequenceRow(executor, active.columns, row, active.report);
+            }
+        } else {
+            await insertBatchWithDuplicateHandling(
+                executor,
+                active.table,
+                active.columns,
+                batchRows,
+                active.schema,
+                active.report,
+                active.tokenOverride,
+            );
+        }
+        batchRows = [];
+    };
+
+    for (;;) {
+        const raw = await nextLine(lines);
+        if (raw === undefined) break;
+        const line = raw.toString("utf8");
+        if (line.startsWith(TABLE_PREFIX)) {
+            await flushBatch();
+            const table = line.slice(TABLE_PREFIX.length).trim();
+            const tableSchema = validated.schema.get(table)!;
+            const columns = tableSchema.columns.map(column => column.name);
+            const report: TableReport = { name: table, inserted: 0, skipped: 0, sequenceRaised: 0 };
+            reports.push(report);
+            let tokenOverride: TokenOverride | null = null;
+            if (mode === "replace" && table === "sys_user") {
+                const tokenVersionIndex = columns.indexOf("token_version");
+                const idIndex = tableSchema.primaryKey.length === 1 ? columns.indexOf(tableSchema.primaryKey[0]) : -1;
+                if (tokenVersionIndex >= 0 && idIndex >= 0) {
+                    tokenOverride = {
+                        preTokenVersions,
+                        idIndex,
+                        tokenVersionIndex,
+                        onRaised: () => {
+                            tokenVersionsRaised += 1;
+                        },
+                    };
+                }
+            }
+            section = { table, schema: tableSchema, columns, report, tokenOverride };
+            continue;
+        }
+        if (line.startsWith("INSERT INTO ")) {
+            const parsed = parseInsertLine(line);
+            batchRows.push(...parsed.rows);
+            if (batchRows.length >= INSERT_BATCH_ROWS) {
+                await flushBatch();
+            }
+        }
+    }
+    await flushBatch();
+    return tokenVersionsRaised;
 }
 
 async function rollbackQuietly(executor: SqlExecutor): Promise<void> {

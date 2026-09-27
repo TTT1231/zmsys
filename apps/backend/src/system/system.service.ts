@@ -97,7 +97,11 @@ export interface PreviewResult {
     tables: ValidatedBackup["tables"];
 }
 
-type HandoffResult = { kind: "accepted" } | { kind: "lock-conflict" } | { kind: "existing"; job: JobView };
+type HandoffResult =
+    | { kind: "accepted" }
+    | { kind: "lock-conflict" }
+    | { kind: "key-conflict" }
+    | { kind: "existing"; job: JobView };
 
 /** Fastify reply 的最小结构类型（仓库惯例：不直接依赖 fastify 包类型） */
 interface ReplyLike {
@@ -390,8 +394,15 @@ export class SystemService implements OnApplicationBootstrap {
             throw new BadRequestException("requestKey 须为 8-64 位字母数字与 ._-= 字符");
         }
 
-        // 幂等复查：已有持久终态行——同文件同模式回放原终态（200），否则 409
-        const existingRow = await this.prisma.sysRestoreJob.findUnique({ where: { requestKey } });
+        // 幂等复查：已有持久终态行——同文件同模式回放原终态（200），否则 409。
+        // 查询本身抛错（DB 故障）也属请求侧失败：清理临时文件后原样上抛（5xx）
+        let existingRow;
+        try {
+            existingRow = await this.prisma.sysRestoreJob.findUnique({ where: { requestKey } });
+        } catch (error) {
+            await unlink(temp.path).catch(() => undefined);
+            throw error;
+        }
         if (existingRow) {
             await unlink(temp.path).catch(() => undefined);
             if (existingRow.fileSha256 === temp.sha256 && existingRow.mode === mode) {
@@ -442,6 +453,9 @@ export class SystemService implements OnApplicationBootstrap {
         const decision = await handoff;
         if (decision.kind === "lock-conflict") {
             throw new ConflictException("恢复锁被占用（另一恢复会话仍在收尾），请稍后重试");
+        }
+        if (decision.kind === "key-conflict") {
+            throw new ConflictException("该 requestKey 已用于其他文件或模式，须更换 requestKey");
         }
         if (decision.kind === "existing") {
             return { jobId: decision.job.jobId, existing: decision.job };
@@ -500,10 +514,15 @@ export class SystemService implements OnApplicationBootstrap {
             }
             lockHeld = true;
 
-            // 锁内复查：另一请求可能在预检期间完成同 key 提交
-            const existingRow = await this.findJobRowByKey(requestKey);
+            // 锁内复查：另一请求可能在预检期间完成同 key 提交。
+            // 与首次查询同口径比对摘要与模式：同文件同模式回放原终态，否则 409（提交身份契约）
+            const existingRow = await this.prisma.sysRestoreJob.findUnique({ where: { requestKey } });
             if (existingRow) {
-                settle({ kind: "existing", job: existingRow });
+                if (existingRow.fileSha256 === temp.sha256 && existingRow.mode === mode) {
+                    settle({ kind: "existing", job: jobViewFromRow(existingRow) });
+                } else {
+                    settle({ kind: "key-conflict" });
+                }
                 return;
             }
 
@@ -727,11 +746,6 @@ export class SystemService implements OnApplicationBootstrap {
                 /* 已断开 */
             }
         }
-    }
-
-    private async findJobRowByKey(requestKey: string): Promise<JobView | null> {
-        const row = await this.prisma.sysRestoreJob.findUnique({ where: { requestKey } });
-        return row ? jobViewFromRow(row) : null;
     }
 
     private async writeFailedCredential(
