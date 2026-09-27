@@ -3,8 +3,8 @@ import type { RoleGrant, RoleId } from "@/data/permissions";
 
 /* ---------- 业务实体（对应 db-scheme.md 各表，业务码为唯一 API key） ---------- */
 
-export type StatusKey = "done" | "progress" | "ready" | "partReady" | "pending" | "cancelled" | "archived";
-export type OrderLifecycleStatus = "active" | "cancelled" | "archived";
+export type StatusKey = "done" | "progress" | "ready" | "partReady" | "pending" | "archived";
+export type OrderLifecycleStatus = "active" | "archived";
 
 export interface OrderStatus {
     label: string;
@@ -25,9 +25,6 @@ export interface Order {
     lifecycleStatus: OrderLifecycleStatus;
     createdBy: string; // 创建人姓名（审计展示，不随编辑变化）
     createdAt: string; // 创建时刻 ISO
-    cancelledAt?: string;
-    cancelledBy?: string;
-    cancelReason?: string;
     archivedAt?: string; // 仅归档终态返回
     archivedBy?: string;
     archiveReason?: string;
@@ -289,11 +286,6 @@ export interface UpdateOrderInput {
     qty?: number;
     deliverDate?: string;
     remark?: string;
-}
-
-export interface CancelOrderInput {
-    expectedVersion: number;
-    reason: string;
 }
 
 /** 归档订单仅限超级管理员；备注选填（留空不上送） */

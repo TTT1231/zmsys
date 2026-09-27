@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/* 订单表格预览结构化规格，并正确区分取消、完成与仍待交付的订单；客户名点击打开客户档案详情。 */
+/* 订单表格预览结构化规格，并正确区分完成与仍待交付的订单；客户名点击打开客户档案详情。 */
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
@@ -30,14 +30,8 @@ const snapshot = {
     boms: [{ ...detailBom, remark: "按钮加弹簧垫片，发货前逐个抽检" }],
     customers: [customer],
     orders: [
-        {
-            ...detailOrder,
-            orderNo: "CANCELLED",
-            lifecycleStatus: "cancelled" as const,
-            outbound: 0,
-            deliverDate: "2020-01-01",
-        },
         { ...detailOrder, orderNo: "DONE", outbound: detailOrder.qty },
+        { ...detailOrder, orderNo: "OVERDUE", outbound: 0, deliverDate: "2020-01-01" },
         detailOrder,
     ],
 };
@@ -48,19 +42,17 @@ vi.mock("@/data/queries", () => ({
 }));
 vi.mock("@/components/ui/toastContexts", () => ({ useToast: () => vi.fn() }));
 afterEach(cleanup);
-it("取消订单不显示全部交付或逾期，正常完成与待交数量保持准确", () => {
+it("逾期订单标已逾期，正常完成与待交数量保持准确", () => {
     render(
         <MemoryRouter>
             <OrdersPage />
         </MemoryRouter>,
     );
     const rows = within(screen.getByRole("table")).getAllByRole("row");
-    expect(rows[1]).toHaveTextContent("已停止交付");
-    expect(rows[1]).not.toHaveTextContent("已全部交付");
-    expect(rows[1]).not.toHaveTextContent("已逾期");
-    expect(rows[1]).toHaveTextContent("已发 0 / 300");
     // 已全部交付按组件设计只留绿色满条，语义走悬停 title（见 OrdersPage 交付情况列注释）
-    expect(rows[2].querySelector(".delivery-track")).toHaveAttribute("title", "已全部交付");
+    expect(rows[1].querySelector(".delivery-track")).toHaveAttribute("title", "已全部交付");
+    expect(rows[2]).toHaveTextContent("已逾期");
+    expect(rows[2]).toHaveTextContent("待交 300");
     expect(rows[3]).toHaveTextContent("待交 100");
 });
 it("表格规格摘要共用同行详情入口，不额外增加规格按钮", () => {
@@ -73,7 +65,7 @@ it("表格规格摘要共用同行详情入口，不额外增加规格按钮", (
     expect(table.getByRole("columnheader", { name: "成品 / BOM" })).toBeInTheDocument();
     expect(table.queryByRole("button", { name: /查看全部规格/ })).not.toBeInTheDocument();
     fireEvent.click(table.getAllByRole("button", { name: "查看详情" })[0]);
-    expect(screen.getByRole("dialog", { name: "CANCELLED" })).toHaveTextContent("6.3静片：铜镀银");
+    expect(screen.getByRole("dialog", { name: "DONE" })).toHaveTextContent("6.3静片：铜镀银");
 });
 it("成品/BOM 旁的 BOM 备注列展示建档备注", () => {
     render(

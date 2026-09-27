@@ -84,7 +84,6 @@ export function OrderTaskCard({
 }) {
     const bom = bomByCode(snap, order.bomCode);
     const remaining = remainingOf(order);
-    const cancelled = order.lifecycleStatus === "cancelled";
     const archived = order.lifecycleStatus === "archived";
     const status = orderStatusOf(snap, order);
     const maxShip = maxShipOf(snap, order.orderNo);
@@ -122,7 +121,7 @@ export function OrderTaskCard({
             <div className="mt-3 flex flex-col gap-1.5 border-t border-line pt-3">
                 <CardField label="交货日期" value={order.deliverDate} />
                 <CardField label="已发 / 订单" value={`${num(order.outbound)} / ${num(order.qty)} 个`} />
-                {!cancelled && !archived && <CardField label="待交数量" value={`${num(remaining)} 个`} strong />}
+                {!archived && <CardField label="待交数量" value={`${num(remaining)} 个`} strong />}
                 {archived && (
                     <CardField
                         label="归档时间"
@@ -132,10 +131,8 @@ export function OrderTaskCard({
                 {archived && <CardField label="归档人" value={order.archivedBy || "—"} />}
                 {archived && <CardField label="归档备注" value={order.archiveReason || "—"} />}
                 <div className="flex flex-wrap justify-between gap-2">
-                    {cancelled ? <span className="text-muted">已停止交付</span> : null}
                     {archived ? <span className="text-muted">已归档</span> : null}
-                    {!cancelled &&
-                        !archived &&
+                    {!archived &&
                         (remaining > 0 ? (
                             <span className={maxShip > 0 ? "text-success" : "text-warning"}>
                                 {maxShip > 0 ? `本次可发 ${num(maxShip)} 个` : "等待备货"}

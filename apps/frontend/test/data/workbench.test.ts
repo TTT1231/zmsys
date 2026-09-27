@@ -1,4 +1,4 @@
-/* 覆盖取消订单口径、BOM 库存隔离、交期分配、客户排名和趋势补零。 */
+/* 覆盖归档订单口径、BOM 库存隔离、交期分配、客户排名和趋势补零。 */
 import { describe, expect, it } from "vitest";
 import {
     customerRanking,
@@ -33,20 +33,19 @@ const data = (orders: WorkbenchOrder[]): WorkbenchData => ({
 const all = { start: "2026-01-01", end: "2026-09-12" };
 
 describe("工作台统计", () => {
-    it("需求含完成订单，取消只保留已履行部分，且需求等于已发加未发", () => {
+    it("需求含完成订单，归档订单全额计入需求且不再安排交付", () => {
         const result = summarizeWorkbench(
             data([
                 order(),
                 order({ no: "done", shipped: 100 }),
-                order({ no: "cancelled", cancelled: true, shipped: 30 }),
-                order({ no: "empty", cancelled: true, shipped: 0 }),
+                order({ no: "archived", archived: true, shipped: 30 }),
+                order({ no: "archived-empty", archived: true, shipped: 0 }),
             ]),
             all,
         );
-        expect(result.qty).toBe(230);
+        expect(result.qty).toBe(400);
         expect(result.shipped).toBe(150);
         expect(result.remaining).toBe(80);
-        expect(result.qty).toBe(result.shipped + result.remaining);
         expect(result.completed).toBe(1);
     });
     it("不同规格库存不能抵扣缺口，改变订单周期不改变当前库存与缺口", () => {
@@ -62,7 +61,7 @@ describe("工作台统计", () => {
             order({ no: "later", due: "2026-09-19", qty: 50, shipped: 0 }),
             order({ no: "early", due: "2026-09-11", qty: 40, shipped: 0 }),
             order({ no: "outside", due: "2026-09-20", qty: 100, shipped: 0 }),
-            order({ no: "cancelled", cancelled: true, due: "2026-09-10" }),
+            order({ no: "archived", archived: true, due: "2026-09-10" }),
         ]);
         expect(workbenchRisks(snapshot).map(row => [row.no, row.kind, row.gap])).toEqual([
             ["early", "overdue", 0],
@@ -83,7 +82,8 @@ describe("工作台统计", () => {
         expect(customerRanking(orders, "qty")).toHaveLength(20);
         expect(customerRanking(orders, "qty")[0].code).toBe("C23");
         expect(customerRanking(orders, "count")[0]).toMatchObject({ code: "C0", count: 2, qty: 110 });
-        expect(customerRanking([order({ cancelled: true, shipped: 0 })], "count")).toEqual([]);
+        // 归档单是真实历史需求：仍进排行（口径与取消时代相反）
+        expect(customerRanking([order({ archived: true, shipped: 0 })], "count")).toHaveLength(1);
     });
     it("趋势按业务日期及品类过滤，补齐无流水日期，并可按月汇总", () => {
         const snapshot = data([]);

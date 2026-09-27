@@ -143,23 +143,11 @@ describe("orderStatusOf", () => {
             label: "已完成",
             key: "done",
         });
-        // 部分发货归档：归档即结案，无"取消后归档"等专属形态，直接按交付进度展示
+        // 部分发货归档：归档即结案，无专属形态，直接按交付进度展示
         expect(orderStatusOf(snap(), order({ qty: 10, outbound: 4, lifecycleStatus: "archived" }))).toEqual({
             label: "部分发货",
             key: "progress",
         });
-        // 历史取消单归档后同样按交付进度展示（不再出现取消字样）
-        expect(
-            orderStatusOf(
-                snap(),
-                order({
-                    qty: 10,
-                    outbound: 4,
-                    lifecycleStatus: "archived",
-                    cancelledAt: "2026-03-12T00:00:00Z",
-                }),
-            ),
-        ).toEqual({ label: "部分发货", key: "progress" });
     });
 
     it("excludes archived orders from ready-to-ship allocation", () => {

@@ -64,7 +64,6 @@ export function createWorkbenchDemo(asOf: string): WorkbenchData {
         // 近期大单按品类体现不同备货压力，避免各品类进度看起来完全相同。
         const scale = recent ? [7, 8, 5][categories.findIndex(category => category.name === product.category)] : 1;
         const qty = (8 + ((index * 13) % 24) + (24 - customerIndex)) * 100 * scale;
-        const cancelled = index % 59 === 0;
         return {
             no: `SO-${date.replaceAll("-", "")}-${String(index + 1).padStart(3, "0")}`,
             customerCode: `C${String(customerIndex + 1).padStart(3, "0")}`,
@@ -73,14 +72,7 @@ export function createWorkbenchDemo(asOf: string): WorkbenchData {
             date,
             due: addDays(date, recent ? 14 : 10),
             qty,
-            shipped: cancelled
-                ? index % 2 === 0
-                    ? 0
-                    : Math.floor(qty / 200) * 100
-                : recent
-                  ? Math.floor((qty * [0.2, 0.45, 0.7, 1][index % 4]) / 100) * 100
-                  : qty,
-            cancelled,
+            shipped: recent ? Math.floor((qty * [0.2, 0.45, 0.7, 1][index % 4]) / 100) * 100 : qty,
         };
     });
     // 每笔实际发货在此前一天有对应检验入库；额外入库构成当前结存。

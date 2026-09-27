@@ -88,7 +88,6 @@ export const ACTION_CATALOG = {
         { id: "view", label: "查看" },
         { id: "create", label: "新建订单" },
         { id: "edit", label: "编辑订单" },
-        { id: "cancel", label: "取消订单" },
         { id: "archive", label: "归档订单", protected: true },
         { id: "delete", label: "删除订单", protected: true },
     ],
@@ -175,7 +174,7 @@ export function buildDefaultGrants(): GrantMap {
             menus: ["workbench", "orders", "archived-orders", "customers", "bom", "inbound", "outbound", "stock"],
             actions: {
                 // 删除订单/删除 BOM 为受保护动作（仅超级管理员），普通角色不随 allActions 下发
-                orders: ["view", "create", "edit", "cancel"],
+                orders: ["view", "create", "edit"],
                 customers: ["view", "create", "edit"],
                 bom: ["view", "create"],
                 inbound: ["view"],
@@ -197,7 +196,7 @@ export function buildDefaultGrants(): GrantMap {
             version: 1,
             menus: ["workbench", "orders", "archived-orders", "customers", "bom", "inbound", "outbound", "stock"],
             actions: {
-                orders: ["view", "create", "edit", "cancel"],
+                orders: ["view", "create", "edit"],
                 customers: ["view", "create", "edit"],
                 bom: ["view", "create"],
                 inbound: ["view"],
@@ -239,7 +238,6 @@ export function menuLabelFor(menu: MenuNode, role: RoleId): string {
 const ACTION_SHORT: Record<string, string> = {
     create: "新建",
     edit: "编辑",
-    cancel: "取消",
     archive: "归档",
     delete: "删除",
     "bulk-transfer": "移交",

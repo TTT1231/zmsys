@@ -4,7 +4,6 @@ import type { Snapshot, UpdateCustomerInput, UpdateUserInput } from "@/api";
 import { useApp } from "@/context/useApp";
 import {
     archiveOrder as archiveOrderReq,
-    cancelOrder,
     createBom,
     createCustomer,
     createInbound,
@@ -196,11 +195,6 @@ function useWbMutation<TInput, TOutput>(mutationFn: (input: TInput) => Promise<T
 }
 
 export const useCreateOrder = () => useWbMutation(createOrder);
-export const useCancelOrder = () =>
-    useWbMutation((input: { orderNo: string; expectedVersion: number; reason: string }) => {
-        const { orderNo, ...body } = input;
-        return cancelOrder(orderNo, body);
-    });
 /** 归档订单（仅超级管理员）：备注选填，空串由后端归一为 null */
 export const useArchiveOrder = () =>
     useWbMutation((input: { orderNo: string; expectedVersion: number; reason?: string }) => {

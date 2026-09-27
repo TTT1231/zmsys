@@ -10,7 +10,6 @@ const STATUS_STYLES: Record<string, string> = {
     partReady: "bg-warning-soft text-warning border-warning/30",
     progress: "bg-soft text-td-strong border-line",
     pending: "bg-warning-soft text-warning border-warning/30",
-    cancelled: "bg-danger-soft text-danger border-danger/30",
     archived: "bg-soft text-subtle border-line",
     danger: "bg-danger-soft text-danger border-danger/30",
     success: "bg-success-soft text-success border-success/30",
@@ -22,7 +21,6 @@ const STATUS_LABELS: Record<StatusKey, string> = {
     ready: "可发货",
     partReady: "部分可发货",
     pending: "待备货",
-    cancelled: "已取消",
     archived: "已归档",
 };
 
