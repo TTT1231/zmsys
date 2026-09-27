@@ -160,17 +160,18 @@ export function SystemLogsPage() {
         setDateError("");
     };
 
-    // 按北京日分组（保持服务端降序）；相邻同日事件归入同组
+    // 按北京日分组（保持服务端降序）；相邻同日事件归入同组（依赖查询结果引用而非派生数组）
     const groups = useMemo(() => {
+        const items = data?.pages.flatMap(page => page.items) ?? [];
         const byDay = new Map<string, SystemLogEntry[]>();
-        for (const entry of entries) {
+        for (const entry of items) {
             const day = beijingDayOf(entry.occurredAt);
             const bucket = byDay.get(day) ?? [];
             bucket.push(entry);
             byDay.set(day, bucket);
         }
         return [...byDay.entries()];
-    }, [entries]);
+    }, [data]);
 
     return (
         <div className="flex flex-col gap-5">
