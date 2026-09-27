@@ -317,6 +317,8 @@ export class OrdersService {
                     customerCode: updated.customer.customerCode,
                     bomCode: updated.bom.bomCode,
                     archivedBy: updated.archiver?.name ?? null,
+                    // 归档原因入快照：系统日志页 reason 展示依赖 detail（行级无 reason 列）
+                    reason: dto.reason?.length ? dto.reason : null,
                 } as unknown as Prisma.InputJsonValue,
                 now,
             });

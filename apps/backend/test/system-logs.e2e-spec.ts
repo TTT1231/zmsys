@@ -35,6 +35,7 @@ describe("系统日志 (e2e)", () => {
     let bomCode: string;
     let customerCodeA: string;
     let orderNo: string;
+    let orderNo2: string;
 
     const login = async (account: string): Promise<string> => {
         const res = await app.inject({
@@ -276,6 +277,46 @@ describe("系统日志 (e2e)", () => {
         );
         expect(ship.statusCode).toBe(200);
 
+        // 归档订单 1（archive 事件：已发 40 满足归档前提；编辑后版本 2）
+        const archive = await post(
+            `/orders/${orderNo}/archive`,
+            superToken,
+            { expectedVersion: 2, reason: "行情不好客户弃单" },
+            `e2e-sl-${RUN}-arc`,
+        );
+        expect(archive.statusCode).toBe(200);
+
+        // 订单 2：整单发货后作废（void_outbound 事件）——归档单的出库不可作废，用独立订单
+        const order2 = await post(
+            "/orders",
+            superToken,
+            {
+                customerCode: customerCodeA,
+                bomCode,
+                qty: 50,
+                deliverDate: "2027-06-30",
+                orderDate: today(),
+                remark: `e2e 日志订单二 ${RUN}`,
+            },
+            `e2e-sl-${RUN}-order2`,
+        );
+        expect(order2.statusCode).toBe(200);
+        orderNo2 = (order2.body.data as { orderNo: string }).orderNo;
+        const ship2 = await post(
+            "/outbound",
+            warehouseToken,
+            { orderNo: orderNo2, qty: 50, date: today(), remark: "整单发" },
+            `e2e-sl-${RUN}-ship2`,
+        );
+        expect(ship2.statusCode).toBe(200);
+        const voided = await post(
+            `/outbound/${(ship2.body.data as { no: string }).no}/void`,
+            warehouseToken,
+            { expectedVersion: 1, reason: "发货对象有误" },
+            `e2e-sl-${RUN}-void`,
+        );
+        expect(voided.statusCode).toBe(200);
+
         // 离岗移交：停用 sales02，客户 B 移交 sales01（transfer 事件）
         const sales02 = await prisma.sysUser.findUnique({ where: { account: sales02Account } });
         const disable = await app.inject({
@@ -305,15 +346,15 @@ describe("系统日志 (e2e)", () => {
         expect(denied.message).toBe("仅超级管理员可查看系统日志");
     });
 
-    it("订单域聚合：create 与 edit 双来源（op_log + change_log）且字段形态完整", async () => {
+    it("订单域聚合：create/edit/archive 三来源（op_log×2 + change_log）且字段形态完整", async () => {
         const page = await logs(superToken, `?domain=order&keyword=${orderNo}&limit=100`);
         expect(page.statusCode).toBe(200);
         const items = entriesOf(page);
-        // op_log create_order + change_log UPDATE（ARCHIVE 未发生）
-        expect(items).toHaveLength(2);
+        expect(items).toHaveLength(3);
         const byAction = new Map(items.map(item => [item.action as string, item]));
         const created = byAction.get("create")!;
         const edited = byAction.get("edit")!;
+        const archived = byAction.get("archive")!;
         expect(created.targetCode).toBe(orderNo);
         expect(created.targetName).toBe(`日志客户甲_${RUN}`);
         expect(created.actor).toEqual({ name: "郭均", role: "super" });
@@ -328,10 +369,20 @@ describe("系统日志 (e2e)", () => {
             { label: "交货日期", before: "2027-06-30", after: "2027-07-15" },
             { label: "备注", before: `e2e 系统日志订单 ${RUN}`, after: "加急" },
         ]);
-        // id 为雪花串（BigInt 精度往返）；时间线降序（edit 晚于 create）
+        // 归档：状态由进行中推断为已归档，快照数量为归档时口径，reason 透出
+        expect(archived).toMatchObject({
+            domain: "order",
+            targetCode: orderNo,
+            reason: "行情不好客户弃单",
+        });
+        expect(archived.changes).toEqual([
+            { label: "订单状态", before: "进行中", after: "已归档" },
+            { label: "订单数量", before: null, after: "600 个" },
+        ]);
+        // id 为雪花串（BigInt 精度往返）；时间线降序（归档晚于编辑晚于创建）
         expect(created.id).toMatch(/^[0-9]+$/);
         expect(created.occurredAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-        expect(items.map(item => item.action)).toEqual(["edit", "create"]);
+        expect(items.map(item => item.action)).toEqual(["archive", "edit", "create"]);
     });
 
     it("客户域：创建/编辑/移交三类动作，电话只记是否变更、移交带 from→to", async () => {
@@ -391,10 +442,14 @@ describe("系统日志 (e2e)", () => {
         const page = await logs(superToken, `?domain=outbound&keyword=${RUN}&limit=100`);
         expect(page.statusCode).toBe(200);
         const items = entriesOf(page) as Array<Record<string, unknown>>;
-        const ship = items.find(item => item.action === "ship") as Record<string, unknown>;
-        // ship 的 op_log detail 含客户名（本套件新写入的数据），按客户名搜索可命中
-        expect(ship.targetCode).toMatch(/^CK/);
-        expect(ship.changes).toEqual([
+        const ships = items.filter(item => item.action === "ship");
+        // 两笔发货（订单 1 首批 40 + 订单 2 整单 50）；降序排列，晚发生的在前
+        expect(ships).toHaveLength(2);
+        expect(ships[0]!.changes).toEqual([
+            { label: "发货数量", before: null, after: "50 个" },
+            { label: "备注", before: null, after: "整单发" },
+        ]);
+        expect(ships[1]!.changes).toEqual([
             { label: "发货数量", before: null, after: "40 个" },
             { label: "备注", before: null, after: "首批" },
         ]);
@@ -419,10 +474,28 @@ describe("系统日志 (e2e)", () => {
         expect(items[0]!.domain).toBe("customer");
     });
 
-    it("时间范围：7d 命中今天造数；custom 缺日期或 from>to 返回 400", async () => {
+    it("作废动作聚合：出库数量与订单号快照、原因透出", async () => {
+        // 关键词按名称路径命中（void 的 detail.customer 为客户名快照；订单号不在搜索三项内）
+        const page = await logs(superToken, `?action=void&domain=outbound&keyword=${RUN}&limit=100`);
+        expect(page.statusCode).toBe(200);
+        const items = entriesOf(page);
+        expect(items).toHaveLength(1);
+        expect(items[0]).toMatchObject({
+            domain: "outbound",
+            action: "void",
+            targetCode: expect.stringMatching(/^CK/),
+            reason: "发货对象有误",
+        });
+        expect(items[0]!.changes).toEqual([
+            { label: "出库数量", before: null, after: "50 个" },
+            { label: "订单号", before: null, after: orderNo2 },
+        ]);
+    });
+
+    it("时间范围：7d 命中今天造数；custom 跨日窗口完整覆盖；缺日期或 from>to 返回 400", async () => {
         const week = await logs(superToken, `?range=7d&domain=order&keyword=${orderNo}`);
         expect(week.statusCode).toBe(200);
-        expect(entriesOf(week)).toHaveLength(2);
+        expect(entriesOf(week)).toHaveLength(3);
 
         const beijingToday = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
         const custom = await logs(
@@ -430,7 +503,15 @@ describe("系统日志 (e2e)", () => {
             `?range=custom&from=${beijingToday}&to=${beijingToday}&domain=order&keyword=${orderNo}`,
         );
         expect(custom.statusCode).toBe(200);
-        expect(entriesOf(custom)).toHaveLength(2);
+        expect(entriesOf(custom)).toHaveLength(3);
+
+        // 跨日窗口（from < to 多日）：今天造数全部命中，含起止两侧日界
+        const span = await logs(
+            superToken,
+            `?range=custom&from=2026-09-01&to=${beijingToday}&domain=order&keyword=${orderNo}`,
+        );
+        expect(span.statusCode).toBe(200);
+        expect(entriesOf(span)).toHaveLength(3);
 
         const missing = await logs(superToken, `?range=custom&domain=order`);
         expect(missing.statusCode).toBe(400);
