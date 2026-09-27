@@ -26,3 +26,6 @@ export const PermissionsPage = lazy(() =>
 );
 export const BackupPage = lazy(() => import("./pages/system/BackupPage").then(m => ({ default: m.BackupPage })));
 export const RestorePage = lazy(() => import("./pages/system/RestorePage").then(m => ({ default: m.RestorePage })));
+export const SystemLogsPage = lazy(() =>
+    import("./pages/system-logs/SystemLogsPage").then(m => ({ default: m.SystemLogsPage })),
+);

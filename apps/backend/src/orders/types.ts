@@ -11,12 +11,9 @@ export interface Order {
     orderDate: string;
     deliverDate: string;
     remark: string;
-    lifecycleStatus: "active" | "cancelled" | "archived";
+    lifecycleStatus: "active" | "archived";
     createdBy: string;
     createdAt: string;
-    cancelledAt?: string;
-    cancelledBy?: string;
-    cancelReason?: string;
     archivedAt?: string;
     archivedBy?: string;
     archiveReason?: string;

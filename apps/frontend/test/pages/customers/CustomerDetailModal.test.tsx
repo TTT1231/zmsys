@@ -27,16 +27,16 @@ const customer: Customer = {
     created: "2026-08-01",
 };
 
-/* 4 笔订单覆盖倒序取 3、已取消弱化与多种状态徽章；stock=200 分配后可发 100 盖住 ZM260915002 待交 */
+/* 4 笔订单覆盖倒序取 3、归档弱化与多种状态徽章；stock=200 分配后可发 100 盖住 ZM260915002 待交 */
 const orders: Order[] = [
     {
         ...detailOrder,
         orderNo: "ZM260915003",
         qty: 100,
-        outbound: 0,
+        outbound: 40,
         orderDate: "2026-09-15",
-        lifecycleStatus: "cancelled",
-        cancelReason: "客户调整需求",
+        lifecycleStatus: "archived",
+        archivedAt: "2026-09-16T00:00:00Z",
     },
     { ...detailOrder, orderNo: "ZM260915002", qty: 100, outbound: 0, orderDate: "2026-09-15" },
     { ...detailOrder, orderNo: "ZM260914001", qty: 500, outbound: 500, orderDate: "2026-09-14" },
@@ -55,8 +55,8 @@ it("时间线按下单日期倒序只取最近 3 笔，带状态徽章并提供�
     expect(screen.getByRole("button", { name: "查看订单 ZM260915002 详情" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "查看订单 ZM260914001 详情" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "查看订单 ZM260913001 详情" })).not.toBeInTheDocument();
-    // 状态徽章：已取消 / 可发货（分配后可发 100 盖住待交 100）/ 已完成
-    expect(screen.getByText("已取消")).toBeInTheDocument();
+    // 状态徽章：部分发货（归档单复用交付进度口径）/ 可发货（分配后可发 100 盖住待交 100）/ 已完成
+    expect(screen.getByText("部分发货")).toBeInTheDocument();
     expect(screen.getByText("可发货")).toBeInTheDocument();
     expect(screen.getByText("已完成")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /查看全部 4 笔订单/ })).toBeInTheDocument();

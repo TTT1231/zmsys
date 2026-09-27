@@ -39,6 +39,7 @@ interface Store {
     users: Map<string, SysUser>;
     customers: CustomTable[];
     userLogs: unknown[];
+    opLogs: unknown[];
     ownerHistories: unknown[];
 }
 
@@ -111,6 +112,12 @@ const createStore = (store: Store) => {
                 return data;
             }),
         },
+        opLog: {
+            create: vi.fn(async ({ data }: { data: unknown }) => {
+                store.opLogs.push(data);
+                return data;
+            }),
+        },
     };
     // TransactionRunner 持有 $transaction 并以 tx 回调业务方法；同一对象兼任 prisma 与 tx
     return Object.assign(tx, {
@@ -173,6 +180,7 @@ describe("UsersService.listUsers", () => {
             ]),
             customers: [],
             userLogs: [],
+            opLogs: [],
             ownerHistories: [],
         };
         const { service } = mkService(store);
@@ -189,7 +197,7 @@ describe("UsersService.createUser", () => {
     let ctx: ReturnType<typeof mkService>;
 
     beforeEach(() => {
-        store = { users: new Map(), customers: [], userLogs: [], ownerHistories: [] };
+        store = { users: new Map(), customers: [], userLogs: [], opLogs: [], ownerHistories: [] };
         ctx = mkService(store);
     });
 
@@ -254,7 +262,13 @@ describe("UsersService.createUser", () => {
 
 describe("UsersService.updateUser", () => {
     it("用户不存在返回 404", async () => {
-        const { service } = mkService({ users: new Map(), customers: [], userLogs: [], ownerHistories: [] });
+        const { service } = mkService({
+            users: new Map(),
+            customers: [],
+            userLogs: [],
+            opLogs: [],
+            ownerHistories: [],
+        });
         await expect(
             service.updateUser("nobody", { expectedVersion: 1, name: "新人", role: "staff" }, actor),
         ).rejects.toThrow(new NotFoundException("用户不存在"));
@@ -266,6 +280,7 @@ describe("UsersService.updateUser", () => {
             users: new Map([["sales01", sales]]),
             customers: [],
             userLogs: [],
+            opLogs: [],
             ownerHistories: [],
         });
         await expect(
@@ -283,6 +298,7 @@ describe("UsersService.updateUser", () => {
             ]),
             customers: [],
             userLogs: [],
+            opLogs: [],
             ownerHistories: [],
         });
         await expect(
@@ -295,7 +311,13 @@ describe("UsersService.updateUser", () => {
 
     it("仅改姓名：版本 +1、tokenVersion 不变、记 PROFILE_UPDATE", async () => {
         const clerk = mkUser({ id: 100n, account: "clerk", roleCode: "staff" });
-        const store: Store = { users: new Map([["clerk", clerk]]), customers: [], userLogs: [], ownerHistories: [] };
+        const store: Store = {
+            users: new Map([["clerk", clerk]]),
+            customers: [],
+            userLogs: [],
+            opLogs: [],
+            ownerHistories: [],
+        };
         const { service } = mkService(store);
         const updated = await service.updateUser("clerk", { expectedVersion: 1, name: "职员甲", role: "staff" }, actor);
         expect(updated).toMatchObject({ name: "职员甲", version: 2 });
@@ -309,6 +331,7 @@ describe("UsersService.updateUser", () => {
             users: new Map([["sales01", sales]]),
             customers: [mkCustomer(900n, 200n)],
             userLogs: [],
+            opLogs: [],
             ownerHistories: [],
         };
         const { service } = mkService(store);
@@ -318,8 +341,8 @@ describe("UsersService.updateUser", () => {
     });
 
     it("销售转岗：同事务批量移交客户、递增 tokenVersion、写 ROLE_CHANGE 与移交历史", async () => {
-        const sales = mkUser({ id: 200n, account: "sales01", roleCode: "sales" });
-        const next = mkUser({ id: 300n, account: "sales02", roleCode: "sales" });
+        const sales = mkUser({ id: 200n, account: "sales01", name: "原销售", roleCode: "sales" });
+        const next = mkUser({ id: 300n, account: "sales02", name: "接任销售", roleCode: "sales" });
         const store: Store = {
             users: new Map([
                 ["sales01", sales],
@@ -327,6 +350,7 @@ describe("UsersService.updateUser", () => {
             ]),
             customers: [mkCustomer(900n, 200n), mkCustomer(901n, 200n)],
             userLogs: [],
+            opLogs: [],
             ownerHistories: [],
         };
         const { service } = mkService(store);
@@ -350,6 +374,17 @@ describe("UsersService.updateUser", () => {
         const batchIds = new Set(store.ownerHistories.map(item => (item as { batchId: bigint }).batchId));
         expect(batchIds.size).toBe(1);
         expect(store.userLogs[0]).toMatchObject({ eventType: "ROLE_CHANGE" });
+        // 离岗移交逐客户补写 op_log（update_customer + ownerChanged 姓名 + 客户名快照）
+        expect(store.opLogs).toHaveLength(2);
+        for (const log of store.opLogs) {
+            expect(log).toMatchObject({
+                action: "update_customer",
+                detailJson: {
+                    ownerChanged: { from: "原销售", to: "接任销售" },
+                    reason: "转岗移交",
+                },
+            });
+        }
     });
 
     it("接任人不是启用中的其他销售返回 400", async () => {
@@ -362,6 +397,7 @@ describe("UsersService.updateUser", () => {
             ]),
             customers: [mkCustomer(900n, 200n)],
             userLogs: [],
+            opLogs: [],
             ownerHistories: [],
         };
         const { service } = mkService(store);
@@ -388,6 +424,7 @@ describe("UsersService.setUserStatus", () => {
             users: new Map([["guojun", superUser]]),
             customers: [],
             userLogs: [],
+            opLogs: [],
             ownerHistories: [],
         });
         await expect(service.setUserStatus("guojun", { expectedVersion: 1, active: false }, actor)).rejects.toThrow(
@@ -397,7 +434,13 @@ describe("UsersService.setUserStatus", () => {
 
     it("停用递增 tokenVersion 与 rowVersion 并写 STATUS_CHANGE；重复停用幂等返回现状", async () => {
         const clerk = mkUser({ id: 100n, account: "clerk", roleCode: "staff" });
-        const store: Store = { users: new Map([["clerk", clerk]]), customers: [], userLogs: [], ownerHistories: [] };
+        const store: Store = {
+            users: new Map([["clerk", clerk]]),
+            customers: [],
+            userLogs: [],
+            opLogs: [],
+            ownerHistories: [],
+        };
         const { service } = mkService(store);
         const disabled = await service.setUserStatus("clerk", { expectedVersion: 1, active: false }, actor);
         expect(disabled).toMatchObject({ active: false, version: 2 });
@@ -419,6 +462,7 @@ describe("UsersService.setUserStatus", () => {
             ]),
             customers: [mkCustomer(900n, 200n)],
             userLogs: [],
+            opLogs: [],
             ownerHistories: [],
         };
         const { service } = mkService(store);
@@ -434,7 +478,13 @@ describe("UsersService.setUserStatus", () => {
 
     it("重新启用不递增 tokenVersion（旧 JWT 仍失效，需重新登录）", async () => {
         const clerk = mkUser({ id: 100n, account: "clerk", roleCode: "staff", status: false, tokenVersion: 5n });
-        const store: Store = { users: new Map([["clerk", clerk]]), customers: [], userLogs: [], ownerHistories: [] };
+        const store: Store = {
+            users: new Map([["clerk", clerk]]),
+            customers: [],
+            userLogs: [],
+            opLogs: [],
+            ownerHistories: [],
+        };
         const { service } = mkService(store);
         const enabled = await service.setUserStatus("clerk", { expectedVersion: 1, active: true }, actor);
         expect(enabled).toMatchObject({ active: true, version: 2 });

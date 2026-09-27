@@ -27,7 +27,7 @@ describe("can / menuVisible", () => {
     });
 
     it("reserves order deletion and archiving for the super admin only", () => {
-        expect(grantOf("super").actions.orders).toEqual(["view", "create", "edit", "cancel", "archive", "delete"]);
+        expect(grantOf("super").actions.orders).toEqual(["view", "create", "edit", "archive", "delete"]);
         expect(can(grantOf("super"), "orders:delete")).toBe(true);
         expect(can(grantOf("super"), "orders:archive")).toBe(true);
         for (const role of ["admin", "warehouse", "sales", "staff"] as const) {
@@ -69,7 +69,7 @@ describe("buildDefaultGrants", () => {
         expect(grants.admin.menus).not.toContain("permissions");
         expect(grants.admin.actions.inbound).toEqual(["view"]);
         expect(grants.admin.actions.outbound).toEqual(["view", "print"]);
-        expect(grants.admin.actions.orders).toEqual(["view", "create", "edit", "cancel"]);
+        expect(grants.admin.actions.orders).toEqual(["view", "create", "edit"]);
         // 仓管：可写台账（含删除已作废）不可打印，无客户档案；跨天作废仅超管
         expect(grants.warehouse.menus).not.toContain("customers");
         expect(grants.warehouse.actions.inbound).toEqual(["view", "register", "edit", "delete"]);

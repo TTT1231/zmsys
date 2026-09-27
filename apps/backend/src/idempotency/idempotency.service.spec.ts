@@ -141,7 +141,7 @@ describe("IdempotencyService.requestKey（业务行幂等键派生）", () => {
 
     it("operationKey 或 idempotencyKey 任一不同派生值即不同", () => {
         const base = service.requestKey(1n, "order:create", "abc12345");
-        expect(service.requestKey(1n, "order:cancel", "abc12345")).not.toBe(base);
+        expect(service.requestKey(1n, "order:archive", "abc12345")).not.toBe(base);
         expect(service.requestKey(1n, "order:create", "abc12346")).not.toBe(base);
     });
 });

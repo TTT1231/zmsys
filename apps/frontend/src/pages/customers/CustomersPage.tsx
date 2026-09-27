@@ -327,9 +327,8 @@ export function CustomerDetailModal({
                         <ol className="flex flex-col gap-2.5 border-l border-line pl-4">
                             {timeline.length === 0 && <li className="text-13 text-subtle">暂无订单记录。</li>}
                             {timeline.map(order => {
-                                const cancelled = order.lifecycleStatus === "cancelled";
                                 const archived = order.lifecycleStatus === "archived";
-                                const inactive = cancelled || archived;
+                                const inactive = archived;
                                 const status = orderStatusOf(snap, order);
                                 return (
                                     <li key={order.orderNo} className="relative">

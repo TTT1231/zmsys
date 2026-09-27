@@ -115,9 +115,7 @@ function OwnerWorkbench() {
         return product ? `${product.category} / ${product.model}` : code;
     };
     const showCustomer = (code: string) => {
-        const orders = summary.orders.filter(
-            order => order.customerCode === code && (!order.cancelled || order.shipped > 0),
-        );
+        const orders = summary.orders.filter(order => order.customerCode === code);
         setDetail({
             kind: "orders",
             title: `${orders[0]?.customer ?? "客户"} · 订单明细`,
@@ -419,7 +417,6 @@ function OwnerWorkbench() {
                                     <tr key={order.no}>
                                         <td>
                                             <span className="font-medium text-ink">{order.no}</span>
-                                            {order.cancelled && <span className="ml-2 text-warning">已取消</span>}
                                             {order.archived && <span className="ml-2 text-subtle">已归档</span>}
                                             <p className="mt-1 text-13 text-muted">{order.customer}</p>
                                         </td>

@@ -379,69 +379,17 @@ describe("销售订单 (e2e)", () => {
         expect(voided.outbound).toBe(0);
     });
 
-    it("取消成功：挂未作废出库单仍可直接取消（已发保留）；终态字段、CANCEL 日志与原因；重放幂等；已取消再取消 409", async () => {
-        // 存在未作废出库单时取消直接放行，已发数量口径保留
-        const order = await prisma.salesOrderTable.findUnique({ where: { orderNo } });
-        await seedRegisteredShipment(order!.id, `CKE2EC${RUN}`, 10);
-
-        const key = `e2e-ord-${RUN}-cancel`;
-        const cancelled = await app.inject({
+    it("取消：非超管 403（受保护权限已随迁移删除，路由不再存在）", async () => {
+        // orders:cancel 权限与 /cancel 路由已随"取消"概念清理移除：任何角色调用均为 404
+        const created = await createOrder(superToken, orderInput(customerCode), `e2e-ord-${RUN}-gone-cancel`);
+        const target = created.json().data as { orderNo: string };
+        const res = await app.inject({
             method: "POST",
-            url: `/api/orders/${orderNo}/cancel`,
-            headers: { ...authHeaders(superToken), "idempotency-key": key },
-            payload: { expectedVersion: 2, reason: "客户计划变更" },
+            url: `/api/orders/${target.orderNo}/cancel`,
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-cancel-404` },
+            payload: { expectedVersion: 1, reason: "试图调用已移除的取消端点" },
         });
-        expect(cancelled.statusCode).toBe(200);
-        expect(cancelled.json().data).toMatchObject({
-            lifecycleStatus: "cancelled",
-            version: 3,
-            outbound: 10,
-            cancelReason: "客户计划变更",
-            cancelledBy: "郭均",
-        });
-        expect(cancelled.json().data.cancelledAt).toBeDefined();
-
-        const replay = await app.inject({
-            method: "POST",
-            url: `/api/orders/${orderNo}/cancel`,
-            headers: { ...authHeaders(superToken), "idempotency-key": key },
-            payload: { expectedVersion: 2, reason: "客户计划变更" },
-        });
-        expect(replay.statusCode).toBe(200);
-        expect(replay.json().data).toEqual(cancelled.json().data);
-
-        const again = await app.inject({
-            method: "POST",
-            url: `/api/orders/${orderNo}/cancel`,
-            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-cancel-2` },
-            payload: { expectedVersion: 3, reason: "再次取消" },
-        });
-        expect(again.statusCode).toBe(409);
-
-        const edit = await app.inject({
-            method: "PUT",
-            url: `/api/orders/${orderNo}`,
-            headers: authHeaders(superToken),
-            payload: { expectedVersion: 3, qty: 200 },
-        });
-        expect(edit.statusCode).toBe(409);
-
-        const logs = await prisma.salesOrderChangeLog.findMany({ where: { order: { orderNo } } });
-        const cancelLog = logs.find(log => log.eventType === "CANCEL");
-        expect(cancelLog).toMatchObject({ reason: "客户计划变更", beforeVersion: 2n, afterVersion: 3n });
-    });
-
-    it("取消订单仍返回列表用于历史审计；客户合作状态由剩余活动订单决定", async () => {
-        const list = await app.inject({ method: "GET", url: "/api/orders", headers: authHeaders(superToken) });
-        const cancelled = list.json().data.find((item: { orderNo: string }) => item.orderNo === orderNo);
-        expect(cancelled.lifecycleStatus).toBe("cancelled");
-        expect(cancelled.cancelReason).toBe("客户计划变更");
-
-        // 该客户仍有一笔活动订单（幂等测试 qty=7 单）→ 合作中；
-        // “取消订单不参与派生”的口径由单测覆盖（lifecycleStatus=ACTIVE 过滤）
-        const customers = await app.inject({ method: "GET", url: "/api/customers", headers: authHeaders(salesToken) });
-        const me = customers.json().data.find((item: { code: string }) => item.code === customerCode);
-        expect(me.cooperation).toBe("合作中");
+        expect(res.statusCode).toBe(404);
     });
 
     it("归档：非超管 403；未发货 409；带未作废出库单仍可归档（保留已发口径）且归档后全锁定", async () => {
@@ -459,7 +407,7 @@ describe("销售订单 (e2e)", () => {
         expect(denied.statusCode).toBe(403);
         expect(denied.json().message).toContain("超级管理员");
 
-        // 未发货的 ACTIVE 订单不可归档（手误单走取消/删除）
+        // 未发货的订单不可归档（手误单走删除）
         const unshipped = await app.inject({
             method: "POST",
             url: `/api/orders/${target.orderNo}/archive`,
@@ -510,7 +458,7 @@ describe("销售订单 (e2e)", () => {
         expect(replay.statusCode).toBe(200);
         expect(replay.json().data).toEqual(archived.json().data);
 
-        // 终态全锁定：编辑（含仅备注）/取消/删除/再归档均 409
+        // 终态全锁定：编辑（含仅备注）/删除/再归档均 409
         const edit = await app.inject({
             method: "PUT",
             url: `/api/orders/${target.orderNo}`,
@@ -519,14 +467,6 @@ describe("销售订单 (e2e)", () => {
         });
         expect(edit.statusCode).toBe(409);
         expect(edit.json().message).toContain("已归档");
-
-        const cancel = await app.inject({
-            method: "POST",
-            url: `/api/orders/${target.orderNo}/cancel`,
-            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-arc-cancel` },
-            payload: { expectedVersion: target.version + 1, reason: "试图取消归档单" },
-        });
-        expect(cancel.statusCode).toBe(409);
 
         const remove = await app.inject({
             method: "POST",
@@ -560,70 +500,6 @@ describe("销售订单 (e2e)", () => {
         const list = await app.inject({ method: "GET", url: "/api/orders", headers: authHeaders(superToken) });
         const mine = list.json().data.find((item: { orderNo: string }) => item.orderNo === target.orderNo);
         expect(mine.lifecycleStatus).toBe("archived");
-    });
-
-    it("未发货取消的订单不可归档（走删除）；部分发货后取消的订单可归档且保留取消语境", async () => {
-        // 一件未发的取消单：归档 409，直接删除收尾
-        const bare = await createOrder(superToken, orderInput(customerCode), `e2e-ord-${RUN}-arc2`);
-        const bareTarget = bare.json().data as { orderNo: string; version: number };
-        const cancelled = await app.inject({
-            method: "POST",
-            url: `/api/orders/${bareTarget.orderNo}/cancel`,
-            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-arc2-cancel` },
-            payload: { expectedVersion: bareTarget.version, reason: "客户撤单" },
-        });
-        expect(cancelled.statusCode).toBe(200);
-
-        const refused = await app.inject({
-            method: "POST",
-            url: `/api/orders/${bareTarget.orderNo}/archive`,
-            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-arc2-refuse` },
-            payload: { expectedVersion: bareTarget.version + 1 },
-        });
-        expect(refused.statusCode).toBe(409);
-        expect(refused.json().message).toContain("一件未发");
-
-        const removed = await app.inject({
-            method: "POST",
-            url: `/api/orders/${bareTarget.orderNo}/delete`,
-            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-arc2-del` },
-            payload: { expectedVersion: bareTarget.version + 1 },
-        });
-        expect(removed.statusCode).toBe(200);
-
-        // 部分发货后取消：可归档，取消语境保留、备注留空
-        const created = await createOrder(superToken, orderInput(customerCode), `e2e-ord-${RUN}-arc3`);
-        const target = created.json().data as { orderNo: string; version: number };
-        await seedRegisteredShipment(
-            (await prisma.salesOrderTable.findUnique({ where: { orderNo: target.orderNo } }))!.id,
-            `CKE2EB${RUN}`,
-            30,
-        );
-
-        const partCancelled = await app.inject({
-            method: "POST",
-            url: `/api/orders/${target.orderNo}/cancel`,
-            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-arc3-cancel` },
-            payload: { expectedVersion: target.version, reason: "客户撤单" },
-        });
-        expect(partCancelled.statusCode).toBe(200);
-
-        const archived = await app.inject({
-            method: "POST",
-            url: `/api/orders/${target.orderNo}/archive`,
-            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-arc3-ok` },
-            payload: { expectedVersion: target.version + 1 },
-        });
-        expect(archived.statusCode).toBe(200);
-        expect(archived.json().data).toMatchObject({
-            lifecycleStatus: "archived",
-            outbound: 30,
-            cancelReason: "客户撤单",
-        });
-        expect(archived.json().data.archivedAt).toBeDefined();
-        expect(archived.json().data.archiveReason).toBe("");
-        const stored = await prisma.salesOrderTable.findUnique({ where: { orderNo: target.orderNo } });
-        expect(stored!.archiveReason).toBeNull();
     });
 
     it("删除净发货为零的订单：非超管 403、版本不匹配 409、列表隐藏并写 op_log、重放幂等", async () => {

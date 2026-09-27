@@ -91,7 +91,6 @@ export class WorkbenchService {
             due: formatDateColumn(row.deliverDate),
             qty: row.qty,
             shipped: outboundByOrderId.get(row.id) ?? 0,
-            ...(row.lifecycleStatus === "CANCELLED" ? { cancelled: true } : {}),
             ...(row.lifecycleStatus === "ARCHIVED" ? { archived: true } : {}),
         }));
 

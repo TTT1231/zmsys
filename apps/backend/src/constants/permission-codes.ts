@@ -18,12 +18,12 @@ export const PERMISSIONS = {
     MENU_PERMISSIONS_ACCOUNTS: "menu:permissions-accounts",
     MENU_PERMISSIONS_ROLES: "menu:permissions-roles",
     MENU_PERMISSIONS_MATRIX: "menu:permissions-matrix",
+    MENU_SYSTEM_LOGS: "menu:system-logs",
 
     // ---- 订单 ----
     ORDERS_VIEW: "orders:view",
     ORDERS_CREATE: "orders:create",
     ORDERS_EDIT: "orders:edit",
-    ORDERS_CANCEL: "orders:cancel",
     ORDERS_DELETE: "orders:delete", // 受保护
     ORDERS_ARCHIVE: "orders:archive", // 受保护
 
@@ -62,6 +62,8 @@ export const PERMISSIONS = {
     MENU_SYSTEM_RESTORE: "menu:system-restore",
     SYSTEM_BACKUP_RUN: "system-backup:run", // 受保护
     SYSTEM_RESTORE_RUN: "system-restore:run", // 受保护
+    // ---- 系统日志（受保护，仅 super）----
+    SYSTEM_LOGS_VIEW: "system-logs:view",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

@@ -34,7 +34,7 @@ describe("TransformInterceptor（统一响应信封）", () => {
 
     it("Date 实例原样保留（date-time 字段由序列化层输出 ISO）", async () => {
         const at = new Date("2026-09-12T08:00:00.000Z");
-        const result = await run({ cancelledAt: at });
-        expect((result.data as { cancelledAt: Date }).cancelledAt).toBe(at);
+        const result = await run({ archivedAt: at });
+        expect((result.data as { archivedAt: Date }).archivedAt).toBe(at);
     });
 });

@@ -309,10 +309,8 @@ function EditOrderModal({
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [confirmArchive, setConfirmArchive] = useState(false);
     const [archiveRemark, setArchiveRemark] = useState("");
-    const cancelled = order.lifecycleStatus === "cancelled";
-    /* 已发货订单锁数量与交期（与后端口径一致），仅备注可改；历史取消单后端全
-     * 字段不可改，表单只读，弹窗仅承载归档/删除终端动作 */
-    const locked = order.outbound > 0 || cancelled;
+    /* 已发货订单锁数量与交期（与后端口径一致），仅备注可改 */
+    const locked = order.outbound > 0;
     const remarkDirty = remark !== order.remark;
     /* 可见出库单（含已作废但未删除）仍需先处理；已软删除的出库单不再阻止订单删除。 */
     const canDelete = can("orders:delete") && order.outbound === 0 && !hasShipmentLedger;
@@ -418,25 +416,14 @@ function EditOrderModal({
                     >
                         取消
                     </button>
-                    {cancelled ? (
-                        // 取消单后端全字段不可改，无保存动作；弹窗仅承载归档/删除
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover"
-                        >
-                            完成
-                        </button>
-                    ) : (
-                        <button
-                            type="button"
-                            disabled={updateOrder.isPending || (locked && !remarkDirty)}
-                            onClick={submit}
-                            className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
-                        >
-                            {updateOrder.isPending ? "正在提交…" : "保存修改"}
-                        </button>
-                    )}
+                    <button
+                        type="button"
+                        disabled={updateOrder.isPending || (locked && !remarkDirty)}
+                        onClick={submit}
+                        className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
+                    >
+                        {updateOrder.isPending ? "正在提交…" : "保存修改"}
+                    </button>
                 </>
             }
         >
@@ -460,21 +447,11 @@ function EditOrderModal({
                         onChange={event => setDeliverDate(event.target.value)}
                     />
                     <div className="sm:col-span-2">
-                        <TextArea
-                            label="订单备注"
-                            value={remark}
-                            disabled={cancelled}
-                            onChange={event => setRemark(event.target.value)}
-                        />
+                        <TextArea label="订单备注" value={remark} onChange={event => setRemark(event.target.value)} />
                     </div>
-                    {locked && !cancelled && (
+                    {locked && (
                         <p className="text-13 text-subtle sm:col-span-2">
                             该订单累计已发 {order.outbound} 个，数量与交货日期不可修改，仅可修改备注。
-                        </p>
-                    )}
-                    {cancelled && (
-                        <p className="text-13 text-subtle sm:col-span-2">
-                            该订单已取消，信息不可修改{order.outbound > 0 ? "；可归档留档" : "；可由超级管理员删除"}。
                         </p>
                     )}
                     {canDelete && (
@@ -586,8 +563,6 @@ export function OrderDetailModal({
     const status = orderStatusOf(snap, order);
     const remaining = remainingOf(order);
     const shipments = snap.outboundLedger.filter(row => row.orderNo === order.orderNo);
-    // 曾取消过（终态为取消，或取消后再归档）：取消语境保留展示
-    const wasCancelled = order.lifecycleStatus === "cancelled" || !!order.cancelledAt;
     return (
         <Modal
             open={!!order}
@@ -627,13 +602,7 @@ export function OrderDetailModal({
                         { label: "剩余待交付", value: remaining },
                     ]}
                     status={<StatusBadge status={status.key} label={status.label} />}
-                    note={
-                        order.lifecycleStatus === "cancelled"
-                            ? "订单已取消，剩余数量不再安排交付。"
-                            : order.lifecycleStatus === "archived"
-                              ? "订单已归档，仅供查询，不可修改。"
-                              : undefined
-                    }
+                    note={order.lifecycleStatus === "archived" ? "订单已归档，仅供查询，不可修改。" : undefined}
                 />
                 <RecordProduct categories={snap.bomCategories} bom={bom} bomCode={order.bomCode} />
                 <RecordFields
@@ -654,9 +623,6 @@ export function OrderDetailModal({
                         { label: "创建人", value: order.createdBy },
                         { label: "创建时间", value: formatDateTime(order.createdAt) },
                         { label: "订单备注", value: order.remark || "—", fullWidth: true },
-                        ...(wasCancelled
-                            ? [{ label: "取消原因", value: order.cancelReason || "—", fullWidth: true }]
-                            : []),
                         ...(order.archivedAt
                             ? [
                                   { label: "归档人", value: order.archivedBy || "—" },
@@ -742,14 +708,13 @@ export function OrdersPage() {
     // “客户/备注”列点客户名打开客户档案详情；存编码渲染时回捞，刷新后数据保持同步
     const [customerDetailCode, setCustomerDetailCode] = useState<string | null>(null);
 
-    /* 归档单分流到「归档订单」页，销售订单页只展示活跃与已取消订单 */
+    /* 归档单分流到「归档订单」页，销售订单页只展示活跃订单 */
     const orders = snap.orders.filter(order => order.lifecycleStatus !== "archived");
     const boms = snap.boms;
     const bomCategory = new Map(boms.map(bom => [bom.code, bom.name]));
     const categories = [...new Set(boms.map(bom => bom.name))];
     const counts = {
         total: orders.length,
-        // 待交付口径与剩余量一致：已取消订单剩余按 0，不再虚增计数
         unfinished: orders.filter(order => remainingOf(order) > 0).length,
         ready: orders.filter(order => maxShipOf(snap, order.orderNo) > 0).length,
     };
@@ -1324,8 +1289,7 @@ export function OrdersPage() {
                                         const bom = bomByCode(snap, order.bomCode);
                                         const status = orderStatusOf(snap, order);
                                         const remaining = remainingOf(order);
-                                        const cancelled = order.lifecycleStatus === "cancelled";
-                                        const done = !cancelled && remaining === 0;
+                                        const done = remaining === 0;
                                         // 档案已删除的客户名不可点（快照里已无对应档案）
                                         const customer = snap.customers.find(item => item.code === order.customerCode);
                                         return (
@@ -1396,15 +1360,8 @@ export function OrdersPage() {
                                                 </td>
                                                 <td className="delivery-cell">
                                                     {/* 已全部交付只留绿色满条（悬停 title 兜底语义），
-                                                    未交付/已取消才展开文字明细 */}
-                                                    {cancelled ? (
-                                                        <>
-                                                            <div className="text-13 text-muted">已停止交付</div>
-                                                            <div className="delivery-shipped tnum mt-0.5 text-12 text-muted">
-                                                                已发 {num(order.outbound)} / {num(order.qty)}
-                                                            </div>
-                                                        </>
-                                                    ) : done ? (
+                                                    未交付才展开文字明细 */}
+                                                    {done ? (
                                                         <div className="delivery-track" title="已全部交付">
                                                             <ProgressTrack value={1} done />
                                                         </div>
@@ -1483,14 +1440,7 @@ export function OrdersPage() {
                 snap={snap}
                 onClose={() => setDetail(null)}
                 onEdit={
-                    // 已取消订单本身不可改，但发过货的可归档、一件未发的可删除（均仅
-                    // 超管），按终端动作放行入口；弹窗内表单对取消单全程只读
-                    canEdit &&
-                    detail &&
-                    (detail.lifecycleStatus === "active" ||
-                        (detail.lifecycleStatus === "cancelled" &&
-                            ((detail.outbound > 0 && can("orders:archive")) ||
-                                (detail.outbound === 0 && can("orders:delete")))))
+                    canEdit && detail?.lifecycleStatus === "active"
                         ? () => setEditing(orders.find(order => order.orderNo === detail.orderNo) ?? detail)
                         : undefined
                 }

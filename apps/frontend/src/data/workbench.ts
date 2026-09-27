@@ -19,7 +19,6 @@ export interface WorkbenchOrder {
     due: string;
     qty: number;
     shipped: number;
-    cancelled?: boolean;
     archived?: boolean;
 }
 
@@ -44,11 +43,10 @@ export interface WorkbenchRange {
     end: string;
 }
 export type RankingMetric = "qty" | "count";
-/** 活跃口径的未交量：取消/归档订单不再安排交付，剩余按 0（缺口与风险随之剔除） */
-export const openQty = (order: WorkbenchOrder) =>
-    order.cancelled || order.archived ? 0 : Math.max(0, order.qty - order.shipped);
-// 需求口径：取消订单只保留实际履行部分；归档订单是真实历史需求，全额计入排名与统计。
-export const demandQty = (order: WorkbenchOrder) => (order.cancelled ? order.shipped : order.qty);
+/** 活跃口径的未交量：归档订单不再安排交付，剩余按 0（缺口与风险随之剔除） */
+export const openQty = (order: WorkbenchOrder) => (order.archived ? 0 : Math.max(0, order.qty - order.shipped));
+// 需求口径：归档订单是真实历史需求，全额计入排名与统计。
+export const demandQty = (order: WorkbenchOrder) => order.qty;
 export const withinRange = (date: string, range: WorkbenchRange) => date >= range.start && date <= range.end;
 
 export function summarizeWorkbench(data: WorkbenchData, range: WorkbenchRange) {
@@ -86,9 +84,9 @@ export function summarizeWorkbench(data: WorkbenchData, range: WorkbenchRange) {
         qty: products.reduce((sum, product) => sum + product.qty, 0),
         shipped: products.reduce((sum, product) => sum + product.shipped, 0),
         remaining: products.reduce((sum, product) => sum + product.remaining, 0),
-        completed: orders.filter(order => !order.cancelled && !order.archived && order.shipped >= order.qty).length,
-        // 有效订单卡片只数仍在推进的单：取消与归档都已收尾
-        activeCount: orders.filter(order => !order.cancelled && !order.archived).length,
+        completed: orders.filter(order => !order.archived && order.shipped >= order.qty).length,
+        // 有效订单卡片只数仍在推进的单：归档都已收尾
+        activeCount: orders.filter(order => !order.archived).length,
     };
 }
 
@@ -116,23 +114,21 @@ export function customerRanking(orders: WorkbenchOrder[], metric: RankingMetric)
         string,
         { code: string; name: string; count: number; qty: number; shipped: number; remaining: number }
     >();
-    orders
-        .filter(order => !order.cancelled || order.shipped > 0)
-        .forEach(order => {
-            const row = customers.get(order.customerCode) ?? {
-                code: order.customerCode,
-                name: order.customer,
-                count: 0,
-                qty: 0,
-                shipped: 0,
-                remaining: 0,
-            };
-            row.count += 1;
-            row.qty += demandQty(order);
-            row.shipped += order.shipped;
-            row.remaining += openQty(order);
-            customers.set(row.code, row);
-        });
+    orders.forEach(order => {
+        const row = customers.get(order.customerCode) ?? {
+            code: order.customerCode,
+            name: order.customer,
+            count: 0,
+            qty: 0,
+            shipped: 0,
+            remaining: 0,
+        };
+        row.count += 1;
+        row.qty += demandQty(order);
+        row.shipped += order.shipped;
+        row.remaining += openQty(order);
+        customers.set(row.code, row);
+    });
     return [...customers.values()]
         .sort((a, b) => b[metric] - a[metric] || b.qty - a.qty || a.code.localeCompare(b.code))
         .slice(0, 20);

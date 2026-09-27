@@ -67,7 +67,7 @@ describe("JwtStrategy.validate（每次请求回查数据库）", () => {
         expect(result.role).toBe("sales");
         expect(result.isSuper).toBe(false);
         expect(result.permissions.has("orders:view")).toBe(true);
-        expect(result.permissions.has("orders:cancel")).toBe(false);
+        expect(result.permissions.has("orders:delete")).toBe(false);
     });
 
     it("授权查询按 sys_permission.protected 过滤：库内脏授权行进不了普通用户权限集", async () => {

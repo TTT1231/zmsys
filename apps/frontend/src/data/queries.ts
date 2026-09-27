@@ -1,10 +1,9 @@
-import { useIsFetching, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useIsFetching, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { GrantMap, RoleId } from "./permissions";
-import type { Snapshot, UpdateCustomerInput, UpdateUserInput } from "@/api";
+import type { Snapshot, SystemLogCursor, SystemLogQuery, UpdateCustomerInput, UpdateUserInput } from "@/api";
 import { useApp } from "@/context/useApp";
 import {
     archiveOrder as archiveOrderReq,
-    cancelOrder,
     createBom,
     createCustomer,
     createInbound,
@@ -28,6 +27,7 @@ import {
     fetchOrders,
     fetchOutboundLedger,
     fetchStockAdjustments,
+    fetchSystemLogs,
     fetchUsers,
     printOutboundDocument,
     resetUserPassword as resetUserPasswordReq,
@@ -196,11 +196,6 @@ function useWbMutation<TInput, TOutput>(mutationFn: (input: TInput) => Promise<T
 }
 
 export const useCreateOrder = () => useWbMutation(createOrder);
-export const useCancelOrder = () =>
-    useWbMutation((input: { orderNo: string; expectedVersion: number; reason: string }) => {
-        const { orderNo, ...body } = input;
-        return cancelOrder(orderNo, body);
-    });
 /** 归档订单（仅超级管理员）：备注选填，空串由后端归一为 null */
 export const useArchiveOrder = () =>
     useWbMutation((input: { orderNo: string; expectedVersion: number; reason?: string }) => {
@@ -299,6 +294,23 @@ export const useResetUserPassword = () =>
     });
 
 /* ---- 用户与权限 ---- */
+
+/** 系统日志时间线（仅 super）：筛选参数入 queryKey（变化即整页重查），
+ *  分批为 (beforeAt, beforeId) 复合游标追加——游标经 pageParam 传递，筛选变更自动回到首批；
+ *  enabled=false 时挂起（自定义范围未应用有效日期前不发查询） */
+export function useSystemLogs(filters: Omit<SystemLogQuery, "beforeAt" | "beforeId">, enabled = true) {
+    return useInfiniteQuery({
+        queryKey: ["system-logs", filters],
+        queryFn: ({ pageParam }: { pageParam: SystemLogCursor | null }) =>
+            fetchSystemLogs({
+                ...filters,
+                ...(pageParam ? { beforeAt: pageParam.at, beforeId: pageParam.id } : {}),
+            }),
+        initialPageParam: null,
+        getNextPageParam: lastPage => lastPage.nextCursor,
+        enabled,
+    });
+}
 
 export function useGrants() {
     return useQuery({ queryKey: wbKeys.grants, queryFn: fetchGrants });

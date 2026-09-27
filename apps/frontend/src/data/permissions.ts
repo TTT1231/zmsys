@@ -20,6 +20,8 @@ export interface MenuNode {
     labelByRole?: Partial<Record<RoleId, string>>;
     /** 仅对特定角色展示的固定项（不参与授权勾选）；带 to 的仍可导航 */
     onlyFor?: RoleId[];
+    /** 受保护菜单只能由超级管理员持有（服务端 protected=1 不播授权行），不参与授权勾选 */
+    protected?: boolean;
     children?: Array<{ key: string; label: string }>;
 }
 
@@ -53,6 +55,7 @@ export const MENU_CATALOG: MenuNode[] = [
         icon: "shield",
         group: "工作台",
         to: "/permissions",
+        protected: true,
         children: [
             { key: "permissions-accounts", label: "账号管理" },
             { key: "permissions-roles", label: "角色与权限" },
@@ -97,6 +100,14 @@ export const MENU_CATALOG: MenuNode[] = [
         to: "/system/restore",
         onlyFor: ["super"],
     },
+    {
+        key: "system-logs",
+        label: "系统日志",
+        icon: "log",
+        group: "业务导航",
+        to: "/system-logs",
+        protected: true,
+    },
 ];
 
 /* 操作字典：id 同时用于后端接口授权和页面按钮；即使页面入口尚未上线，
@@ -106,7 +117,6 @@ export const ACTION_CATALOG = {
         { id: "view", label: "查看" },
         { id: "create", label: "新建订单" },
         { id: "edit", label: "编辑订单" },
-        { id: "cancel", label: "取消订单" },
         { id: "archive", label: "归档订单", protected: true },
         { id: "delete", label: "删除订单", protected: true },
     ],
@@ -144,6 +154,7 @@ export const ACTION_CATALOG = {
      * 固定权限码字面量与前端 can() 判断 */
     "system-backup": [{ id: "run", label: "执行备份", protected: true }],
     "system-restore": [{ id: "run", label: "执行恢复", protected: true }],
+    "system-logs": [{ id: "view", label: "查看", protected: true }],
 } as const satisfies Record<string, readonly ActionDef[]>;
 
 /* 仅限特定角色的动作组（组级 onlyFor）：不出现在权限编辑器，也不进入
@@ -205,7 +216,7 @@ export function buildDefaultGrants(): GrantMap {
             menus: ["workbench", "orders", "archived-orders", "customers", "bom", "inbound", "outbound", "stock"],
             actions: {
                 // 删除订单/删除 BOM 为受保护动作（仅超级管理员），普通角色不随 allActions 下发
-                orders: ["view", "create", "edit", "cancel"],
+                orders: ["view", "create", "edit"],
                 customers: ["view", "create", "edit"],
                 bom: ["view", "create"],
                 inbound: ["view"],
@@ -227,7 +238,7 @@ export function buildDefaultGrants(): GrantMap {
             version: 1,
             menus: ["workbench", "orders", "archived-orders", "customers", "bom", "inbound", "outbound", "stock"],
             actions: {
-                orders: ["view", "create", "edit", "cancel"],
+                orders: ["view", "create", "edit"],
                 customers: ["view", "create", "edit"],
                 bom: ["view", "create"],
                 inbound: ["view"],
@@ -269,7 +280,6 @@ export function menuLabelFor(menu: MenuNode, role: RoleId): string {
 const ACTION_SHORT: Record<string, string> = {
     create: "新建",
     edit: "编辑",
-    cancel: "取消",
     archive: "归档",
     delete: "删除",
     "bulk-transfer": "移交",

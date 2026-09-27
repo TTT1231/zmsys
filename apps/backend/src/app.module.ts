@@ -20,6 +20,7 @@ import { HealthModule } from "./health/health.module";
 import { WorkbenchModule } from "./workbench/workbench.module";
 import { SystemModule } from "./system/system.module";
 import { MaintenanceStateModule } from "./domain/maintenance-state";
+import { SystemLogsModule } from "./system-logs/system-logs.module";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
 import { PermissionsGuard } from "./common/guards/permissions.guard";
 import { MaintenanceGuard } from "./common/guards/maintenance.guard";
@@ -49,6 +50,7 @@ import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
         WorkbenchModule,
         MaintenanceStateModule,
         SystemModule,
+        SystemLogsModule,
     ],
     providers: [
         // 维护守卫先于认证/授权：为请求记录维护代次并拦截维护中的请求（只读白名单放行）

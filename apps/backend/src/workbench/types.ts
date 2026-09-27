@@ -19,7 +19,6 @@ export interface WorkbenchOrder {
     due: string;
     qty: number;
     shipped: number;
-    cancelled?: boolean;
     archived?: boolean;
 }
 

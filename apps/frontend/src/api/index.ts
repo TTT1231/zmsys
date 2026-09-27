@@ -1,7 +1,7 @@
 /* api 出口（barrel）：业务层一律从 "@/api" 导入，类型同样走本桶；本文件只做 re-export。 */
 export type * from "./types";
 export { login, logout, fetchProfile, changePassword } from "./auth";
-export { fetchOrders, createOrder, updateOrder, cancelOrder, archiveOrder, deleteOrder } from "./orders";
+export { fetchOrders, createOrder, updateOrder, archiveOrder, deleteOrder } from "./orders";
 export { fetchCustomers, createCustomer, updateCustomer } from "./customers";
 export { fetchBoms, fetchBomCategories, fetchBomStocks, fetchBomStockLedger, createBom, deleteBom } from "./boms";
 export {
@@ -31,3 +31,4 @@ export {
     fetchRestoreJob,
     fetchRestoreJobByKey,
 } from "./system";
+export { fetchSystemLogs } from "./system-logs";

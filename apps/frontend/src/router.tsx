@@ -19,6 +19,7 @@ import {
     RestorePage,
     SearchPage,
     StockPage,
+    SystemLogsPage,
     WorkbenchPage,
 } from "./RouterPages";
 
@@ -52,6 +53,7 @@ export const router = createBrowserRouter([
                     { path: "/permissions", element: <PermissionsPage /> },
                     { path: "/system/backup", element: <BackupPage /> },
                     { path: "/system/restore", element: <RestorePage /> },
+                    { path: "/system-logs", element: <SystemLogsPage /> },
                     { path: "*", element: <ErrorPage kind="not-found" /> },
                 ],
             },
