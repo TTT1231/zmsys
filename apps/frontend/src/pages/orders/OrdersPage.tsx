@@ -9,7 +9,14 @@ import { RecordFields, RecordProduct, RecordSummary } from "@/components/busines
 import { DangerNote } from "@/components/business/DangerNote";
 import { CustomerDetailModal } from "@/pages/customers/CustomersPage";
 import { OutboundModal } from "@/pages/outbound/OutboundPage";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import {
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type CSSProperties,
+    type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { downloadCsv, num } from "@/lib/format";
@@ -23,7 +30,6 @@ import { SortTh } from "@/components/ui/SortTh";
 import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import {
     DndContext,
-    DragOverlay,
     PointerSensor,
     useDraggable,
     useSensor,
@@ -715,9 +721,18 @@ export function OrdersPage() {
     // 拖拽态：拖拽中的订单号 + 插入线下标（相对 pageRows，"插到该行前"，n=追加到末尾）
     const [draggingNo, setDraggingNo] = useState<string | null>(null);
     const [dropIndex, setDropIndex] = useState<number | null>(null);
-    // 落地/键盘移动的确认高亮（订单号），500ms 后渐隐清除
-    const [flashNo, setFlashNo] = useState<string | null>(null);
-    const flashTimer = useRef(0);
+    // 落地/键盘移动的确认高亮（500ms 瞬时装饰）：直接操作单元格类，不经组件状态——
+    // 拖拽收尾的重渲染会整体重写 tr 的 className（抹掉手动类），但 td 的虚拟值未变
+    // 不会触发属性重写，类挂在 td 上天然存活于 React 渲染之外
+    const flashRow = (orderNo: string) => {
+        const tr = rowRefs.current.get(orderNo);
+        if (!tr) return;
+        const cells = [...tr.children];
+        cells.forEach(td => td.classList.remove("row-just-moved"));
+        void tr.offsetWidth; // 强制 reflow 重启动画
+        cells.forEach(td => td.classList.add("row-just-moved"));
+        window.setTimeout(() => cells.forEach(td => td.classList.remove("row-just-moved")), 500);
+    };
     // 深链 ?new=order 首帧即开弹窗（初始 state 直读）；effect 只负责清参数，不在副作用里开弹窗
     const [newOpen, setNewOpen] = useState(() => searchParams.get("new") === "order");
     const [ship, setShip] = useState<string | null>(null);
@@ -827,14 +842,6 @@ export function OrdersPage() {
        dnd-kit 只做指针层（激活阈值 4px 区分手柄点击与拖拽），不用 sortable 腾位 */
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
     const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
-    const flashRow = (orderNo: string) => {
-        setFlashNo(null);
-        window.clearTimeout(flashTimer.current);
-        requestAnimationFrame(() => {
-            setFlashNo(orderNo);
-            flashTimer.current = window.setTimeout(() => setFlashNo(null), 500);
-        });
-    };
     // 把 pageRows[from] 移到 insertBefore（"插到该下标行之前"，n=末尾），合流提交完整序
     const submitMove = (from: number, insertBefore: number) => {
         if (insertBefore === from || insertBefore === from + 1) return false;
@@ -850,26 +857,50 @@ export function OrdersPage() {
         return true;
     };
     // 插入线落点：以浮层（精简行快照）几何中心越过目标行边缘判定（指针触发发糊、边缘最稳）
-    const onDragStart = (event: DragStartEvent) => setDraggingNo(event.active.id as string);
-    const onDragMove = (event: DragMoveEvent) => {
-        const rect = event.active.rect.current.translated;
-        if (!rect) return;
-        const center = rect.top + rect.height / 2;
+    const onDragStart = (event: DragStartEvent) => {
+        const no = event.active.id as string;
+        const el = rowRefs.current.get(no);
+        if (el) {
+            const rect = el.getBoundingClientRect();
+            dragGhostRef.current = {
+                baseTop: rect.top,
+                height: rect.height,
+                left: rect.left,
+                centerY: rect.top + rect.height / 2,
+            };
+            setGhostTop(rect.top);
+        }
+        setDraggingNo(no);
+    };
+    /* 浮层几何自管理：DragOverlay 在 React 19 下不挂载（translated rect 恒 null），
+       改用 dnd-kit 的 delta 坐标自绘精简浮层，插入线以浮层中心越行缘判定 */
+    const dragGhostRef = useRef<{ baseTop: number; height: number; left: number; centerY: number } | null>(null);
+    const [ghostTop, setGhostTop] = useState(0);
+    const computeDrop = (centerY: number) => {
         let index = pageRows.length;
         for (let i = 0; i < pageRows.length; i++) {
             const el = rowRefs.current.get(pageRows[i].orderNo);
             if (!el) continue;
             const rowRect = el.getBoundingClientRect();
-            if (center < rowRect.bottom) {
-                index = center > rowRect.top + rowRect.height / 2 ? i + 1 : i;
+            if (centerY < rowRect.bottom) {
+                index = centerY > rowRect.top + rowRect.height / 2 ? i + 1 : i;
                 break;
             }
         }
         setDropIndex(current => (current === index ? current : index));
     };
+    const onDragMove = (event: DragMoveEvent) => {
+        const ghost = dragGhostRef.current;
+        if (!ghost) return;
+        const top = Math.min(window.innerHeight - ghost.height - 12, Math.max(8, ghost.baseTop + event.delta.y));
+        ghost.centerY = top + ghost.height / 2;
+        setGhostTop(current => (current === top ? current : top));
+        computeDrop(ghost.centerY);
+    };
     const resetDrag = () => {
         setDraggingNo(null);
         setDropIndex(null);
+        dragGhostRef.current = null;
     };
     const onDragEnd = () => {
         const from = draggingNo ? pageRows.findIndex(order => order.orderNo === draggingNo) : -1;
@@ -904,6 +935,39 @@ export function OrdersPage() {
             flashRow(orderNo);
         }
     };
+    // 拖到表格滚动区上下边缘时自动滚动：行屏幕位置随滚动变化，每帧重算插入线，
+    // 否则占位指示漂出视口与浮层脱钩（速度按深入感应区比例分档）
+    useEffect(() => {
+        if (!draggingNo) return;
+        let raf = 0;
+        const tick = () => {
+            const scroller = tableScrollRef.current;
+            const ghost = dragGhostRef.current;
+            if (scroller && ghost) {
+                const rect = scroller.getBoundingClientRect();
+                const EDGE = 72;
+                const MAX = 16;
+                let depth = 0;
+                let dir = 0;
+                if (ghost.centerY < rect.top + EDGE) {
+                    depth = (rect.top + EDGE - ghost.centerY) / EDGE;
+                    dir = -1;
+                } else if (ghost.centerY > rect.bottom - EDGE) {
+                    depth = (ghost.centerY - (rect.bottom - EDGE)) / EDGE;
+                    dir = 1;
+                }
+                if (depth > 0) {
+                    scroller.scrollTop += dir * Math.max(2, MAX * Math.min(1, depth));
+                    computeDrop(ghost.centerY);
+                }
+            }
+            raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(raf);
+        // 拖拽期间 pageRows 不变（翻页/筛选都会先结束拖拽），computeDrop 闭包安全
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [draggingNo]);
 
     // 清空条件只作用于筛选行（搜索/状态/品类/交期）；快捷 tab 由用户自行切换
     const clearFilters = () => {
@@ -1270,9 +1334,7 @@ export function OrdersPage() {
                                                 }}
                                                 className={`${draggingNo === order.orderNo ? "row-drag-source" : ""} ${
                                                     dropLineAbove === order.orderNo ? "row-drop-above" : ""
-                                                }${dropLineBelow === order.orderNo ? "row-drop-below" : ""}${
-                                                    flashNo === order.orderNo ? "row-just-moved" : ""
-                                                }`}
+                                                }${dropLineBelow === order.orderNo ? "row-drop-below" : ""}`}
                                             >
                                                 <td className="drag-col">
                                                     <RowDragHandle
@@ -1373,14 +1435,15 @@ export function OrdersPage() {
                                     })}
                                 </tbody>
                             </DataTable>
-                            <DragOverlay dropAnimation={null}>
-                                {draggingNo
-                                    ? (() => {
-                                          const order = pageRows.find(item => item.orderNo === draggingNo);
-                                          return order ? <DragGhost order={order} /> : null;
-                                      })()
-                                    : null}
-                            </DragOverlay>
+                            {draggingNo
+                                ? (() => {
+                                      const order = pageRows.find(item => item.orderNo === draggingNo);
+                                      const ghost = dragGhostRef.current;
+                                      return order && ghost ? (
+                                          <DragGhost order={order} style={{ top: ghostTop, left: ghost.left }} />
+                                      ) : null;
+                                  })()
+                                : null}
                         </DndContext>
                     )}
                 </div>
@@ -1481,9 +1544,9 @@ function RowDragHandle({
 
 /* 拖拽浮层：精简行快照（手柄/订单号/客户，宽度对齐表格前三列）+ 跟随操作提示。
    宽表整行快照会遮住大半视线，Atlassian 同款只留关键信息 */
-function DragGhost({ order }: { order: Order }) {
+function DragGhost({ order, style }: { order: Order; style?: CSSProperties }) {
     return (
-        <div className="drag-ghost">
+        <div className="drag-ghost" style={{ position: "fixed", zIndex: 200, pointerEvents: "none", ...style }}>
             <div className="flex items-center">
                 <div className="flex w-11 shrink-0 justify-center text-muted">
                     <Icon name="grip" size={14} />
