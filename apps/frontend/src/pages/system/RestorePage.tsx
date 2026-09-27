@@ -36,18 +36,76 @@ const newRequestKey = (): string => {
     return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
 };
 
+const formatFileSize = (bytes: number): string =>
+    bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${(bytes / 1024).toFixed(1)} KB`;
+
+function RestoreSteps({
+    current,
+    finished = false,
+    failed = false,
+}: {
+    current: number;
+    finished?: boolean;
+    failed?: boolean;
+}) {
+    return (
+        <nav
+            className="rounded-panel border border-line bg-surface px-4 py-4 shadow-card sm:px-6"
+            aria-label="恢复步骤"
+        >
+            <ol className="grid grid-cols-4 gap-2">
+                {(["选择文件", "选择方式", "确认恢复", "查看结果"] as const).map((label, index) => {
+                    const step = index + 1;
+                    const complete = step < current || (finished && step === current);
+                    return (
+                        <li
+                            key={label}
+                            className="relative flex min-w-0 flex-col items-center gap-1.5 text-center"
+                            aria-current={step === current && !finished ? "step" : undefined}
+                        >
+                            {step < 4 && (
+                                <span
+                                    className={`absolute top-3.5 left-1/2 h-0.5 w-full ${step < current ? "bg-success" : "bg-line"}`}
+                                    aria-hidden="true"
+                                />
+                            )}
+                            <span
+                                className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-12 font-semibold sm:h-8 sm:w-8 ${failed && step === 4 ? "bg-danger-soft text-danger" : complete ? "bg-success-soft text-success" : step === current ? "bg-primary text-white" : "bg-soft text-muted"}`}
+                            >
+                                {failed && step === 4 ? (
+                                    <Icon name="alert" size={15} />
+                                ) : complete ? (
+                                    <Icon name="check" size={15} />
+                                ) : (
+                                    step
+                                )}
+                            </span>
+                            <span
+                                className={`text-12 font-medium whitespace-nowrap ${failed && step === 4 ? "text-danger" : step === current ? "text-ink" : complete ? "text-success" : "text-muted"}`}
+                            >
+                                {label}
+                            </span>
+                        </li>
+                    );
+                })}
+            </ol>
+        </nav>
+    );
+}
+
 /** 数据库恢复（仅超管）：选文件 → 预检 → 模式与确认口令 → 提交后轮询凭证 */
 export function RestorePage() {
     const { can } = useApp();
     const toast = useToast();
     const [file, setFile] = useState<File | null>(null);
     const [preview, setPreview] = useState<BackupPreviewResult | null>(null);
-    const [mode, setMode] = useState<RestoreMode>("merge");
+    const [mode, setMode] = useState<RestoreMode | null>(null);
     const [ack, setAck] = useState("");
     const [pending, setPending] = useState<PendingSubmission | null>(() => loadPending());
     const [job, setJob] = useState<RestoreJob | null>(null);
     const [notFound, setNotFound] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const selectedFileRef = useRef<File | null>(null);
     const pollTimer = useRef<number | null>(null);
 
     useEffect(() => {
@@ -60,18 +118,27 @@ export function RestorePage() {
 
     const previewMutation = useMutation({
         mutationFn: (target: File) => previewRestore(target),
-        onSuccess: result => {
+        onSuccess: (result, target) => {
+            if (selectedFileRef.current !== target) return;
             setPreview(result);
             setAck("");
-            if (!result.canReplace && mode === "replace") {
-                setMode("merge");
-            }
         },
-        onError: (error: Error) => {
+        onError: (error: Error, target) => {
+            if (selectedFileRef.current !== target) return;
             setPreview(null);
             toast(error.message || "预检失败：文件不合法或与当前库结构不符", true);
         },
     });
+
+    const chooseFile = (chosen: File | null) => {
+        selectedFileRef.current = chosen;
+        setFile(chosen);
+        setPreview(null);
+        setMode(null);
+        setAck("");
+        previewMutation.reset();
+        if (chosen) previewMutation.mutate(chosen);
+    };
 
     const clearSubmission = useCallback(() => {
         setPending(null);
@@ -178,260 +245,466 @@ export function RestorePage() {
     // —— 已有待核实提交：优先展示任务进度，不展示提交表单 ——
     if (pending) {
         const statusText: Record<string, string> = {
-            RUNNING: "执行中（系统维护态）",
-            UNKNOWN: "提交结果核实中",
-            SUCCEEDED: "成功",
-            SUCCEEDED_AUDIT_FAILED: "成功（审计补记失败，见服务日志）",
-            FAILED: "失败（已回滚）",
+            RUNNING: "正在恢复数据",
+            UNKNOWN: "正在核实提交结果",
+            SUCCEEDED: "数据恢复完成",
+            SUCCEEDED_AUDIT_FAILED: "恢复完成，审计记录需检查",
+            FAILED: "恢复失败，数据已回滚",
         };
+        const currentStatus = job?.status ?? "UNKNOWN";
+        const finished = job !== null && TERMINAL.has(job.status);
+        const showJobDetails = notFound || finished || Boolean(job?.errorText || job?.report?.tables);
         return (
-            <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 p-5 lg:p-7">
-                <PageHeading
-                    eyebrow="系统"
-                    title="数据库恢复"
-                    description={`requestKey：${pending.requestKey}（请留存，断线/重登录后凭它继续查询）`}
-                />
-                <section className="rounded-card border border-line bg-panel p-5">
-                    <div className="flex items-center gap-3">
-                        {(job?.status ?? "RUNNING") === "RUNNING" || job?.status === "UNKNOWN" ? (
-                            <Icon name="refresh" size={18} className="animate-spin text-primary" />
-                        ) : (
-                            <Icon
-                                name={job?.status === "FAILED" ? "alert" : "check"}
-                                size={18}
-                                className={job?.status === "FAILED" ? "text-danger" : "text-success"}
-                            />
-                        )}
-                        <div className="min-w-0 flex-1">
-                            <div className="text-15 font-semibold text-ink">
-                                {statusText[job?.status ?? "RUNNING"] ?? job?.status ?? "执行中"}
-                            </div>
-                            <div className="mt-0.5 text-12 text-subtle">
-                                {pending.fileName} · {pending.mode === "merge" ? "合并补缺" : "整库快照还原"}
-                                {job?.finishedAt && ` · 完成于 ${new Date(job.finishedAt).toLocaleString()}`}
+            <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-5 lg:p-7">
+                <PageHeading title="数据恢复" description="此页面会持续查询任务结果，重新登录后也可继续查看。" />
+                <RestoreSteps current={4} finished={finished} failed={job?.status === "FAILED"} />
+                <div className="grid items-start gap-5 lg:grid-cols-3">
+                    <section
+                        className="overflow-hidden rounded-panel border border-line bg-surface shadow-card lg:col-span-2"
+                        aria-labelledby="restore-status-title"
+                    >
+                        <div
+                            className={`flex items-start gap-4 border-b border-line p-5 sm:p-6 ${currentStatus === "FAILED" ? "bg-danger-soft" : finished ? "bg-success-soft" : "bg-primary-soft/50"}`}
+                            role="status"
+                            aria-live="polite"
+                        >
+                            <span
+                                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${currentStatus === "FAILED" ? "bg-danger text-white" : finished ? "bg-success text-white" : "bg-primary text-white"}`}
+                            >
+                                <Icon
+                                    name={finished ? (currentStatus === "FAILED" ? "alert" : "check") : "refresh"}
+                                    size={22}
+                                    className={finished ? "" : "animate-spin motion-reduce:animate-none"}
+                                />
+                            </span>
+                            <div className="min-w-0">
+                                <h2 id="restore-status-title" className="text-20 font-semibold text-ink">
+                                    {statusText[currentStatus] ?? currentStatus}
+                                </h2>
+                                <p className="mt-1 text-14 text-td-strong">
+                                    {currentStatus === "RUNNING"
+                                        ? "执行期间系统暂时停止写入，请等待结果。"
+                                        : currentStatus === "UNKNOWN"
+                                          ? "正在确认任务是否已受理，请保持此页打开。"
+                                          : currentStatus === "SUCCEEDED_AUDIT_FAILED"
+                                            ? "数据已恢复；请查看服务日志中的审计补记问题。"
+                                            : currentStatus === "FAILED"
+                                              ? "本次操作未生效，可查看下方错误后重新处理。"
+                                              : "备份数据已成功写入。"}
+                                </p>
                             </div>
                         </div>
-                    </div>
-                    {notFound && (
-                        <div className="mt-3 rounded-xl bg-soft px-3.5 py-2.5 text-13 leading-5 text-td">
-                            当前未查到该 key 的持久记录（原请求可能仍在上传或预检，不代表终态）。 可稍候继续查询，或以
-                            <b>同一文件 / 同一模式 / 同一 requestKey</b> 重新提交。
-                            {file && (
-                                <span className="mt-2 flex flex-wrap gap-2">
-                                    <Button
-                                        className="min-h-8 px-3 text-13"
-                                        disabled={submitMutation.isPending}
-                                        onClick={() =>
-                                            submitMutation.mutate({
-                                                file,
-                                                mode: pending.mode,
-                                                ack: pending.mode === "merge" ? "RESTORE" : "REPLACE",
-                                            })
-                                        }
+                        {showJobDetails && (
+                            <div className="p-5 sm:p-6">
+                                {notFound && !finished && (
+                                    <div className="rounded-card border border-warning/30 bg-warning-soft p-4 text-13 leading-5 text-warning-strong">
+                                        <div className="flex items-start gap-2">
+                                            <Icon name="info" size={17} className="mt-0.5 shrink-0" />
+                                            <p>
+                                                暂未查到任务记录。文件可能仍在上传或预检中，页面会继续自动查询。若长时间无结果，可用原文件和原任务编号重新提交。
+                                            </p>
+                                        </div>
+                                        <input
+                                            ref={fileInputRef}
+                                            type="file"
+                                            accept=".sql,.gz,application/sql,application/gzip"
+                                            className="hidden"
+                                            onChange={event => setFile(event.target.files?.[0] ?? null)}
+                                        />
+                                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                                            <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
+                                                {file ? `已选：${file.name}` : "重新选择原文件"}
+                                            </Button>
+                                            <Button
+                                                disabled={file?.name !== pending.fileName || submitMutation.isPending}
+                                                onClick={() =>
+                                                    file &&
+                                                    submitMutation.mutate({
+                                                        file,
+                                                        mode: pending.mode,
+                                                        ack: pending.mode === "merge" ? "RESTORE" : "REPLACE",
+                                                    })
+                                                }
+                                            >
+                                                {submitMutation.isPending ? "正在重新提交…" : "使用原任务编号重试"}
+                                            </Button>
+                                        </div>
+                                        {file && file.name !== pending.fileName && (
+                                            <p className="mt-2 text-danger-strong">请选择原文件：{pending.fileName}</p>
+                                        )}
+                                    </div>
+                                )}
+                                {job?.status === "FAILED" && job.errorText && (
+                                    <div
+                                        className="rounded-card border border-danger/30 bg-danger-soft p-4 text-13 leading-5 text-danger-strong"
+                                        role="alert"
                                     >
-                                        重新提交（{pending.fileName}）
-                                    </Button>
-                                    <Button className="min-h-8 px-3 text-13" onClick={clearSubmission}>
-                                        放弃本次提交
-                                    </Button>
-                                </span>
-                            )}
-                        </div>
-                    )}
-                    {job?.status === "FAILED" && job.errorText && (
-                        <div className="mt-3 rounded-xl bg-danger-soft px-3.5 py-2.5 text-13 leading-5 text-danger-strong">
-                            {job.errorText}
-                        </div>
-                    )}
-                    {job?.report?.tables && job.status !== "FAILED" && (
-                        <div className="mt-3 max-h-56 overflow-y-auto rounded-xl border border-line">
-                            <table className="w-full text-13">
-                                <thead>
-                                    <tr className="border-b border-line bg-soft text-left text-12 text-subtle">
-                                        <th className="px-3 py-2 font-medium">表</th>
-                                        <th className="px-3 py-2 font-medium">插入</th>
-                                        <th className="px-3 py-2 font-medium">跳过（一致）</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {job.report.tables.map(table => (
-                                        <tr
-                                            key={table.name}
-                                            className="border-b border-dashed border-line last:border-b-0"
-                                        >
-                                            <td className="px-3 py-1.5 text-td">{table.name}</td>
-                                            <td className="px-3 py-1.5 text-td">{table.inserted}</td>
-                                            <td className="px-3 py-1.5 text-td">{table.skipped}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                    {(job?.status === "SUCCEEDED" || job?.status === "SUCCEEDED_AUDIT_FAILED") &&
-                        pending.mode === "replace" && (
-                            <div className="mt-3 rounded-xl bg-warning-soft/60 px-3.5 py-2.5 text-13 leading-5 text-warning-strong">
-                                整库还原已提交：所有用户会话已失效，请重新登录。
-                                {job?.report?.tokenVersionsRaised
-                                    ? `共抬升 ${job.report.tokenVersionsRaised} 个账号的会话版本。`
-                                    : ""}
+                                        <div className="font-semibold">失败原因</div>
+                                        <p className="mt-1">{job.errorText}</p>
+                                    </div>
+                                )}
+                                {job?.report?.tables && job.status !== "FAILED" && (
+                                    <div>
+                                        <h3 className="text-15 font-semibold text-ink">数据处理明细</h3>
+                                        <div className="mt-3 max-h-72 overflow-auto rounded-card border border-line">
+                                            <table className="w-full min-w-96 text-left text-13">
+                                                <thead className="sticky top-0 bg-soft text-12 text-muted">
+                                                    <tr>
+                                                        <th className="px-4 py-3 font-medium">数据表</th>
+                                                        <th className="px-4 py-3 font-medium">已插入</th>
+                                                        <th className="px-4 py-3 font-medium">已跳过</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {job.report.tables.map(table => (
+                                                        <tr key={table.name} className="border-t border-line">
+                                                            <td className="px-4 py-2.5 text-td">{table.name}</td>
+                                                            <td className="px-4 py-2.5 tabular-nums text-td">
+                                                                {table.inserted}
+                                                            </td>
+                                                            <td className="px-4 py-2.5 tabular-nums text-td">
+                                                                {table.skipped}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+                                {(job?.status === "SUCCEEDED" || job?.status === "SUCCEEDED_AUDIT_FAILED") &&
+                                    pending.mode === "replace" && (
+                                        <div className="mt-4 rounded-card border border-warning/30 bg-warning-soft p-4 text-13 leading-5 text-warning-strong">
+                                            所有用户会话已失效，请重新登录。
+                                            {job.report?.tokenVersionsRaised
+                                                ? `涉及 ${job.report.tokenVersionsRaised} 个账号。`
+                                                : ""}
+                                        </div>
+                                    )}
+                                {finished && (
+                                    <div className="mt-5 flex justify-end">
+                                        <Button onClick={clearSubmission}>完成并返回</Button>
+                                    </div>
+                                )}
                             </div>
                         )}
-                    {job && TERMINAL.has(job.status) && (
-                        <div className="mt-4 flex justify-end">
-                            <Button className="min-h-9 px-4 text-14" onClick={clearSubmission}>
-                                完成（允许新的恢复提交）
-                            </Button>
+                    </section>
+                    <aside
+                        className="rounded-panel border border-line bg-surface p-5 shadow-card"
+                        aria-label="本次恢复任务"
+                    >
+                        <h2 className="text-16 font-semibold text-ink">本次任务</h2>
+                        <dl className="mt-4 space-y-4 text-13">
+                            <div>
+                                <dt className="text-muted">备份文件</dt>
+                                <dd className="mt-1 break-all font-medium text-ink">{pending.fileName}</dd>
+                            </div>
+                            <div>
+                                <dt className="text-muted">恢复方式</dt>
+                                <dd className="mt-1 font-medium text-ink">
+                                    {pending.mode === "merge" ? "合并补缺" : "整库还原"}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt className="text-muted">提交时间</dt>
+                                <dd className="mt-1 text-td">{new Date(pending.submittedAt).toLocaleString()}</dd>
+                            </div>
+                            {job?.finishedAt && (
+                                <div>
+                                    <dt className="text-muted">完成时间</dt>
+                                    <dd className="mt-1 text-td">{new Date(job.finishedAt).toLocaleString()}</dd>
+                                </div>
+                            )}
+                        </dl>
+                        <div className="mt-5 border-t border-line pt-4">
+                            <div className="text-12 text-muted">任务编号 · 断线后查询依据</div>
+                            <div className="mt-2 flex items-start gap-2">
+                                <code className="min-w-0 flex-1 break-all rounded-input bg-soft px-3 py-2 text-12 text-td">
+                                    {pending.requestKey}
+                                </code>
+                                <button
+                                    type="button"
+                                    aria-label="复制任务编号"
+                                    title="复制任务编号"
+                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input border border-line text-muted hover:text-primary-strong focus-visible:outline-2 focus-visible:outline-primary"
+                                    onClick={() =>
+                                        void navigator.clipboard.writeText(pending.requestKey).then(
+                                            () => toast("任务编号已复制"),
+                                            () => toast("复制失败，请手动选择任务编号", true),
+                                        )
+                                    }
+                                >
+                                    <Icon name="copy" size={16} />
+                                </button>
+                            </div>
                         </div>
-                    )}
-                </section>
+                    </aside>
+                </div>
             </div>
         );
     }
 
-    const expectedAck = mode === "merge" ? "RESTORE" : "REPLACE";
-    const canSubmit = file !== null && preview !== null && ack === expectedAck && !submitMutation.isPending;
+    const expectedAck = mode === "merge" ? "RESTORE" : mode === "replace" ? "REPLACE" : "";
+    const currentStep = preview === null ? 1 : mode === null ? 2 : 3;
+    const canSubmit =
+        file !== null && preview !== null && mode !== null && ack === expectedAck && !submitMutation.isPending;
 
     return (
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 p-5 lg:p-7">
-            <PageHeading
-                eyebrow="系统"
-                title="数据库恢复"
-                description="上传本系统导出的备份文件（.sql / .sql.gz）；合并补缺不覆盖现有数据，整库还原会先清空再插回。"
-            />
-
-            <section className="rounded-card border border-line bg-panel p-5">
-                <h3 className="mb-3 text-14 font-semibold text-ink">① 选择备份文件</h3>
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".sql,.gz,application/sql,application/gzip"
-                    className="hidden"
-                    onChange={event => {
-                        const chosen = event.target.files?.[0] ?? null;
-                        setFile(chosen);
-                        setPreview(null);
-                        if (chosen) {
-                            previewMutation.mutate(chosen);
-                        }
-                    }}
-                />
-                <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed border-line-strong bg-surface px-4 py-8 text-center transition-colors hover:bg-soft"
-                >
-                    <Icon name="upload" size={22} className="text-muted" />
-                    {file ? (
-                        <>
-                            <span className="text-14 text-ink">{file.name}</span>
-                            <span className="text-12 text-subtle">{(file.size / 1024).toFixed(1)} KB</span>
-                        </>
-                    ) : (
-                        <span className="text-13 text-subtle">点击选择备份文件（上限 512MiB）</span>
-                    )}
-                </button>
-                {previewMutation.isPending && (
-                    <div className="mt-3 text-13 text-subtle">正在预检（校验格式/指纹/校验和）…</div>
-                )}
-                {preview && (
-                    <div className="mt-3 grid gap-1.5 rounded-xl bg-soft px-3.5 py-3 text-13 text-td">
-                        <span>
-                            备份时间：<b>{new Date(preview.meta.createdAt).toLocaleString()}</b>
-                        </span>
-                        <span>
-                            分组：
-                            {preview.meta.groups.length} 组 · 表 {preview.meta.tables.length} 张 · 行数合计{" "}
-                            {preview.meta.tables.reduce((sum, table) => sum + table.rowCount, 0)}
-                        </span>
-                        <span className="text-12 text-subtle">
-                            迁移基线 {preview.meta.latestMigration} · 服务器 {preview.meta.serverVersion}
-                        </span>
-                    </div>
-                )}
-            </section>
-
-            <section className="rounded-card border border-line bg-panel p-5">
-                <h3 className="mb-3 text-14 font-semibold text-ink">② 恢复模式</h3>
-                <div className="grid gap-2">
-                    <label
-                        className={`flex cursor-pointer items-start gap-2.5 rounded-xl border px-3.5 py-3 transition-colors ${
-                            mode === "merge"
-                                ? "border-primary-border bg-primary-soft"
-                                : "border-line bg-surface hover:bg-soft"
-                        }`}
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-5 lg:p-7">
+            <PageHeading title="数据恢复" description="上传备份文件并预检，确认恢复方式后执行。" />
+            <RestoreSteps current={currentStep} />
+            <div className="grid items-start gap-5 lg:grid-cols-3">
+                <div className="flex flex-col gap-5 lg:col-span-2">
+                    <section
+                        className="rounded-panel border border-line bg-surface p-5 shadow-card sm:p-6"
+                        aria-labelledby="restore-file-title"
                     >
+                        <h2 id="restore-file-title" className="text-17 font-semibold text-ink">
+                            选择备份文件
+                        </h2>
+                        <p className="mt-0.5 text-13 text-muted">选择后自动预检文件。</p>
                         <input
-                            type="radio"
-                            name="restore-mode"
-                            className="mt-1 accent-primary"
-                            checked={mode === "merge"}
-                            onChange={() => setMode("merge")}
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".sql,.gz,application/sql,application/gzip"
+                            className="hidden"
+                            onChange={event => {
+                                chooseFile(event.target.files?.[0] ?? null);
+                                event.target.value = "";
+                            }}
                         />
-                        <span>
-                            <span className="block text-14 font-medium text-ink">合并补缺（merge）</span>
-                            <span className="block text-12 text-subtle">
-                                只补插缺失行；主键已存在且内容一致跳过，不一致则整体回滚。日常补数据用。
+                        <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="mt-5 flex min-h-36 w-full cursor-pointer flex-col items-center justify-center rounded-card border border-dashed border-line-strong bg-soft px-5 py-6 text-center transition-colors hover:border-primary-border hover:bg-primary-soft/40 focus-visible:outline-2 focus-visible:outline-primary"
+                        >
+                            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface text-primary-strong shadow-xs">
+                                <Icon name={file ? "file" : "upload"} size={22} />
                             </span>
-                        </span>
-                    </label>
-                    <label
-                        className={`flex items-start gap-2.5 rounded-xl border px-3.5 py-3 transition-colors ${
-                            mode === "replace"
-                                ? "border-primary-border bg-primary-soft"
-                                : preview?.canReplace
-                                  ? "cursor-pointer border-line bg-surface hover:bg-soft"
-                                  : "not-allowed border-line bg-soft opacity-60"
-                        }`}
+                            <span className="mt-3 max-w-full break-all text-14 font-medium text-ink">
+                                {file ? file.name : "点击选择备份文件"}
+                            </span>
+                            <span className="mt-1 text-13 text-muted">
+                                {file
+                                    ? `${formatFileSize(file.size)} · 点击更换文件`
+                                    : "支持 .sql 和 .sql.gz，最大 512 MB"}
+                            </span>
+                        </button>
+                        {previewMutation.isPending && (
+                            <div className="mt-4 flex items-center gap-2 text-13 text-primary-strong" role="status">
+                                <Icon name="refresh" size={16} className="animate-spin motion-reduce:animate-none" />
+                                正在预检文件…
+                            </div>
+                        )}
+                        {previewMutation.isError && (
+                            <div
+                                className="mt-4 rounded-card border border-danger/30 bg-danger-soft p-4 text-13 text-danger-strong"
+                                role="alert"
+                            >
+                                预检未通过：{previewMutation.error.message || "文件不合法或与当前数据库结构不符"}
+                                。请选择其他备份文件。
+                            </div>
+                        )}
+                        {preview && (
+                            <div className="mt-4 rounded-card border border-success/25 bg-success-soft/40 p-4">
+                                <div className="flex items-center gap-2 text-14 font-semibold text-success">
+                                    <Icon name="check" size={18} />
+                                    预检通过
+                                </div>
+                                <dl className="mt-4 grid gap-4 sm:grid-cols-3">
+                                    <div>
+                                        <dt className="text-12 text-muted">备份时间</dt>
+                                        <dd className="mt-1 text-13 font-medium text-ink">
+                                            {new Date(preview.meta.createdAt).toLocaleString()}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-12 text-muted">业务分组 / 数据表</dt>
+                                        <dd className="mt-1 text-13 font-medium text-ink">
+                                            {preview.meta.groups.length} 组 / {preview.meta.tables.length} 张
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-12 text-muted">数据行数</dt>
+                                        <dd className="mt-1 text-13 font-medium tabular-nums text-ink">
+                                            {preview.meta.tables
+                                                .reduce((sum, table) => sum + table.rowCount, 0)
+                                                .toLocaleString()}
+                                        </dd>
+                                    </div>
+                                </dl>
+                            </div>
+                        )}
+                    </section>
+
+                    <section
+                        className="rounded-panel border border-line bg-surface p-5 shadow-card sm:p-6"
+                        aria-labelledby="restore-mode-title"
                     >
+                        <h2 id="restore-mode-title" className="text-17 font-semibold text-ink">
+                            选择恢复方式
+                        </h2>
+                        <p className="mt-0.5 text-13 text-muted">整库还原仅支持完整备份。</p>
+                        <div
+                            className="mt-5 grid gap-3 sm:grid-cols-2"
+                            role="radiogroup"
+                            aria-labelledby="restore-mode-title"
+                        >
+                            <label
+                                className={`flex flex-col rounded-card border p-4 transition-colors focus-within:ring-2 focus-within:ring-primary-border ${mode === "merge" ? "cursor-pointer border-primary-border bg-primary-soft/50" : preview ? "cursor-pointer border-line bg-panel hover:border-line-strong" : "cursor-not-allowed border-line bg-soft"}`}
+                            >
+                                <span className="flex items-center gap-2">
+                                    <input
+                                        type="radio"
+                                        name="restore-mode"
+                                        className="h-4 w-4 accent-primary"
+                                        disabled={!preview}
+                                        checked={mode === "merge"}
+                                        onChange={() => {
+                                            setMode("merge");
+                                            setAck("");
+                                        }}
+                                    />
+                                    <span className="text-14 font-semibold text-ink">合并补缺</span>
+                                </span>
+                                <span className="mt-3 text-13 leading-5 text-td-strong">
+                                    仅插入缺失的数据；已有且相同的数据会跳过。如出现冲突，整次操作回滚。
+                                </span>
+                                <span className="mt-auto pt-3 text-12 font-medium text-primary-strong">
+                                    适合补回遗漏数据
+                                </span>
+                            </label>
+                            <label
+                                className={`flex flex-col rounded-card border p-4 transition-colors focus-within:ring-2 focus-within:ring-primary-border ${mode === "replace" ? "border-warning/50 bg-warning-soft" : preview?.canReplace ? "cursor-pointer border-line bg-panel hover:border-warning/50" : "cursor-not-allowed border-line bg-soft"}`}
+                            >
+                                <span className="flex items-center gap-2">
+                                    <input
+                                        type="radio"
+                                        name="restore-mode"
+                                        className="h-4 w-4 accent-primary"
+                                        disabled={!preview?.canReplace}
+                                        checked={mode === "replace"}
+                                        onChange={() => {
+                                            setMode("replace");
+                                            setAck("");
+                                        }}
+                                    />
+                                    <span className="text-14 font-semibold text-ink">整库还原</span>
+                                </span>
+                                <span className="mt-3 text-13 leading-5 text-td-strong">
+                                    清空现有业务数据，再写入备份。备份之后新增的数据会丢失，所有用户需要重新登录。
+                                </span>
+                                <span
+                                    className={`mt-auto pt-3 text-12 font-medium ${preview?.canReplace ? "text-warning-strong" : "text-muted"}`}
+                                >
+                                    {preview
+                                        ? preview.canReplace
+                                            ? "此文件支持整库还原"
+                                            : "此文件是部分备份，无法整库还原"
+                                        : "预检完整备份后可选择"}
+                                </span>
+                            </label>
+                        </div>
+                    </section>
+
+                    <section
+                        className="rounded-panel border border-line bg-surface p-5 shadow-card sm:p-6"
+                        aria-labelledby="restore-confirm-title"
+                    >
+                        <h2 id="restore-confirm-title" className="text-17 font-semibold text-ink">
+                            确认执行
+                        </h2>
+                        <p className="mt-0.5 text-13 text-muted">核对文件和恢复方式后输入确认词。</p>
+                        <label htmlFor="restore-ack" className="mt-5 block text-13 font-medium text-td-strong">
+                            {mode ? (
+                                <>
+                                    输入{" "}
+                                    <code className="rounded-md bg-soft px-1.5 py-0.5 font-semibold text-ink">
+                                        {expectedAck}
+                                    </code>{" "}
+                                    以确认{mode === "merge" ? "合并补缺" : "整库还原"}
+                                </>
+                            ) : (
+                                "请先选择恢复方式"
+                            )}
+                        </label>
                         <input
-                            type="radio"
-                            name="restore-mode"
-                            className="mt-1 accent-primary"
-                            disabled={!preview?.canReplace}
-                            checked={mode === "replace"}
-                            onChange={() => setMode("replace")}
+                            id="restore-ack"
+                            type="text"
+                            value={ack}
+                            onChange={event => setAck(event.target.value)}
+                            disabled={mode === null}
+                            aria-invalid={ack.length > 0 && ack !== expectedAck}
+                            aria-describedby={ack && ack !== expectedAck ? "restore-ack-hint" : undefined}
+                            placeholder="请输入上方确认词"
+                            className="mt-2 w-full rounded-input border border-line-strong bg-surface px-3.5 py-2.5 text-14 text-ink outline-none focus:border-primary-border focus:ring-2 focus:ring-primary-border/50"
+                            autoComplete="off"
+                            spellCheck={false}
                         />
-                        <span>
-                            <span className="block text-14 font-medium text-ink">整库快照还原（replace）</span>
-                            <span className="block text-12 text-subtle">
-                                {preview?.canReplace
-                                    ? "清空业务表后按备份插回；两次备份之间新增的数据会被删除，所有用户须重新登录。"
-                                    : "仅完整备份可用于整库还原（当前文件为部分备份）。"}
-                            </span>
-                        </span>
-                    </label>
+                        {ack && ack !== expectedAck && (
+                            <p id="restore-ack-hint" className="mt-2 text-12 text-danger-strong">
+                                确认词不匹配，请按原样输入。
+                            </p>
+                        )}
+                    </section>
                 </div>
-            </section>
 
-            <section className="rounded-card border border-line bg-panel p-5">
-                <h3 className="mb-2 text-14 font-semibold text-ink">③ 确认执行</h3>
-                <p className="mb-2.5 text-13 text-subtle">
-                    输入 <b className="text-td">{expectedAck}</b> 以确认（{mode === "merge" ? "合并" : "整库还原"}
-                    模式）。 执行期间系统进入维护态，全部写请求返回 503。
-                </p>
-                <input
-                    type="text"
-                    value={ack}
-                    onChange={event => setAck(event.target.value)}
-                    placeholder={expectedAck}
-                    className="w-full rounded-input border border-line bg-surface px-3.5 py-2.5 text-14 text-ink outline-none focus:border-primary-border"
-                    autoComplete="off"
-                    spellCheck={false}
-                />
-            </section>
-
-            <div className="flex items-center justify-end gap-3">
-                <span className="text-12 text-subtle">
-                    提交后将生成 requestKey 并在本机留存；断线或重新登录后自动凭原 key 继续查询
-                </span>
-                <Button
-                    className="min-h-9 px-4 text-14"
-                    disabled={!canSubmit}
-                    onClick={() => file && submitMutation.mutate({ file, mode, ack })}
-                >
-                    {submitMutation.isPending ? "正在提交…" : `确认恢复（${expectedAck}）`}
-                </Button>
+                <aside className="flex flex-col gap-4 lg:sticky lg:top-6">
+                    <section
+                        className="rounded-panel border border-line bg-surface p-5 shadow-card"
+                        aria-labelledby="restore-summary-title"
+                    >
+                        <h2 id="restore-summary-title" className="text-16 font-semibold text-ink">
+                            执行摘要
+                        </h2>
+                        <dl className="mt-4 space-y-4 text-13">
+                            <div>
+                                <dt className="text-muted">备份文件</dt>
+                                <dd className="mt-1 break-all font-medium text-ink">{file?.name ?? "尚未选择"}</dd>
+                            </div>
+                            <div>
+                                <dt className="text-muted">预检状态</dt>
+                                <dd
+                                    className={`mt-1 font-medium ${preview ? "text-success" : previewMutation.isError ? "text-danger-strong" : "text-td-strong"}`}
+                                >
+                                    {preview
+                                        ? "已通过"
+                                        : previewMutation.isPending
+                                          ? "正在检查"
+                                          : previewMutation.isError
+                                            ? "未通过"
+                                            : "等待文件"}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt className="text-muted">恢复方式</dt>
+                                <dd className="mt-1 font-medium text-ink">
+                                    {mode === "merge" ? "合并补缺" : mode === "replace" ? "整库还原" : "尚未选择"}
+                                </dd>
+                            </div>
+                        </dl>
+                        {mode === "replace" && (
+                            <p className="mt-4 rounded-card bg-warning-soft p-3 text-13 leading-5 text-warning-strong">
+                                整库还原会删除备份之后新增的数据。
+                            </p>
+                        )}
+                        <Button
+                            variant={mode === "replace" ? "danger" : "primary"}
+                            className="mt-5 w-full"
+                            disabled={!canSubmit}
+                            onClick={() => file && mode && submitMutation.mutate({ file, mode, ack })}
+                        >
+                            {submitMutation.isPending ? "正在提交任务…" : "开始恢复"}
+                        </Button>
+                        <p className="mt-3 text-12 leading-5 text-muted">提交后自动跟踪任务结果。</p>
+                    </section>
+                    <div className="rounded-card border border-warning/30 bg-warning-soft p-4 text-13 leading-5 text-warning-strong">
+                        <div className="flex items-start gap-2">
+                            <Icon name="alert" size={18} className="mt-0.5 shrink-0" />
+                            <p>请在业务低峰期操作。恢复期间系统写入会暂停，整库还原还会让当前登录会话失效。</p>
+                        </div>
+                    </div>
+                </aside>
             </div>
         </div>
     );

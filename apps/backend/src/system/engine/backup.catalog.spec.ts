@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
     ALL_GROUP_KEYS,
     BACKUP_GROUPS,
@@ -44,5 +46,14 @@ describe("备份分组目录", () => {
             expect(all.has(table)).toBe(false);
         }
         expect(BACKUP_GROUPS.length).toBe(8);
+    });
+    it("每张 Prisma 实体表都纳入备份或显式列为运行态例外", () => {
+        const schema = readFileSync(resolve(__dirname, "../../../prisma/schema.prisma"), "utf8");
+        const models = [...schema.matchAll(/^model\s+\w+\s*\{([\s\S]*?)^\}/gm)];
+        const physicalTables = models
+            .map(([, body]) => /@@map\("([^"]+)"\)/.exec(body)?.[1])
+            .filter((table): table is string => !!table);
+        expect(physicalTables).toHaveLength(models.length);
+        expect([...new Set([...allCatalogTables(), ...RUNTIME_TABLES])].sort()).toEqual(physicalTables.sort());
     });
 });
