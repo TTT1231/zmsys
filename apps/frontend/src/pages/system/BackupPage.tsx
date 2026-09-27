@@ -24,7 +24,8 @@ function applyLinkage(selected: Set<string>, key: string, checked: boolean, grou
     next.delete(key);
     for (;;) {
         let changed = false;
-        for (const chosen of [...next]) {
+        // Set 迭代中删除未访问项是规范行为（跳过不访问），无需复制快照
+        for (const chosen of next) {
             const deps = groups.find(group => group.key === chosen)?.dependsOn ?? [];
             if (deps.some(dep => !next.has(dep))) {
                 next.delete(chosen);
@@ -42,18 +43,14 @@ export function BackupPage() {
     const toast = useToast();
     const catalog = useQuery({ queryKey: ["backup-catalog"], queryFn: fetchBackupCatalog });
     const groups = useMemo(() => catalog.data?.groups ?? [], [catalog.data]);
-    const [selected, setSelected] = useState<Set<string>>(new Set());
+    // null = 尚未人工选择：目录加载后默认全选（渲染期派生，避免 effect 内 setState）
+    const [selected, setSelected] = useState<Set<string> | null>(null);
+    const active = selected ?? (groups.length > 0 ? new Set(groups.map(group => group.key)) : new Set<string>());
     const [gzip, setGzip] = useState(true);
     const selectAllRef = useRef<HTMLInputElement>(null);
 
-    useEffect(() => {
-        if (selected.size === 0 && groups.length > 0) {
-            setSelected(new Set(groups.map(group => group.key)));
-        }
-    }, [groups, selected.size]);
-
     const backupMutation = useMutation({
-        mutationFn: () => runBackup([...selected], gzip),
+        mutationFn: () => runBackup([...active], gzip),
         onSuccess: async result => {
             const url = URL.createObjectURL(result.data);
             const anchor = document.createElement("a");
@@ -66,13 +63,16 @@ export function BackupPage() {
         onError: (error: Error) => toast(error.message || "备份失败", true),
     });
 
+    const allChecked = active.size === groups.length && groups.length > 0;
+    // indeterminate 属于 DOM 副作用：在 effect 中同步，不在渲染期访问 ref
+    useEffect(() => {
+        if (selectAllRef.current) {
+            selectAllRef.current.indeterminate = active.size > 0 && !allChecked;
+        }
+    }, [active, allChecked]);
+
     if (!can("system-backup:run")) {
         return <div className="p-6 text-14 text-subtle">仅超级管理员可访问数据库备份。</div>;
-    }
-
-    const allChecked = selected.size === groups.length && groups.length > 0;
-    if (selectAllRef.current) {
-        selectAllRef.current.indeterminate = selected.size > 0 && !allChecked;
     }
 
     return (
@@ -121,9 +121,9 @@ export function BackupPage() {
                                 <input
                                     type="checkbox"
                                     className="mt-1 accent-primary"
-                                    checked={selected.has(group.key)}
+                                    checked={active.has(group.key)}
                                     onChange={event =>
-                                        setSelected(prev => applyLinkage(prev, group.key, event.target.checked, groups))
+                                        setSelected(applyLinkage(active, group.key, event.target.checked, groups))
                                     }
                                 />
                                 <span className="min-w-0">
@@ -154,12 +154,12 @@ export function BackupPage() {
 
             <div className="flex items-center justify-end gap-3">
                 <span className="text-13 text-subtle">
-                    已选 {selected.size}/{groups.length} 组
-                    {selected.size === groups.length && "（完整备份，可用于整库还原）"}
+                    已选 {active.size}/{groups.length} 组
+                    {active.size === groups.length && "（完整备份，可用于整库还原）"}
                 </span>
                 <Button
                     className="min-h-9 px-4 text-14"
-                    disabled={selected.size === 0 || backupMutation.isPending}
+                    disabled={active.size === 0 || backupMutation.isPending}
                     onClick={() => backupMutation.mutate()}
                 >
                     {backupMutation.isPending ? "正在备份…" : "执行备份"}
