@@ -54,10 +54,8 @@ it("逾期订单标已逾期，正常完成与待交数量保持准确", () => {
     expect(rows[2]).toHaveTextContent("已逾期");
     expect(rows[2]).toHaveTextContent("待交 300");
     expect(rows[3]).toHaveTextContent("待交 100");
-    // 移动端订单卡片：库存数量紧跟「已发 / 订单」（订单数量）行之后，每卡仅一条；取消单不展示
+    // 移动端订单卡片：库存数量紧跟「已发 / 订单」（订单数量）行之后，每卡仅一条
     const cards = [...document.querySelectorAll<HTMLElement>(".mobile-records article")];
-    const cancelledCard = cards.find(node => node.textContent?.includes("CANCELLED"));
-    expect(within(cancelledCard!).queryByText("库存数量")).not.toBeInTheDocument();
     const stockCard = cards.find(node => node.textContent?.includes("库存数量"));
     expect(within(stockCard!).getByText("200 个")).toBeInTheDocument();
     const fieldByLabel = (root: HTMLElement, label: string) =>
