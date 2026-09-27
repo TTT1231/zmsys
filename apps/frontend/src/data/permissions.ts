@@ -36,8 +36,8 @@ export interface ActionDef {
    工作台组用 chart：grid 已是子项「工作台」的图标，避免组/子项同图 */
 export const NAV_GROUPS = [
     { group: "工作台", icon: "chart" },
-    { group: "业务导航", icon: "cube" },
-    { group: "系统", icon: "database" },
+    { group: "业务导航", icon: "briefcase" },
+    { group: "系统", icon: "sliders" },
 ] as const;
 
 export const MENU_CATALOG: MenuNode[] = [
@@ -70,10 +70,10 @@ export const MENU_CATALOG: MenuNode[] = [
         to: "/orders",
         labelByRole: { warehouse: "待发货订单" },
     },
-    { key: "customers", label: "客户档案", icon: "users", group: "业务导航", to: "/customers" },
-    { key: "bom", label: "物料与 BOM", icon: "layers", group: "业务导航", to: "/bom" },
+    { key: "customers", label: "客户档案", icon: "contacts", group: "业务导航", to: "/customers" },
+    { key: "bom", label: "物料与 BOM", icon: "bom", group: "业务导航", to: "/bom" },
     { key: "inbound", label: "成品入库", icon: "inbound", group: "业务导航", to: "/inbound" },
-    { key: "outbound", label: "成品出库", icon: "truck", group: "业务导航", to: "/outbound" },
+    { key: "outbound", label: "成品出库", icon: "outbound", group: "业务导航", to: "/outbound" },
     { key: "stock", label: "库存", icon: "stock", group: "业务导航", to: "/stock" },
     {
         key: "changelog",
@@ -95,7 +95,7 @@ export const MENU_CATALOG: MenuNode[] = [
     {
         key: "system-restore",
         label: "恢复",
-        icon: "upload",
+        icon: "restore",
         group: "系统",
         to: "/system/restore",
         onlyFor: ["super"],

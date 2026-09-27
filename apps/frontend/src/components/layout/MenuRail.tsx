@@ -55,7 +55,7 @@ export function MenuRail({ sections, activeGroup, onSelectGroup, variant = "pane
                                     onClick={() => onSelectGroup?.(section.group)}
                                     className={railButtonClass(activeGroup === section.group)}
                                 >
-                                    <Icon name={section.icon} size={19} />
+                                    <Icon name={section.icon} size={20} strokeWidth={1.7} />
                                 </button>
                             </TooltipTrigger>
                             <TooltipContent side="right">{section.group}</TooltipContent>
@@ -84,7 +84,7 @@ function GroupPopup({
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <button type="button" aria-label={section.group} className={railButtonClass(active)}>
-                    <Icon name={section.icon} size={19} />
+                    <Icon name={section.icon} size={20} strokeWidth={1.7} />
                 </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent side="right" align="start" className="min-w-48">
@@ -97,7 +97,7 @@ function GroupPopup({
                                 onNavigate?.();
                             }}
                         >
-                            <Icon name={item.icon} size={16} className="shrink-0" />
+                            <Icon name={item.icon} size={18} strokeWidth={1.7} className="shrink-0" />
                             {item.label}
                         </DropdownMenuItem>
                     ) : (
@@ -108,7 +108,7 @@ function GroupPopup({
                                 onClick={onNavigate}
                                 className={({ isActive }) => (isActive ? "font-semibold text-primary-strong" : "")}
                             >
-                                <Icon name={item.icon} size={16} className="shrink-0" />
+                                <Icon name={item.icon} size={18} strokeWidth={1.7} className="shrink-0" />
                                 {item.label}
                             </NavLink>
                         </DropdownMenuItem>

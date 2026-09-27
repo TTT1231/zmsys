@@ -144,7 +144,7 @@ describe("buildNavSections", () => {
 
     it("carries group icon for rail and horizontal menus", () => {
         const sections = buildNavSections("super", grantOf("super"));
-        expect(sections.map(section => section.icon)).toEqual(["chart", "cube", "database"]);
+        expect(sections.map(section => section.icon)).toEqual(["chart", "briefcase", "sliders"]);
     });
 
     it("hides customer menu from warehouse nav", () => {

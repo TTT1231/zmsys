@@ -32,7 +32,7 @@ export function HeaderMenu({ sections }: { sections: NavSection[] }) {
                                         : "text-td hover:bg-soft hover:text-ink"
                                 }`}
                             >
-                                <Icon name={section.icon} size={16} className="shrink-0" />
+                                <Icon name={section.icon} size={18} strokeWidth={1.7} className="shrink-0" />
                                 <span className="whitespace-nowrap">{section.group}</span>
                                 <Icon name="chevron-down" size={14} className="shrink-0 text-muted" />
                             </button>
@@ -44,7 +44,7 @@ export function HeaderMenu({ sections }: { sections: NavSection[] }) {
                                         key={item.label}
                                         onSelect={() => openNote({ title: item.label, description: item.note! })}
                                     >
-                                        <Icon name={item.icon} size={16} className="shrink-0" />
+                                        <Icon name={item.icon} size={18} strokeWidth={1.7} className="shrink-0" />
                                         {item.label}
                                     </DropdownMenuItem>
                                 ) : (
@@ -56,7 +56,7 @@ export function HeaderMenu({ sections }: { sections: NavSection[] }) {
                                                 isActive ? "font-semibold text-primary-strong" : ""
                                             }
                                         >
-                                            <Icon name={item.icon} size={16} className="shrink-0" />
+                                            <Icon name={item.icon} size={18} strokeWidth={1.7} className="shrink-0" />
                                             {item.label}
                                         </NavLink>
                                     </DropdownMenuItem>

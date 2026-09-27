@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router";
 import { Icon } from "@/lib/icons";
+import { BrandLogo } from "@/components/BrandLogo";
 import { useApp } from "@/context/useApp";
 import { FONT_BASE, usePreferences } from "@/context/usePreferences";
 import { buildNavSections, findActiveGroup, type NavSection } from "@/data/permissions";
@@ -26,9 +27,7 @@ function useNavSections(): NavSection[] {
 function BrandMark({ withText }: { withText: boolean }) {
     return (
         <span className="flex min-w-0 items-center gap-3">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-input bg-linear-to-br from-[var(--color-primary)] to-[var(--color-primary-strong)] text-white shadow-glow">
-                <Icon name="brand" size={17} />
-            </span>
+            <BrandLogo decorative={withText} />
             {withText && (
                 <span className="min-w-0">
                     <span className="block truncate text-15 font-semibold text-ink">众茂生产系统</span>
@@ -178,9 +177,9 @@ export function MobileBottomNav({ onOpenDrawer }: { onOpenDrawer: () => void }) 
     const { role, grant } = useApp();
     const centerItems = [
         { key: "orders", label: role === "warehouse" ? "待发货" : "订单", icon: "order", to: "/orders" },
-        { key: "customers", label: "客户", icon: "users", to: "/customers" },
+        { key: "customers", label: "客户", icon: "contacts", to: "/customers" },
         { key: "inbound", label: "入库", icon: "inbound", to: "/inbound" },
-        { key: "outbound", label: "出库", icon: "truck", to: "/outbound" },
+        { key: "outbound", label: "出库", icon: "outbound", to: "/outbound" },
     ]
         .filter(item => grant.menus.includes(item.key))
         .slice(0, 3);
@@ -201,12 +200,12 @@ export function MobileBottomNav({ onOpenDrawer }: { onOpenDrawer: () => void }) 
             }}
         >
             <NavLink to="/workbench" className={itemClass} end>
-                <Icon name="grid" size={19} />
+                <Icon name="grid" size={20} strokeWidth={1.7} />
                 工作台
             </NavLink>
             {centerItems.map(item => (
                 <NavLink key={item.to + item.label} to={item.to} className={itemClass}>
-                    <Icon name={item.icon} size={19} />
+                    <Icon name={item.icon} size={20} strokeWidth={1.7} />
                     {item.label}
                 </NavLink>
             ))}

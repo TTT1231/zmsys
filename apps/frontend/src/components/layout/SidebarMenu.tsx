@@ -28,13 +28,9 @@ export function MenuItemLink({ item, inset = false, onNote, onNavigate }: MenuIt
                     onNote({ title: item.label, description: item.note! });
                     onNavigate?.();
                 }}
-                className={`group relative flex min-h-[40px] max-lg:min-h-[44px] items-center gap-2.5 rounded-btn text-14 text-td transition-colors hover:bg-soft ${padding}`}
+                className={`relative flex min-h-10 max-lg:min-h-11 items-center gap-2.5 rounded-btn text-14 text-td transition-colors hover:bg-soft ${padding}`}
             >
-                <Icon
-                    name={item.icon}
-                    size={17}
-                    className="shrink-0 transition-transform duration-200 group-hover:scale-115"
-                />
+                <Icon name={item.icon} size={18} strokeWidth={1.7} className="shrink-0" />
                 <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>
             </button>
         );
@@ -46,16 +42,12 @@ export function MenuItemLink({ item, inset = false, onNote, onNavigate }: MenuIt
             end={item.end}
             onClick={onNavigate}
             className={({ isActive }) =>
-                `group relative flex min-h-[40px] max-lg:min-h-[44px] items-center gap-2.5 rounded-btn text-14 transition-colors ${
+                `relative flex min-h-10 max-lg:min-h-11 items-center gap-2.5 rounded-btn text-14 transition-colors ${
                     isActive ? "bg-primary-soft font-semibold text-primary-strong" : "text-td hover:bg-soft"
                 } ${padding}`
             }
         >
-            <Icon
-                name={item.icon}
-                size={17}
-                className="shrink-0 transition-transform duration-200 group-hover:scale-115"
-            />
+            <Icon name={item.icon} size={18} strokeWidth={1.7} className="shrink-0" />
             <span className="min-w-0 flex-1 truncate">{item.label}</span>
         </NavLink>
     );
@@ -95,11 +87,11 @@ export function SidebarMenu({ sections, onNavigate }: SidebarMenuProps) {
                             type="button"
                             aria-expanded={open}
                             onClick={() => setOpenGroup(open ? null : section.group)}
-                            className={`group flex w-full min-h-[40px] max-lg:min-h-[44px] cursor-pointer items-center gap-2.5 rounded-btn px-3.5 text-14 font-medium transition-colors ${
+                            className={`group flex w-full min-h-10 max-lg:min-h-11 cursor-pointer items-center gap-2.5 rounded-btn px-3.5 text-14 font-medium transition-colors ${
                                 activeGroup === section.group ? "text-primary-strong" : "text-ink hover:bg-soft"
                             }`}
                         >
-                            <Icon name={section.icon} size={17} className="shrink-0" />
+                            <Icon name={section.icon} size={18} strokeWidth={1.7} className="shrink-0" />
                             <span className="min-w-0 flex-1 truncate text-left">{section.group}</span>
                             <Icon
                                 name="chevron-down"

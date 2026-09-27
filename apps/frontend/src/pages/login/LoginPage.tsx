@@ -1,6 +1,7 @@
 import { type FormEvent, useRef, useState } from "react";
 import { Navigate, useNavigate } from "react-router";
 import { Icon } from "@/lib/icons";
+import { BrandLogo } from "@/components/BrandLogo";
 import { useApp } from "@/context/useApp";
 import { isApiError } from "@/http";
 import { useNotification, useToast } from "@/components/ui/toastContexts";
@@ -88,9 +89,7 @@ export function LoginPage() {
 
                 {/* 品牌标识（移动端 + 桌面端共用） */}
                 <div className="relative flex items-center gap-3">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/25 bg-white/15 text-white backdrop-blur-sm">
-                        <Icon name="brand" size={22} />
-                    </span>
+                    <BrandLogo decorative className="size-11" />
                     <div className="leading-tight">
                         <div className="text-17 font-semibold text-white">众茂生产系统</div>
                         <div className="text-13 text-indigo-100">订单驱动的成品仓库管理</div>
