@@ -122,10 +122,10 @@ export function OrderTaskCard({
             <div className="mt-3 flex flex-col gap-1.5 border-t border-line pt-3">
                 <CardField label="交货日期" value={order.deliverDate} />
                 <CardField label="已发 / 订单" value={`${num(order.outbound)} / ${num(order.qty)} 个`} />
-                {!cancelled && !archived && <CardField label="待交数量" value={`${num(remaining)} 个`} strong />}
                 {!cancelled && !archived && (
                     <CardField label="库存数量" value={`${num(stockOf(snap, order.bomCode))} 个`} />
                 )}
+                {!cancelled && !archived && <CardField label="待交数量" value={`${num(remaining)} 个`} strong />}
                 {archived && (
                     <CardField
                         label="归档时间"
