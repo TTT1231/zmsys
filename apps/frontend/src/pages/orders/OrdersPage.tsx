@@ -31,7 +31,7 @@ import {
     useWbRefresh,
     useWbSnapshot,
 } from "@/data/queries";
-import { EMPTY_SNAPSHOT, bomByCode, maxShipOf, orderStatusOf, remainingOf } from "@/data/views";
+import { EMPTY_SNAPSHOT, bomByCode, maxShipOf, orderStatusOf, remainingOf, stockOf } from "@/data/views";
 import { addDays, addMonths, formatDateTime, todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/toastContexts";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
@@ -1001,6 +1001,7 @@ export function OrdersPage() {
                                             "BOM 备注",
                                             "订单备注",
                                             "订单数量",
+                                            "库存数量",
                                             "交货日期",
                                             "累计出库",
                                             "创建人",
@@ -1015,6 +1016,7 @@ export function OrdersPage() {
                                             bomByCode(snap, order.bomCode)?.remark ?? "",
                                             order.remark,
                                             String(order.qty),
+                                            String(stockOf(snap, order.bomCode)),
                                             order.deliverDate,
                                             String(order.outbound),
                                             order.createdBy,
@@ -1048,7 +1050,7 @@ export function OrdersPage() {
                     ) : (
                         <DataTable
                             tableId="orders"
-                            defaultWidths={[154, 260, 397, 150, 100, 120, 140, 90, 150, 125, 100]}
+                            defaultWidths={[154, 260, 397, 150, 100, 100, 120, 140, 90, 150, 125, 100]}
                             recordCount={filtered.length}
                             identityColumn={0}
                             pinnedStart={[0, 1, 2, 3]}
@@ -1074,6 +1076,7 @@ export function OrdersPage() {
                                         onSort={() => applySort("qty")}
                                         width="8%"
                                     />
+                                    <th style={{ width: "8%" }}>库存数量</th>
                                     <SortTh
                                         label="交货日期"
                                         active={sort.key === "deliverDate"}
@@ -1103,7 +1106,7 @@ export function OrdersPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {pageRows.length === 0 && <EmptyRow colSpan={11} description="没有找到匹配的订单" />}
+                                {pageRows.length === 0 && <EmptyRow colSpan={12} description="没有找到匹配的订单" />}
                                 {pageRows.map(order => {
                                     const bom = bomByCode(snap, order.bomCode);
                                     const status = orderStatusOf(snap, order);
@@ -1146,6 +1149,9 @@ export function OrdersPage() {
                                             </td>
                                             <td>
                                                 <QtyCell value={order.qty} />
+                                            </td>
+                                            <td>
+                                                <QtyCell value={stockOf(snap, order.bomCode)} />
                                             </td>
                                             <td>
                                                 <DateCell
