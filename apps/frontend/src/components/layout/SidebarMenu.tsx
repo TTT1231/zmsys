@@ -113,7 +113,9 @@ export function SidebarMenu({ sections, onNavigate }: SidebarMenuProps) {
                                 open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
                             }`}
                         >
-                            <div className="overflow-hidden">
+                            {/* 负 margin 抵消水平 padding：裁剪框向外扩 4px，
+                                容纳 :focus-visible 画在元素外侧的焦点圈（3px outline + 1px offset） */}
+                            <div className="-mx-1 overflow-hidden px-1">
                                 <div className="flex flex-col gap-0.5 py-1">
                                     {section.items.map(item => (
                                         <MenuItemLink
