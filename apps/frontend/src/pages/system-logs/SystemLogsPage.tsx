@@ -290,6 +290,8 @@ export function SystemLogsPage() {
                                 <section key={day} aria-label={`${day} 的操作`}>
                                     <div className="flex items-center gap-3 py-3 text-13 font-bold text-td">
                                         <span>{dayHeadingOf(day)}</span>
+                                        {/* 日标题右侧分隔线延伸至行尾（原型 day-heading:after） */}
+                                        <span aria-hidden="true" className="h-px flex-1 bg-line" />
                                     </div>
                                     <ol className="ml-2 border-l border-line pl-6">
                                         {items.map(entry => (
