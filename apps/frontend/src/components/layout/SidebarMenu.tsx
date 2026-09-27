@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { NavLink, useLocation } from "react-router";
 import { Icon } from "@/lib/icons";
 import { findActiveGroup, type NavItem, type NavSection } from "@/data/permissions";
@@ -61,21 +61,20 @@ interface SidebarMenuProps {
 export function SidebarMenu({ sections, onNavigate }: SidebarMenuProps) {
     const location = useLocation();
     const { openNote, noteDialog } = useMenuNote();
-    const activeGroup = findActiveGroup(sections, location.pathname)?.group;
+    const activeGroup = findActiveGroup(sections, location.pathname)?.group ?? null;
     const [openGroup, setOpenGroup] = useState<string | null>(activeGroup ?? sections[0]?.group ?? null);
+    const [lastActiveGroup, setLastActiveGroup] = useState(activeGroup);
 
-    // 路由跨组切换时自动展开新组（组内导航不打扰用户手动收起的状态）。
-    // 依赖用组名字符串：对象依赖（findActiveGroup 的返回）每次渲染都是新引用，会每帧重置展开态
-    useEffect(() => {
+    // 路由跨组切换时自动展开新组（组内导航组名不变，不打扰用户手动收起的状态）；
+    // 授权 / 角色变化导致分组增减时兜底回落到第一组。
+    // 渲染期校正：React 检测到状态更新会立即以最新状态重渲染，不经 effect 级联
+    if (lastActiveGroup !== activeGroup) {
+        setLastActiveGroup(activeGroup);
         if (activeGroup) setOpenGroup(activeGroup);
-    }, [activeGroup]);
-
-    // 授权 / 角色变化导致分组增减时兜底
-    useEffect(() => {
-        if (openGroup && !sections.some(section => section.group === openGroup)) {
-            setOpenGroup(sections[0]?.group ?? null);
-        }
-    }, [sections, openGroup]);
+    }
+    if (openGroup && !sections.some(section => section.group === openGroup)) {
+        setOpenGroup(sections[0]?.group ?? null);
+    }
 
     return (
         <nav className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-4">

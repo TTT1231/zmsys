@@ -60,11 +60,15 @@ export function Sidebar({ collapsed, open, onClose, maximized = false, form, bel
     const sections = useNavSections();
     const location = useLocation();
     const activeGroup = findActiveGroup(sections, location.pathname);
-    // 双列模式手选的组：路由变化时跟随激活组，游离路由（/search 等）保留上次选择
-    const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
-    useEffect(() => {
-        if (activeGroup) setSelectedGroup(activeGroup.group);
-    }, [activeGroup?.group]);
+    const activeGroupName = activeGroup?.group ?? null;
+    // 双列模式手选的组：路由变化时跟随激活组（按组名对比，游离路由 /search 等组名不变，保留上次选择）。
+    // 渲染期校正：React 检测到状态更新会立即以最新状态重渲染，不经 effect 级联
+    const [selectedGroup, setSelectedGroup] = useState<string | null>(activeGroupName);
+    const [lastActiveGroup, setLastActiveGroup] = useState(activeGroupName);
+    if (lastActiveGroup !== activeGroupName) {
+        setLastActiveGroup(activeGroupName);
+        if (activeGroupName) setSelectedGroup(activeGroupName);
+    }
     const panelSection =
         sections.find(section => section.group === (selectedGroup ?? activeGroup?.group)) ?? sections[0];
 
