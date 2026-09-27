@@ -18,9 +18,13 @@ import { OutboundModule } from "./outbound/outbound.module";
 import { MaintenanceModule } from "./maintenance/maintenance.module";
 import { HealthModule } from "./health/health.module";
 import { WorkbenchModule } from "./workbench/workbench.module";
+import { SystemModule } from "./system/system.module";
+import { MaintenanceStateModule } from "./domain/maintenance-state";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
 import { PermissionsGuard } from "./common/guards/permissions.guard";
+import { MaintenanceGuard } from "./common/guards/maintenance.guard";
 import { TransformInterceptor } from "./common/interceptors/transform.interceptor";
+import { WriteRegistrationInterceptor } from "./common/interceptors/write-registration.interceptor";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 
 @Module({
@@ -43,11 +47,17 @@ import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
         MaintenanceModule,
         HealthModule,
         WorkbenchModule,
+        MaintenanceStateModule,
+        SystemModule,
     ],
     providers: [
+        // 维护守卫先于认证/授权：为请求记录维护代次并拦截维护中的请求（只读白名单放行）
+        { provide: APP_GUARD, useClass: MaintenanceGuard },
         // 先认证后授权：全局 JWT 守卫在前，权限码守卫在后（默认拒绝）
         { provide: APP_GUARD, useClass: JwtAuthGuard },
         { provide: APP_GUARD, useClass: PermissionsGuard },
+        // 写登记在信封包装前：全部 guard 通过后原子登记，handler 收尾释放
+        { provide: APP_INTERCEPTOR, useClass: WriteRegistrationInterceptor },
         { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
         { provide: APP_FILTER, useClass: AllExceptionsFilter },
     ],

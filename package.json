@@ -20,6 +20,8 @@
         "test:e2e": "pnpm test:db:reset && pnpm --filter ./apps/backend exec vitest run --config ./vitest.config.e2e.mts",
         "smoke": "tsx scripts/smoke.ts",
         "backup-database": "tsx scripts/backup-database.ts",
+        "restore-database": "tsx scripts/restore-database.ts",
+        "restore-drill": "tsx scripts/restore-drill.ts",
         "deploy:prod": "tsx scripts/deploy/deploy.ts"
     },
     "devDependencies": {

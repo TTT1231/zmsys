@@ -172,7 +172,11 @@ INSERT INTO sys_permission (code, kind, menu_key, action_id, label, protected) V
     ('outbound:print', 'ACTION', 'outbound', 'print', '打印', 0),
     ('outbound:delete', 'ACTION', 'outbound', 'delete', '删除出库记录', 0),
     ('permissions:view', 'ACTION', 'permissions', 'view', '查看', 1),
-    ('permissions:manage', 'ACTION', 'permissions', 'manage', '用户与角色管理', 1);
+    ('permissions:manage', 'ACTION', 'permissions', 'manage', '用户与角色管理', 1),
+    ('menu:system-backup', 'MENU', 'system-backup', NULL, '备份', 0),
+    ('menu:system-restore', 'MENU', 'system-restore', NULL, '恢复', 0),
+    ('system-backup:run', 'ACTION', 'system-backup', 'run', '执行备份', 1),
+    ('system-restore:run', 'ACTION', 'system-restore', 'run', '执行恢复', 1);
 
 CREATE TABLE sys_grant (
     role_code VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -1234,7 +1238,8 @@ CREATE TABLE op_log (
         'ship', 'create_customer', 'create_order', 'delete_order', 'delete_bom', 'archive_order',
         'create_inbound', 'void_inbound', 'delete_inbound',
         'void_outbound', 'delete_outbound',
-        'create_bom', 'update_customer'
+        'create_bom', 'update_customer',
+        'db_backup', 'db_restore'
     ) NOT NULL,
     target_type VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     target_id BIGINT NOT NULL,
@@ -1249,6 +1254,27 @@ CREATE TABLE op_log (
     CONSTRAINT fk_op_log_operator FOREIGN KEY (operator_id) REFERENCES sys_user (id)
         ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT ck_op_log_detail CHECK (JSON_TYPE(detail_json) = 'OBJECT')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- 恢复任务持久凭证（应用内备份/恢复，见 db-scheme.md §10）：成功凭证与恢复数据
+-- 同事务写入；FAILED 行确认未提交后单独补写。无外键——replace 清空业务表不受牵连，
+-- 亦不随备份导出（运行态）。request_key 用 ascii_bin 精确比较防排序规则漂移。
+CREATE TABLE sys_restore_job (
+    id BIGINT NOT NULL,
+    request_key VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    file_sha256 CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    mode ENUM('merge', 'replace') NOT NULL,
+    status ENUM('SUCCEEDED', 'SUCCEEDED_AUDIT_FAILED', 'FAILED') NOT NULL,
+    operator_id BIGINT NOT NULL,
+    operator_name VARCHAR(64) NOT NULL,
+    report_json JSON NOT NULL,
+    error_text TEXT NOT NULL,
+    created_at DATETIME(3) NOT NULL,
+    finished_at DATETIME(3) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_sys_restore_job_request (request_key),
+    KEY idx_sys_restore_job_created (created_at DESC),
+    CONSTRAINT ck_sys_restore_job_sha CHECK (file_sha256 REGEXP '^[0-9a-f]{64}$')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 生产运行账号权限原则（实际账号名由部署环境替换）：

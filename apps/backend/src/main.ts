@@ -5,8 +5,10 @@ import { ValidationPipe } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import helmet from "@fastify/helmet";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import { AppModule } from "./app.module";
 import type { AppConfig } from "./configuration";
+import { MAX_UPLOAD_BYTES } from "./system/system.service";
 
 /** 请求日志脱敏：绝不记录凭据类头与字段 */
 const LOG_REDACT_PATHS = [
@@ -33,6 +35,15 @@ export function configureApp(app: NestFastifyApplication, corsOrigins: string[] 
         // Fastify 插件为链式注册，统一在 ready()/listen() 时结算，无需在此等待
         void app.register(cors, { origin: corsOrigins, credentials: true });
     }
+    // 恢复文件上传：512MiB/1 文件，字段大小另限（实施计划 §6）
+    void app.register(multipart, {
+        limits: {
+            fileSize: MAX_UPLOAD_BYTES,
+            files: 1,
+            fields: 8,
+            fieldSize: 64 * 1024,
+        },
+    });
 }
 
 async function bootstrap() {
@@ -48,6 +59,8 @@ async function bootstrap() {
                     ? {}
                     : { transport: { target: "pino-pretty", options: { translateTime: "SYS:HH:MM:ss" } } }),
             },
+            // 大文件上传/完整预检/流式备份不受请求超时约束（nginx 层 1800s 兜底）
+            requestTimeout: 0,
         }),
     );
     void app.register(helmet);

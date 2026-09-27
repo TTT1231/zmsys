@@ -23,7 +23,9 @@ export type OpLogAction =
     | "void_outbound"
     | "delete_outbound"
     | "create_bom"
-    | "update_customer";
+    | "update_customer"
+    | "db_backup"
+    | "db_restore";
 
 export interface RecordOpLogParams {
     action: OpLogAction;

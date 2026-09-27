@@ -460,3 +460,57 @@ export interface TrendRow {
     outboundQty: number;
     outboundCount: number;
 }
+
+/* ---------- 系统备份/恢复 ---------- */
+
+/** 备份分组目录（后端 backup.catalog 单一来源） */
+export interface BackupGroupDef {
+    key: string;
+    label: string;
+    tables: string[];
+    dependsOn: string[];
+}
+
+export interface BackupCatalog {
+    groups: BackupGroupDef[];
+    allGroupKeys: string[];
+}
+
+export interface BackupPreviewMeta {
+    format: string;
+    version: number;
+    createdAt: string;
+    groups: string[];
+    serverProduct: string;
+    serverVersion: string;
+    latestMigration: string;
+    schemaFingerprint: string;
+    tables: Array<{ name: string; rowCount: number }>;
+}
+
+export interface BackupPreviewResult {
+    meta: BackupPreviewMeta;
+    canReplace: boolean;
+    tables: Array<{ name: string; rowCount: number; insertStatements: number }>;
+}
+
+export type RestoreMode = "merge" | "replace";
+export type RestoreJobStatus = "RUNNING" | "UNKNOWN" | "SUCCEEDED" | "SUCCEEDED_AUDIT_FAILED" | "FAILED";
+
+export interface RestoreJob {
+    jobId: string;
+    requestKey: string;
+    mode: RestoreMode;
+    status: RestoreJobStatus;
+    report: {
+        mode: RestoreMode;
+        startedAt: string;
+        finishedAt: string;
+        tables?: Array<{ name: string; inserted: number; skipped: number; sequenceRaised?: number }>;
+        tokenVersionsRaised?: number;
+        apiIdempotencyPurged?: number;
+    } | null;
+    errorText: string;
+    createdAt: string;
+    finishedAt: string | null;
+}

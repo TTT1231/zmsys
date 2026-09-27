@@ -110,7 +110,7 @@ enum MaterialGroupKind {
 }
 
 /// op_log.action：业务里程碑动作（审计清单：订单创建/删除、客户创建/更新、BOM 创建/删除、
-/// 出入库创建/作废/删除、发货、归档）；普通索引（update_customer 同目标可多条，防重由幂等层承担）
+/// 出入库创建/作废/删除、发货、归档、数据库备份/恢复）；普通索引（update_customer 同目标可多条，防重由幂等层承担）
 enum OpLogAction {
   ship
   create_customer
@@ -125,6 +125,8 @@ enum OpLogAction {
   delete_outbound
   create_bom
   update_customer
+  db_backup
+  db_restore
 }
 
 /// 固定角色目录；grant_version 是整组授权的乐观锁版本
@@ -682,6 +684,40 @@ model OpLog {
   @@index([createdAt(sort: Desc)], map: "idx_op_log_time")
   @@index([operatorId, createdAt(sort: Desc)], map: "idx_op_log_operator_time")
   @@map("op_log")
+}
+
+/// sys_restore_job.mode：merge 补缺 / replace 快照还原
+enum SysRestoreMode {
+  merge
+  replace
+}
+
+/// sys_restore_job.status：RUNNING/UNKNOWN 只存在于进程内存；持久行均为终态
+enum SysRestoreStatus {
+  SUCCEEDED
+  SUCCEEDED_AUDIT_FAILED
+  FAILED
+}
+
+/// 恢复任务持久凭证（无外键、replace 不清空、不随备份导出）：
+/// 成功凭证与恢复数据同事务提交；FAILED 行在确认未提交后单独补写。
+/// request_key 为提交身份，ascii_bin 精确比较；file_sha256 为上传文件原始字节摘要
+model SysRestoreJob {
+  id           BigInt            @id
+  requestKey   String            @map("request_key") @db.VarChar(64)
+  fileSha256   String            @map("file_sha256") @db.Char(64)
+  mode         SysRestoreMode
+  status       SysRestoreStatus
+  operatorId   BigInt            @map("operator_id")
+  operatorName String            @map("operator_name") @db.VarChar(64)
+  reportJson   Json              @map("report_json")
+  errorText    String            @map("error_text") @db.Text
+  createdAt    DateTime          @map("created_at") @db.DateTime(3)
+  finishedAt   DateTime          @map("finished_at") @db.DateTime(3)
+
+  @@unique([requestKey], map: "uk_sys_restore_job_request")
+  @@index([createdAt(sort: Desc)], map: "idx_sys_restore_job_created")
+  @@map("sys_restore_job")
 }
 
 /// 每个订单累计已发数量（§6.2 分配算法的对照视图，SQL SECURITY INVOKER）

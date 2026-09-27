@@ -45,6 +45,8 @@ tags:
       description: 固定角色、实时授权与授权日志
     - name: workbench
       description: 工作台经营总览聚合
+    - name: system
+      description: 应用内数据库备份/恢复（仅超管；含恢复任务查询）
 
 paths:
     /auth/login:
@@ -849,6 +851,186 @@ paths:
                             schema: { $ref: "#/components/schemas/WorkbenchOverviewEnvelope" }
                 "401": { $ref: "#/components/responses/Unauthorized" }
 
+    /system/backup/catalog:
+        get:
+            tags: [system]
+            operationId: getBackupCatalog
+            summary: 备份分组目录
+            description: |
+                返回业务域分组（key/label/tables/dependsOn）与全部分组键。完整备份＝
+                目录全集（动态计算）；恢复维护期间放行（只读白名单）。
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                required: [groups, allGroupKeys]
+                                properties:
+                                    groups:
+                                        type: array
+                                        items:
+                                            type: object
+                                            required: [key, label, tables, dependsOn]
+                                            properties:
+                                                key: { type: string }
+                                                label: { type: string }
+                                                tables: { type: array, items: { type: string } }
+                                                dependsOn: { type: array, items: { type: string } }
+                                    allGroupKeys: { type: array, items: { type: string } }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+
+    /system/backup/run:
+        post:
+            tags: [system]
+            operationId: runBackup
+            summary: 执行备份并流式下载
+            description: |
+                按分组闭包导出数据快照（zmsys-backup v1 格式，仅数据不含 DDL），
+                以 application/sql 或 application/gzip 附件流式返回。响应头
+                content-disposition 携带文件名。先写「发起备份」op_log(db_backup)
+                再开流——该日志不是下载成功凭证。备份含口令哈希，按机密保管。
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [groups]
+                            properties:
+                                groups:
+                                    type: array
+                                    minItems: 1
+                                    items: { type: string }
+                                gzip: { type: boolean, default: false }
+            responses:
+                "200":
+                    description: 备份文件流（附件）
+                    content:
+                        application/sql:
+                            schema: { type: string, format: binary }
+                        application/gzip:
+                            schema: { type: string, format: binary }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "503": { $ref: "#/components/responses/Maintenance" }
+
+    /system/restore/preview:
+        post:
+            tags: [system]
+            operationId: previewRestore
+            summary: 恢复文件预检
+            description: |
+                上传统一格式备份文件（512MiB 上限，gzip 按魔数识别），完整校验
+                checksum/文法/schema 指纹/迁移基线后返回 meta 与 canReplace。
+                只读不落任何业务数据。
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            type: object
+                            required: [file]
+                            properties:
+                                file: { type: string, format: binary }
+            responses:
+                "200":
+                    description: 预检结果（meta + canReplace + 逐表行数）
+                    content:
+                        application/json:
+                            schema: { type: object }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "413": { $ref: "#/components/responses/PayloadTooLarge" }
+
+    /system/restore/run:
+        post:
+            tags: [system]
+            operationId: runRestore
+            summary: 提交恢复任务（异步）
+            description: |
+                multipart 字段须置于文件之前：mode=merge|replace、ack（merge 须 RESTORE /
+                replace 须 REPLACE）、requestKey（8-64 位提交身份）。requestKey 为幂等身份：
+                同 key 同文件同模式重提返回 200 原终态；异文件/模式 409。受理返回 202 后
+                系统进入维护态（非白名单请求 503）直至终态；客户端保留 requestKey 断线重查
+                （GET /system/restore/jobs/key/{requestKey}）。404 查询结果表示当前未查到
+                持久记录，不代表终态（原请求可能仍在上传/预检），可凭同 key 重提。
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            type: object
+                            required: [mode, ack, requestKey, file]
+                            properties:
+                                mode: { type: string, enum: [merge, replace] }
+                                ack: { type: string, enum: [RESTORE, REPLACE] }
+                                requestKey: { type: string, minLength: 8, maxLength: 64, pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$" }
+                                file: { type: string, format: binary }
+            responses:
+                "200":
+                    description: 同 key 重提回放既有终态
+                    content:
+                        application/json:
+                            schema: { type: object }
+                "202":
+                    description: 已受理（jobId；执行期维护态，凭 key 轮询）
+                    content:
+                        application/json:
+                            schema: { type: object }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "409": { $ref: "#/components/responses/Conflict" }
+                "413": { $ref: "#/components/responses/PayloadTooLarge" }
+                "503": { $ref: "#/components/responses/Maintenance" }
+
+    /system/restore/jobs/{id}:
+        get:
+            tags: [system]
+            operationId: getRestoreJob
+            summary: 按 jobId 查询恢复任务
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema: { type: string, pattern: "^[0-9]{1,19}$" }
+            responses:
+                "200":
+                    description: 任务视图（内存 RUNNING/UNKNOWN 或持久终态）
+                    content:
+                        application/json:
+                            schema: { type: object }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { description: 未查到记录（不代表终态） }
+
+    /system/restore/jobs/key/{requestKey}:
+        get:
+            tags: [system]
+            operationId: getRestoreJobByKey
+            summary: 凭 requestKey 查询恢复任务（维护期放行）
+            description: |
+                断线/刷新/重登录后凭客户端自存的 requestKey 查询。恢复维护期间该端点
+                放行（只读白名单）。返回 UNKNOWN 表示提交结果核实中（保持维护，禁止重跑）。
+            parameters:
+                - name: requestKey
+                  in: path
+                  required: true
+                  schema: { type: string }
+            responses:
+                "200":
+                    description: 任务视图
+                    content:
+                        application/json:
+                            schema: { type: object }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { description: 当前未查到记录（原请求可能仍在上传或预检；可凭同 key 重提） }
+
 components:
     securitySchemes:
         bearerAuth:
@@ -907,6 +1089,16 @@ components:
                     schema: { $ref: "#/components/schemas/NullEnvelope" }
         BadRequest:
             description: 参数或业务格式校验失败
+            content:
+                application/json:
+                    schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        PayloadTooLarge:
+            description: 上传文件超 512MiB 或解压内容/单行超限
+            content:
+                application/json:
+                    schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        Maintenance:
+            description: 系统恢复维护中（非只读白名单请求一律拒绝；终端态后自动解除）
             content:
                 application/json:
                     schema: { $ref: "#/components/schemas/ErrorEnvelope" }
@@ -1510,7 +1702,7 @@ components:
             allOf:
                 - $ref: "#/components/schemas/Envelope"
                 - type: object
-                properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/BomStockLedger" }, message: { const: ok } }
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/BomStockLedger" }, message: { const: ok } }
         BomStockLedger:
             type: object
             description: 单个 BOM 的出入库流水；flows 按业务日升序，stockQty 与末笔 balance 一致

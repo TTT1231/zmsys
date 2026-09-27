@@ -47,8 +47,16 @@ pnpm test:db:reset            # 重置 e2e 测试库（DROP/CREATE + 迁移 + se
 pnpm test:e2e                 # 重置测试库 + 后端 e2e
 pnpm smoke                    # 后端冒烟（前置：build backend + 测试库已 reset）
 pnpm backup-database          # 备份生产库并校验（dump 拉回本地 + 还原比对对象/行数）
+pnpm restore-database         # 应用内恢复 CLI（应急通道：--local / 默认远程容器执行；详见 docs/db-scheme.md §10）
+pnpm restore-drill            # 恢复演练（双轨 + 故障注入，仅 *_test 库）
 pnpm deploy:prod              # 部署生产（本地构建→上传→远端装配起栈；--stage-only 可选；不含备份，需留底先跑 pnpm backup-database）
 ```
+
+## 备份/恢复注意（应用内功能，仅超管）
+
+- 应用内备份（菜单「系统」→「备份」「恢复」）导出含 `sys_user` 口令哈希（bcrypt）的完整数据快照，**备份文件按机密保管**，不得存放于不受控位置。
+- 恢复 CLI `pnpm restore-database` 的停写前提必须人工保证：先停 backend 与其他写入进程、暂停部署/迁移，再执行；`--yes` 只跳过确认，不绕过停写前提。灾后空库先跑同版本迁移，再 CLI replace；若更换过 JWT_SECRET，须 `docker compose up -d --no-deps --force-recreate backend` 重建容器（不能只 start/restart 旧容器）。
+- 忘记超管密码走救援改密：`pnpm restore-database --reset-password <account>`（停写后取得恢复锁，新密码经 stdin 隐藏传入）。
 
 ## tailwindcss 注意
 

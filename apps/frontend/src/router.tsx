@@ -8,6 +8,7 @@ import { ErrorPage, RouterErrorPage } from "./pages/error/ErrorPage";
    混放组件定义会破坏 React Fast Refresh */
 import {
     ArchivedOrdersPage,
+    BackupPage,
     BomPage,
     CustomersPage,
     InboundPage,
@@ -15,6 +16,7 @@ import {
     OrdersPage,
     OutboundPage,
     PermissionsPage,
+    RestorePage,
     SearchPage,
     StockPage,
     WorkbenchPage,
@@ -48,6 +50,8 @@ export const router = createBrowserRouter([
                     { path: "/outbound", element: <OutboundPage /> },
                     { path: "/stock", element: <StockPage /> },
                     { path: "/permissions", element: <PermissionsPage /> },
+                    { path: "/system/backup", element: <BackupPage /> },
+                    { path: "/system/restore", element: <RestorePage /> },
                     { path: "*", element: <ErrorPage kind="not-found" /> },
                 ],
             },

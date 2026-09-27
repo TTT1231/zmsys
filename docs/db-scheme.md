@@ -280,3 +280,39 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 - 所有业务编码、账号、幂等键及 BOM 指纹唯一键。
 
 工作台数据由 `/workbench/overview` 聚合端点统一供给（产品含 v_bom_stock 库存、订单含 v_order_outbound_qty 净额、出入库按业务日聚合）。台账和订单列表启用分页前，应先按需增加库存、趋势、欠量等后端聚合端点，不能用分页后的局部数据计算全局库存。
+
+## 10. 应用内数据库备份/恢复（仅超管）
+
+超管专属功能：菜单「系统」→「备份」「恢复」；引擎与校验同时供 CLI（`pnpm restore-database`）应急通道复用。业务组闭包含 `sys_user`（bcrypt 哈希）——**备份文件按机密保管**。
+
+### 10.1 分组与文件格式
+
+- 分组目录单一来源 `src/system/backup.catalog.ts`：8 组（users/sequences/customers/bom/orders/inbound/outbound/system），入库↔出库互为依赖（v_bom_stock 口径），bom 依赖 sequences（nextBomCode INSERT IGNORE）。完整备份＝目录全集（动态计算）。`sys_permission`/`api_idempotency`/`sys_restore_job` 永不入备份。
+- 格式 `zmsys-backup v1`：UTF-8/LF、一行一语句、仅数据不含 DDL。固定头/meta（JSON）/`SET NAMES utf8mb4;`/表段/INSERT/checksum/尾标记；checksum 为 header 后至 checksum 行前全部行的 sha256。表按 information_schema FK 拓扑序输出；自引用表（material_group/stock_adjustment/outbound_ledger）按递归深度父先子后、同层主键序。批次 ≤1000 行/1MiB，单行 ≤8MiB；解压上限 2GiB、上传 512MiB（nginx 总请求体 513m）。
+- 保真纪律：备份/恢复专用一次性连接固定 `bigIntAsNumber:false / decimalAsNumber:false / jsonStrings:true / dateStrings:true` + UTC。业务 JSON 列保持数据库原文（禁止 JS parse→stringify 往返，大整数会静默改值），DATETIME/DATE 保持原文（不经本地 Date）。schemaFingerprint（列全量类型/可空/默认/排序规则、主键、唯一索引、FK、CHECK 的规范化摘要）与 latestMigration 均须一致才允许恢复；serverProduct/大版本一致（v1 仅同构库）。
+
+### 10.2 两模式与冲突分诊
+
+- **merge（默认）＝日常补缺**：单事务层级序参数化插入。PRIMARY 冲突二分到行逐列比对——JSON 列用数据库 `<=> CAST(? AS JSON)`（区分 SQL NULL 与 JSON null、大整数精确、对象键序不敏感），文本族按 `CAST(... AS BINARY)` 字节比较，其余无损类型比较；差异 ⊆ 豁免列（sys_user 为 last_login_at+updated_at，其余表仅 updated_at）→ 跳过保留目标值，否则中止回滚（报告表/键/差异列）。非 PRIMARY 唯一键冲突 → 中止回滚（报告索引名）。`biz_sequence` 特例 `INSERT ... ON DUPLICATE KEY UPDATE next_value = GREATEST(next_value, ?)`。
+- **replace ＝完整数据快照还原**（仅完整备份）：范围外引用预检（FK 图 + EXISTS；可清理运行表 api_idempotency 除外）→ 事务内保存恢复前 token_version、DELETE api_idempotency → FK off 逆序整表 DELETE → FK on 按文件序插回 → 范围内 FK 孤儿复核 → 同事务写成功凭证。重跑会删掉两次备份之间新增的数据（文案明示）。不提供 binlog 任意时间点恢复。
+- **replace 的会话例外**：每用户写 `token_version = max(恢复前目标值（无则 0）, 备份值) + 1`，其余字段按备份还原；恢复后所有用户须重新登录。merge 不改会话版本也不豁免其冲突。灾后重建库（空库先跑同版本迁移再 CLI replace）若已丢失原会话版本，必须更换部署 JWT_SECRET 再重建 backend 容器（`docker compose up -d --no-deps --force-recreate backend`），随后重载 frontend 的 nginx。
+- **空库初始化**：灾后先跑同版本迁移再 CLI replace，不能把备份文件直接导入裸空库。mysql 客户端仅用于 scratch 库格式验证（去 DEFINER、保留 sys_permission、清空备份范围表、固定 UTC 与兼容 sql_mode）。
+
+### 10.3 提交幂等与凭证表
+
+- `sys_restore_job`（无 FK、replace 不清空、不随备份导出）：id Snowflake、request_key VARCHAR(64) UNIQUE（ascii/ascii_bin）、file_sha256（上传文件原始字节摘要）、mode、status ENUM(SUCCEEDED/SUCCEEDED_AUDIT_FAILED/FAILED)、operator、report_json、error_text、created_at/finished_at。**成功凭证与恢复数据同事务提交**；FAILED 行在确认未提交后单独补写。不能以“任意行存在”判断已提交。
+- **requestKey 提交身份**：POST run 算摘要后查 key——同文件同模式 → 200 原终态；异文件/模式 → 409。无行 → 完整预检 → 原子占内存任务槽 + 零等待 GET_LOCK（锁名含库名摘要 ≤64 字符；占用 409 不排队）→ 锁内复查 → 内存 RUNNING、接管文件、返 202。重新执行＝结果确认后新 key+重输 ack；UNKNOWN 不允许。
+- **查询语义**：`GET jobs/key/:requestKey`（维护期放行）无持久行时返回 404 NOT_FOUND——只表示当前未查到，不是终态（原请求可能仍在上传/预检）；客户端保留同一 key 继续查询或明确重提同文件/模式/key。数据库不可达是 5xx。RUNNING/UNKNOWN 只在进程内存。
+- **UNKNOWN 核实**：COMMIT 回执丢失/断线/回滚失败 → 内存 UNKNOWN（保持维护态），销毁原连接后新连接取得同一恢复锁再查凭证——有成功行即成功；锁在手且无成功行（旧会话已结束）才记 FAILED。禁止自动重跑或用 FAILED 覆盖成功行。
+
+### 10.4 维护态与任务化
+
+- MaintenanceGuard 先于 JWT：请求记录当前 generation，维护激活时仅放行只读白名单（GET auth/profile、system/backup/catalog、system/restore/jobs/*、health/live），其余 503；激活时 generation 递增。配套拦截器在全部 guard 通过后原子检查「非维护且代次一致」才登记写请求（含登录、backup/run），跨过一次恢复的旧鉴权请求 503；计数在 handler/DB 实际结束后释放，HTTP 断线不提前释放。恢复前排空 60s 未果且未执行则失败。
+- 进程启动先短暂取得恢复锁再开放业务写与 purge；拿不到则保持维护态等待旧会话结束。台账清理（maintenance）维护期不启动新批次（purgeActive 标志覆盖首查到最后事务）。
+- op_log 扩 `db_backup`（发起备份即记，不当下载成功凭证）与 `db_restore`（确认成功后经 PrismaService 补记；失败把凭证标 SUCCEEDED_AUDIT_FAILED，再失败保留成功凭证只记服务日志）。
+
+### 10.5 CLI 与演练
+
+- `pnpm restore-database [--local] [--replace] [--yes] [--request-key <key>] <文件>`：--local 与容器同一薄入口（`apps/backend/src/system/restore-cli.ts`，进程 UTC 初始化，stdin 专用于备份字节）；默认远程＝一次 SSH → backend 镜像临时命令容器 `docker compose run --rm -T --no-deps backend node dist/system/restore-cli.js ...`，先检查 backend 已停、目标库与本地确认值一致，确认在本地外壳完成。**停写前提**（backend/其他写入进程已停、暂停部署迁移）不因 --yes 绕过。
+- `--reset-password <account>` 独立救援改密：不要求重跑恢复；停写后取得同一恢复锁，新密码经 stdin 隐藏传入（不走 argv、不记录），复用口令规则（6-128 位），更新 bcrypt/password_changed_at/token_version/row_version 并记用户变更日志。现有 users 重置接口禁止 super，本救援入口不沿用该限制。
+- `pnpm restore-drill` 对 `*_test` 双轨演练：replace 轨（自引用三层且子 id 小于父、幂等清理、字段还原、token_version、序列、凭证）+ merge 轨（补插/GREATEST/分歧回滚）+ 四项故障注入（同 key 回放、COMMIT 回执丢失核实、提交后崩溃凭证可查、回滚中重启后同 key 重跑）。

@@ -23,3 +23,11 @@ export {
     resetUserPassword,
 } from "./users";
 export { fetchRoles, fetchGrants, saveRoleGrants, fetchGrantLog } from "./permissions";
+export {
+    fetchBackupCatalog,
+    runBackup,
+    previewRestore,
+    runRestore,
+    fetchRestoreJob,
+    fetchRestoreJobByKey,
+} from "./system";
