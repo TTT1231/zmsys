@@ -164,6 +164,7 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
         case "ship":
             return [
                 { key: "qty", label: "发货数量", before: null, after: qtyText(detail?.qty) },
+                { key: "orderNo", label: "订单号", before: null, after: asText(detail?.orderNo) },
                 { key: "remark", label: "备注", before: null, after: asText(detail?.remark) },
             ].filter(change => change.after !== null);
         case "void_outbound":

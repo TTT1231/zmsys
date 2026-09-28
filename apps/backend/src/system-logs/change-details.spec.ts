@@ -109,11 +109,12 @@ describe("changesOfOpLog", () => {
         ).toEqual([{ key: "status", label: "状态", before: "有效", after: "已作废" }]);
     });
 
-    it("ship：发货数量与备注", () => {
+    it("ship：发货数量/订单号与备注", () => {
         expect(
             changesOfOpLog("ship", { orderNo: "ZM260927001", qty: 40, remark: "加急", customer: "华辰电器" }),
         ).toEqual([
             { key: "qty", label: "发货数量", before: null, after: "40 个" },
+            { key: "orderNo", label: "订单号", before: null, after: "ZM260927001" },
             { key: "remark", label: "备注", before: null, after: "加急" },
         ]);
     });
