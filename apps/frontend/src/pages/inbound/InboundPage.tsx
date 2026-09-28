@@ -8,7 +8,7 @@ import { DangerNote } from "@/components/business/DangerNote";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
-import { downloadCsv, num } from "@/lib/format";
+import { num } from "@/lib/format";
 import { useApp } from "@/context/useApp";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { Badge, Button } from "@/components/ui/Badge";
@@ -707,35 +707,6 @@ export function InboundPage() {
                         <ToolbarMore>
                             <Button variant="secondary" icon="refresh" onClick={refresh}>
                                 刷新
-                            </Button>
-                            <Button
-                                variant="secondary"
-                                icon="download"
-                                onClick={() =>
-                                    downloadCsv(
-                                        "成品入库",
-                                        [
-                                            "入库单号",
-                                            "BOM 编码",
-                                            "BOM 备注",
-                                            "入库数量",
-                                            "入库日期",
-                                            "检验登记人",
-                                            "状态",
-                                        ],
-                                        pageRows.map(row => [
-                                            row.no,
-                                            row.bomCode,
-                                            bomByCode(snap, row.bomCode)?.remark.trim() || "—",
-                                            String(row.qty),
-                                            row.date,
-                                            row.inspector,
-                                            row.status === "active" ? "有效" : "已作废",
-                                        ]),
-                                    )
-                                }
-                            >
-                                导出
                             </Button>
                         </ToolbarMore>
                         {canRegister && (

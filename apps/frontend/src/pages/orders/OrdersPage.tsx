@@ -19,7 +19,7 @@ import {
 } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
-import { downloadCsv, num } from "@/lib/format";
+import { num } from "@/lib/format";
 import { useApp } from "@/context/useApp";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { Badge, Button, ProgressTrack, StatusBadge, TableLink } from "@/components/ui/Badge";
@@ -1170,47 +1170,6 @@ export function OrdersPage() {
                                 }}
                             >
                                 刷新
-                            </Button>
-                            <Button
-                                variant="secondary"
-                                icon="download"
-                                onClick={() =>
-                                    downloadCsv(
-                                        "销售订单",
-                                        [
-                                            "销售订单号",
-                                            "客户",
-                                            "客户编码",
-                                            "BOM 编码",
-                                            "BOM 备注",
-                                            "订单备注",
-                                            "订单数量",
-                                            "库存数量",
-                                            "交货日期",
-                                            "累计出库",
-                                            "创建人",
-                                            "创建时间",
-                                            "状态",
-                                        ],
-                                        pageRows.map(order => [
-                                            order.orderNo,
-                                            order.customer,
-                                            order.customerCode,
-                                            order.bomCode,
-                                            bomByCode(snap, order.bomCode)?.remark ?? "",
-                                            order.remark,
-                                            String(order.qty),
-                                            String(stockOf(snap, order.bomCode)),
-                                            order.deliverDate,
-                                            String(order.outbound),
-                                            order.createdBy,
-                                            formatDateTime(order.createdAt),
-                                            orderStatusOf(snap, order).label,
-                                        ]),
-                                    )
-                                }
-                            >
-                                导出
                             </Button>
                         </ToolbarMore>
                     </div>
