@@ -1,9 +1,11 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { Prisma } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { TransactionRunner } from "../prisma/transaction.runner";
 import type { Tx } from "../prisma/transaction.runner";
 import { MaintenanceState } from "../domain/maintenance-state";
+import type { AppConfig } from "../configuration";
 
 /** 软删除保留期（天）：过期后物理清理，op_log 的 delete 快照成为唯一残留 */
 const SOFT_DELETE_RETENTION_DAYS = 7;
@@ -33,10 +35,12 @@ export class LedgerPurgeService implements OnApplicationBootstrap, OnApplication
         private readonly prisma: PrismaService,
         private readonly txRunner: TransactionRunner,
         private readonly maintenance: MaintenanceState,
+        private readonly config: ConfigService<AppConfig>,
     ) {}
 
     onApplicationBootstrap(): void {
-        if (process.env.NODE_ENV === "test") {
+        // 测试进程跳过定时清理调度（与 configuration 同一口径，不直读 process.env）
+        if (this.config.getOrThrow("nodeEnv", { infer: true }) === "test") {
             return;
         }
         this.firstRunHandle = setTimeout(() => {

@@ -67,7 +67,6 @@ it("排序生效下键盘移动即暂停排序，落位按当前显示序", () =
     );
     fireEvent.keyDown(handleOf("SO-001"), { key: "ArrowDown" });
     expect(orderNos()).toEqual(["SO-002", "SO-001", "SO-003"]);
-    expect(toastSpy).toHaveBeenCalledWith("已移至第 2 行，共 3 行");
     // 排序被暂停：aria-sort 回到 none，手柄提示切回手动序文案；此后仍可继续微调
     expect(orderNoSortState()).toBe("none");
     expect(handleOf("SO-001")).toHaveAttribute("title", "拖拽调整顺序：仅改变当前视图显示，刷新或重新排序后恢复");

@@ -8,7 +8,6 @@ import { ToastProvider } from "./components/ui/Toast";
 import { VersionCheck } from "./components/VersionCheck";
 import { router } from "./router";
 import "./index.css";
-
 const queryClient = new QueryClient({
     defaultOptions: {
         queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: false },

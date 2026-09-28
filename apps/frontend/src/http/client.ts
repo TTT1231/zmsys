@@ -3,10 +3,11 @@ import type { HttpResponse } from "@zmsys/request";
 import { isCancel, RequestClient } from "@zmsys/request";
 
 import { ApiError } from "./errors";
+import { env } from "@/env";
 import { clearToken, getToken } from "@/lib/token";
 
 export const requestClient = new RequestClient({
-    baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
+    baseURL: env.VITE_API_BASE_URL,
     // 包内默认 10s，这里维持前端原有的 15s
     timeout: 15_000,
 });

@@ -7,7 +7,7 @@ import helmet from "@fastify/helmet";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import { AppModule } from "./app.module";
-import type { AppConfig } from "./configuration";
+import { DEFAULT_NODE_ENV, type AppConfig } from "./configuration";
 import { MAX_UPLOAD_BYTES } from "./system/system.service";
 
 /** 请求日志脱敏：绝不记录凭据类头与字段 */
@@ -47,7 +47,8 @@ export function configureApp(app: NestFastifyApplication, corsOrigins: string[] 
 }
 
 async function bootstrap() {
-    const isProduction = process.env.NODE_ENV === "production";
+    // 与 configuration 同一兜底：未显式设置时按生产运行（dist 即生产构建）
+    const isProduction = (process.env.NODE_ENV ?? DEFAULT_NODE_ENV) === "production";
     const app = await NestFactory.create<NestFastifyApplication>(
         AppModule,
         new FastifyAdapter({

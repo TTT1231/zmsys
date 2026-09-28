@@ -29,6 +29,9 @@ export interface AppConfig {
 type NodeEnv = "development" | "production" | "test";
 
 const NODE_ENVS: readonly NodeEnv[] = ["development", "production", "test"];
+/** 未显式设置 NODE_ENV 时的兜底：dist 产物即生产构建，默认按生产运行；
+    开发/测试须显式声明（契约：根 .env 里 NODE_ENV=development） */
+export const DEFAULT_NODE_ENV: NodeEnv = "production";
 const SNOWFLAKE_WORKER_ID_MAX = 1023;
 
 /** 必填字符串：缺失即记录错误，不静默给默认值 */
@@ -67,7 +70,7 @@ const optionalInt = (
 export default (): AppConfig => {
     const errors: string[] = [];
 
-    const nodeEnvRaw = process.env.NODE_ENV ?? "development";
+    const nodeEnvRaw = process.env.NODE_ENV ?? DEFAULT_NODE_ENV;
     if (!NODE_ENVS.includes(nodeEnvRaw as NodeEnv)) {
         errors.push(`NODE_ENV 必须是 ${NODE_ENVS.join("/")}，当前为 ${nodeEnvRaw}`);
     }

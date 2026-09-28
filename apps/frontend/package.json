@@ -5,7 +5,7 @@
     "type": "module",
     "scripts": {
         "dev": "vite",
-        "build": "tsc -b && vite build",
+        "build": "vite build --mode production",
         "typecheck": "tsc -b --force",
         "test": "vitest run"
     },
@@ -22,7 +22,8 @@
         "react-dom": "^19.2.8",
         "react-router": "^8.3.1",
         "sonner": "^2.0.8",
-        "tailwind-merge": "^3.6.0"
+        "tailwind-merge": "^3.6.0",
+        "zod": "^4.6.5"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.3.3",

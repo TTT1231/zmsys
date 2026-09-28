@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import type { ConfigService } from "@nestjs/config";
 import { LedgerPurgeService } from "./ledger-purge.service";
+import type { AppConfig } from "../configuration";
 import { PrismaService } from "../prisma/prisma.service";
 import { TransactionRunner } from "../prisma/transaction.runner";
 import { MaintenanceState } from "../domain/maintenance-state";
@@ -67,7 +69,10 @@ const mkService = (inboundBatches: bigint[][], outboundBatches: bigint[][], orde
         run: vi.fn(async (fn: (client: typeof tx) => Promise<unknown>) => fn(tx)),
     } as unknown as TransactionRunner;
     const maintenance = new MaintenanceState();
-    return { service: new LedgerPurgeService(prisma, txRunner, maintenance), ops, queryRaw, maintenance };
+    const config = {
+        getOrThrow: vi.fn((key: string) => (key === "nodeEnv" ? "production" : undefined)),
+    } as unknown as ConfigService<AppConfig>;
+    return { service: new LedgerPurgeService(prisma, txRunner, maintenance, config), ops, queryRaw, maintenance };
 };
 
 describe("LedgerPurgeService.purge", () => {
