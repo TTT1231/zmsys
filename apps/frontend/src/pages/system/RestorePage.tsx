@@ -564,7 +564,9 @@ export function RestorePage() {
                         )}
 
                         <div className="mt-8 border-t border-line pt-4">
-                            <div className="text-12 text-muted">任务编号 · 断线后可凭此编号回到本页继续查询</div>
+                            <div className="text-12 text-muted">
+                                任务编号 · 报障或排查时提供；断线或刷新后，回到本页将自动继续查询
+                            </div>
                             <div className="mt-2 flex items-start gap-2">
                                 <code className="min-w-0 flex-1 break-all rounded-input bg-soft px-3 py-2 text-12 text-td">
                                     {pending.requestKey}
