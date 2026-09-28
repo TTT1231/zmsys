@@ -1,8 +1,8 @@
 /**
  * 契约漂移检查（最小实现）：后端注册路由（HTTP method + route）必须 ⊆ 契约 paths。
  * 不比对 schema 细节；/health/* 等基础设施路由白名单。
- * 契约路径经 CONTRACT_PATH 可配置，默认 ../admin-manage/docs/api/openapi.yaml
- * （CI 两仓库分发未解决前，路径缺失时整体 skip）。
+ * 契约路径经 CONTRACT_PATH 可配置，默认仓库根 docs/openapi.yaml
+ * （路径缺失时整体 skip 兜底）。
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -14,8 +14,7 @@ import { DiscoveryModule, DiscoveryService } from "@nestjs/core";
 import { AppModule } from "../src/app.module";
 import { configureApp } from "../src/main";
 
-const CONTRACT_PATH =
-    process.env.CONTRACT_PATH ?? join(__dirname, "..", "..", "admin-manage", "docs", "api", "openapi.yaml");
+const CONTRACT_PATH = process.env.CONTRACT_PATH ?? join(__dirname, "..", "..", "..", "docs", "openapi.yaml");
 
 /** Nest 稳定内部元数据键：@Controller 前缀写类上，路由装饰器把 path / method 写在 handler 函数自身上 */
 const PATH_METADATA = "path";

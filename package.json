@@ -9,8 +9,8 @@
     "type": "module",
     "scripts": {
         "postinstall": "pnpm -r run --if-present stub",
-        "dev:frontend": "turbo run dev --filter=admin-manage",
-        "dev:backend": "turbo run dev --filter=zmsys-backend",
+        "dev:frontend": "turbo run dev --filter=zmsysfrontend",
+        "dev:backend": "turbo run dev --filter=zmsysbackend",
         "typecheck": "tsx scripts/run-typecheck.ts",
         "lint": "tsx scripts/run-oxlint.ts && tsx scripts/theme-guard.ts",
         "format": "oxfmt .",
