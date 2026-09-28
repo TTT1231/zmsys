@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Icon } from "@/lib/icons";
 import { Button } from "@/components/ui/Badge";
-import { PageHeading } from "@/components/ui/PageHeading";
 import { fetchRestoreJobByKey, previewRestore, runRestore } from "@/api";
 import { useToast } from "@/components/ui/toastContexts";
 import { useApp } from "@/context/useApp";
@@ -420,7 +419,6 @@ export function RestorePage() {
                   : "尚未收到结果，页面会持续自动查询。";
         return (
             <div className="mx-auto w-full max-w-6xl p-5 lg:p-7">
-                <PageHeading title="数据恢复" description="此页面会持续查询任务结果，重新登录后也可继续查看。" />
                 <section
                     className="overflow-hidden rounded-panel border border-line bg-surface shadow-card"
                     aria-label="恢复结果"
@@ -621,7 +619,6 @@ export function RestorePage() {
 
     return (
         <div className="mx-auto w-full max-w-6xl p-5 lg:p-7">
-            <PageHeading title="数据恢复" description="按步骤上传备份文件、选择恢复方式，确认后执行。" />
             <section
                 className="grid grid-cols-1 overflow-hidden rounded-panel border border-line bg-surface shadow-card md:grid-cols-[196px_minmax(0,1fr)]"
                 aria-label="恢复流程"

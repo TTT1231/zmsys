@@ -3,7 +3,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Icon } from "@/lib/icons";
 import { Button } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
-import { PageHeading } from "@/components/ui/PageHeading";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { runBackup, fetchBackupCatalog } from "@/api";
 import { useToast } from "@/components/ui/toastContexts";
@@ -145,8 +144,6 @@ export function BackupPage() {
 
     return (
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 overflow-y-auto p-5 lg:p-7">
-            <PageHeading title="数据备份" description="选择备份范围，生成并下载数据快照。默认包含全部业务数据。" />
-
             <section
                 className="overflow-hidden rounded-panel border border-line bg-surface shadow-card"
                 aria-labelledby="backup-scope-title"
