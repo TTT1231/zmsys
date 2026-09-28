@@ -418,7 +418,7 @@ export function RestorePage() {
                   ? "执行期间系统暂停写入，请保持此页打开。"
                   : "尚未收到结果，页面会持续自动查询。";
         return (
-            <div className="mx-auto w-full max-w-6xl p-5 lg:p-7">
+            <div className="w-full p-5 lg:p-7">
                 <section
                     className="overflow-hidden rounded-panel border border-line bg-surface shadow-card"
                     aria-label="恢复结果"
@@ -620,7 +620,7 @@ export function RestorePage() {
     const headingClass = "text-20 font-semibold text-ink outline-none";
 
     return (
-        <div className="mx-auto w-full max-w-6xl p-5 lg:p-7">
+        <div className="w-full p-5 lg:p-7">
             <section
                 className="grid grid-cols-1 overflow-hidden rounded-panel border border-line bg-surface shadow-card md:grid-cols-[196px_minmax(0,1fr)]"
                 aria-label="恢复流程"
@@ -757,7 +757,11 @@ export function RestorePage() {
                                     <Icon name="file" size={16} className="shrink-0" />
                                     <span className="break-all">{file?.name}</span>
                                 </p>
-                                <div className="mt-6 grid gap-3.5" role="radiogroup" aria-label="恢复方式">
+                                <div
+                                    className="mt-6 grid gap-3.5 2xl:grid-cols-2"
+                                    role="radiogroup"
+                                    aria-label="恢复方式"
+                                >
                                     <ModeOption
                                         value="merge"
                                         title="补充缺失数据"

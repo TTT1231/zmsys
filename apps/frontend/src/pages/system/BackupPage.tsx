@@ -143,7 +143,7 @@ export function BackupPage() {
     };
 
     return (
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 overflow-y-auto p-5 lg:p-7">
+        <div className="flex w-full flex-col gap-6 p-5 lg:p-7">
             <section
                 className="overflow-hidden rounded-panel border border-line bg-surface shadow-card"
                 aria-labelledby="backup-scope-title"
@@ -195,7 +195,9 @@ export function BackupPage() {
                     ) : visibleGroups.length === 0 ? (
                         <div className="py-12 text-center text-14 text-muted">当前没有可备份的数据分组。</div>
                     ) : (
-                        <div className={`grid gap-3 sm:grid-cols-2 ${busy ? "pointer-events-none opacity-60" : ""}`}>
+                        <div
+                            className={`grid gap-3 sm:grid-cols-2 2xl:grid-cols-3 ${busy ? "pointer-events-none opacity-60" : ""}`}
+                        >
                             {visibleGroups.map(group => {
                                 const checked = active.has(group.key);
                                 const auto = checked && !explicitSet.has(group.key);
