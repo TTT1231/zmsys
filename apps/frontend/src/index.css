@@ -225,6 +225,19 @@
         }
     }
 
+    /* 恢复进度不确定态（原型 .indet）：服务端不回报百分比，色带循环滑动只表达“进行中”；
+       reduced-motion 由下方 motion-reduce 变体回退为常亮满条 */
+    --animate-indeterminate: indeterminate 1.4s ease-in-out infinite;
+
+    @keyframes indeterminate {
+        from {
+            transform: translateX(-100%);
+        }
+        to {
+            transform: translateX(390%);
+        }
+    }
+
     /* 路由页面进入动画（UI/产品/设计三方融合定稿）：淡入 + 上移 10px，decelerate 缓动，
      只做进入不做退出（退出动画是新内容延迟感的最大来源）；reduced-motion 由全局降级兜底 */
     --animate-page-enter: page-enter 0.22s cubic-bezier(0.2, 0, 0, 1);
