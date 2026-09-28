@@ -34,7 +34,7 @@ import {
     type SqlExecutor,
     type TableSchema,
 } from "./db-introspection";
-import { closureTables } from "../backup.catalog";
+import { closureTables, isFullBackupClosure } from "../backup.catalog";
 import { readServerExpectation } from "./restore-engine";
 
 /** 支持流式读取的执行器（mariadb 专用连接适配；测试可用内存行实现） */
@@ -66,9 +66,10 @@ export interface BackupStreamHandle {
 
 const pad = (value: number): string => String(value).padStart(2, "0");
 
+/** 备份文件命名；全量口径与恢复侧一致（isFullBackupClosure：闭包覆盖目录全集） */
 export function backupFileName(database: string, groups: readonly string[], gzip: boolean, now = new Date()): string {
     const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-    const scope = groups.length === 0 ? "full" : groups.length === 1 ? groups[0] : `partial-${groups.length}`;
+    const scope = isFullBackupClosure(groups) ? "full" : groups.length === 1 ? groups[0] : `partial-${groups.length}`;
     return `${database}-${scope}-${stamp}.sql${gzip ? ".gz" : ""}`;
 }
 
