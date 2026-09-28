@@ -6,7 +6,9 @@
  *
  * 服务器规格有限，构建全部在本地完成后上传，远端只做「装配式」构建
  * （依赖层命中 docker 缓存时秒级）。流程：
- *   1. 本地构建 frontend（vite）与 backend（nest，prebuild 自动 prisma generate）产物
+ *   1. 本地经 turbo 构建 frontend（vite）与 backend（nest，prebuild 自动 prisma
+ *      generate）产物：输入（代码/依赖/根 .env）未变时复用本机构建缓存，产物与
+ *      app-build-id 一并复用——版本检测只在内容真正变化时提示，不再因重复部署误报
  *   2. 组装 staging：workspace 骨架（manifest+lockfile）+ backend 运行件（dist/prisma）
  *      + frontend dist + scripts/deploy 配置（compose/Dockerfile/nginx）
  *   3. 连接①：上传解压到 DEPLOY_REMOTE_DIR，保障远端 .env（凭据沿用旧
@@ -64,9 +66,9 @@ for (const [label, value, pattern] of [
 const stagingDir = join(deployDir, ".staging");
 const tarPath = join(deployDir, ".staging.tar.gz");
 
-/** 本地跑 pnpm 包脚本（Windows .cmd 需经 shell 解析，故用 execSync） */
-const run = (command: string, cwd: string): void => {
-    execSync(command, { cwd, stdio: "inherit" });
+/** 本地跑 pnpm 包脚本（Windows .cmd 需经 shell 解析，故用 execSync）；env 覆盖进程继承值 */
+const run = (command: string, cwd: string, env: NodeJS.ProcessEnv = {}): void => {
+    execSync(command, { cwd, stdio: "inherit", env: { ...process.env, ...env } });
 };
 
 /** staging 布局 = compose 构建上下文：deploy 配置在根，workspace 骨架按仓库相对路径 */
@@ -140,8 +142,10 @@ const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(r
 
 const main = async (): Promise<void> => {
     console.log("[1/4] 本地构建 frontend + backend 产物");
-    run("pnpm --filter ./apps/frontend run build", repoRoot);
-    run("pnpm --filter ./apps/backend run build", repoRoot);
+    // turbo 自带拓扑与缓存：未变的包直接复用本机缓存产物（含 app-build-id）。
+    // 显式按 production 构建：根 .env 的 NODE_ENV=development（本机开发约定）会经
+    // 进程继承与 envDir 双路污染 vite（jsxDEV 注入），须在此覆盖
+    run("pnpm exec turbo run build", repoRoot, { NODE_ENV: "production" });
     assertFrontendProdBuild();
 
     console.log("[2/4] 组装 staging（workspace 骨架 + 产物 + deploy 配置）");

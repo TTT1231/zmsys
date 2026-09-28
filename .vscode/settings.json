@@ -7,7 +7,7 @@
     "explorer.fileNesting.enabled": true, // 启用文件嵌套功能
     "explorer.fileNesting.expand": false, // 默认折叠嵌套文件（不展开）
     "explorer.fileNesting.patterns": {
-        "package.json": "pnpm-lock.yaml,zmsys.code-workspace, .gitignore, .gitattributes,pnpm-workspace.yaml ,README.md",
+        "package.json": "pnpm-lock.yaml,tsconfig.json, .gitignore, .gitattributes,pnpm-workspace.yaml ,README.md",
         ".oxlintrc.json": ".oxfmtrc.json,.oxlintrc.staged.json ,lefthook.yml",
         "AGENTS.md": "CLAUDE.md"
     }

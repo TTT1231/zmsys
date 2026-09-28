@@ -9,9 +9,8 @@
     "type": "module",
     "scripts": {
         "postinstall": "pnpm -r run --if-present stub",
-        "dev": "pnpm --parallel --filter ./apps/frontend --filter ./apps/backend run dev",
-        "dev:frontend": "pnpm --filter ./apps/frontend dev",
-        "dev:backend": "pnpm --filter ./apps/backend dev",
+        "dev:frontend": "turbo run dev --filter=admin-manage",
+        "dev:backend": "turbo run dev --filter=zmsys-backend",
         "typecheck": "tsx scripts/run-typecheck.ts",
         "lint": "tsx scripts/run-oxlint.ts && tsx scripts/theme-guard.ts",
         "format": "oxfmt .",
@@ -22,7 +21,8 @@
         "backup-database": "tsx scripts/backup-database.ts",
         "restore-database": "tsx scripts/restore-database.ts",
         "restore-drill": "tsx scripts/restore-drill.ts",
-        "deploy:prod": "tsx scripts/deploy/deploy.ts"
+        "deploy:prod": "tsx scripts/deploy/deploy.ts",
+        "clean": "node scripts/clean.mjs"
     },
     "devDependencies": {
         "@types/node": "catalog:",
@@ -35,6 +35,7 @@
         "oxlint-tsgolint": "catalog:",
         "tsdown": "catalog:",
         "tsx": "catalog:",
+        "turbo": "^2.11.4",
         "typescript": "catalog:",
         "vitest": "catalog:"
     },

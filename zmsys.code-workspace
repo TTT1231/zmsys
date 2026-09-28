@@ -1,11 +1,11 @@
 {
     "folders": [
         {
-            "name": "frontend (admin-manage)",
+            "name": "frontend",
             "path": "apps/frontend",
         },
         {
-            "name": "backend (zmsys-backend)",
+            "name": "backend",
             "path": "apps/backend",
         },
         {
