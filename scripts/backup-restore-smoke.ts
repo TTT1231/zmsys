@@ -14,6 +14,7 @@
  */
 import { config } from "dotenv";
 import "../apps/backend/src/process-tz.js";
+import { loadDbEnv } from "../apps/backend/src/configuration/raw-env.js";
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { gunzipSync } from "node:zlib";
@@ -32,10 +33,7 @@ const DATABASE = process.env.SMOKE_DB ?? "zmdb_test";
 if (!DATABASE.endsWith("_test")) {
     throw new Error(`冒烟仅允许 *_test 库，当前 ${DATABASE}`);
 }
-const HOST = process.env.DB_HOST ?? "localhost";
-const PORT = process.env.DB_PORT ?? "3306";
-const DB_USER = process.env.DB_USERNAME ?? "root";
-const DB_PASSWORD = process.env.DB_PASSWORD ?? "";
+const { host: HOST, port: PORT, user: DB_USER, password: DB_PASSWORD } = loadDbEnv();
 const BACKEND_PORT = process.env.SMOKE_BACKEND_PORT ?? "5050";
 const base = `http://127.0.0.1:${BACKEND_PORT}/api`;
 const PASSWORD = process.env.SMOKE_SUPER_PASSWORD ?? "smoke-test-2026";
@@ -58,7 +56,7 @@ interface Job {
 const sql = async <T>(statement: string): Promise<T> => {
     const connection = await mysql.createConnection({
         host: HOST,
-        port: Number.parseInt(PORT, 10),
+        port: PORT,
         user: DB_USER,
         password: DB_PASSWORD,
         database: DATABASE,
@@ -341,7 +339,7 @@ async function main(): Promise<void> {
                         ...process.env,
                         DB_DATABASE: DATABASE,
                         DB_HOST: HOST,
-                        DB_PORT: PORT,
+                        DB_PORT: String(PORT),
                         DB_USERNAME: DB_USER,
                         DB_PASSWORD,
                     },

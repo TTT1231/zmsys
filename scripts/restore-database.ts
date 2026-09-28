@@ -16,6 +16,7 @@
  */
 import { config } from "dotenv";
 import "../apps/backend/src/process-tz.js";
+import { loadDbEnv } from "../apps/backend/src/configuration/raw-env.js";
 import { spawn } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { existsSync } from "node:fs";
@@ -162,11 +163,10 @@ const runLocalEntry = async (args: string[], stdin: NodeJS.ReadableStream): Prom
 
 /** 本地恢复：与容器同一薄入口（子进程，stdin 流入备份字节），复用同一引擎/锁/去重 */
 async function runLocalRestore(filePath: string, mode: string, requestKey: string): Promise<void> {
-    const host = process.env.DB_HOST ?? "localhost";
+    const { host, database } = loadDbEnv();
     if (!["localhost", "127.0.0.1"].includes(host)) {
         throw new Error(`--local 仅允许 localhost，当前 DB_HOST=${host}（远程库请走默认远程模式）`);
     }
-    const database = process.env.DB_DATABASE ?? "zmdb";
     console.log(`[local] 目标库：${database}@${host}（${mode}）`);
     const code = await runLocalEntry(["--mode", mode, "--request-key", requestKey], createReadStream(filePath));
     if (code !== 0) {

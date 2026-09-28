@@ -22,10 +22,11 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { PrismaClient } from "../src/generated/prisma/client";
+import { loadDbEnv } from "../src/configuration/raw-env";
+import { createMariadbPool } from "../src/prisma/create-pool";
 
 // env 统一在仓库根 .env（相对本包 cwd 解析）；包内 .env 兜底（容器/独立部署）
 config({ path: ["../../.env", ".env"] });
-import { createMariadbPool } from "../src/prisma/create-pool";
 
 const repoRoot = resolve(fileURLToPath(import.meta.url), "..", "..", "..", "..");
 
@@ -36,18 +37,15 @@ async function main(): Promise<void> {
         throw new Error("缺少合法的 --code 参数（如 --code CUS-0022）");
     }
     const apply = process.argv.includes("--apply");
-    const host = process.env.DB_HOST ?? "localhost";
-    const database = process.env.DB_DATABASE ?? "zmdb";
-    console.log(
-        `目标库 ${database}@${host}:${process.env.DB_PORT ?? "3306"}（模式：${apply ? "APPLY 执行删除" : "DRY-RUN 仅预览"}）`,
-    );
+    const db = loadDbEnv();
+    console.log(`目标库 ${db.database}@${db.host}:${db.port}（模式：${apply ? "APPLY 执行删除" : "DRY-RUN 仅预览"}）`);
 
     const pool = createMariadbPool({
-        host,
-        port: Number.parseInt(process.env.DB_PORT ?? "3306", 10) || 3306,
-        user: process.env.DB_USERNAME ?? "root",
-        password: process.env.DB_PASSWORD ?? "",
-        name: database,
+        host: db.host,
+        port: db.port,
+        user: db.user,
+        password: db.password,
+        name: db.database,
         connectionLimit: 2,
     });
     const prisma = new PrismaClient({ adapter: new PrismaMariaDb(pool) });

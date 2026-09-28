@@ -3,11 +3,14 @@
  * 双条件强制：NODE_ENV=test 且库名以 _test 结尾；二者缺一即拒绝运行，
  * 绝不允许测试触碰开发库（zmdb）。
  */
-import "dotenv/config";
+import { config } from "dotenv";
+import { deriveTestDatabase, loadDbEnv } from "../src/configuration/raw-env";
+
+// vitest 从本包 cwd 运行：仓库根 .env 优先，包内 .env 兜底（修掉裸 dotenv/config 只读 cwd 的盲区）
+config({ path: ["../../.env", ".env"] });
 
 // 测试库名由开发库名派生（加 _test 后缀）；已带后缀则尊重显式配置
-const baseDatabase = process.env.DB_DATABASE ?? "zmdb";
-const testDatabase = baseDatabase.endsWith("_test") ? baseDatabase : `${baseDatabase}_test`;
+const testDatabase = deriveTestDatabase(loadDbEnv().database);
 
 process.env.NODE_ENV = "test";
 process.env.DB_DATABASE = testDatabase;

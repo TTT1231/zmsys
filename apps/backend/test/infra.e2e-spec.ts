@@ -17,6 +17,7 @@ import { BusinessSequenceService } from "../src/sequence/business-sequence.servi
 import { IdempotencyService } from "../src/idempotency/idempotency.service";
 import { TestIdempotencyController } from "./test-idempotency.controller";
 import { TEST_DATABASE } from "./db-guard";
+import { loadDbEnv } from "../src/configuration/raw-env";
 
 const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -271,11 +272,12 @@ describe("基础设施并发专项 (e2e)", () => {
                 await sequence.nextRaw(tx, "deadlock:B");
             });
 
+            const { host, port, user, password } = loadDbEnv();
             const connection = await mariadb.createConnection({
-                host: process.env.DB_HOST ?? "localhost",
-                port: Number.parseInt(process.env.DB_PORT ?? "3306", 10) || 3306,
-                user: process.env.DB_USERNAME ?? "root",
-                password: process.env.DB_PASSWORD ?? "",
+                host,
+                port,
+                user,
+                password,
                 database: TEST_DATABASE,
             });
 

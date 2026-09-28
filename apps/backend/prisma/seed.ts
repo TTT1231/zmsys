@@ -8,10 +8,11 @@ import "../src/process-tz";
 import bcrypt from "bcryptjs";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { PrismaClient } from "../src/generated/prisma/client";
+import { loadDbEnv } from "../src/configuration/raw-env";
+import { createMariadbPool } from "../src/prisma/create-pool";
 
 // env 统一在仓库根 .env（相对本包 cwd 解析）；包内 .env 兜底（容器/独立部署）
 config({ path: ["../../.env", ".env"] });
-import { createMariadbPool } from "../src/prisma/create-pool";
 
 const SEED_USERS = [
     { id: 1n, account: "guojun", name: "郭均", roleCode: "super" },
@@ -26,12 +27,13 @@ if (process.env.NODE_ENV === "production" && process.env.SEED_ALLOW_DEFAULT_PASS
 
 async function main(): Promise<void> {
     // 与 PrismaService 共用同一 pool 工厂：保证 seed 写入同样遵守 UTC 会话时区约定
+    const db = loadDbEnv();
     const pool = createMariadbPool({
-        host: process.env.DB_HOST ?? "localhost",
-        port: Number.parseInt(process.env.DB_PORT ?? "3306", 10) || 3306,
-        user: process.env.DB_USERNAME ?? "root",
-        password: process.env.DB_PASSWORD ?? "",
-        name: process.env.DB_DATABASE ?? "zmdb",
+        host: db.host,
+        port: db.port,
+        user: db.user,
+        password: db.password,
+        name: db.database,
         connectionLimit: 2,
     });
     const prisma = new PrismaClient({ adapter: new PrismaMariaDb(pool) });

@@ -2,6 +2,7 @@
 // npm install --save-dev prisma dotenv
 import { config } from "dotenv";
 import { defineConfig } from "prisma/config";
+import { loadDbEnv } from "./src/configuration/raw-env";
 
 // env 统一在仓库根 .env（相对本包 cwd 解析）；包内 .env 兜底（容器/独立部署）
 config({ path: ["../../.env", ".env"] });
@@ -12,12 +13,8 @@ config({ path: ["../../.env", ".env"] });
  */
 const databaseUrl = (): string => {
     const encode = (value: string): string => encodeURIComponent(value);
-    const host = process.env.DB_HOST?.trim() || "localhost";
-    const port = process.env.DB_PORT?.trim() || "3306";
-    const user = process.env.DB_USERNAME?.trim() || "root";
-    const password = process.env.DB_PASSWORD ?? "";
-    const name = process.env.DB_DATABASE?.trim() || "zmdb";
-    return `mysql://${encode(user)}:${encode(password)}@${host}:${port}/${name}`;
+    const { host, port, user, password, database } = loadDbEnv();
+    return `mysql://${encode(user)}:${encode(password)}@${host}:${port}/${database}`;
 };
 
 export default defineConfig({

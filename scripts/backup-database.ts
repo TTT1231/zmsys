@@ -21,6 +21,7 @@
  * 用法：pnpm backup-database
  */
 import { config } from "dotenv";
+import { loadDbEnv } from "../apps/backend/src/configuration/raw-env.js";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -59,10 +60,7 @@ if (!/^[A-Za-z0-9_]+$/.test(VERIFY_DB)) {
     throw new Error(`校验库名含非法字符：${VERIFY_DB}`);
 }
 
-const VERIFY_HOST = process.env.DB_HOST ?? "localhost";
-const VERIFY_PORT = Number.parseInt(process.env.DB_PORT ?? "3306", 10) || 3306;
-const VERIFY_USER = process.env.DB_USERNAME ?? "root";
-const VERIFY_PASSWORD = process.env.DB_PASSWORD ?? "";
+const { host: VERIFY_HOST, port: VERIFY_PORT, user: VERIFY_USER, password: VERIFY_PASSWORD } = loadDbEnv();
 if (!["localhost", "127.0.0.1"].includes(VERIFY_HOST)) {
     throw new Error(`还原校验仅允许 localhost，当前 DB_HOST=${VERIFY_HOST}`);
 }

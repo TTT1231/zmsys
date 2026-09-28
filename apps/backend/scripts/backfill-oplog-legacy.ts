@@ -21,10 +21,11 @@ import { config } from "dotenv";
 import "../src/process-tz";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { PrismaClient } from "../src/generated/prisma/client";
+import { loadDbEnv } from "../src/configuration/raw-env";
+import { createMariadbPool } from "../src/prisma/create-pool";
 
 // env 统一在仓库根 .env（相对本包 cwd 解析）；包内 .env 兜底（容器/独立部署）
 config({ path: ["../../.env", ".env"] });
-import { createMariadbPool } from "../src/prisma/create-pool";
 
 type JsonRecord = Record<string, unknown>;
 interface BackfillPlan {
@@ -149,19 +150,16 @@ async function planShipCustomer(
 
 async function main(): Promise<void> {
     const apply = process.argv.includes("--apply");
-    const host = process.env.DB_HOST ?? "localhost";
-    const database = process.env.DB_DATABASE ?? "zmdb";
-    console.log(
-        `目标库 ${database}@${host}:${process.env.DB_PORT ?? "3306"}（模式：${apply ? "APPLY 执行写入" : "DRY-RUN 仅预览"}）`,
-    );
+    const db = loadDbEnv();
+    console.log(`目标库 ${db.database}@${db.host}:${db.port}（模式：${apply ? "APPLY 执行写入" : "DRY-RUN 仅预览"}）`);
     if (!apply) console.log("预览模式不写库；确认计划后加 --apply 执行。生产执行前先做全量备份。\n");
 
     const pool = createMariadbPool({
-        host,
-        port: Number.parseInt(process.env.DB_PORT ?? "3306", 10) || 3306,
-        user: process.env.DB_USERNAME ?? "root",
-        password: process.env.DB_PASSWORD ?? "",
-        name: database,
+        host: db.host,
+        port: db.port,
+        user: db.user,
+        password: db.password,
+        name: db.database,
         connectionLimit: 2,
     });
     const prisma = new PrismaClient({ adapter: new PrismaMariaDb(pool) });

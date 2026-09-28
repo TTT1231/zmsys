@@ -18,6 +18,7 @@
  */
 import { config } from "dotenv";
 import "../apps/backend/src/process-tz.js";
+import { deriveTestDatabase, loadDbEnv } from "../apps/backend/src/configuration/raw-env.js";
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
@@ -32,10 +33,9 @@ const repoRoot = resolve(fileURLToPath(import.meta.url), "..", "..");
 const backendDir = join(repoRoot, "apps", "backend");
 config({ path: join(repoRoot, ".env") });
 
-const HOST = process.env.DB_HOST ?? "localhost";
-const DATABASE = (process.env.DB_DATABASE ?? "zmdb").endsWith("_test")
-    ? (process.env.DB_DATABASE ?? "zmdb")
-    : `${process.env.DB_DATABASE ?? "zmdb"}_test`;
+const db = loadDbEnv();
+const HOST = db.host;
+const DATABASE = deriveTestDatabase(db.database);
 if (!DATABASE.endsWith("_test")) {
     throw new Error(`演练仅允许 *_test 库，当前 ${DATABASE}`);
 }
@@ -52,9 +52,9 @@ const assert = (condition: unknown, message: string): void => {
 const newConnection = (): Promise<mariadb.Connection> =>
     mariadb.createConnection({
         host: HOST,
-        port: Number.parseInt(process.env.DB_PORT ?? "3306", 10) || 3306,
-        user: process.env.DB_USERNAME ?? "root",
-        password: process.env.DB_PASSWORD ?? "",
+        port: db.port,
+        user: db.user,
+        password: db.password,
         database: DATABASE,
         timezone: "Z",
         sessionVariables: { time_zone: "+00:00" },
@@ -98,9 +98,9 @@ const makeBackup = async (filePath: string): Promise<void> => {
     const { createBackupConnection } = await import("../apps/backend/src/prisma/create-pool.js");
     const connection = await createBackupConnection({
         host: HOST,
-        port: Number.parseInt(process.env.DB_PORT ?? "3306", 10) || 3306,
-        user: process.env.DB_USERNAME ?? "root",
-        password: process.env.DB_PASSWORD ?? "",
+        port: db.port,
+        user: db.user,
+        password: db.password,
         name: DATABASE,
     });
     try {

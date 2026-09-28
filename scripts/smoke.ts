@@ -7,6 +7,7 @@
  */
 import { config } from "dotenv";
 import "../apps/backend/src/process-tz.js";
+import { loadDbEnv } from "../apps/backend/src/configuration/raw-env.js";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -24,7 +25,7 @@ const PORT = Number(process.env.PORT ?? 5000);
 const base = `http://127.0.0.1:${PORT}/api`;
 
 // 测试库护栏：强制 *_test，绝不连开发库
-const baseDatabase = process.env.DB_DATABASE ?? "zmdb";
+const baseDatabase = loadDbEnv().database;
 if (baseDatabase.endsWith("_test")) {
     // 已显式指定测试库
 } else {
