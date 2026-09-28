@@ -26,9 +26,9 @@
     "devDependencies": {
         "@types/node": "catalog:",
         "@zmsys/tsconfig": "workspace:*",
-        "dotenv": "^17.4.2",
+        "dotenv": "catalog:",
         "lefthook": "catalog:",
-        "mariadb": "3.4.5",
+        "mariadb": "catalog:",
         "oxfmt": "catalog:",
         "oxlint": "catalog:",
         "oxlint-tsgolint": "catalog:",

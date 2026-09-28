@@ -20,7 +20,7 @@ allowBuilds:
 
 catalog:
     "oxfmt": ^0.68.0
-    "@types/node": ^22.20.3
+    "@types/node": ^24.0.0
     "@types/qs": ^6.15.1
     "axios": ^1.20.0
     "axios-mock-adapter": ^2.1.0
@@ -31,4 +31,7 @@ catalog:
     "tsx": ^4.23.13
     "typescript": ^7.0.2
     "vitest": ^5.0.1
+    "@vitest/coverage-v8": ^5.0.1
+    "mariadb": 3.4.5
+    "dotenv": ^17.4.2
     "lefthook": ^2.1.14
