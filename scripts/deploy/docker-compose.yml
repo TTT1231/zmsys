@@ -42,7 +42,7 @@ services:
       DB_PORT: "3306"
       DB_USERNAME: zm
       DB_PASSWORD: ${ZM_DB_PASSWORD}
-      DB_DATABASE: zmdb
+      DB_DATABASE: ${DEPLOY_DB_NAME:-zmdb}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: 8h
       JWT_ISSUER: zmsys-backend
@@ -59,7 +59,7 @@ services:
     image: mysql:8.0
     environment:
       MYSQL_ROOT_PASSWORD: ${ZM_DB_ROOT_PASSWORD}
-      MYSQL_DATABASE: zmdb
+      MYSQL_DATABASE: ${DEPLOY_DB_NAME:-zmdb}
       MYSQL_USER: zm
       MYSQL_PASSWORD: ${ZM_DB_PASSWORD}
     # 库表用 utf8mb4；表结构由 backend 启动时的 prisma migrate deploy 从既有库增量应用。

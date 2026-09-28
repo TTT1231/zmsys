@@ -177,6 +177,17 @@ mkdir -p ${REMOTE_DIR}
 if [ ! -f ${REMOTE_DIR}/.env ] && [ -f /opt/zmsys/admin-manage/.env ]; then cp /opt/zmsys/admin-manage/.env ${REMOTE_DIR}/.env; fi
 if [ ! -f ${REMOTE_DIR}/.env ]; then echo "缺少 ${REMOTE_DIR}/.env（ZM_DB_ROOT_PASSWORD/ZM_DB_PASSWORD/JWT_SECRET）且旧目录无可继承" >&2; exit 1; fi
 grep -q '^DEPLOY_CORS_ORIGINS=' ${REMOTE_DIR}/.env || echo 'DEPLOY_CORS_ORIGINS=${CORS_ORIGINS}' >> ${REMOTE_DIR}/.env
+# 库名单源：compose 的 DB_DATABASE/MYSQL_DATABASE 读本文件，与本地迁移检测必须同源；
+# 已存在但与本地不一致（改库名是大事）直接报错，宁 fail 不静默分叉
+if grep -q '^DEPLOY_DB_NAME=' ${REMOTE_DIR}/.env; then
+  REMOTE_DB=$(grep '^DEPLOY_DB_NAME=' ${REMOTE_DIR}/.env | tail -n 1 | cut -d= -f2)
+  if [ "$REMOTE_DB" != '${DB_NAME}' ]; then
+    echo "远端 .env 的 DEPLOY_DB_NAME=$REMOTE_DB 与本地 ${DB_NAME} 不一致，改库名须人工介入（既有数据卷不随变量改名）" >&2
+    exit 1
+  fi
+else
+  echo 'DEPLOY_DB_NAME=${DB_NAME}' >> ${REMOTE_DIR}/.env
+fi
 tar -xzf - -C ${REMOTE_DIR} && echo UPLOAD_OK`;
     const upload = spawnSync("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15", SSH_HOST, uploadCommand], {
         input: tarBuffer,
