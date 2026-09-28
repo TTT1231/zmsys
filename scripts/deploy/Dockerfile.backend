@@ -28,6 +28,10 @@ COPY internal/tsconfig/package.json ./internal/tsconfig/
 # 不需要 migrations——迁移目录挪到 install 之后，新增迁移不再击穿依赖层缓存）
 COPY apps/backend/prisma/schema.prisma ./apps/backend/prisma/schema.prisma
 
+# prisma7.config.ts import 的零依赖 env 解析模块：install 阶段的 prisma generate
+# 经 Prisma CLI loader 加载 config，须与 schema 同层先行（src 其余部分不进运行镜像）
+COPY apps/backend/src/configuration/raw-env.ts ./apps/backend/src/configuration/raw-env.ts
+
 # 只装 backend（及其 workspace 依赖）的生产包：frontend 的 echarts/vite、根的
 # oxlint/typescript/vitest 等构建工具链全部不进运行镜像。prisma CLI 已在
 # backend dependencies（容器启动的 migrate deploy 需要）。

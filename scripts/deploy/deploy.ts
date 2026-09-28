@@ -105,6 +105,12 @@ const assembleStaging = (): void => {
     // backend 运行件：manifest + prisma 配置/schema/迁移 + 编译产物（dist/generated 内含 prisma client）
     copy(join("apps", "backend", "package.json"), join("apps", "backend", "package.json"));
     copy(join("apps", "backend", "prisma7.config.ts"), join("apps", "backend", "prisma7.config.ts"));
+    // prisma7.config.ts import 的零依赖 env 解析模块：postinstall 的 prisma generate
+    // 经 Prisma CLI loader 加载 config，容器内必须随行（src 其余部分不进运行镜像）
+    copy(
+        join("apps", "backend", "src", "configuration", "raw-env.ts"),
+        join("apps", "backend", "src", "configuration", "raw-env.ts"),
+    );
     copy(join("apps", "backend", "prisma"), join("apps", "backend", "prisma"));
     copy(join("apps", "backend", "dist"), join("apps", "backend", "dist"));
 
