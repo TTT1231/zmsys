@@ -6,7 +6,7 @@ import { EmptyRow } from "@/components/ui/EmptyRow";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
-import { downloadCsv, num } from "@/lib/format";
+import { num } from "@/lib/format";
 import { useApp } from "@/context/useApp";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { Pagination } from "@/components/ui/Pagination";
@@ -520,37 +520,6 @@ export function CustomersPage() {
                         <ToolbarMore>
                             <Button variant="secondary" icon="refresh" onClick={refresh}>
                                 刷新
-                            </Button>
-                            <Button
-                                variant="secondary"
-                                icon="download"
-                                onClick={() =>
-                                    downloadCsv(
-                                        "客户档案",
-                                        [
-                                            "客户编码",
-                                            "客户名称",
-                                            "客户联系人",
-                                            "客户电话",
-                                            "地区",
-                                            "累计订单",
-                                            "待交数量",
-                                            "合作状态",
-                                        ],
-                                        pageRows.map(row => [
-                                            row.customer.code,
-                                            row.customer.name,
-                                            row.customer.contact,
-                                            row.customer.phone,
-                                            regionText(row.customer),
-                                            String(row.orderCount),
-                                            String(row.pendingQty),
-                                            row.customer.cooperation,
-                                        ]),
-                                    )
-                                }
-                            >
-                                导出
                             </Button>
                         </ToolbarMore>
                         {canCreate && (

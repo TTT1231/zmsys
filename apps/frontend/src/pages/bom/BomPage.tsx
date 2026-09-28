@@ -12,7 +12,7 @@ import { BomSpecs } from "@/components/bom/BomSpecs";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
-import { downloadCsv, num } from "@/lib/format";
+import { num } from "@/lib/format";
 import { formatDateTime } from "@/lib/date";
 import { copyText } from "@/lib/clipboard";
 import { useApp } from "@/context/useApp";
@@ -990,25 +990,6 @@ export function BomPage() {
                         <ToolbarMore>
                             <Button variant="secondary" icon="refresh" onClick={refresh}>
                                 刷新
-                            </Button>
-                            <Button
-                                variant="secondary"
-                                icon="download"
-                                onClick={() =>
-                                    downloadCsv(
-                                        "BOM",
-                                        ["序号", "BOM编码", "品类", "物料构成", "BOM 备注"],
-                                        pageRows.map((bom, index) => [
-                                            String((page - 1) * pageSize + index + 1),
-                                            bom.code,
-                                            bom.name,
-                                            bom.spec,
-                                            bom.remark,
-                                        ]),
-                                    )
-                                }
-                            >
-                                导出
                             </Button>
                         </ToolbarMore>
                         {canCreate && (

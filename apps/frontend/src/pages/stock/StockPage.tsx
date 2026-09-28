@@ -7,7 +7,7 @@ import { EmptyRow } from "@/components/ui/EmptyRow";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useMemo, useRef, useState, useEffect } from "react";
 import { Icon } from "@/lib/icons";
-import { downloadCsv, num } from "@/lib/format";
+import { num } from "@/lib/format";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { Button, TableLink } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
@@ -345,25 +345,6 @@ export function StockPage() {
                         <ToolbarMore>
                             <Button variant="secondary" icon="refresh" onClick={refresh}>
                                 刷新
-                            </Button>
-                            <Button
-                                variant="secondary"
-                                icon="download"
-                                onClick={() =>
-                                    downloadCsv(
-                                        "库存",
-                                        ["序号", "BOM编码", "品类", "BOM备注", "当前库存（个）"],
-                                        pageRows.map((row, index) => [
-                                            String((page - 1) * pageSize + index + 1),
-                                            row.code,
-                                            row.name,
-                                            row.remark.trim() || "—",
-                                            String(row.stock),
-                                        ]),
-                                    )
-                                }
-                            >
-                                导出
                             </Button>
                         </ToolbarMore>
                     </TableHeaderActions>

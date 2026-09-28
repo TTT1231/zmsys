@@ -6,7 +6,7 @@ import { BomCell } from "@/components/bom/BomCell";
 import { OrderDetailModal } from "@/pages/orders/OrdersPage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/lib/icons";
-import { downloadCsv, num } from "@/lib/format";
+import { num } from "@/lib/format";
 import { useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { Button, ProgressTrack, StatusBadge, TableLink } from "@/components/ui/Badge";
@@ -17,7 +17,6 @@ import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { nextSortState, type SortState } from "@/lib/tableSort";
 import { Field } from "@/components/ui/Field";
 import { EMPTY_SNAPSHOT, bomByCode, orderStatusOf, remainingOf } from "@/data/views";
-import { formatDateTime } from "@/lib/date";
 import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
@@ -244,47 +243,6 @@ export function ArchivedOrdersPage() {
                         <ToolbarMore>
                             <Button variant="secondary" icon="refresh" onClick={refresh}>
                                 刷新
-                            </Button>
-                            <Button
-                                variant="secondary"
-                                icon="download"
-                                onClick={() =>
-                                    downloadCsv(
-                                        "归档订单",
-                                        [
-                                            "销售订单号",
-                                            "客户",
-                                            "客户编码",
-                                            "BOM 编码",
-                                            "订单数量",
-                                            "交货日期",
-                                            "累计出库",
-                                            "创建人",
-                                            "创建时间",
-                                            "归档时间",
-                                            "归档人",
-                                            "归档备注",
-                                            "状态",
-                                        ],
-                                        pageRows.map(order => [
-                                            order.orderNo,
-                                            order.customer,
-                                            order.customerCode,
-                                            order.bomCode,
-                                            String(order.qty),
-                                            order.deliverDate,
-                                            String(order.outbound),
-                                            order.createdBy,
-                                            formatDateTime(order.createdAt),
-                                            order.archivedAt ? datetimeOf(order.archivedAt) : "",
-                                            order.archivedBy ?? "",
-                                            order.archiveReason ?? "",
-                                            orderStatusOf(snap, order).label,
-                                        ]),
-                                    )
-                                }
-                            >
-                                导出
                             </Button>
                         </ToolbarMore>
                     </TableHeaderActions>

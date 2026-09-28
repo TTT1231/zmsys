@@ -12,7 +12,7 @@ import { RemarkCell } from "@/components/ui/RemarkCell";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
-import { downloadCsv, num } from "@/lib/format";
+import { num } from "@/lib/format";
 import { useApp } from "@/context/useApp";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { Badge, Button, ProgressTrack, StatusBadge } from "@/components/ui/Badge";
@@ -745,37 +745,6 @@ export function OutboundPage() {
                         <ToolbarMore>
                             <Button variant="secondary" icon="refresh" onClick={refresh}>
                                 刷新
-                            </Button>
-                            <Button
-                                variant="secondary"
-                                icon="download"
-                                onClick={() =>
-                                    downloadCsv(
-                                        "成品出库",
-                                        [
-                                            "出库单号",
-                                            "订单",
-                                            "客户",
-                                            "BOM 编码",
-                                            "发货数量",
-                                            "出库日期",
-                                            "操作人",
-                                            "状态",
-                                        ],
-                                        pageRows.map(row => [
-                                            row.no,
-                                            row.orderNo,
-                                            row.customer,
-                                            row.bomCode,
-                                            String(row.qty),
-                                            row.date,
-                                            row.operator,
-                                            outboundStateLabel(row),
-                                        ]),
-                                    )
-                                }
-                            >
-                                导出
                             </Button>
                         </ToolbarMore>
                         {canRegister && (
