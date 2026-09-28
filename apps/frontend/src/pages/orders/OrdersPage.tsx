@@ -664,7 +664,6 @@ export function OrdersPage() {
     const { role, can } = useApp();
     const { data, isLoading, isFetching } = useWbSnapshot();
     const { refresh } = useWbRefresh();
-    const toast = useToast();
     // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
     const overlay = useDelayedFlag(isFetching && !isLoading);
     const snap = data ?? EMPTY_SNAPSHOT;
@@ -892,13 +891,11 @@ export function OrdersPage() {
         const landedNo = draggingNo;
         resetDrag();
         if (moved) {
-            toast("已调整显示顺序：仅当前视图有效，刷新或重新排序后恢复");
             flashRow(landedNo!);
         }
     };
     const onDragCancel = () => {
         resetDrag();
-        toast("已取消本次拖拽");
     };
     // 插入线渲染目标（拖拽中才有）：dropIndex 指向行画上缘线，越界则末行画下缘线
     const dropLineAbove =
@@ -913,9 +910,6 @@ export function OrdersPage() {
         const insertBefore = event.key === "ArrowUp" ? from - 1 : from + 2;
         if (insertBefore < 0 || insertBefore > pageRows.length) return;
         if (submitMove(from, insertBefore)) {
-            toast(
-                `已移至第 ${(insertBefore > from ? insertBefore - 1 : insertBefore) + 1} 行，共 ${pageRows.length} 行`,
-            );
             flashRow(orderNo);
         }
     };
