@@ -381,14 +381,16 @@ CREATE TABLE material_item (
     CONSTRAINT ck_material_item_status CHECK (status IN (0, 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- BOM 档案 = 品类 + 选中物料集合；(category_id, spec_hash) 业务去重，
--- spec_hash 为规范化「物料 id + 数量」对（BigInt 十进制、去重、按 id 数值升序的
--- [[id, quantity], ...] JSON 数组）的 SHA-256；同集合不同数量视为不同 BOM。
+-- BOM 档案 = 品类 + 选中物料集合 + 建档备注；(category_id, spec_hash) 业务去重，
+-- spec_hash 为三元素 JSON 数组 [categoryId, [[id, quantity], ...], remark]（构成按
+-- BigInt 十进制、去重、id 数值升序规范化，备注为 trim 后原文）的 SHA-256；
+-- 同集合不同数量或不同备注视为不同 BOM。
 CREATE TABLE bom_table (
     id BIGINT NOT NULL,
     bom_code VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     category_id BIGINT NOT NULL,
     spec_hash BINARY(32) NOT NULL,
+    remark TEXT NOT NULL DEFAULT (''),
     unit VARCHAR(16) NOT NULL DEFAULT '个',
     status TINYINT UNSIGNED NOT NULL DEFAULT 1,
     row_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
