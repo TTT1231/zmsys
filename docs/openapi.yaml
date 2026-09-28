@@ -1885,6 +1885,7 @@ components:
             type: object
             required: [label, before, after]
             properties:
+                key: { type: string, description: 语义源字段名（bomCode/orderNo 等），前端据此渲染可点击编号链接 }
                 label: { type: string, description: 中文标签（订单数量/交货日期等） }
                 before: { type: [string, "null"] }
                 after: { type: [string, "null"] }

@@ -4,8 +4,14 @@ import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Badge";
 import { PageLoading } from "@/components/ui/PageLoading";
-import { useSystemLogs } from "@/data/queries";
-import type { SystemLogAction, SystemLogDomain, SystemLogEntry } from "@/api";
+import { useSystemLogs, useWbSnapshot } from "@/data/queries";
+import { EMPTY_SNAPSHOT } from "@/data/views";
+import { OrderDetailModal } from "@/pages/orders/OrdersPage";
+import { BomDetailModal } from "@/pages/bom/BomPage";
+import { VoucherModal } from "@/pages/inbound/InboundPage";
+import { OutboundDetailModal } from "@/pages/outbound/OutboundPage";
+import { CustomerDetailModal } from "@/pages/customers/CustomersPage";
+import type { Snapshot, SystemLogAction, SystemLogChange, SystemLogDomain, SystemLogEntry } from "@/api";
 
 /** 关键词防抖：输入停顿 300ms 才并入查询（避免逐字符触发请求） */
 function useDebouncedValue<T>(value: T, delay = 300): T {
@@ -123,19 +129,50 @@ const objectOf = (entry: SystemLogEntry): string => {
     return DOMAIN_LABELS[entry.domain];
 };
 
+/** 编号点击 → 详情弹窗目标（存业务码，渲染时从快照回捞整行数据） */
+type DetailTarget = { kind: SystemLogDomain; code: string };
+
+/** 快照回捞：编号是否对应存活实体行（删除类事件的目标行不在快照，编号降级为纯文本） */
+function hasLiveEntity(domain: SystemLogDomain, code: string, snap: Snapshot): boolean {
+    switch (domain) {
+        case "order":
+            return snap.orders.some(item => item.orderNo === code);
+        case "bom":
+            return snap.boms.some(item => item.code === code);
+        case "inbound":
+            return snap.inboundLedger.some(item => item.no === code);
+        case "outbound":
+            return snap.outboundLedger.some(item => item.no === code);
+        case "customer":
+            return snap.customers.some(item => item.code === code);
+    }
+}
+
+/** 变更值链接语义：key → 详情域（BOM 编码 → BOM 详情、订单号 → 订单详情） */
+function linkDomainOf(key: string | undefined): SystemLogDomain | null {
+    if (key === "bomCode") return "bom";
+    if (key === "orderNo") return "order";
+    return null;
+}
+
 /* ---------- 页面 ---------- */
 
 export function SystemLogsPage() {
     const [tab, setTab] = useState<DomainKey>("all");
     const [keyword, setKeyword] = useState("");
     const [action, setAction] = useState("all");
-    const [range, setRange] = useState<"today" | "7d" | "30d" | "custom">("today");
+    // 默认最近 7 天（审计日志业界惯例：GitHub 默认近 3 个月，无人只默认当天）
+    const [range, setRange] = useState<"today" | "7d" | "30d" | "custom">("7d");
     // custom 延迟生效：草稿仅在点「应用范围」或 Enter 时并入 applied
     const [draftFrom, setDraftFrom] = useState("");
     const [draftTo, setDraftTo] = useState("");
     const [applied, setApplied] = useState<{ from: string; to: string } | null>(null);
     const [dateError, setDateError] = useState("");
     const debouncedKeyword = useDebouncedValue(keyword);
+    // 业务详情弹窗数据源：全量聚合快照（与搜索页同源共享 React Query 缓存）
+    const { data: snapData } = useWbSnapshot();
+    const snap = snapData ?? EMPTY_SNAPSHOT;
+    const [detail, setDetail] = useState<DetailTarget | null>(null);
 
     // 自定义范围未应用有效日期前不发起查询（缺 from/to 会被后端 400 拒绝）
     const pendingCustom = range === "custom" && !applied;
@@ -176,7 +213,7 @@ export function SystemLogsPage() {
         setTab("all");
         setKeyword("");
         setAction("all");
-        setRange("today");
+        setRange("7d");
         setDraftFrom("");
         setDraftTo("");
         setApplied(null);
@@ -334,7 +371,12 @@ export function SystemLogsPage() {
                                     </div>
                                     <ol className="ml-2 border-l border-line pl-6">
                                         {items.map(entry => (
-                                            <EventCard key={entry.id} entry={entry} />
+                                            <EventCard
+                                                key={entry.id}
+                                                entry={entry}
+                                                snap={snap}
+                                                onOpenDetail={setDetail}
+                                            />
                                         ))}
                                     </ol>
                                 </section>
@@ -363,13 +405,58 @@ export function SystemLogsPage() {
                 <Icon name="shield" size={15} className="shrink-0" />
                 客户联系电话只显示「已变更」，不会在日志中展示完整号码；编辑明细日志随业务数据的保留期清理。
             </p>
+            {/* 编号点击 → 业务详情弹窗（SearchPage 同款：state 存业务码，渲染时从快照回捞；
+                目标已删除时回捞为 null，弹窗不渲染） */}
+            {detail?.kind === "order" && (
+                <OrderDetailModal
+                    order={snap.orders.find(item => item.orderNo === detail.code) ?? null}
+                    snap={snap}
+                    onClose={() => setDetail(null)}
+                />
+            )}
+            {detail?.kind === "bom" && (
+                <BomDetailModal
+                    bom={snap.boms.find(item => item.code === detail.code) ?? null}
+                    categories={snap.bomCategories}
+                    onClose={() => setDetail(null)}
+                />
+            )}
+            {detail?.kind === "inbound" && (
+                <VoucherModal
+                    row={snap.inboundLedger.find(item => item.no === detail.code) ?? null}
+                    snap={snap}
+                    onClose={() => setDetail(null)}
+                />
+            )}
+            {detail?.kind === "outbound" && (
+                <OutboundDetailModal
+                    row={snap.outboundLedger.find(item => item.no === detail.code) ?? null}
+                    snap={snap}
+                    onClose={() => setDetail(null)}
+                />
+            )}
+            {detail?.kind === "customer" && (
+                <CustomerDetailModal
+                    customer={snap.customers.find(item => item.code === detail.code) ?? null}
+                    snap={snap}
+                    onClose={() => setDetail(null)}
+                />
+            )}
         </div>
     );
 }
 
 /* ---------- 事件卡片 ---------- */
 
-function EventCard({ entry }: { entry: SystemLogEntry }) {
+function EventCard({
+    entry,
+    snap,
+    onOpenDetail,
+}: {
+    entry: SystemLogEntry;
+    snap: Snapshot;
+    onOpenDetail: (target: DetailTarget) => void;
+}) {
     const meta = ACTION_META[entry.action];
     const first = entry.changes?.[0];
     // 明细惰性渲染：首次展开才创建字段节点（折叠态不预生成 DOM）
@@ -389,7 +476,8 @@ function EventCard({ entry }: { entry: SystemLogEntry }) {
                 <div className="min-w-0 flex-1">
                     <h3 className="flex flex-wrap items-center gap-1.5 text-14 leading-6 font-semibold text-ink">
                         <span>{entry.actor.name}</span>
-                        <span className={textToneOf(entry.action)}>{meta.verb}</span>
+                        {/* 动作词不染色（含「了」）：动作语义由图标方块与时间线圆点承载，标题保持纯文本 */}
+                        <span>{meta.verb}</span>
                         {objectOf(entry) && <span>{objectOf(entry)}</span>}
                         <span className="tnum ml-auto pl-2 text-12 font-normal text-muted">
                             {beijingTimeOf(entry.occurredAt)}
@@ -407,7 +495,18 @@ function EventCard({ entry }: { entry: SystemLogEntry }) {
                 <span className="rounded-md bg-soft px-1.5 py-0.5 text-11 font-semibold text-td-strong">
                     {DOMAIN_CHIPS[entry.domain]}
                 </span>
-                <span className="tnum text-12 font-bold text-primary-strong">{entry.targetCode}</span>
+                {/* 编号可点击弹详情：库存调整无专属详情视图；目标已删除（快照无行）时降级为纯文本 */}
+                {entry.action !== "adjust" && hasLiveEntity(entry.domain, entry.targetCode, snap) ? (
+                    <button
+                        type="button"
+                        onClick={() => onOpenDetail({ kind: entry.domain, code: entry.targetCode })}
+                        className="tnum cursor-pointer text-12 font-bold text-primary-strong transition hover:underline"
+                    >
+                        {entry.targetCode}
+                    </button>
+                ) : (
+                    <span className="tnum text-12 font-bold text-primary-strong">{entry.targetCode}</span>
+                )}
                 {entry.targetName && <span className="text-12 text-td">{entry.targetName}</span>}
                 {first && (
                     <>
@@ -419,9 +518,7 @@ function EventCard({ entry }: { entry: SystemLogEntry }) {
                             </span>
                         )}
                         {first.before !== null && <Icon name="chevron-right" size={13} className="text-placeholder" />}
-                        <span className={`rounded-md px-1.5 py-0.5 text-12 font-semibold ${chipToneOf(entry.action)}`}>
-                            {first.after ?? "—"}
-                        </span>
+                        <FirstChangeAfter entry={entry} change={first} snap={snap} onOpenDetail={onOpenDetail} />
                     </>
                 )}
             </div>
@@ -452,15 +549,25 @@ function EventCard({ entry }: { entry: SystemLogEntry }) {
                                 >
                                     <span className="min-w-20 shrink-0 text-muted">{change.label}</span>
                                     <span className="wrap-break-word text-td">
-                                        {change.before === null ? (
-                                            "新建记录"
-                                        ) : (
+                                        {/* 新建类（before=null）直接显示值，不再重复「新建记录」前缀：
+                                            新建语境已由卡片标题交代 */}
+                                        {change.before === null ? null : (
                                             <>
                                                 {change.before} <span aria-hidden="true">→</span>{" "}
                                             </>
                                         )}
-                                        <span className={`font-semibold ${textToneOf(entry.action)}`}>
-                                            {change.after ?? "—"}
+                                        <span
+                                            className={
+                                                change.before === null
+                                                    ? "font-semibold"
+                                                    : `font-semibold ${textToneOf(entry.action)}`
+                                            }
+                                        >
+                                            <LinkedChangeValue
+                                                change={change}
+                                                snap={snap}
+                                                onOpenDetail={onOpenDetail}
+                                            />
                                         </span>
                                     </span>
                                 </div>
@@ -476,6 +583,61 @@ function EventCard({ entry }: { entry: SystemLogEntry }) {
                 </div>
             )}
         </li>
+    );
+}
+
+/* ---------- 语义值链接（BOM 编码 / 订单号 → 对应详情弹窗；目标已删除时降级纯文本） ---------- */
+
+/** 目标行首条变更的新值 chip */
+function FirstChangeAfter({
+    entry,
+    change,
+    snap,
+    onOpenDetail,
+}: {
+    entry: SystemLogEntry;
+    change: SystemLogChange;
+    snap: Snapshot;
+    onOpenDetail: (target: DetailTarget) => void;
+}) {
+    const linkDomain = linkDomainOf(change.key);
+    const chipClass = `rounded-md px-1.5 py-0.5 text-12 font-semibold ${chipToneOf(entry.action)}`;
+    if (!linkDomain || !change.after || !hasLiveEntity(linkDomain, change.after, snap)) {
+        return <span className={chipClass}>{change.after ?? "—"}</span>;
+    }
+    return (
+        <button
+            type="button"
+            onClick={() => onOpenDetail({ kind: linkDomain, code: change.after! })}
+            className={`cursor-pointer transition hover:underline ${chipClass}`}
+        >
+            {change.after}
+        </button>
+    );
+}
+
+/** 明细行值 */
+function LinkedChangeValue({
+    change,
+    snap,
+    onOpenDetail,
+}: {
+    change: SystemLogChange;
+    snap: Snapshot;
+    onOpenDetail: (target: DetailTarget) => void;
+}) {
+    const linkDomain = linkDomainOf(change.key);
+    if (!linkDomain || !change.after || !hasLiveEntity(linkDomain, change.after, snap)) {
+        return <>{change.after ?? "—"}</>;
+    }
+    return (
+        <button
+            type="button"
+            onClick={() => onOpenDetail({ kind: linkDomain, code: change.after! })}
+            className="cursor-pointer transition hover:underline"
+        >
+            {change.after}
+        </button>
     );
 }
 

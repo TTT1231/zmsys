@@ -8,9 +8,11 @@ import { SystemLogsPage } from "@/pages/system-logs/SystemLogsPage";
 import type { SystemLogPage } from "@/api";
 
 const useSystemLogs = vi.fn();
+const useWbSnapshot = vi.fn();
 
 vi.mock("@/data/queries", () => ({
     useSystemLogs: (...args: unknown[]) => useSystemLogs(...(args as [])),
+    useWbSnapshot: (...args: unknown[]) => useWbSnapshot(...(args as [])),
 }));
 
 const pageOf = (items: SystemLogPage["items"], nextCursor: SystemLogPage["nextCursor"] = null): SystemLogPage => ({
@@ -69,6 +71,9 @@ beforeEach(() => {
         hasNextPage: false,
         fetchNextPage: vi.fn(),
     });
+    // 默认空快照：编号按「目标已删除」降级为纯文本
+    useWbSnapshot.mockReset();
+    useWbSnapshot.mockReturnValue({ data: null, isLoading: false });
 });
 afterEach(cleanup);
 
@@ -115,7 +120,7 @@ it("首条变更预览：编辑类显示旧值划线与箭头，新建类（befo
     expect(struckInCreate).toBeNull();
 });
 
-it("展开详情显示全量变更与操作原因块；null-before 在明细中显示「新建记录」", () => {
+it("展开详情显示全量变更与操作原因块；新建类明细直接显示值（无「新建记录」前缀）", () => {
     renderPage();
     const cards = screen.getAllByRole("listitem");
     const transferCard = cards.find(card => card.textContent?.includes("CUS-0107"))!;
@@ -129,7 +134,11 @@ it("展开详情显示全量变更与操作原因块；null-before 在明细中�
 
     const createCard = cards.find(card => card.textContent?.includes("CUS-0125"))!;
     fireEvent.click(within(createCard).getByRole("button", { name: /查看变更详情/ }));
-    expect(within(createCard).getAllByText("新建记录").length).toBe(2);
+    // 新建类明细：目标行名称 + 预览 + 明细共三处；负责销售仅明细一处（预览只取首条变更）；
+    // 不再重复「新建记录」前缀
+    expect(within(createCard).getAllByText("嘉信电子").length).toBe(3);
+    expect(within(createCard).getAllByText("sales01").length).toBe(1);
+    expect(within(createCard).queryByText("新建记录")).toBeNull();
 });
 
 it("仅有原因无字段变更的事件也渲染详情入口与原因块", () => {
@@ -196,7 +205,7 @@ it("自定义范围延迟生效：from>to 报错（role=alert），合法时点�
     );
 });
 
-it("重置回到默认筛选：全部 tab、清空关键词、操作类型 all、时间范围今天", async () => {
+it("重置回到默认筛选：全部 tab、清空关键词、操作类型 all、时间范围最近 7 天", async () => {
     renderPage();
     fireEvent.change(screen.getByLabelText("关键词"), { target: { value: "华辰" } });
     fireEvent.change(screen.getByLabelText("操作类型"), { target: { value: "edit" } });
@@ -209,7 +218,7 @@ it("重置回到默认筛选：全部 tab、清空关键词、操作类型 all�
         expect(last.domain).toBeUndefined();
         expect(last.action).toBeUndefined();
         expect(last.keyword).toBeUndefined();
-        expect(last.range).toBe("today");
+        expect(last.range).toBe("7d");
     });
 });
 
@@ -294,4 +303,48 @@ it("关键词防抖：输入停顿 300ms 后才并入查询", async () => {
     await vi.waitFor(() => expect(useSystemLogs.mock.calls.at(-1)![0]).toMatchObject({ keyword: "华辰" }), {
         timeout: 1000,
     });
+});
+
+it("编号可点击弹详情：快照有行时渲染为按钮，点击弹出订单详情；无行时保持纯文本", () => {
+    useWbSnapshot.mockReturnValue({
+        data: {
+            version: 1,
+            orders: [
+                {
+                    version: 1,
+                    orderNo: "SO-202609-018",
+                    customer: "华辰电器",
+                    customerCode: "CUS-0088",
+                    bomCode: "ZMKW0001",
+                    qty: 600,
+                    outbound: 0,
+                    orderDate: "2026-09-20",
+                    deliverDate: "2026-10-12",
+                    remark: "",
+                    lifecycleStatus: "active",
+                    createdBy: "李晓",
+                    createdAt: "2026-09-20T00:00:00.000Z",
+                },
+            ],
+            boms: [],
+            bomCategories: [],
+            customers: [],
+            inboundLedger: [],
+            outboundLedger: [],
+            stockAdjustments: [],
+            stock: {},
+            users: [],
+            customerOwnerOptions: [],
+        },
+        isLoading: false,
+    });
+    renderPage();
+    const cards = screen.getAllByRole("listitem");
+    // 快照存在该订单 → 编号渲染为按钮，点击弹出详情（弹窗标题再次出现订单号）
+    const editCard = cards.find(card => card.textContent?.includes("SO-202609-018"))!;
+    fireEvent.click(within(editCard).getByRole("button", { name: "SO-202609-018" }));
+    expect(screen.getAllByText("SO-202609-018").length).toBeGreaterThanOrEqual(2);
+    // 快照无该客户（视为已删除）→ 编号保持纯文本
+    const createCard = cards.find(card => card.textContent?.includes("CUS-0125"))!;
+    expect(within(createCard).queryByRole("button", { name: "CUS-0125" })).toBeNull();
 });

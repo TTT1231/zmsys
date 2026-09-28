@@ -175,8 +175,10 @@ export type SystemLogDomain = "customer" | "order" | "bom" | "inbound" | "outbou
 
 export type SystemLogAction = "create" | "edit" | "transfer" | "archive" | "delete" | "void" | "ship" | "adjust";
 
-/** 单条字段变更（服务端产出中文 label 与展示值；before=null 表示新建记录） */
+/** 单条字段变更（服务端产出中文 label 与展示值；before=null 表示新建记录。
+ *  key 为语义源字段名（bomCode/orderNo 等），前端据此渲染可点击编号链接） */
 export interface SystemLogChange {
+    key?: string;
     label: string;
     before: string | null;
     after: string | null;

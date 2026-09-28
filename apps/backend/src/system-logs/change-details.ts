@@ -1,6 +1,7 @@
 /** 系统日志卡片变更提取（纯函数，node 直跑单测）：从各来源的 detail/before/after
  * JSON 产出统一的中文字段变更列表；值格式贴近时间线展示（数量带单位"个"、
- * 日期 yyyy-MM-dd、状态中文），before=null 表示新建记录。 */
+ * 日期 yyyy-MM-dd、状态中文），before=null 表示新建记录。每行携带语义 key
+ * （源字段名），前端据此把 BOM 编码/订单号等渲染为可点击编号链接。 */
 import type { SystemLogChange } from "./types";
 
 /** JSON detail 的宽松读取类型（快照字段形态随动作不同，逐键判型） */
@@ -76,14 +77,14 @@ function diffByFields(
             const beforeRegion = before ? regionOf(before) : null;
             const afterRegion = regionOf(after);
             if (beforeRegion !== afterRegion) {
-                changes.push({ label: "所在地区", before: beforeRegion, after: afterRegion });
+                changes.push({ key: "region", label: "所在地区", before: beforeRegion, after: afterRegion });
             }
             continue;
         }
         const beforeValue = before ? format(before[field.key]) : null;
         const afterValue = format(source[field.key]);
         if (beforeValue !== afterValue) {
-            changes.push({ label: field.label, before: beforeValue, after: afterValue });
+            changes.push({ key: field.key, label: field.label, before: beforeValue, after: afterValue });
         }
     }
     return changes;
@@ -97,48 +98,61 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
             // detail 为订单完整快照：创建/删除展示关键事实（before=null）
             const snapshot = detail ?? {};
             return [
-                { label: "客户", before: null, after: asText(snapshot.customer) },
-                { label: "订单数量", before: null, after: qtyText(snapshot.qty) },
-                { label: "交货日期", before: null, after: asText(snapshot.deliverDate) },
-                { label: "备注", before: null, after: asText(snapshot.remark) },
+                { key: "customer", label: "客户", before: null, after: asText(snapshot.customer) },
+                { key: "qty", label: "订单数量", before: null, after: qtyText(snapshot.qty) },
+                { key: "deliverDate", label: "交货日期", before: null, after: asText(snapshot.deliverDate) },
+                { key: "remark", label: "备注", before: null, after: asText(snapshot.remark) },
             ].filter(change => change.after !== null);
         }
         case "archive_order":
             // 归档前必为 ACTIVE（终态不可再归档），状态变更可推断；数量为归档时口径
             return [
-                { label: "订单状态", before: "进行中", after: "已归档" },
-                { label: "订单数量", before: null, after: qtyText(detail?.qty) },
+                { key: "lifecycleStatus", label: "订单状态", before: "进行中", after: "已归档" },
+                { key: "qty", label: "订单数量", before: null, after: qtyText(detail?.qty) },
             ];
         case "update_customer": {
             if (!detail) return null;
             const ownerChanged = asJson(detail.ownerChanged);
             if (ownerChanged) {
                 // 负责人移交（页面编辑或离岗批量）：只展示移交事实
-                return [{ label: "负责销售", before: asText(ownerChanged.from), after: asText(ownerChanged.to) }];
+                return [
+                    {
+                        key: "owner",
+                        label: "负责销售",
+                        before: asText(ownerChanged.from),
+                        after: asText(ownerChanged.to),
+                    },
+                ];
             }
             const changes = diffByFields(asJson(detail.before), asJson(detail.after) ?? {}, CUSTOMER_FIELDS);
             if (detail.phoneChanged === true) {
-                changes.push({ label: "联系电话", before: "原号码不展示", after: "已变更，号码不展示" });
+                changes.push({
+                    key: "phone",
+                    label: "联系电话",
+                    before: "原号码不展示",
+                    after: "已变更，号码不展示",
+                });
             }
             return changes;
         }
         case "create_customer":
             return [
-                { label: "客户名称", before: null, after: asText(detail?.name) },
-                { label: "负责销售", before: null, after: asText(detail?.ownerAccount) },
+                { key: "name", label: "客户名称", before: null, after: asText(detail?.name) },
+                { key: "ownerAccount", label: "负责销售", before: null, after: asText(detail?.ownerAccount) },
             ].filter(change => change.after !== null);
         case "create_bom":
         case "delete_bom": {
             // detail 为 BOM 契约响应/删除前快照
             return [
-                { label: "成品名称", before: null, after: asText(detail?.name) },
-                { label: "规格构成", before: null, after: asText(detail?.spec) },
+                { key: "name", label: "成品名称", before: null, after: asText(detail?.name) },
+                { key: "spec", label: "规格构成", before: null, after: asText(detail?.spec) },
             ].filter(change => change.after !== null);
         }
         case "create_inbound":
         case "delete_inbound": {
             const snapshot = detail ?? {};
             return INBOUND_FIELDS.map(field => ({
+                key: field.key,
                 label: field.label,
                 before: null,
                 after: (field.format ?? asText)(snapshot[field.key]),
@@ -149,15 +163,15 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
         }
         case "ship":
             return [
-                { label: "发货数量", before: null, after: qtyText(detail?.qty) },
-                { label: "备注", before: null, after: asText(detail?.remark) },
+                { key: "qty", label: "发货数量", before: null, after: qtyText(detail?.qty) },
+                { key: "remark", label: "备注", before: null, after: asText(detail?.remark) },
             ].filter(change => change.after !== null);
         case "void_outbound":
         case "delete_outbound": {
             // shipmentSnapshot：状态与数量关键事实
             return [
-                { label: "出库数量", before: null, after: qtyText(detail?.qty) },
-                { label: "订单号", before: null, after: asText(detail?.orderNo) },
+                { key: "qty", label: "出库数量", before: null, after: qtyText(detail?.qty) },
+                { key: "orderNo", label: "订单号", before: null, after: asText(detail?.orderNo) },
             ].filter(change => change.after !== null);
         }
         default:
@@ -168,10 +182,10 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
 /** 库存调整事件（stock_adjustment 表行）的变更列表 */
 export function changesOfAdjustment(qtyDelta: number, relatedInboundNo: string | null): SystemLogChange[] {
     const changes: SystemLogChange[] = [
-        { label: "调整数量", before: null, after: `${qtyDelta > 0 ? "+" : ""}${qtyDelta} 个` },
+        { key: "qtyDelta", label: "调整数量", before: null, after: `${qtyDelta > 0 ? "+" : ""}${qtyDelta} 个` },
     ];
     if (relatedInboundNo) {
-        changes.push({ label: "关联入库单", before: null, after: relatedInboundNo });
+        changes.push({ key: "relatedInboundNo", label: "关联入库单", before: null, after: relatedInboundNo });
     }
     return changes;
 }
