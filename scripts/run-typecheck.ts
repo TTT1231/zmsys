@@ -23,7 +23,9 @@ if (root.error !== undefined) throw root.error;
 completeFrom(root);
 
 if (process.exitCode === 0) {
-    const recursive = spawnSync("pnpm --recursive --if-present run typecheck", { stdio: "inherit", shell: true });
-    if (recursive.error !== undefined) throw recursive.error;
-    completeFrom(recursive);
+    // turbo 按拓扑跑各包 typecheck 并缓存结果；根包无 //#typecheck 任务，不会被
+    // 纳入任务图，不存在「包装器 → turbo → 包装器」递归
+    const packages = spawnSync("pnpm exec turbo run typecheck", { stdio: "inherit", shell: true });
+    if (packages.error !== undefined) throw packages.error;
+    completeFrom(packages);
 }
