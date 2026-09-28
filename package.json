@@ -8,7 +8,6 @@
     "author": "",
     "type": "module",
     "scripts": {
-        "postinstall": "pnpm -r run --if-present stub",
         "dev:frontend": "turbo run dev --filter=zmsysfrontend",
         "dev:backend": "turbo run dev --filter=zmsysbackend",
         "typecheck": "tsx scripts/run-typecheck.ts",
@@ -33,7 +32,6 @@
         "oxfmt": "catalog:",
         "oxlint": "catalog:",
         "oxlint-tsgolint": "catalog:",
-        "tsdown": "catalog:",
         "tsx": "catalog:",
         "turbo": "^2.11.4",
         "typescript": "catalog:",

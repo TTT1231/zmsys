@@ -18,7 +18,7 @@
  *      docker compose build && up -d → 健康检查（/api/health/live）
  *
  * ssh 连接频率受限：全程仅 2 次连接（上传/执行各 1 次），间隔 20s；
- * 各步骤幂等，撞限流报错后稍等重跑 pnpm deploy 即可续跑。
+ * 各步骤幂等，撞限流报错后稍等重跑 pnpm deploy:prod 即可续跑。
  *
  * 数据安全：MySQL 数据在 zmsys-mysql-data 卷，重建容器/镜像不影响；
  * 会清空数据的操作（down -v、volume rm/prune、改卷名）本脚本一律不执行。
@@ -26,7 +26,7 @@
  * 前置：仓库根 .env 配好 DEPLOY_SSH_HOST（真实地址不入库）；
  * --stage-only 只做本地构建+组装（不连服务器，调试用）。
  *
- * 用法：pnpm deploy [--stage-only]
+ * 用法：pnpm deploy:prod [--stage-only]
  */
 import { config } from "dotenv";
 import { execSync, spawnSync } from "node:child_process";
@@ -238,7 +238,7 @@ fi`;
         timeout: 3600000,
     });
     if (execute.status !== 0) {
-        throw new Error(`远端执行失败（exit=${execute.status}），可稍等后重跑 pnpm deploy 续跑（各步骤幂等）`);
+        throw new Error(`远端执行失败（exit=${execute.status}），可稍等后重跑 pnpm deploy:prod 续跑（各步骤幂等）`);
     }
 
     const sha256 = createHash("sha256").update(tarBuffer).digest("hex");

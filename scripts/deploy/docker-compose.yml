@@ -1,4 +1,4 @@
-# 生产栈：pnpm deploy 在本地构建产物后上传，服务器上 docker compose build 只做装配
+# 生产栈：pnpm deploy:prod 在本地构建产物后上传，服务器上 docker compose build 只做装配
 #（依赖层缓存命中时秒级，见 Dockerfile.backend）。构建上下文 = 部署目录（staging 布局）。
 #
 # 命名统一 zmsys：project 名锁定为 zmsys，容器 zmsys-frontend-1 / zmsys-backend-1 /

@@ -13,8 +13,6 @@ ARG NPM_REGISTRY=https://mirrors.huaweicloud.com/repository/npm/
 ENV NPM_CONFIG_REGISTRY=$NPM_REGISTRY
 # 与根 package.json packageManager 对齐，保证 lockfile 解析行为一致
 RUN npm install -g pnpm@12.4.2
-# 镜像内没有 .git，跳过 git 钩子类 postinstall
-ENV HUSKY=0
 
 WORKDIR /app
 

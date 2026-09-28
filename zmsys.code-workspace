@@ -16,5 +16,9 @@
             "name": "@zmsys/utils",
             "path": "packages/utils",
         },
+        {
+            "name": "@zmsys/tsconfig",
+            "path": "internal/tsconfig",
+        },
     ],
 }
