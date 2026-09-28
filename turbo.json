@@ -5,7 +5,8 @@
     "tasks": {
         "build": {
             "dependsOn": ["^build"],
-            "outputs": ["dist/**"]
+            "env": ["VITE_*"],
+            "outputs": ["dist/**", "tsconfig.build.tsbuildinfo"]
         },
         "dev": {
             "cache": false,

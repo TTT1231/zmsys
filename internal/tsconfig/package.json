@@ -5,7 +5,8 @@
     "files": [
         "base.json",
         "web.json",
-        "node.json"
+        "node.json",
+        "library.json"
     ],
     "type": "module",
     "dependencies": {

@@ -1,7 +1,7 @@
 /**
  * 自动化冒烟：spawn 真实进程（编译产物 dist/main.js）→ 等健康就绪 → 登录 →
  * profile → ready 探活 → 发停止信号 → 断言优雅退出（退出码 + Prisma/池关闭日志）。
- * 全程连 *_test 专用库（护栏同 e2e）。前置：pnpm --filter ./apps/backend run build、
+ * 全程连 *_test 专用库（护栏同 e2e）。前置：pnpm exec turbo run build --filter=zmsysbackend、
  * 测试库已 reset。Windows 不支持向子进程投递真实信号，停止阶段降级为仅断言进程退出；
  * Linux（CI）下完整验证 SIGINT 优雅停机。
  */
@@ -56,7 +56,7 @@ const waitFor = async (label: string, check: () => Promise<boolean>, timeoutMs: 
 
 const main = async (): Promise<void> => {
     if (!existsSync(ENTRY)) {
-        throw new Error("缺少编译产物 dist/main.js，请先执行 pnpm --filter ./apps/backend run build");
+        throw new Error("缺少编译产物 dist/main.js，请先执行 pnpm exec turbo run build --filter=zmsysbackend");
     }
 
     const output: string[] = [];
