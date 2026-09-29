@@ -127,7 +127,7 @@ describe("BOM/成品档案 (e2e)", () => {
             ["group", "型号", false],
             ["group", "规格", false],
             ["group", "方向", false],
-            ["group", "杆子点位厚度", false],
+            ["group", "杆子", false],
             ["group", "A面", false],
             ["group", "B面", false],
             ["group", "弹簧", false],

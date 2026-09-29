@@ -136,9 +136,11 @@ export const BOM_CATEGORIES: CategoryDef[] = [
                 ["3096", "反面转90°扁位朝上"],
                 ["3097", "正面转90°扁位朝上"],
             ]),
-            group("2004", "杆子点位厚度", "lever-point-thickness", null, [
-                ["3005", "4.8"],
-                ["3023", "4.9"],
+            group("2004", "杆子", "lever-point-thickness", null, [
+                ["3005", "4.8/12mm"],
+                ["3023", "4.9/12mm"],
+                ["3766", "4.6/23mm"],
+                ["3767", "4.6/18mm"],
             ]),
             group("2005", "A面", "face-a", null, [
                 ["3031", "三脚银点"],

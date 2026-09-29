@@ -51,7 +51,7 @@ describe("categoryOf", () => {
             ["group", "型号", false],
             ["group", "规格", false],
             ["group", "方向", false],
-            ["group", "杆子点位厚度", false],
+            ["group", "杆子", false],
             ["group", "A面", false],
             ["group", "B面", false],
             ["group", "弹簧", false],
@@ -146,16 +146,16 @@ describe("catalogRowsOf", () => {
         });
     });
 
-    it("旋转XK2目录：型号全集、规格、方向与杆子点位厚度；A面与B面共用 9 项触点选项", () => {
+    it("旋转XK2目录：型号全集、规格、方向与杆子；A面与B面共用 9 项触点选项", () => {
         const rotary = cat("旋转XK2");
         const itemsOf = (groupName: string) =>
             rotary.groups.find(node => node.name === groupName)!.items.map(item => item.name);
         expect(itemsOf("型号")).toHaveLength(21);
         expect(itemsOf("型号")).toContain("无");
         expect(itemsOf("方向")).toEqual(["正面", "反面", "正面反轴", "反面转90°扁位朝上", "正面转90°扁位朝上"]);
-        expect(itemsOf("规格")).toHaveLength(22);
+        expect(itemsOf("规格")).toHaveLength(23);
         expect(itemsOf("规格")[0]).toBe("211-1");
-        expect(itemsOf("杆子点位厚度")).toEqual(["4.8", "4.9"]);
+        expect(itemsOf("杆子")).toEqual(["4.8/12mm", "4.9/12mm", "4.6/23mm", "4.6/18mm"]);
         const faceOptions = [
             "三脚银点",
             "三脚铜点",
