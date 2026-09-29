@@ -225,6 +225,10 @@ describe("BOM/成品档案 (e2e)", () => {
         const rotaryBefore = (before.json().data as Array<{ code: string }>).filter(bom =>
             bom.code.startsWith("XK2"),
         ).length;
+        // 期望号取自 biz_sequence：序列只增不减，删除过档案的库存在号段空洞，
+        // 「现存数 + 1」仅在从未取号的洁净库成立；行不存在 ⟺ 品类从未建档
+        const seq = await prisma.bizSequence.findUnique({ where: { sequenceKey: "bom:rotary-switch" } });
+        const rotaryNext = seq?.nextValue ?? BigInt(rotaryBefore + 1);
 
         const [model, direction, faceA, spring] = await Promise.all([
             itemIdOf("rotary-switch", "型号", "1-1"),
@@ -239,7 +243,7 @@ describe("BOM/成品档案 (e2e)", () => {
         );
         expect(res.statusCode).toBe(200);
         const created = res.json().data;
-        expect(created.code).toBe(`XK2${String(rotaryBefore + 1).padStart(3, "0")}`);
+        expect(created.code).toBe(`XK2${rotaryNext.toString().padStart(3, "0")}`);
         expect(created).toMatchObject({ name: "旋转XK2", modelCode: "1-1", unit: "个" });
         expect(created.created).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
         expect(created.items.map((item: { name: string }) => item.name)).toEqual(["1-1", "正面", "三脚银点", "0.5"]);
