@@ -344,6 +344,8 @@ it("无原型演示噪音：无副标题、无步骤编号、无预览/预估编
     expect(screen.getByText("从左侧勾选物料")).toBeInTheDocument();
 });
 
+// 全量 69 文件并行时机器负载高，此重组件用例（合并树 + 双树切换 + 多步交互）
+// 单跑 ~2.5s 会漂过默认 5s 超时，单独放宽到 15s
 it("跌倒开关：品类子选微动类型后合并树展示，提交携带 childCategory", async () => {
     const user = userEvent.setup();
     render(<NewBomModal open onClose={vi.fn()} />);
@@ -398,7 +400,7 @@ it("跌倒开关：品类子选微动类型后合并树展示，提交携带 chi
     expect(screen.getByRole("button", { name: "跌倒盖" })).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "带CB" })).toBeInTheDocument();
     expect(screen.queryByRole("checkbox", { name: "二脚底座（无挡脚）" })).not.toBeInTheDocument();
-});
+}, 15000);
 
 it("普通品类不出现子选下拉", async () => {
     const user = userEvent.setup();
