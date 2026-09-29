@@ -63,6 +63,8 @@ const PATHS: Record<string, string[]> = {
     grip: ["M9.5 7h.4", "M14.5 7h.4", "M9.5 12h.4", "M14.5 12h.4", "M9.5 17h.4", "M14.5 17h.4"],
     "chevron-left": ["M14.5 6 9 12l5.5 6"],
     "chevron-right": ["M9.5 6 15 12l-5.5 6"],
+    /* 登录滑块验证手柄：双右尖角（vben ChevronsRight 同款指向） */
+    "chevrons-right": ["M6.5 6 12 12l-5.5 6", "M12.5 6 18 12l-5.5 6"],
     "chevron-down": ["M6 9.5l6 5.5 6-5.5"],
     "chevron-up": ["M6 14.5l6-5.5 6 5.5"],
     /* 表头排序指示：未激活时上下双箭头，激活后换 chevron-up / chevron-down */

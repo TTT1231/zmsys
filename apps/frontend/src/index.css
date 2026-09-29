@@ -1359,3 +1359,36 @@ button:active:not(:disabled) {
         clip-path: inset(0 20.75rem 0 0);
     }
 }
+
+/* ── 登录滑块验证提示文字（vben SliderCaptcha / SpineText 同款流光）：
+   背景裁进字形，白色光斑从左向右周期扫过；验证通过后文字压在绿色进度条上，
+   用 -webkit-text-fill-color 实心白盖掉裁剪背景并停住动画 ── */
+.login-captcha-text {
+    color: transparent;
+    background:
+        radial-gradient(circle at center, rgb(255 255 255 / 80%), #f000) -200% 50% / 200% 100% no-repeat,
+        #000;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: captcha-shine 2s linear infinite;
+}
+
+.login-captcha-text[data-passing="true"] {
+    -webkit-text-fill-color: #fff;
+    animation: none;
+}
+
+html.dark .login-captcha-text {
+    background:
+        radial-gradient(circle at center, rgb(24 24 26 / 80%), transparent) -200% 50% / 200% 100% no-repeat,
+        #f4f4f4;
+}
+
+@keyframes captcha-shine {
+    0% {
+        background-position: 200% 0%;
+    }
+    100% {
+        background-position: -200% 0%;
+    }
+}
