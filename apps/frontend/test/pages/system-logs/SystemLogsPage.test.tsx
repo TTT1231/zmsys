@@ -95,9 +95,11 @@ it("时间线按天分组渲染卡片：动词语义、域徽章、编号与名�
     const cards = screen.getAllByRole("listitem");
     const editCard = cards.find(card => card.textContent?.includes("SO-202609-018"))!;
     expect(within(editCard).getAllByText("销售订单").length).toBeGreaterThan(0);
-    expect(screen.getByText("10:27")).toBeInTheDocument();
+    // 卡片时间带完整北京日期时间（跨日回看不依赖分组标题）
+    expect(screen.getByText("2026-09-26 10:27")).toBeInTheDocument();
     expect(screen.getByText("SO-202609-018")).toBeInTheDocument();
-    expect(screen.getByText("华辰电器")).toBeInTheDocument();
+    // 编号后的名称快照不再展示（与首条变更值重复，上下文由变更行承载）
+    expect(screen.queryByText("华辰电器")).toBeNull();
     // 角色代号映射为中文名
     expect(screen.getByText("管理员")).toBeInTheDocument();
 });
@@ -134,9 +136,9 @@ it("展开详情显示全量变更与操作原因块；新建类明细直接显�
 
     const createCard = cards.find(card => card.textContent?.includes("CUS-0125"))!;
     fireEvent.click(within(createCard).getByRole("button", { name: /查看变更详情/ }));
-    // 新建类明细：目标行名称 + 预览 + 明细共三处；负责销售仅明细一处（预览只取首条变更）；
-    // 不再重复「新建记录」前缀
-    expect(within(createCard).getAllByText("嘉信电子").length).toBe(3);
+    // 新建类明细：预览 + 明细共两处（编号后的名称快照已去重移除）；负责销售仅明细一处
+    // （预览只取首条变更）；不再重复「新建记录」前缀
+    expect(within(createCard).getAllByText("嘉信电子").length).toBe(2);
     expect(within(createCard).getAllByText("sales01").length).toBe(1);
     expect(within(createCard).queryByText("新建记录")).toBeNull();
 });
