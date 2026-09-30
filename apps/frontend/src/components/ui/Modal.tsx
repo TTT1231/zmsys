@@ -116,7 +116,7 @@ export function Modal({
     return createPortal(
         <div
             ref={overlayRef}
-            className={`fixed inset-0 z-150 flex bg-scrim backdrop-blur-[2px] ${layout === "detail" ? "items-stretch justify-end" : "items-center justify-center p-4 max-md:items-end max-md:p-0"}`}
+            className={`fixed inset-0 z-150 flex animate-fade-in bg-scrim backdrop-blur-[2px] ${layout === "detail" ? "items-stretch justify-end" : "items-center justify-center p-4 max-md:items-end max-md:p-0"}`}
             onMouseDown={event => {
                 if (event.target === event.currentTarget) onClose();
             }}
@@ -129,6 +129,8 @@ export function Modal({
                 tabIndex={-1}
                 style={{ maxWidth: width }}
                 className={`flex w-full flex-col overflow-hidden bg-surface shadow-modal ${
+                    layout === "detail" ? "animate-modal-enter-detail" : "animate-modal-enter"
+                } ${
                     layout === "detail"
                         ? "h-dvh max-h-dvh rounded-l-panel max-md:rounded-none"
                         : layout === "workspace"

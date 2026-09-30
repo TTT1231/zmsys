@@ -52,7 +52,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export function Button({ variant = "primary", icon, children, className = "", ...rest }: ButtonProps) {
     const base =
-        "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-btn px-4 text-14 font-medium transition disabled:cursor-not-allowed disabled:opacity-60";
+        "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-btn px-4 text-14 font-medium transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60";
     const styles =
         variant === "primary"
             ? "bg-primary text-white hover:bg-primary-hover"

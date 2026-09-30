@@ -259,21 +259,23 @@
         }
     }
 
-    /* 全局通知：右上角轻滑入，退出更快；仅使用 transform / opacity 避免布局抖动 */
-    --animate-notification-enter: notification-enter 0.22s cubic-bezier(0.2, 0, 0, 1);
-    --animate-notification-exit: notification-exit 0.16s ease-in forwards;
+    /* 弹窗进入：面板淡入 + 轻微位移（中心弹窗上浮、侧滑详情从右滑入），遮罩复用 fade-in。
+       与 page-enter 同原则只做进入不做退出：关闭必须即时响应，延迟卸载会拖慢连续开关表单的手感；
+       仅 transform / opacity，reduced-motion 由全局降级兜底 */
+    --animate-modal-enter: modal-enter 0.22s cubic-bezier(0.2, 0, 0, 1);
+    --animate-modal-enter-detail: modal-enter-detail 0.26s cubic-bezier(0.2, 0, 0, 1);
 
-    @keyframes notification-enter {
+    @keyframes modal-enter {
         from {
             opacity: 0;
-            transform: translate3d(12px, -4px, 0);
+            transform: translateY(12px);
         }
     }
 
-    @keyframes notification-exit {
-        to {
+    @keyframes modal-enter-detail {
+        from {
             opacity: 0;
-            transform: translate3d(8px, 0, 0);
+            transform: translateX(24px);
         }
     }
 

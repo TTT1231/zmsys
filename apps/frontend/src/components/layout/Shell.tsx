@@ -163,15 +163,17 @@ export function Sidebar({ collapsed, open, onClose, maximized = false, form, bel
                 )}
             </aside>
 
-            {/* 移动端遮罩 */}
-            {open && (
-                <button
-                    type="button"
-                    aria-label="关闭主导航"
-                    onClick={onClose}
-                    className="fixed inset-0 z-40 bg-scrim backdrop-blur-[2px] lg:hidden"
-                />
-            )}
+            {/* 移动端遮罩：常驻挂载走透明度过渡（条件渲染会瞬现瞬失，与抽屉本体的 300ms 滑动脱节）；
+                关闭态 inert 移出无障碍树，pointer-events-none 拦截误点 */}
+            <button
+                type="button"
+                aria-label="关闭主导航"
+                inert={!open}
+                onClick={onClose}
+                className={`fixed inset-0 z-40 bg-scrim backdrop-blur-[2px] transition-opacity duration-300 ease-out lg:hidden ${
+                    open ? "opacity-100" : "pointer-events-none opacity-0"
+                }`}
+            />
         </>
     );
 }

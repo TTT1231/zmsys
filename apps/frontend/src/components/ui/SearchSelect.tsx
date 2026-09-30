@@ -129,14 +129,18 @@ export function SearchSelect({
                         if (active >= 0 && results[active]) choose(results[active].value);
                     }
                 }}
-                className="min-h-11 w-full rounded-input border border-line-strong bg-surface px-3 text-14 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className={`min-h-11 w-full rounded-input border bg-surface px-3 text-14 focus:outline-none focus:ring-2 ${
+                    error
+                        ? "border-danger focus:border-danger focus:ring-danger/20"
+                        : "border-line-strong focus:border-primary focus:ring-primary/20"
+                }`}
             />
             {open &&
                 createPortal(
                     <div
                         ref={listRef}
                         style={position}
-                        className="fixed z-200 overflow-y-auto overscroll-contain rounded-input border border-line bg-surface p-1 shadow-modal"
+                        className="fixed z-200 animate-fade-in overflow-y-auto overscroll-contain rounded-input border border-line bg-surface p-1 shadow-modal"
                         onMouseDown={event => event.preventDefault()}
                     >
                         <p role="status" className="px-3 py-2 text-13 text-muted">

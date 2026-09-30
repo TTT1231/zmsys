@@ -1,7 +1,10 @@
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
-const inputBase =
-    "w-full rounded-input border border-line-strong bg-surface px-3 py-2 text-14 text-ink transition placeholder:text-subtle focus:border-primary focus:outline-none disabled:bg-soft disabled:text-subtle";
+/* 校验失败时边框与焦点态同步转危险色：错误在输入框本身可见，不只依赖下方文案 */
+const inputBase = (error: boolean) =>
+    `w-full rounded-input border bg-surface px-3 py-2 text-14 text-ink transition placeholder:text-subtle focus:outline-none disabled:bg-soft disabled:text-subtle ${
+        error ? "border-danger focus:border-danger" : "border-line-strong focus:border-primary"
+    }`;
 
 export function TextField({
     label,
@@ -17,7 +20,7 @@ export function TextField({
 }) {
     return (
         <Field label={label} required={required} error={error} hint={hint}>
-            <input aria-invalid={!!error} aria-required={required} {...rest} className={inputBase} />
+            <input aria-invalid={!!error} aria-required={required} {...rest} className={inputBase(!!error)} />
         </Field>
     );
 }
@@ -34,7 +37,13 @@ export function DateField({
 }) {
     return (
         <Field label={label} required={required} error={error}>
-            <input aria-invalid={!!error} aria-required={required} {...rest} type="date" className={inputBase} />
+            <input
+                aria-invalid={!!error}
+                aria-required={required}
+                {...rest}
+                type="date"
+                className={inputBase(!!error)}
+            />
         </Field>
     );
 }
@@ -52,7 +61,7 @@ export function SelectField({
 }) {
     return (
         <Field label={label} required={required} error={error}>
-            <select aria-invalid={!!error} aria-required={required} {...rest} className={inputBase}>
+            <select aria-invalid={!!error} aria-required={required} {...rest} className={inputBase(!!error)}>
                 {children}
             </select>
         </Field>
@@ -77,7 +86,7 @@ export function TextArea({
                 aria-required={required}
                 {...rest}
                 placeholder={placeholder}
-                className={`${inputBase} min-h-18 resize-y`}
+                className={`${inputBase(!!error)} min-h-18 resize-y`}
             />
         </Field>
     );
