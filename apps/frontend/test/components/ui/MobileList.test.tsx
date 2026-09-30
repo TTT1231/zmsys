@@ -4,6 +4,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { CardField, OrderTaskCard } from "@/components/ui/MobileList";
+import { deriveOrders } from "@/data/views";
 import { detailOrder, detailSnapshot } from "../../fixtures/recordDetails";
 afterEach(cleanup);
 it.each([0, 200])("已发 %i 个后归档均显示已归档，保留实际已发数量", outbound => {
@@ -34,4 +35,18 @@ it("CardField 标签与值分行渲染，值右对齐等宽数字", () => {
     const value = screen.getByText("1,000 个");
     expect(value.className).toContain("text-right");
     expect(value.className).toContain("tnum");
+});
+it("传入页面级 derived（P2 一次分配）与逐卡全量派生渲染一致", () => {
+    // qty 300 / 已发 200 → 待交 100；库存 200 → 本次可发 100（部分发货）；
+    // 交期改未来，避免逾期徽章盖住状态徽章（断言依赖“今天”，交期过期的分支另有用例覆盖）
+    const order = { ...detailOrder, deliverDate: "2999-01-01" };
+    const snap = { ...detailSnapshot, orders: [order] };
+    const derived = deriveOrders(snap);
+    const { unmount } = render(<OrderTaskCard order={order} snap={snap} derived={derived} onDetail={vi.fn()} />);
+    expect(screen.getByText("本次可发 100 个")).toBeInTheDocument();
+    expect(screen.getByText("部分发货")).toBeInTheDocument();
+    unmount();
+    render(<OrderTaskCard order={order} snap={snap} onDetail={vi.fn()} />);
+    expect(screen.getByText("本次可发 100 个")).toBeInTheDocument();
+    expect(screen.getByText("部分发货")).toBeInTheDocument();
 });

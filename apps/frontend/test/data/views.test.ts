@@ -6,9 +6,12 @@ import type { Bom, Order, Snapshot } from "@/api";
 import {
     EMPTY_SNAPSHOT,
     bomByCode,
+    bomIndexOf,
     dailyTrend,
+    deriveOrders,
     maxShipOf,
     orderStatusOf,
+    orderStatusOfMax,
     readyToShip,
     remainingOf,
     stockGapList,
@@ -226,11 +229,63 @@ describe("readyToShip", () => {
     });
 });
 
+describe("deriveOrders", () => {
+    it("precomputes maxShip/status equal to per-order queries for every order", () => {
+        const fixture = snap({
+            stock: { ZMXK001: 12 },
+            orders: [
+                order({ orderNo: "ZM-1", qty: 10 }),
+                order({ orderNo: "ZM-2", qty: 10, deliverDate: "2026-03-18" }),
+                order({ orderNo: "ZM-DONE", qty: 10, outbound: 10 }),
+                order({ orderNo: "ZM-ARC", qty: 10, outbound: 2, lifecycleStatus: "archived" }),
+            ],
+        });
+        const derived = deriveOrders(fixture);
+        for (const item of fixture.orders) {
+            expect(derived.byOrderNo.get(item.orderNo)?.maxShip ?? 0).toBe(maxShipOf(fixture, item.orderNo));
+            expect(derived.byOrderNo.get(item.orderNo)?.status ?? orderStatusOfMax(item, 0)).toEqual(
+                orderStatusOf(fixture, item),
+            );
+        }
+    });
+
+    it("keeps first-wins on duplicate order no (与旧 readyToShip().find 定位一致)", () => {
+        const fixture = snap({
+            stock: { ZMXK001: 8 },
+            orders: [
+                order({ orderNo: "ZM-DUP", qty: 5, deliverDate: "2026-03-18" }),
+                order({ orderNo: "ZM-DUP", qty: 6, deliverDate: "2026-03-19" }),
+            ],
+        });
+        const derived = deriveOrders(fixture);
+        expect(derived.rows.map(row => row.remaining)).toEqual([5, 6]);
+        expect(derived.byOrderNo.get("ZM-DUP")?.remaining).toBe(5);
+        expect(maxShipOf(fixture, "ZM-DUP")).toBe(5);
+    });
+
+    it("indexes boms first-wins, matching bomByCode", () => {
+        const fixture = snap({ boms: [bom(), bom({ modelCode: "M-200", spec: "重复编码档案" })] });
+        const index = bomIndexOf(fixture);
+        expect(index.get("ZMXK001")?.modelCode).toBe("M-100");
+        expect(index.get("ZMXK001")).toBe(bomByCode(fixture, "ZMXK001"));
+    });
+
+    it("accepts a shared bomIndex without changing allocation rows", () => {
+        const fixture = snap({ stock: { ZMXK001: 5 }, orders: [order()] });
+        expect(readyToShip(fixture, bomIndexOf(fixture))).toEqual(readyToShip(fixture));
+    });
+});
+
 describe("maxShipOf", () => {
     it("returns allocation for the order and zero for unknown order no", () => {
         const fixture = snap({ stock: { ZMXK001: 4 }, orders: [order()] });
         expect(maxShipOf(fixture, "ZM260315001")).toBe(4);
         expect(maxShipOf(fixture, "ZM-UNKNOWN")).toBe(0);
+    });
+
+    it("short-circuits fulfilled orders to zero without allocation", () => {
+        const fixture = snap({ stock: { ZMXK001: 4 }, orders: [order({ outbound: 10 })] });
+        expect(maxShipOf(fixture, "ZM260315001")).toBe(0);
     });
 });
 
