@@ -18,6 +18,7 @@ const RUN = Date.now().toString(36);
 
 /** 固定测试 BOM（与 orders e2e 同款，存在则复用；重置库后单跑本文件可自建） */
 const BOM_CODE = "ZME2E0001";
+const BOM_REMARK = "e2e 日志 BOM 备注";
 const BOM_ITEMS = [
     { groupKey: "base", groupName: "底座", name: "三脚底座（有挡脚）", position: 1 },
     { groupKey: "button", groupName: "按钮", name: "8.5mm", position: 2 },
@@ -92,8 +93,12 @@ describe("系统日志 (e2e)", () => {
         snowflake = app.get(SnowflakeGenerator);
         superToken = await login("guojun");
 
-        // 固定测试 BOM：存在则复用（重跑不撞唯一键）；明细按建档冻结快照造数
+        // 固定测试 BOM：存在则复用（重跑不撞唯一键）；明细按建档冻结快照造数。
+        // remark 为订单日志 BOM 备注断言的来源，复用旧行缺省空串时补写
         const existing = await prisma.bomTable.findUnique({ where: { bomCode: BOM_CODE } });
+        if (existing && existing.remark === "") {
+            await prisma.bomTable.update({ where: { bomCode: BOM_CODE }, data: { remark: BOM_REMARK } });
+        }
         if (!existing) {
             const category = await prisma.bomCategory.findUnique({ where: { categoryKey: "new-micro-switch" } });
             const superUser = await prisma.sysUser.findUnique({ where: { account: "guojun" } });
@@ -123,6 +128,7 @@ describe("系统日志 (e2e)", () => {
                         "",
                     ),
                     requestKey: `e2e-bom-${BOM_CODE}`,
+                    remark: BOM_REMARK,
                     createdBy: superUser!.id,
                     updatedBy: superUser!.id,
                     createdAt: now,
@@ -388,6 +394,7 @@ describe("系统日志 (e2e)", () => {
             { key: "bomCode", label: "BOM 编码", before: null, after: BOM_CODE },
             { key: "bomName", label: "成品名称", before: null, after: "新微动" },
             { key: "bomSpec", label: "规格构成", before: null, after: "底座：三脚底座（有挡脚） · 按钮：8.5mm" },
+            { key: "bomRemark", label: "BOM 备注", before: null, after: BOM_REMARK },
             { key: "qty", label: "订单数量", before: null, after: "500 个" },
             { key: "deliverDate", label: "交货日期", before: null, after: "2027-06-30" },
             { key: "remark", label: "备注", before: null, after: `e2e 系统日志订单 ${RUN}` },

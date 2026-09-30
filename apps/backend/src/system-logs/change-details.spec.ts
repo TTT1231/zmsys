@@ -21,6 +21,7 @@ describe("changesOfOpLog", () => {
                 bomCode: "ZMKW0001",
                 bomName: "新微动",
                 bomModel: "KW-2A",
+                bomRemark: "带挡脚版本，注意区分",
                 bomSpec: {
                     items: [
                         {
@@ -49,6 +50,7 @@ describe("changesOfOpLog", () => {
             { key: "bomCode", label: "BOM 编码", before: null, after: "ZMKW0001" },
             { key: "bomName", label: "成品名称", before: null, after: "新微动" },
             { key: "bomSpec", label: "规格构成", before: null, after: "底座：三脚底座（有挡脚） · 按钮：8.5mm" },
+            { key: "bomRemark", label: "BOM 备注", before: null, after: "带挡脚版本，注意区分" },
             { key: "qty", label: "订单数量", before: null, after: "240 个" },
             { key: "deliverDate", label: "交货日期", before: null, after: "2026-10-18" },
         ]);
@@ -193,10 +195,17 @@ describe("changesOfOpLog", () => {
         ]);
     });
 
-    it("create_bom：成品名称与规格构成", () => {
-        expect(changesOfOpLog("create_bom", { name: "新微动", spec: "底座：三脚底座 · 按钮：8.5mm" })).toEqual([
+    it("create_bom：成品名称/规格构成/建档备注", () => {
+        expect(
+            changesOfOpLog("create_bom", {
+                name: "新微动",
+                spec: "底座：三脚底座 · 按钮：8.5mm",
+                remark: "客户专属定制",
+            }),
+        ).toEqual([
             { key: "name", label: "成品名称", before: null, after: "新微动" },
             { key: "spec", label: "规格构成", before: null, after: "底座：三脚底座 · 按钮：8.5mm" },
+            { key: "remark", label: "备注", before: null, after: "客户专属定制" },
         ]);
     });
 

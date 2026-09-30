@@ -138,12 +138,14 @@ export class OrdersService {
                 targetType: "order",
                 targetId: id,
                 targetCode: orderNo,
-                // 完整快照对齐 archive_order 写法（系统日志页的创建卡片直接展示）
+                // 完整快照对齐 archive_order 写法（系统日志页的创建卡片直接展示）；
+                // bomRemark 取 BOM 行建档备注随日志冻结，与 BOM 冻结快照同自足口径
                 detail: {
                     ...(this.orderSnapshot(created) as Record<string, unknown>),
                     customer: customer.name,
                     customerCode: customer.customerCode,
                     bomCode: bom.bomCode,
+                    bomRemark: bom.remark,
                 } as unknown as Prisma.InputJsonValue,
                 now,
             });
@@ -386,8 +388,13 @@ export class OrdersService {
                 where: { id: current.id },
                 data: { deletedAt: now, updatedBy: BigInt(actor.id), updatedAt: now },
             });
-            // op_log 快照：行内字段 + 关联编码（客户/BOM），审计可独立还原删除前形态
+            // op_log 快照：行内字段 + 关联编码（客户/BOM），审计可独立还原删除前形态；
+            // BOM 行此刻未删（删订单不动 BOM），补读建档备注一并冻结
             const snapshot = this.orderSnapshot(current) as Record<string, unknown>;
+            const bomRemark = await tx.bomTable.findUnique({
+                where: { id: current.bomId },
+                select: { remark: true },
+            });
             await recordOpLog(tx, this.snowflake, actor, {
                 action: "delete_order",
                 targetType: "order",
@@ -398,6 +405,7 @@ export class OrdersService {
                     customer: current.customerNameSnapshot,
                     customerCode: current.customer.customerCode,
                     bomCode: current.bom.bomCode,
+                    bomRemark: bomRemark?.remark ?? "",
                     deletedAt: now.toISOString(),
                 } as unknown as Prisma.InputJsonValue,
                 now,

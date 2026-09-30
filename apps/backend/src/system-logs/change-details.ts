@@ -104,6 +104,7 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
                 { key: "bomCode", label: "BOM 编码", before: null, after: asText(snapshot.bomCode) },
                 { key: "bomName", label: "成品名称", before: null, after: asText(snapshot.bomName) },
                 { key: "bomSpec", label: "规格构成", before: null, after: asText(bomSpecOf(snapshot.bomSpec)) },
+                { key: "bomRemark", label: "BOM 备注", before: null, after: asText(snapshot.bomRemark) },
                 { key: "qty", label: "订单数量", before: null, after: qtyText(snapshot.qty) },
                 { key: "deliverDate", label: "交货日期", before: null, after: asText(snapshot.deliverDate) },
                 { key: "remark", label: "备注", before: null, after: asText(snapshot.remark) },
@@ -151,6 +152,7 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
             return [
                 { key: "name", label: "成品名称", before: null, after: asText(detail?.name) },
                 { key: "spec", label: "规格构成", before: null, after: asText(detail?.spec) },
+                { key: "remark", label: "备注", before: null, after: asText(detail?.remark) },
             ].filter(change => change.after !== null);
         }
         case "create_inbound":

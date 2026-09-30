@@ -462,6 +462,9 @@ function EventCard({
 }) {
     const meta = ACTION_META[entry.action];
     const first = entry.changes?.[0];
+    // 订单日志目标行额外预览 BOM 编码（免展开即可点开 BOM 详情）；入库等
+    // bomCode 本就是首条的卡片不重复渲染
+    const bomCodeChange = entry.changes?.find(change => change.key === "bomCode");
     // 明细惰性渲染：首次展开才创建字段节点（折叠态不预生成 DOM）
     const [expanded, setExpanded] = useState(false);
     const hasDetail = (entry.changes?.length ?? 0) > 0 || !!entry.reason;
@@ -522,6 +525,18 @@ function EventCard({
                         )}
                         {first.before !== null && <Icon name="chevron-right" size={13} className="text-placeholder" />}
                         <FirstChangeAfter entry={entry} change={first} snap={snap} onOpenDetail={onOpenDetail} />
+                    </>
+                )}
+                {bomCodeChange && bomCodeChange !== first && (
+                    <>
+                        <span aria-hidden="true" className="h-1 w-1 rounded-full bg-placeholder" />
+                        <span className="text-12 text-muted">{bomCodeChange.label}</span>
+                        <FirstChangeAfter
+                            entry={entry}
+                            change={bomCodeChange}
+                            snap={snap}
+                            onOpenDetail={onOpenDetail}
+                        />
                     </>
                 )}
             </div>
@@ -591,7 +606,7 @@ function EventCard({
 
 /* ---------- 语义值链接（BOM 编码 / 订单号 → 对应详情弹窗；目标已删除时降级纯文本） ---------- */
 
-/** 目标行首条变更的新值 chip */
+/** 目标行变更预览的新值 chip（首条与 BOM 编码预览共用；可点击编号走链接语义） */
 function FirstChangeAfter({
     entry,
     change,
