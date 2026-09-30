@@ -1,0 +1,216 @@
+{
+    "resultsPath": "out/perf-lab/v2/micro-run2.json",
+    "provenance": "run2 of 2026-09-30; recovered from session echo (see notes); micro.json now holds run3",
+    "entries": [
+        {
+            "target": "p2-ready-counts",
+            "n": 40,
+            "ms": 1.018,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p2-ready-counts",
+            "n": 400,
+            "ms": 167.032,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p2-ready-counts",
+            "n": 2000,
+            "ms": 8915.663,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p2-ready-counts",
+            "n": 4000,
+            "ms": 57410.556,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p2-ready-counts",
+            "n": 10000,
+            "ms": 1096090.416,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p5-search-filter",
+            "n": 40,
+            "ms": 5.492,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p5-search-filter",
+            "n": 400,
+            "ms": 6.058,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p5-search-filter",
+            "n": 2000,
+            "ms": 10.56,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p5-search-filter",
+            "n": 4000,
+            "ms": 21.661,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p5-search-filter",
+            "n": 10000,
+            "ms": 30.907,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "picker-mount",
+            "n": 40,
+            "ms": 2.671,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "picker-mount",
+            "n": 400,
+            "ms": 33.176,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "picker-mount",
+            "n": 2000,
+            "ms": 164.413,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "picker-mount",
+            "n": 4000,
+            "ms": 282.872,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "picker-mount",
+            "n": 10000,
+            "ms": 848.466,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 40,
+            "ms": 2.787,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 40,
+            "ms": 10.902,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 400,
+            "ms": 2.917,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 400,
+            "ms": 14.602,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 2000,
+            "ms": 1.262,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 2000,
+            "ms": 5.81,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 4000,
+            "ms": 1.181,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 4000,
+            "ms": 5.88,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 10000,
+            "ms": 1.164,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 10000,
+            "ms": 5.932,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 40,
+            "ms": 16.323,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 40,
+            "ms": 8.248,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 400,
+            "ms": 2.896,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 400,
+            "ms": 10.289,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 2000,
+            "ms": 3.044,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 2000,
+            "ms": 10.077,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 4000,
+            "ms": 3.567,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 4000,
+            "ms": 10.883,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 10000,
+            "ms": 21.746,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 10000,
+            "ms": 12.366,
+            "notes": "v2 早轮（run2）中位数；数值誊录自当日会话中 node 读取该轮 micro.json 的完整回显，该文件后被第三轮覆盖；p6-page-update 另有 stdout 片段佐证"
+        }
+    ]
+}

@@ -1,0 +1,30 @@
+[perf-lab] p6-page-update n=400 ms=10.289 | 挂真实 BomPage（400 条 BOM 数据池）后模拟 usage 数据到达（引用前 200 订单）触发父级 update：Profiler actualDuration(update) 整页口径——含当前页两套行内容重算（bomComposition/bomSummary 真实执行）与 DataTable 协调；pageSize=50（经分页 select 切换后）；jsdom 无布局绘制；2 预热 + 9 计时轮取中位数
+[perf-lab] p6-page-update n=2000 ms=3.044 | 挂真实 BomPage（2000 条 BOM 数据池）后模拟 usage 数据到达（引用前 1000 订单）触发父级 update：Profiler actualDuration(update) 整页口径——含当前页两套行内容重算（bomComposition/bomSummary 真实执行）与 DataTable 协调；pageSize=10；jsdom 无布局绘制；2 预热 + 9 计时轮取中位数
+[perf-lab] p6-page-update n=2000 ms=10.077 | 挂真实 BomPage（2000 条 BOM 数据池）后模拟 usage 数据到达（引用前 1000 订单）触发父级 update：Profiler actualDuration(update) 整页口径——含当前页两套行内容重算（bomComposition/bomSummary 真实执行）与 DataTable 协调；pageSize=50（经分页 select 切换后）；jsdom 无布局绘制；2 预热 + 9 计时轮取中位数
+[perf-lab] p6-page-update n=4000 ms=3.567 | 挂真实 BomPage（4000 条 BOM 数据池）后模拟 usage 数据到达（引用前 2000 订单）触发父级 update：Profiler actualDuration(update) 整页口径——含当前页两套行内容重算（bomComposition/bomSummary 真实执行）与 DataTable 协调；pageSize=10；jsdom 无布局绘制；2 预热 + 9 计时轮取中位数
+[perf-lab] p6-page-update n=4000 ms=10.883 | 挂真实 BomPage（4000 条 BOM 数据池）后模拟 usage 数据到达（引用前 2000 订单）触发父级 update：Profiler actualDuration(update) 整页口径——含当前页两套行内容重算（bomComposition/bomSummary 真实执行）与 DataTable 协调；pageSize=50（经分页 select 切换后）；jsdom 无布局绘制；2 预热 + 9 计时轮取中位数
+[perf-lab] p6-page-update n=10000 ms=21.746 | 挂真实 BomPage（10000 条 BOM 数据池）后模拟 usage 数据到达（引用前 5000 订单）触发父级 update：Profiler actualDuration(update) 整页口径——含当前页两套行内容重算（bomComposition/bomSummary 真实执行）与 DataTable 协调；pageSize=10；jsdom 无布局绘制；2 预热 + 9 计时轮取中位数
+[perf-lab] p6-page-update n=10000 ms=12.366 | 挂真实 BomPage（10000 条 BOM 数据池）后模拟 usage 数据到达（引用前 5000 订单）触发父级 update：Profiler actualDuration(update) 整页口径——含当前页两套行内容重算（bomComposition/bomSummary 真实执行）与 DataTable 协调；pageSize=50（经分页 select 切换后）；jsdom 无布局绘制；2 预热 + 9 计时轮取中位数
+
+ [32m✓[39m [30m[42m bench [49m[39m test/perf/core.bench.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 29844[2mms[22m[39m
+   [33m[2m✓[22m[39m p2-ready-counts[33m 3343[2mms[22m[39m
+     [1mname           [22m  [1m        hz[22m  [1m   min[22m  [1m   max[22m  [1m  mean[22m  [1m   p75[22m  [1m   p99[22m  [1m  p995[22m  [1m  p999[22m  [1m   rme[22m  [1msamples[22m
+     p2-ready-counts  [34m833,333.33[39m  [36m0.0012[39m  [36m0.0012[39m  [36m0.0012[39m  [36m0.0012[39m  [36m0.0012[39m  [36m0.0012[39m  [36m0.0012[39m  [2m±0.00%[22m  [2m      1[22m
+   [33m[2m✓[22m[39m p5-search-filter[33m 2007[2mms[22m[39m
+     [1mname            [22m  [1m        hz[22m  [1m   min[22m  [1m   max[22m  [1m  mean[22m  [1m   p75[22m  [1m   p99[22m  [1m  p995[22m  [1m  p999[22m  [1m   rme[22m  [1msamples[22m
+     p5-search-filter  [34m833,333.33[39m  [36m0.0012[39m  [36m0.0012[39m  [36m0.0012[39m  [36m0.0012[39m  [36m0.0012[39m  [36m0.0012[39m  [36m0.0012[39m  [2m±0.00%[22m  [2m      1[22m
+   [33m[2m✓[22m[39m p6-page-summary[33m 682[2mms[22m[39m
+     [1mname           [22m  [1m        hz[22m  [1m   min[22m  [1m   max[22m  [1m  mean[22m  [1m   p75[22m  [1m   p99[22m  [1m  p995[22m  [1m  p999[22m  [1m   rme[22m  [1msamples[22m
+     p6-page-summary  [34m833,333.33[39m  [36m0.0012[39m  [36m0.0012[39m  [36m0.0012[39m  [36m0.0012[39m  [36m0.0012[39m  [36m0.0012[39m  [36m0.0012[39m  [2m±0.00%[22m  [2m      1[22m
+   [33m[2m✓[22m[39m picker-mount[33m 17435[2mms[22m[39m
+     [1mname        [22m  [1m        hz[22m  [1m   min[22m  [1m   max[22m  [1m  mean[22m  [1m   p75[22m  [1m   p99[22m  [1m  p995[22m  [1m  p999[22m  [1m   rme[22m  [1msamples[22m
+     picker-mount  [34m666,666.67[39m  [36m0.0015[39m  [36m0.0015[39m  [36m0.0015[39m  [36m0.0015[39m  [36m0.0015[39m  [36m0.0015[39m  [36m0.0015[39m  [2m±0.00%[22m  [2m      1[22m
+   [33m[2m✓[22m[39m p6-page-update[33m 6374[2mms[22m[39m
+     [1mname          [22m  [1m        hz[22m  [1m   min[22m  [1m   max[22m  [1m  mean[22m  [1m   p75[22m  [1m   p99[22m  [1m  p995[22m  [1m  p999[22m  [1m   rme[22m  [1msamples[22m
+     p6-page-update  [34m416,666.67[39m  [36m0.0024[39m  [36m0.0024[39m  [36m0.0024[39m  [36m0.0024[39m  [36m0.0024[39m  [36m0.0024[39m  [36m0.0024[39m  [2m±0.00%[22m  [2m      1[22m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m5 passed[39m[22m[90m (5)[39m
+[2m   Start at [22m 19:15:08
+[2m   Duration [22m 33.39s[2m (tests 90%, environment 5%, import 3%, transform 2%)[22m
+

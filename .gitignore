@@ -80,3 +80,7 @@ datalog
 
 # 原型 
 docs/prototypes
+
+# perf-lab：原始 trace（~10MB gz，本地保留供定向复查，可整目录删除）与 P4 实验构建不入库
+out/perf-lab/v2/traces/
+apps/frontend/dist-exp/

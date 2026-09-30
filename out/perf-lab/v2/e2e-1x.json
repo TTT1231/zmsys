@@ -1,0 +1,534 @@
+{
+    "checkpoint": "1x",
+    "resultsPath": "C:\\Users\\Tu1231\\Desktop\\zmsys\\out\\perf-lab\\v2\\e2e-1x.json",
+    "scenarios": [
+        {
+            "scenario": "bom-cold-start",
+            "ok": true,
+            "requestCount": 22,
+            "transferBytes": 484696,
+            "apiTimings": [
+                {
+                    "path": "/api/bom-categories",
+                    "ms": 48.1,
+                    "bytes": 20593
+                },
+                {
+                    "path": "/api/outbound",
+                    "ms": 41.9,
+                    "bytes": 10045
+                },
+                {
+                    "path": "/api/inbound",
+                    "ms": 41,
+                    "bytes": 15957
+                },
+                {
+                    "path": "/api/orders",
+                    "ms": 38.5,
+                    "bytes": 12468
+                },
+                {
+                    "path": "/api/bom-stocks",
+                    "ms": 28.8,
+                    "bytes": 566
+                },
+                {
+                    "path": "/api/boms",
+                    "ms": 28.5,
+                    "bytes": 76960
+                },
+                {
+                    "path": "/api/auth/profile",
+                    "ms": 11.1,
+                    "bytes": 837
+                },
+                {
+                    "path": "/api/auth/profile",
+                    "ms": 10.2,
+                    "bytes": 837
+                }
+            ],
+            "interactionOrLoadMs": 1261,
+            "longTaskCount": 3,
+            "longTaskMaxMs": 68,
+            "longTaskTotalMs": 183,
+            "tracePath": "out/perf-lab/v2/traces/1x-bom-cold-start.json.gz",
+            "traceSaved": true,
+            "traceEventCount": 0,
+            "domNodes": 726,
+            "tableRemounted": null,
+            "notes": "冷启动（新 context、无业务 localStorage、无 HTTP 缓存）goto /bom 到表格数据行稳定：1261ms；数据行 10 行。",
+            "apiRequestCount": 8
+        },
+        {
+            "scenario": "bom-cold-start-pair",
+            "ok": true,
+            "requestCount": 0,
+            "transferBytes": 0,
+            "apiTimings": [],
+            "interactionOrLoadMs": 1289,
+            "longTaskCount": 0,
+            "longTaskMaxMs": 0,
+            "longTaskTotalMs": 0,
+            "tracePath": "out/perf-lab/v2/traces/1x-bom-cold-start-pair.json.gz",
+            "traceSaved": true,
+            "traceEventCount": 0,
+            "domNodes": 0,
+            "tableRemounted": null,
+            "notes": "同栈同数据交错配对（normal→delayed ×3 轮，每轮全新 context 冷启动）。normal=[1185,1289,1297]ms（中位 1289ms，轮间极差 112ms）；delayed(usage 三接口人为延后 10s)=[1296,1282,1281]ms（中位 1282ms）。中位差值 delayed−normal=-7ms。口径：这是「整条 usage 链延后」对首显的影响（带宽/主线程并发竞争在本机 localhost 栈下的体现），不代表聚合接口改造的收益；与轮间极差同量级的差值应视为噪声。"
+        },
+        {
+            "scenario": "workbench-then-bom",
+            "ok": true,
+            "requestCount": 26,
+            "transferBytes": 715296,
+            "apiTimings": [
+                {
+                    "path": "/api/bom-categories",
+                    "ms": 44.9,
+                    "bytes": 20593
+                },
+                {
+                    "path": "/api/outbound",
+                    "ms": 40.2,
+                    "bytes": 10045
+                },
+                {
+                    "path": "/api/orders",
+                    "ms": 34.7,
+                    "bytes": 12468
+                },
+                {
+                    "path": "/api/inbound",
+                    "ms": 33.8,
+                    "bytes": 15957
+                },
+                {
+                    "path": "/api/boms",
+                    "ms": 27.4,
+                    "bytes": 76960
+                },
+                {
+                    "path": "/api/workbench/overview",
+                    "ms": 24.7,
+                    "bytes": 33790
+                },
+                {
+                    "path": "/api/bom-stocks",
+                    "ms": 20.6,
+                    "bytes": 566
+                },
+                {
+                    "path": "/api/auth/profile",
+                    "ms": 8.7,
+                    "bytes": 837
+                }
+            ],
+            "interactionOrLoadMs": 3246,
+            "longTaskCount": 4,
+            "longTaskMaxMs": 175,
+            "longTaskTotalMs": 358,
+            "tracePath": "out/perf-lab/v2/traces/1x-workbench-then-bom.json.gz",
+            "traceSaved": true,
+            "traceEventCount": 0,
+            "domNodes": 729,
+            "tableRemounted": null,
+            "notes": "工作台冷加载 1074ms（工作台页走 /api/workbench/overview 聚合端点）；侧边栏导航到 BOM 表格稳定 3246ms，数据行 10。五类资源明细：/api/boms×1(27ms)；/api/bom-categories×1(45ms)；/api/bom-stocks×1(21ms)；/api/orders×1(35ms)；/api/inbound×1(34ms)；/api/outbound×1(40ms)。与工作台快照 queryKey 不同（[\"wb\",…] vs [\"boms\",…]），无重复请求（工作台页不取这五类资源，P3 重复路径见 consumer-then-bom）。",
+            "apiRequestCount": 9
+        },
+        {
+            "scenario": "consumer-then-bom",
+            "ok": true,
+            "requestCount": 10,
+            "transferBytes": 152492,
+            "apiTimings": [
+                {
+                    "path": "/api/bom-categories",
+                    "ms": 43.2,
+                    "bytes": 20593
+                },
+                {
+                    "path": "/api/orders",
+                    "ms": 38.1,
+                    "bytes": 12468
+                },
+                {
+                    "path": "/api/inbound",
+                    "ms": 36.8,
+                    "bytes": 15957
+                },
+                {
+                    "path": "/api/outbound",
+                    "ms": 34.4,
+                    "bytes": 10045
+                },
+                {
+                    "path": "/api/boms",
+                    "ms": 21,
+                    "bytes": 76960
+                },
+                {
+                    "path": "/api/bom-stocks",
+                    "ms": 12.8,
+                    "bytes": 566
+                }
+            ],
+            "interactionOrLoadMs": 1142,
+            "longTaskCount": 3,
+            "longTaskMaxMs": 85,
+            "longTaskTotalMs": 215,
+            "tracePath": "out/perf-lab/v2/traces/1x-consumer-then-bom.json.gz",
+            "traceSaved": true,
+            "traceEventCount": 0,
+            "domNodes": 729,
+            "tableRemounted": null,
+            "notes": "入库页阶段 API 清单：/api/auth/profile×2，/api/orders×1，/api/boms×1，/api/bom-categories×1，/api/customers×1，/api/inbound×1，/api/outbound×1，/api/stock-adjustments×1，/api/users×1，/api/customer-owner-options×1。侧边栏导航到 BOM 表格稳定 1142ms（数据行 10），BOM 阶段完整 API 清单：/api/bom-categories×1，/api/boms×1，/api/bom-stocks×1，/api/orders×1，/api/inbound×1，/api/outbound×1。两阶段都请求的接口（BOM 页重复获取，P3 实测口径）：/api/bom-categories×1，/api/boms×1，/api/orders×1，/api/inbound×1，/api/outbound×1。",
+            "apiRequestCount": 6
+        },
+        {
+            "scenario": "bom-refresh-stale",
+            "ok": true,
+            "requestCount": 6,
+            "transferBytes": 42236,
+            "apiTimings": [
+                {
+                    "path": "/api/outbound",
+                    "ms": 27.4,
+                    "bytes": 10045
+                },
+                {
+                    "path": "/api/orders",
+                    "ms": 22,
+                    "bytes": 12468
+                },
+                {
+                    "path": "/api/inbound",
+                    "ms": 18.9,
+                    "bytes": 15957
+                },
+                {
+                    "path": "/api/bom-stocks",
+                    "ms": 11.1,
+                    "bytes": 566
+                }
+            ],
+            "interactionOrLoadMs": 1229,
+            "longTaskCount": 0,
+            "longTaskMaxMs": 0,
+            "longTaskTotalMs": 0,
+            "tracePath": "out/perf-lab/v2/traces/1x-bom-refresh-stale.json.gz",
+            "traceSaved": true,
+            "traceEventCount": 0,
+            "domNodes": 729,
+            "tableRemounted": null,
+            "notes": "等 35s（全局 staleTime=30s 过期、BOM 域 5min 未到）后重进 /bom：导航到表格稳定 1229ms，行数 10→10。重进阶段请求：/api/boms×0；/api/bom-categories×0；/api/bom-stocks×1(11ms)；/api/orders×1(22ms)；/api/inbound×1(19ms)；/api/outbound×1(27ms)——boms/bom-categories 未过期不重新请求，stocks 与 usage 三接口过期重新获取。重进瞬间采样：表格暂不在文档（路由切换的懒加载 PageLoading 阶段），LoadingOverlay 遮罩 early=false/late=true（useDelayedFlag 200ms 内完成不闪现）。",
+            "apiRequestCount": 4
+        },
+        {
+            "scenario": "bom-search",
+            "ok": true,
+            "requestCount": 22,
+            "transferBytes": 484696,
+            "apiTimings": [
+                {
+                    "path": "/api/bom-categories",
+                    "ms": 60.8,
+                    "bytes": 20593
+                },
+                {
+                    "path": "/api/orders",
+                    "ms": 50.5,
+                    "bytes": 12468
+                },
+                {
+                    "path": "/api/outbound",
+                    "ms": 48.4,
+                    "bytes": 10045
+                },
+                {
+                    "path": "/api/inbound",
+                    "ms": 39,
+                    "bytes": 15957
+                },
+                {
+                    "path": "/api/boms",
+                    "ms": 29.6,
+                    "bytes": 76960
+                },
+                {
+                    "path": "/api/bom-stocks",
+                    "ms": 17.8,
+                    "bytes": 566
+                },
+                {
+                    "path": "/api/auth/profile",
+                    "ms": 10.1,
+                    "bytes": 837
+                },
+                {
+                    "path": "/api/auth/profile",
+                    "ms": 9.3,
+                    "bytes": 837
+                }
+            ],
+            "interactionOrLoadMs": 64,
+            "longTaskCount": 3,
+            "longTaskMaxMs": 68,
+            "longTaskTotalMs": 187,
+            "tracePath": "out/perf-lab/v2/traces/1x-bom-search.json.gz",
+            "traceSaved": true,
+            "traceEventCount": 0,
+            "domNodes": 370,
+            "tableRemounted": null,
+            "notes": "逐键键入「KQ010」（KQ010 前 6 字符，间隔 180ms，共 5 键）。Event Timing（durationThreshold=16；duration=输入→下一次绘制）：k1\"K\"=40ms(延迟0.4/处理0.4)/无窗口内更新 k2\"Q\"=64ms(延迟0/处理0.2)/结果变 k3\"0\"=32ms(延迟0.2/处理0.1)/无窗口内更新 k4\"1\"=24ms(延迟0/处理0.1)/结果变 k5\"0\"=16ms(延迟0.2/处理0.1)/无窗口内更新。已上报 5/5 键（未上报=低于采集阈值或浏览器未报，非零填充）：max=64ms、中位=32ms。interactionOrLoadMs=已上报键的 max。",
+            "apiRequestCount": 8
+        },
+        {
+            "scenario": "bom-usage-filter",
+            "ok": true,
+            "requestCount": 22,
+            "transferBytes": 446910,
+            "apiTimings": [
+                {
+                    "path": "/api/orders",
+                    "ms": 1172.6,
+                    "bytes": 35
+                },
+                {
+                    "path": "/api/outbound",
+                    "ms": 1172.5,
+                    "bytes": 35
+                },
+                {
+                    "path": "/api/inbound",
+                    "ms": 1172.2,
+                    "bytes": 35
+                },
+                {
+                    "path": "/api/bom-categories",
+                    "ms": 36.8,
+                    "bytes": 20593
+                },
+                {
+                    "path": "/api/boms",
+                    "ms": 21.7,
+                    "bytes": 76960
+                },
+                {
+                    "path": "/api/auth/profile",
+                    "ms": 13.3,
+                    "bytes": 837
+                },
+                {
+                    "path": "/api/auth/profile",
+                    "ms": 12.4,
+                    "bytes": 837
+                },
+                {
+                    "path": "/api/bom-stocks",
+                    "ms": 10.5,
+                    "bytes": 566
+                }
+            ],
+            "interactionOrLoadMs": 328,
+            "longTaskCount": 3,
+            "longTaskMaxMs": 65,
+            "longTaskTotalMs": 188,
+            "tracePath": "out/perf-lab/v2/traces/1x-bom-usage-filter.json.gz",
+            "traceSaved": true,
+            "traceEventCount": 0,
+            "domNodes": 726,
+            "tableRemounted": true,
+            "notes": "受控两遍（usage 三接口挂起，响应改写为空引用集：未使用=全部 BOM、正在使用=空）。pass A 非空：切「未使用」后原表格卸载断言通过；释放后重挂=true，10 行数据；受控 usage 等待段（切→释放，人为挂起，非真实网络耗时）422ms，处理段（释放→表格回归，含解析/派生/调度/渲染）328ms，窗口长任务=[]ms。pass B 空：切「正在使用」后卸载断言通过；释放后重挂=true，空态「没有正在使用的 BOM」判定成立（1 行占位）；等待段 436ms、处理段 313ms，窗口长任务=[]ms。interactionOrLoadMs=pass A 处理段。",
+            "apiRequestCount": 8
+        },
+        {
+            "scenario": "bom-column-resize",
+            "ok": true,
+            "requestCount": 22,
+            "transferBytes": 484696,
+            "apiTimings": [
+                {
+                    "path": "/api/bom-categories",
+                    "ms": 39.1,
+                    "bytes": 20593
+                },
+                {
+                    "path": "/api/orders",
+                    "ms": 34.6,
+                    "bytes": 12468
+                },
+                {
+                    "path": "/api/outbound",
+                    "ms": 33.6,
+                    "bytes": 10045
+                },
+                {
+                    "path": "/api/inbound",
+                    "ms": 29.6,
+                    "bytes": 15957
+                },
+                {
+                    "path": "/api/bom-stocks",
+                    "ms": 18.5,
+                    "bytes": 566
+                },
+                {
+                    "path": "/api/boms",
+                    "ms": 17.6,
+                    "bytes": 76960
+                },
+                {
+                    "path": "/api/auth/profile",
+                    "ms": 9.8,
+                    "bytes": 837
+                },
+                {
+                    "path": "/api/auth/profile",
+                    "ms": 8.9,
+                    "bytes": 837
+                }
+            ],
+            "interactionOrLoadMs": 2070,
+            "longTaskCount": 3,
+            "longTaskMaxMs": 63,
+            "longTaskTotalMs": 180,
+            "tracePath": "out/perf-lab/v2/traces/1x-bom-column-resize.json.gz",
+            "traceSaved": true,
+            "traceEventCount": 0,
+            "domNodes": 726,
+            "tableRemounted": null,
+            "notes": "拖动「物料构成」列宽手柄 2070ms（每 40ms 一步）。rAF 帧间隔：n=343 min=5.9 p50=6.1 p95=6.1 max=18.2ms（60fps 帧预算 16.7ms）；掉帧估算 0 帧（帧间隔>25ms 计一次掉帧，0 次慢帧）。",
+            "apiRequestCount": 8
+        },
+        {
+            "scenario": "inbound-bom-picker",
+            "ok": true,
+            "requestCount": 26,
+            "transferBytes": 491388,
+            "apiTimings": [
+                {
+                    "path": "/api/bom-categories",
+                    "ms": 56.6,
+                    "bytes": 20593
+                },
+                {
+                    "path": "/api/stock-adjustments",
+                    "ms": 52.7,
+                    "bytes": 35
+                },
+                {
+                    "path": "/api/users",
+                    "ms": 52,
+                    "bytes": 384
+                },
+                {
+                    "path": "/api/customer-owner-options",
+                    "ms": 46.2,
+                    "bytes": 71
+                },
+                {
+                    "path": "/api/customers",
+                    "ms": 44.3,
+                    "bytes": 6385
+                },
+                {
+                    "path": "/api/outbound",
+                    "ms": 42.2,
+                    "bytes": 10045
+                },
+                {
+                    "path": "/api/inbound",
+                    "ms": 28.9,
+                    "bytes": 15957
+                },
+                {
+                    "path": "/api/orders",
+                    "ms": 25.7,
+                    "bytes": 12468
+                }
+            ],
+            "interactionOrLoadMs": 77,
+            "longTaskCount": 3,
+            "longTaskMaxMs": 85,
+            "longTaskTotalMs": 213,
+            "tracePath": "out/perf-lab/v2/traces/1x-inbound-bom-picker.json.gz",
+            "traceSaved": true,
+            "traceEventCount": 0,
+            "domNodes": 884,
+            "tableRemounted": null,
+            "notes": "入库列表加载后点「检验入库」打开新建入库弹窗（BOM 选择器）到品类下拉可用 77ms（弹窗与列表共用 wb 快照缓存）。点品类下拉选最大品类「安全开关」（11 条 BOM，全部品类分布：安全开关:11,老微动:11,新微动:11,旋转XK2:11,琴键开关:10,跌倒开关:6）到 BomPicker 选项渲染完成 216ms；选项 DOM：候选按钮 11 个（弹窗内按钮总数 15）。",
+            "apiRequestCount": 11
+        },
+        {
+            "scenario": "orders-page",
+            "ok": true,
+            "requestCount": 26,
+            "transferBytes": 554770,
+            "apiTimings": [
+                {
+                    "path": "/api/bom-categories",
+                    "ms": 53.1,
+                    "bytes": 20593
+                },
+                {
+                    "path": "/api/stock-adjustments",
+                    "ms": 48.3,
+                    "bytes": 35
+                },
+                {
+                    "path": "/api/customer-owner-options",
+                    "ms": 47.5,
+                    "bytes": 71
+                },
+                {
+                    "path": "/api/users",
+                    "ms": 46.9,
+                    "bytes": 384
+                },
+                {
+                    "path": "/api/orders",
+                    "ms": 46.4,
+                    "bytes": 12468
+                },
+                {
+                    "path": "/api/inbound",
+                    "ms": 44,
+                    "bytes": 15957
+                },
+                {
+                    "path": "/api/outbound",
+                    "ms": 34.9,
+                    "bytes": 10045
+                },
+                {
+                    "path": "/api/customers",
+                    "ms": 30,
+                    "bytes": 6385
+                }
+            ],
+            "interactionOrLoadMs": 1096,
+            "longTaskCount": 4,
+            "longTaskMaxMs": 142,
+            "longTaskTotalMs": 326,
+            "tracePath": "out/perf-lab/v2/traces/1x-orders-page.json.gz",
+            "traceSaved": true,
+            "traceEventCount": 0,
+            "domNodes": 1204,
+            "tableRemounted": null,
+            "notes": "订单页冷加载（含 wb 聚合快照）到表格稳定 1096ms，全部行 10。切「可发货」tab 到行数稳定 360ms，ready 计数 32，行数 10（interactionOrLoadMs 为冷加载耗时；切换耗时见本 notes）。",
+            "apiRequestCount": 11
+        }
+    ],
+    "apiVisibleCounts": {
+        "boms": 60,
+        "orders": 40,
+        "inbound": 80,
+        "outbound": 41,
+        "customers": 20,
+        "categories": 9,
+        "unusedBoms": 20
+    },
+    "envNotes": "视口固定 1280×800（playwright viewport），有头系统 Chrome（C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe），独立临时 profile。\n前端为生产构建（C:\\Users\\Tu1231\\Desktop\\zmsys\\apps\\frontend\\dist；每场景断言资源含 /assets/*.js 且无 vite dev client）；静态+API 反代为自写 node:http 服务（out/perf-lab/server.mjs），静态文本资源按 Accept-Encoding 提供 gzip（对齐生产 nginx），API 响应原样透传（后端未注册压缩，生产若经 nginx 压缩 API 字节会小于本次 transferBytes）。\n后端为编译产物 apps/backend/dist/main.js（cwd=仓库根，env DB_DATABASE=zmdb_test 覆盖 .env——已实测 bogus 库名时 /api/health/ready 返回 503 证明覆盖生效），非 watch 模式。\n数据：pnpm test:db:reset 后由 harness 经真实 API 补足业务数据（BOM≥60、订单≥40、客户3、配套入库/出库，幂等补足），本次 seed={\"boms\":60,\"orders\":40,\"customers\":20}；apiVisibleCounts 为二次补数后经 API 核验的接口可见记录数（≠ 数据库表行数），unusedBoms 为订单/入库/出库均未引用的 BOM 数（实际分布，不做全局预留假设）。\n认证：API 登录（同一 POST /api/auth/login）后构造仅含 zm-token 的 storageState 注入 context；业务 localStorage（表格列宽/主题偏好等）每场景均为空 = 清空存储。\nstaleTime 依据 src/main.tsx:13（全局 30s）与 src/data/queries.ts:60（BOM 列表/品类 5min）。\n指标口径（v2）：requestCount=导航文档+资源条目数；transferBytes=performance transferSize 之和（含响应头）；apiTimings=按耗时降序前 8 个 /api 请求（ms=resource duration，bytes=encodedBodySize）；longtask=页面注入 PerformanceObserver（条目含 startTime，阈值 50ms 为浏览器标准）；domNodes=稳定后 document.querySelectorAll(\"*\").length。\ntrace 口径（v2）：CDP Tracing devtools.timeline 原始事件 gzip 落盘（tracePath；超 200MB 不落盘且 traceSaved=false 并注明——该场景 trace 归因视为不完整）。v1 的 layoutMs/paintMs/scriptMs 自动分桶因嵌套重复计数不可靠已移除；关键时间窗用现成工具（DevTools/Perfetto）对原始 trace 定向检查。\nbom-search 口径（v2）：Event Timing（durationThreshold=16；duration=输入→下一次绘制），每键以 event.timeStamp 与条目 startTime 绑定（容差 1.5ms）；未上报=低于采集阈值或浏览器未报，不补零；结果变化按可见 BOM 编码序列+总数（「共 N 条」）判定。\nbom-usage-filter 口径（v2）：受控两遍——usage 三接口挂起后响应改写为空引用集（未使用=全部 BOM→非空；正在使用=空），断言切筛选后原表格卸载、释放后新表格/空态挂载；「受控 usage 等待段」（切→释放）为人为挂起，不代表真实网络耗时；「处理段」（释放→表格回归）含响应解析、派生计算、调度与渲染。\nbom-cold-start-pair / bom-layout-pair 口径：前者为正常 vs usage 三接口延后 10s 的交错配对（测整条 usage 链延后对首显的影响，不代表聚合接口收益）；后者为同一实验构建内 single/dual 布局交替配对（开关经 addInitScript 在首渲染前设置）。\n每场景独立干净 context（outer:none 场景自管多 context）；正式采样前完整加载一次 BOM 页做预热（丢弃）；测量期间无其它并行负载（栈内仅被测进程）。\n场景 5 的 /orders /inbound /outbound 被 context.route 人为挂起+改写（route.fetch 取真实响应后改写 data 字段）；场景 6 掉帧=rAF 间隔>25ms 的估算——本机 Chrome 有头窗口 rAF 间隔实测 p50≈6ms（未与显示 vsync 对齐），故不用 16.7ms 帧预算口径，>25ms 才计慢帧。\n局限：transferBytes 受自写反代 gzip 影响（静态资源与生产 nginx 压缩口径接近，API 未压缩）；longtask 阈值 50ms 为浏览器标准；Event Timing 不保证每键都上报；场景重试上限 3 次（初次+2 重试）。"
+}

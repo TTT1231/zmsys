@@ -1,0 +1,31 @@
+diff --git a/apps/frontend/src/pages/bom/BomPage.tsx b/apps/frontend/src/pages/bom/BomPage.tsx
+index d1b67e1..eeb2a4b 100644
+--- a/apps/frontend/src/pages/bom/BomPage.tsx
++++ b/apps/frontend/src/pages/bom/BomPage.tsx
+@@ -812,6 +812,10 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
+ /* 可排序列：BOM 编码；默认不排序，保持后端「新建置顶」的列表顺序 */
+ type BomSortKey = "code";
+ 
++// [perf-lab dist-exp 实验构建专用] 单分支布局开关：经 addInitScript 在首渲染前设置（P4 配对实验）。
++// 正常构建不携带此补丁——dist-exp 构建后即还原，diff 存档于 out/perf-lab/archive-v1/。
++const SINGLE_LAYOUT = (window as unknown as { __singleLayout?: boolean }).__singleLayout === true;
++
+ export function BomPage() {
+     const { can } = useApp();
+     const bomsQuery = useBoms();
+@@ -1000,6 +1004,7 @@ export function BomPage() {
+                     </TableHeaderActions>
+                 </div>
+ 
++                {!SINGLE_LAYOUT && (
+                 <div className="mobile-records">
+                     {usageUnavailable ? (
+                         <div role="status" className="p-8">
+@@ -1040,6 +1045,7 @@ export function BomPage() {
+                         </ListState>
+                     )}
+                 </div>
++                )}
+                 <div className="hidden lg:block">
+                     {isLoading ? (
+                         <PageLoading className="py-16" />

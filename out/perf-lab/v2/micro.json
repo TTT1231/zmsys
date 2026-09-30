@@ -1,0 +1,215 @@
+{
+    "resultsPath": "out/perf-lab/v2/micro.json",
+    "entries": [
+        {
+            "target": "p2-ready-counts",
+            "n": 40,
+            "ms": 1.182,
+            "notes": "每个活跃订单各调一次真实 maxShipOf（内部完整执行 readyToShip：过滤+按交期排序+BOM 线性查找+find 定位），等价复走 OrdersPage counts.ready；订单 40（活跃 37，命中可发 19）× BOM 40，明细均值 11.4；2 预热 + 9 计时轮取中位数"
+        },
+        {
+            "target": "p2-ready-counts",
+            "n": 400,
+            "ms": 190.153,
+            "notes": "每个活跃订单各调一次真实 maxShipOf（内部完整执行 readyToShip：过滤+按交期排序+BOM 线性查找+find 定位），等价复走 OrdersPage counts.ready；订单 400（活跃 377，命中可发 179）× BOM 400，明细均值 11.3；2 预热 + 9 计时轮取中位数"
+        },
+        {
+            "target": "p2-ready-counts",
+            "n": 2000,
+            "ms": 11951.285,
+            "notes": "超预算跳过：试跑 8 次真实 maxShipOf 平均 6.293 ms/次 × 1899 活跃单 ≈ 单轮 11951.285 ms，× 11 轮超 30s 预算；ms 为预估值而非实测中位数"
+        },
+        {
+            "target": "p2-ready-counts",
+            "n": 4000,
+            "ms": 78387.369,
+            "notes": "超预算跳过：试跑 8 次真实 maxShipOf 平均 20.574 ms/次 × 3810 活跃单 ≈ 单轮 78387.369 ms，× 11 轮超 30s 预算；ms 为预估值而非实测中位数"
+        },
+        {
+            "target": "p2-ready-counts",
+            "n": 10000,
+            "ms": 1635948.323,
+            "notes": "超预算跳过：试跑 8 次真实 maxShipOf 平均 171.934 ms/次 × 9515 活跃单 ≈ 单轮 1635948.323 ms，× 11 轮超 30s 预算；ms 为预估值而非实测中位数"
+        },
+        {
+            "target": "p5-search-filter",
+            "n": 40,
+            "ms": 7.219,
+            "notes": "挂真实 BomPage（仅 mock 数据层 hook，filtered useMemo 与渲染全走真实源码），40 条 BOM；关键词 \"\" → \"支架\"（对全部候选拼接编码/品类/规格/物料检索文本并转小写，重建成本满额），React Profiler actualDuration(update)；2 预热 + 9 计时轮取中位数"
+        },
+        {
+            "target": "p5-search-filter",
+            "n": 400,
+            "ms": 8.267,
+            "notes": "挂真实 BomPage（仅 mock 数据层 hook，filtered useMemo 与渲染全走真实源码），400 条 BOM；关键词 \"\" → \"支架\"（对全部候选拼接编码/品类/规格/物料检索文本并转小写，重建成本满额），React Profiler actualDuration(update)；2 预热 + 9 计时轮取中位数"
+        },
+        {
+            "target": "p5-search-filter",
+            "n": 2000,
+            "ms": 18.375,
+            "notes": "挂真实 BomPage（仅 mock 数据层 hook，filtered useMemo 与渲染全走真实源码），2000 条 BOM；关键词 \"\" → \"支架\"（对全部候选拼接编码/品类/规格/物料检索文本并转小写，重建成本满额），React Profiler actualDuration(update)；2 预热 + 9 计时轮取中位数"
+        },
+        {
+            "target": "p5-search-filter",
+            "n": 4000,
+            "ms": 19.192,
+            "notes": "挂真实 BomPage（仅 mock 数据层 hook，filtered useMemo 与渲染全走真实源码），4000 条 BOM；关键词 \"\" → \"支架\"（对全部候选拼接编码/品类/规格/物料检索文本并转小写，重建成本满额），React Profiler actualDuration(update)；2 预热 + 9 计时轮取中位数"
+        },
+        {
+            "target": "p5-search-filter",
+            "n": 10000,
+            "ms": 54.11,
+            "notes": "挂真实 BomPage（仅 mock 数据层 hook，filtered useMemo 与渲染全走真实源码），10000 条 BOM；关键词 \"\" → \"支架\"（对全部候选拼接编码/品类/规格/物料检索文本并转小写，重建成本满额），React Profiler actualDuration(update)；2 预热 + 9 计时轮取中位数"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 40,
+            "ms": 1.406,
+            "notes": "40 条 BOM 数据池挂载 10 个真实 BomCell（pageSize=10，池不足时取前 40 条；内部真实执行 bomComposition/bomSummary：组合品类构建目录 Set/Map 并分解，非组合第 15 行早退），React Profiler actualDuration(mount)；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）；双份布局增量以 e2e 配对实验为准（bom-layout-pair），本值仅为行内容分量"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 40,
+            "ms": 5.643,
+            "notes": "40 条 BOM 数据池挂载 40 个真实 BomCell（pageSize=50，池不足时取前 40 条；内部真实执行 bomComposition/bomSummary：组合品类构建目录 Set/Map 并分解，非组合第 15 行早退），React Profiler actualDuration(mount)；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）；双份布局增量以 e2e 配对实验为准（bom-layout-pair），本值仅为行内容分量"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 400,
+            "ms": 1.387,
+            "notes": "400 条 BOM 数据池挂载 10 个真实 BomCell（pageSize=10，池不足时取前 400 条；内部真实执行 bomComposition/bomSummary：组合品类构建目录 Set/Map 并分解，非组合第 15 行早退），React Profiler actualDuration(mount)；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）；双份布局增量以 e2e 配对实验为准（bom-layout-pair），本值仅为行内容分量"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 400,
+            "ms": 16.564,
+            "notes": "400 条 BOM 数据池挂载 50 个真实 BomCell（pageSize=50，池不足时取前 400 条；内部真实执行 bomComposition/bomSummary：组合品类构建目录 Set/Map 并分解，非组合第 15 行早退），React Profiler actualDuration(mount)；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）；双份布局增量以 e2e 配对实验为准（bom-layout-pair），本值仅为行内容分量"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 2000,
+            "ms": 3.149,
+            "notes": "2000 条 BOM 数据池挂载 10 个真实 BomCell（pageSize=10，池不足时取前 2000 条；内部真实执行 bomComposition/bomSummary：组合品类构建目录 Set/Map 并分解，非组合第 15 行早退），React Profiler actualDuration(mount)；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）；双份布局增量以 e2e 配对实验为准（bom-layout-pair），本值仅为行内容分量"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 2000,
+            "ms": 16.037,
+            "notes": "2000 条 BOM 数据池挂载 50 个真实 BomCell（pageSize=50，池不足时取前 2000 条；内部真实执行 bomComposition/bomSummary：组合品类构建目录 Set/Map 并分解，非组合第 15 行早退），React Profiler actualDuration(mount)；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）；双份布局增量以 e2e 配对实验为准（bom-layout-pair），本值仅为行内容分量"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 4000,
+            "ms": 3.023,
+            "notes": "4000 条 BOM 数据池挂载 10 个真实 BomCell（pageSize=10，池不足时取前 4000 条；内部真实执行 bomComposition/bomSummary：组合品类构建目录 Set/Map 并分解，非组合第 15 行早退），React Profiler actualDuration(mount)；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）；双份布局增量以 e2e 配对实验为准（bom-layout-pair），本值仅为行内容分量"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 4000,
+            "ms": 6.538,
+            "notes": "4000 条 BOM 数据池挂载 50 个真实 BomCell（pageSize=50，池不足时取前 4000 条；内部真实执行 bomComposition/bomSummary：组合品类构建目录 Set/Map 并分解，非组合第 15 行早退），React Profiler actualDuration(mount)；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）；双份布局增量以 e2e 配对实验为准（bom-layout-pair），本值仅为行内容分量"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 10000,
+            "ms": 1.393,
+            "notes": "10000 条 BOM 数据池挂载 10 个真实 BomCell（pageSize=10，池不足时取前 10000 条；内部真实执行 bomComposition/bomSummary：组合品类构建目录 Set/Map 并分解，非组合第 15 行早退），React Profiler actualDuration(mount)；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）；双份布局增量以 e2e 配对实验为准（bom-layout-pair），本值仅为行内容分量"
+        },
+        {
+            "target": "p6-page-summary",
+            "n": 10000,
+            "ms": 6.589,
+            "notes": "10000 条 BOM 数据池挂载 50 个真实 BomCell（pageSize=50，池不足时取前 10000 条；内部真实执行 bomComposition/bomSummary：组合品类构建目录 Set/Map 并分解，非组合第 15 行早退），React Profiler actualDuration(mount)；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）；双份布局增量以 e2e 配对实验为准（bom-layout-pair），本值仅为行内容分量"
+        },
+        {
+            "target": "picker-mount",
+            "n": 40,
+            "ms": 3.125,
+            "notes": "真实 BomPicker 传入 40 条全匹配项（关键词空，max-h-60 只限滚动高度不限 DOM，全部挂载为选项按钮），React Profiler actualDuration(mount)；1 次试跑预热 + 9 计时轮取中位数"
+        },
+        {
+            "target": "picker-mount",
+            "n": 400,
+            "ms": 47.741,
+            "notes": "真实 BomPicker 传入 400 条全匹配项（关键词空，max-h-60 只限滚动高度不限 DOM，全部挂载为选项按钮），React Profiler actualDuration(mount)；1 次试跑预热 + 9 计时轮取中位数"
+        },
+        {
+            "target": "picker-mount",
+            "n": 2000,
+            "ms": 171.422,
+            "notes": "真实 BomPicker 传入 2000 条全匹配项（关键词空，max-h-60 只限滚动高度不限 DOM，全部挂载为选项按钮），React Profiler actualDuration(mount)；1 次试跑预热 + 9 计时轮取中位数"
+        },
+        {
+            "target": "picker-mount",
+            "n": 4000,
+            "ms": 483.704,
+            "notes": "真实 BomPicker 传入 4000 条全匹配项（关键词空，max-h-60 只限滚动高度不限 DOM，全部挂载为选项按钮），React Profiler actualDuration(mount)；1 次试跑预热 + 9 计时轮取中位数"
+        },
+        {
+            "target": "picker-mount",
+            "n": 10000,
+            "ms": 928.359,
+            "notes": "真实 BomPicker 传入 10000 条全匹配项（关键词空，max-h-60 只限滚动高度不限 DOM，全部挂载为选项按钮），React Profiler actualDuration(mount)；1 次试跑预热 + 9 计时轮取中位数"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 40,
+            "ms": 17.111,
+            "notes": "挂真实 BomPage（40 条 BOM 数据池）后模拟 usage 数据到达（引用前 20 订单）触发父级 update：Profiler actualDuration(update) 整页口径——含当前页两套行内容重算（bomComposition/bomSummary 真实执行）与 DataTable 协调；pageSize=10；jsdom 无布局绘制；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 40,
+            "ms": 9.394,
+            "notes": "挂真实 BomPage（40 条 BOM 数据池）后模拟 usage 数据到达（引用前 20 订单）触发父级 update：Profiler actualDuration(update) 整页口径——含当前页两套行内容重算（bomComposition/bomSummary 真实执行）与 DataTable 协调；pageSize=50（经分页 select 切换后）；jsdom 无布局绘制；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 400,
+            "ms": 3.17,
+            "notes": "挂真实 BomPage（400 条 BOM 数据池）后模拟 usage 数据到达（引用前 200 订单）触发父级 update：Profiler actualDuration(update) 整页口径——含当前页两套行内容重算（bomComposition/bomSummary 真实执行）与 DataTable 协调；pageSize=10；jsdom 无布局绘制；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 400,
+            "ms": 11.415,
+            "notes": "挂真实 BomPage（400 条 BOM 数据池）后模拟 usage 数据到达（引用前 200 订单）触发父级 update：Profiler actualDuration(update) 整页口径——含当前页两套行内容重算（bomComposition/bomSummary 真实执行）与 DataTable 协调；pageSize=50（经分页 select 切换后）；jsdom 无布局绘制；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 2000,
+            "ms": 20.428,
+            "notes": "挂真实 BomPage（2000 条 BOM 数据池）后模拟 usage 数据到达（引用前 1000 订单）触发父级 update：Profiler actualDuration(update) 整页口径——含当前页两套行内容重算（bomComposition/bomSummary 真实执行）与 DataTable 协调；pageSize=10；jsdom 无布局绘制；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 2000,
+            "ms": 11.817,
+            "notes": "挂真实 BomPage（2000 条 BOM 数据池）后模拟 usage 数据到达（引用前 1000 订单）触发父级 update：Profiler actualDuration(update) 整页口径——含当前页两套行内容重算（bomComposition/bomSummary 真实执行）与 DataTable 协调；pageSize=50（经分页 select 切换后）；jsdom 无布局绘制；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 4000,
+            "ms": 3.79,
+            "notes": "挂真实 BomPage（4000 条 BOM 数据池）后模拟 usage 数据到达（引用前 2000 订单）触发父级 update：Profiler actualDuration(update) 整页口径——含当前页两套行内容重算（bomComposition/bomSummary 真实执行）与 DataTable 协调；pageSize=10；jsdom 无布局绘制；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 4000,
+            "ms": 11.939,
+            "notes": "挂真实 BomPage（4000 条 BOM 数据池）后模拟 usage 数据到达（引用前 2000 订单）触发父级 update：Profiler actualDuration(update) 整页口径——含当前页两套行内容重算（bomComposition/bomSummary 真实执行）与 DataTable 协调；pageSize=50（经分页 select 切换后）；jsdom 无布局绘制；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 10000,
+            "ms": 22.366,
+            "notes": "挂真实 BomPage（10000 条 BOM 数据池）后模拟 usage 数据到达（引用前 5000 订单）触发父级 update：Profiler actualDuration(update) 整页口径——含当前页两套行内容重算（bomComposition/bomSummary 真实执行）与 DataTable 协调；pageSize=10；jsdom 无布局绘制；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）"
+        },
+        {
+            "target": "p6-page-update",
+            "n": 10000,
+            "ms": 14.016,
+            "notes": "挂真实 BomPage（10000 条 BOM 数据池）后模拟 usage 数据到达（引用前 5000 订单）触发父级 update：Profiler actualDuration(update) 整页口径——含当前页两套行内容重算（bomComposition/bomSummary 真实执行）与 DataTable 协调；pageSize=50（经分页 select 切换后）；jsdom 无布局绘制；1 次试跑预热 + 9 计时轮取中位数（池 40 档数值偏高、未归因）"
+        }
+    ]
+}

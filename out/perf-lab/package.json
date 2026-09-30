@@ -1,0 +1,17 @@
+{
+    "name": "perf-lab",
+    "version": "1.0.0",
+    "private": true,
+    "description": "端到端性能轨迹 harness（真实浏览器 + 前端生产构建 + 真实后端 + zmdb_test）",
+    "keywords": [],
+    "license": "ISC",
+    "author": "",
+    "type": "module",
+    "main": "index.js",
+    "scripts": {
+        "sweep": "node run-sweep.mjs --checkpoint baseline --out out/perf-lab/e2e-baseline.json"
+    },
+    "dependencies": {
+        "playwright-core": "^1.63.0"
+    }
+}
