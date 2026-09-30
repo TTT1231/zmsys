@@ -102,8 +102,11 @@ describe("changesOfOpLog", () => {
         ]);
     });
 
-    it("archive_order：状态由进行中推断为已归档", () => {
-        expect(changesOfOpLog("archive_order", { qty: 300, lifecycleStatus: "ARCHIVED" })).toEqual([
+    it("archive_order：客户随行，状态由进行中推断为已归档", () => {
+        expect(
+            changesOfOpLog("archive_order", { customer: "华辰电器", qty: 300, lifecycleStatus: "ARCHIVED" }),
+        ).toEqual([
+            { key: "customer", label: "客户", before: null, after: "华辰电器" },
             { key: "lifecycleStatus", label: "订单状态", before: "进行中", after: "已归档" },
             { key: "qty", label: "订单数量", before: null, after: "300 个" },
         ]);
@@ -141,7 +144,7 @@ describe("changesOfOpLog", () => {
         ]);
     });
 
-    it("update_customer 的 ownerChanged：移交只展示负责销售 from → to", () => {
+    it("update_customer 的 ownerChanged：客户名随行，移交只展示负责销售 from → to", () => {
         expect(
             changesOfOpLog("update_customer", {
                 name: "锦泰科技",
@@ -149,7 +152,10 @@ describe("changesOfOpLog", () => {
                 batchId: "9000000000000000",
                 reason: "原负责人离岗，统一移交客户",
             }),
-        ).toEqual([{ key: "owner", label: "负责销售", before: "周宁", after: "王明" }]);
+        ).toEqual([
+            { key: "name", label: "客户名称", before: null, after: "锦泰科技" },
+            { key: "owner", label: "负责销售", before: "周宁", after: "王明" },
+        ]);
     });
 
     it("create_customer：名称与负责销售", () => {
@@ -185,13 +191,29 @@ describe("changesOfOpLog", () => {
         ).toEqual([{ key: "status", label: "状态", before: "有效", after: "已作废" }]);
     });
 
-    it("ship：发货数量/订单号与备注", () => {
+    it("ship：客户随行，发货数量/订单号与备注", () => {
         expect(
             changesOfOpLog("ship", { orderNo: "ZM260927001", qty: 40, remark: "加急", customer: "华辰电器" }),
         ).toEqual([
+            { key: "customer", label: "客户", before: null, after: "华辰电器" },
             { key: "qty", label: "发货数量", before: null, after: "40 个" },
             { key: "orderNo", label: "订单号", before: null, after: "ZM260927001" },
             { key: "remark", label: "备注", before: null, after: "加急" },
+        ]);
+    });
+
+    it("void_outbound：客户随行（shipmentSnapshot），出库数量与订单号", () => {
+        expect(
+            changesOfOpLog("void_outbound", {
+                customer: "锦泰科技",
+                customerCode: "CUS-0031",
+                orderNo: "ZM260927002",
+                qty: 50,
+            }),
+        ).toEqual([
+            { key: "customer", label: "客户", before: null, after: "锦泰科技" },
+            { key: "qty", label: "出库数量", before: null, after: "50 个" },
+            { key: "orderNo", label: "订单号", before: null, after: "ZM260927002" },
         ]);
     });
 
@@ -269,11 +291,12 @@ describe("changesOfOrderEdit / changesOfInboundEdit", () => {
 });
 
 describe("changesOfAdjustment / reasonText", () => {
-    it("调整数量带符号，关联入库单可选", () => {
-        expect(changesOfAdjustment(20, null)).toEqual([
+    it("成品名称随行，调整数量带符号，关联入库单可选", () => {
+        expect(changesOfAdjustment(20, null, "新微动")).toEqual([
+            { key: "bomName", label: "成品名称", before: null, after: "新微动" },
             { key: "qtyDelta", label: "调整数量", before: null, after: "+20 个" },
         ]);
-        expect(changesOfAdjustment(-5, "RK26092701")).toEqual([
+        expect(changesOfAdjustment(-5, "RK26092701", null)).toEqual([
             { key: "qtyDelta", label: "调整数量", before: null, after: "-5 个" },
             { key: "relatedInboundNo", label: "关联入库单", before: null, after: "RK26092701" },
         ]);

@@ -113,15 +113,17 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
         case "archive_order":
             // 归档前必为 ACTIVE（终态不可再归档），状态变更可推断；数量为归档时口径
             return [
+                { key: "customer", label: "客户", before: null, after: asText(detail?.customer) },
                 { key: "lifecycleStatus", label: "订单状态", before: "进行中", after: "已归档" },
                 { key: "qty", label: "订单数量", before: null, after: qtyText(detail?.qty) },
-            ];
+            ].filter(change => change.after !== null);
         case "update_customer": {
             if (!detail) return null;
             const ownerChanged = asJson(detail.ownerChanged);
             if (ownerChanged) {
-                // 负责人移交（页面编辑或离岗批量）：只展示移交事实
+                // 负责人移交（页面编辑或离岗批量）：客户名 + 移交事实
                 return [
+                    { key: "name", label: "客户名称", before: null, after: asText(detail.name) },
                     {
                         key: "owner",
                         label: "负责销售",
@@ -170,14 +172,16 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
         }
         case "ship":
             return [
+                { key: "customer", label: "客户", before: null, after: asText(detail?.customer) },
                 { key: "qty", label: "发货数量", before: null, after: qtyText(detail?.qty) },
                 { key: "orderNo", label: "订单号", before: null, after: asText(detail?.orderNo) },
                 { key: "remark", label: "备注", before: null, after: asText(detail?.remark) },
             ].filter(change => change.after !== null);
         case "void_outbound":
         case "delete_outbound": {
-            // shipmentSnapshot：状态与数量关键事实
+            // shipmentSnapshot：客户与数量/订单号关键事实
             return [
+                { key: "customer", label: "客户", before: null, after: asText(detail?.customer) },
                 { key: "qty", label: "出库数量", before: null, after: qtyText(detail?.qty) },
                 { key: "orderNo", label: "订单号", before: null, after: asText(detail?.orderNo) },
             ].filter(change => change.after !== null);
@@ -187,11 +191,22 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
     }
 }
 
-/** 库存调整事件（stock_adjustment 表行）的变更列表 */
-export function changesOfAdjustment(qtyDelta: number, relatedInboundNo: string | null): SystemLogChange[] {
+/** 库存调整事件（stock_adjustment 表行）的变更列表；productName 为调整 BOM 的品类名
+ *  （目标行不再展示 targetName，成品上下文由本行承载） */
+export function changesOfAdjustment(
+    qtyDelta: number,
+    relatedInboundNo: string | null,
+    productName: string | null,
+): SystemLogChange[] {
     const changes: SystemLogChange[] = [
-        { key: "qtyDelta", label: "调整数量", before: null, after: `${qtyDelta > 0 ? "+" : ""}${qtyDelta} 个` },
-    ];
+        { key: "bomName", label: "成品名称", before: null, after: productName },
+        {
+            key: "qtyDelta",
+            label: "调整数量",
+            before: null,
+            after: `${qtyDelta > 0 ? "+" : ""}${qtyDelta} 个`,
+        },
+    ].filter(change => change.after !== null);
     if (relatedInboundNo) {
         changes.push({ key: "relatedInboundNo", label: "关联入库单", before: null, after: relatedInboundNo });
     }

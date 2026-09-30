@@ -348,7 +348,7 @@ export class SystemLogsService {
         if (row.op_action !== null) {
             changes = changesOfOpLog(row.op_action, detail);
         } else if (row.domain === "inbound" && row.action === "adjust") {
-            changes = changesOfAdjustment(row.qty_delta ?? 0, row.related_no);
+            changes = changesOfAdjustment(row.qty_delta ?? 0, row.related_no, row.target_name);
         } else if (row.domain === "order") {
             changes = changesOfOrderEdit(beforeJson, afterJson);
         } else {

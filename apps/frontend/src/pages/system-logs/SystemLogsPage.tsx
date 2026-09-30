@@ -151,11 +151,26 @@ function hasLiveEntity(domain: SystemLogDomain, code: string, snap: Snapshot): b
     }
 }
 
-/** 变更值链接语义：key → 详情域（BOM 编码 → BOM 详情、订单号 → 订单详情） */
+/** 变更值链接语义：key → 详情域（BOM 编码 → BOM 详情、订单号 → 订单详情、
+ *  客户名 → 客户档案详情——值为名称，定位时回捞编码） */
 function linkDomainOf(key: string | undefined): SystemLogDomain | null {
     if (key === "bomCode") return "bom";
     if (key === "orderNo") return "order";
+    if (key === "customer") return "customer";
     return null;
+}
+
+/** 客户行值为名称：回捞客户编码用于弹窗定位与存活判定（客户档案不可删，同名取首个） */
+function customerCodeOfName(name: string | null | undefined, snap: Snapshot): string | null {
+    return (name && snap.customers.find(customer => customer.name === name)?.code) || null;
+}
+
+/** 变更值的链接定位编码：普通 key 值即编码；客户 key 值为名称需回捞 */
+function linkCodeOf(linkDomain: SystemLogDomain, change: SystemLogChange, snap: Snapshot): string | null {
+    if (linkDomain === "customer") {
+        return customerCodeOfName(change.after, snap);
+    }
+    return change.after ?? null;
 }
 
 /* ---------- 页面 ---------- */
@@ -501,7 +516,8 @@ function EventCard({
                 <span className="rounded-md bg-soft px-1.5 py-0.5 text-11 font-semibold text-td-strong">
                     {DOMAIN_CHIPS[entry.domain]}
                 </span>
-                {/* 编号可点击弹详情：库存调整无专属详情视图；目标已删除（快照无行）时降级为纯文本 */}
+                {/* 编号可点击弹详情：库存调整无专属详情视图；目标已删除（快照无行）时降级为纯文本。
+                    编号后的名称快照不再展示——与首条变更（客户/成品名称等）重复，上下文由变更行承载 */}
                 {entry.action !== "adjust" && hasLiveEntity(entry.domain, entry.targetCode, snap) ? (
                     <button
                         type="button"
@@ -513,7 +529,6 @@ function EventCard({
                 ) : (
                     <span className="tnum text-12 font-bold text-primary-strong">{entry.targetCode}</span>
                 )}
-                {entry.targetName && <span className="text-12 text-td">{entry.targetName}</span>}
                 {first && (
                     <>
                         <span aria-hidden="true" className="h-1 w-1 rounded-full bg-placeholder" />
@@ -619,14 +634,15 @@ function FirstChangeAfter({
     onOpenDetail: (target: DetailTarget) => void;
 }) {
     const linkDomain = linkDomainOf(change.key);
+    const linkCode = linkDomain ? linkCodeOf(linkDomain, change, snap) : null;
     const chipClass = `rounded-md px-1.5 py-0.5 text-12 font-semibold ${chipToneOf(entry.action)}`;
-    if (!linkDomain || !change.after || !hasLiveEntity(linkDomain, change.after, snap)) {
+    if (!linkDomain || !linkCode || !hasLiveEntity(linkDomain, linkCode, snap)) {
         return <span className={chipClass}>{change.after ?? "—"}</span>;
     }
     return (
         <button
             type="button"
-            onClick={() => onOpenDetail({ kind: linkDomain, code: change.after! })}
+            onClick={() => onOpenDetail({ kind: linkDomain, code: linkCode })}
             className={`cursor-pointer transition hover:underline ${chipClass}`}
         >
             {change.after}
@@ -645,13 +661,14 @@ function LinkedChangeValue({
     onOpenDetail: (target: DetailTarget) => void;
 }) {
     const linkDomain = linkDomainOf(change.key);
-    if (!linkDomain || !change.after || !hasLiveEntity(linkDomain, change.after, snap)) {
+    const linkCode = linkDomain ? linkCodeOf(linkDomain, change, snap) : null;
+    if (!linkDomain || !linkCode || !hasLiveEntity(linkDomain, linkCode, snap)) {
         return <>{change.after ?? "—"}</>;
     }
     return (
         <button
             type="button"
-            onClick={() => onOpenDetail({ kind: linkDomain, code: change.after! })}
+            onClick={() => onOpenDetail({ kind: linkDomain, code: linkCode })}
             className="cursor-pointer transition hover:underline"
         >
             {change.after}

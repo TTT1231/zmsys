@@ -411,6 +411,7 @@ describe("系统日志 (e2e)", () => {
             reason: "行情不好客户弃单",
         });
         expect(archived.changes).toEqual([
+            { key: "customer", label: "客户", before: null, after: `日志客户甲_${RUN}` },
             { key: "lifecycleStatus", label: "订单状态", before: "进行中", after: "已归档" },
             { key: "qty", label: "订单数量", before: null, after: "600 个" },
         ]);
@@ -443,8 +444,9 @@ describe("系统日志 (e2e)", () => {
         const transfer = byAction.get("transfer") as Record<string, unknown>;
         expect(transfer.targetName).toBe(`日志客户乙_${RUN}`);
         expect(transfer.reason).toBe("原负责人离岗，统一移交客户");
-        // ownerChanged 为用户姓名（from=sales02 → to=sales01 的账号姓名）
+        // ownerChanged 为用户姓名（from=sales02 → to=sales01 的账号姓名）；客户名随行
         expect(transfer.changes).toEqual([
+            { key: "name", label: "客户名称", before: null, after: `日志客户乙_${RUN}` },
             { key: "owner", label: "负责销售", before: "日志联调sales02", after: "日志联调sales01" },
         ]);
     });
@@ -464,6 +466,7 @@ describe("系统日志 (e2e)", () => {
         >;
         expect(adjust.targetCode).toMatch(/^TZ-/);
         expect(adjust.changes).toEqual([
+            { key: "bomName", label: "成品名称", before: null, after: "新微动" },
             { key: "qtyDelta", label: "调整数量", before: null, after: "+20 个" },
             { key: "relatedInboundNo", label: "关联入库单", before: null, after: expect.stringMatching(/^RK/) },
         ]);
@@ -534,6 +537,7 @@ describe("系统日志 (e2e)", () => {
             reason: "发货对象有误",
         });
         expect(items[0]!.changes).toEqual([
+            { key: "customer", label: "客户", before: null, after: `日志客户甲_${RUN}` },
             { key: "qty", label: "出库数量", before: null, after: "50 个" },
             { key: "orderNo", label: "订单号", before: null, after: orderNo2 },
         ]);
