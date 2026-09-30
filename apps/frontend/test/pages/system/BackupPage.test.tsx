@@ -9,7 +9,7 @@ import type { BackupCatalog } from "@/api";
 
 const fetchBackupCatalog = vi.fn();
 const runBackup = vi.fn();
-const toast = vi.fn();
+const toast = { success: vi.fn(), error: vi.fn() };
 
 vi.mock("@/api", () => ({
     fetchBackupCatalog: (...args: unknown[]) => fetchBackupCatalog(...(args as [])),
@@ -71,7 +71,8 @@ const ALL_KEYS = CATALOG.allGroupKeys;
 beforeEach(() => {
     fetchBackupCatalog.mockReset();
     runBackup.mockReset();
-    toast.mockReset();
+    toast.success.mockReset();
+    toast.error.mockReset();
     fetchBackupCatalog.mockResolvedValue(CATALOG);
     runBackup.mockResolvedValue({ fileName: "zmdb-full-20260928.sql", data: new Blob(["backup"]) });
     Object.defineProperty(URL, "createObjectURL", {
@@ -131,7 +132,7 @@ it("备份按钮打开格式弹窗：默认压缩版，可选未压缩版后执�
     fireEvent.click(within(dialog).getByRole("radio", { name: /未压缩版/ }));
     fireEvent.click(within(dialog).getByRole("button", { name: /开始备份/ }));
     // mutate 的 mutationFn 在微任务里才执行：等 onSuccess 落地后断言下载与提示
-    await waitFor(() => expect(toast).toHaveBeenCalledWith("备份完成：zmdb-full-20260928.sql"));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("备份完成：zmdb-full-20260928.sql"));
     expect(runBackup).toHaveBeenCalledWith(ALL_KEYS, false);
     expect(URL.createObjectURL).toHaveBeenCalled();
 });

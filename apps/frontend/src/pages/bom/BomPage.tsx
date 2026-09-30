@@ -55,7 +55,7 @@ export function BomDetailModal({
     const toast = useToast();
     if (!bom) return null;
     const copyCode = async () => {
-        if (await copyText(bom.code)) toast(`已复制 ${bom.code}`);
+        if (await copyText(bom.code)) toast.success(`已复制 ${bom.code}`);
     };
     return (
         <Modal
@@ -141,7 +141,7 @@ function DeleteBomModal({ bom, onClose }: { bom: Bom | null; onClose: () => void
         if (deleteBom.isPending) return;
         deleteBom.mutate(bom.code, {
             onSuccess: () => {
-                toast(`BOM ${bom.code} 已删除`);
+                toast.success(`BOM ${bom.code} 已删除`);
                 onClose();
             },
         });
@@ -361,7 +361,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                     }
                 },
                 onSuccess: bom => {
-                    toast(`BOM ${bom.code} 已创建`);
+                    toast.success(`BOM ${bom.code} 已创建`);
                     onClose();
                     pickCategory("");
                 },
@@ -759,7 +759,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                             variant="primary"
                             onClick={async () => {
                                 if (duplicateCode && (await copyText(duplicateCode))) {
-                                    toast(`已复制 ${duplicateCode}，可直接粘贴到销售订单`);
+                                    toast.success(`已复制 ${duplicateCode}，可直接粘贴到销售订单`);
                                 }
                             }}
                         >

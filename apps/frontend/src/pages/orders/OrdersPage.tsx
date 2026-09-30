@@ -154,7 +154,7 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
             },
             {
                 onSuccess: () => {
-                    toast("订单已创建，可在订单列表查看");
+                    toast.success("订单已创建，可在订单列表查看");
                     onClose();
                     reset();
                 },
@@ -345,7 +345,7 @@ function EditOrderModal({
             },
             {
                 onSuccess: () => {
-                    toast(`订单 ${order.orderNo} 已更新`);
+                    toast.success(`订单 ${order.orderNo} 已更新`);
                     onClose();
                 },
             },
@@ -358,7 +358,7 @@ function EditOrderModal({
             { orderNo: order.orderNo, expectedVersion: order.version },
             {
                 onSuccess: () => {
-                    toast(`订单 ${order.orderNo} 已删除`);
+                    toast.success(`订单 ${order.orderNo} 已删除`);
                     setConfirmDelete(false);
                     onClose();
                 },
@@ -372,7 +372,7 @@ function EditOrderModal({
             { orderNo: order.orderNo, expectedVersion: order.version, reason: archiveRemark.trim() },
             {
                 onSuccess: () => {
-                    toast(`订单 ${order.orderNo} 已归档，可在「归档订单」查看`);
+                    toast.success(`订单 ${order.orderNo} 已归档，可在「归档订单」查看`);
                     setConfirmArchive(false);
                     onClose();
                 },

@@ -263,7 +263,7 @@ function ResetPasswordModal({ user, onClose }: { user: WbUser; onClose: () => vo
     };
 
     const copyPassword = async () => {
-        if (await copyText(INITIAL_PASSWORD)) toast("已复制初始密码");
+        if (await copyText(INITIAL_PASSWORD)) toast.success("已复制初始密码");
     };
 
     return (
@@ -375,7 +375,7 @@ function UserActiveToggle({
             { account: user.account, expectedVersion: user.version, active: !user.active },
             {
                 onSuccess: () =>
-                    toast(user.active ? `已停用【${user.name}】，其登录会话已失效` : `已启用【${user.name}】`),
+                    toast.success(user.active ? `已停用【${user.name}】，其登录会话已失效` : `已启用【${user.name}】`),
             },
         );
     };
@@ -446,7 +446,7 @@ function DeactivateTransferModal({
             },
             {
                 onSuccess: () => {
-                    toast(`已停用【${user.name}】，名下 ${ownedCount} 个客户已移交给接任销售`);
+                    toast.success(`已停用【${user.name}】，名下 ${ownedCount} 个客户已移交给接任销售`);
                     onClose();
                 },
             },
@@ -532,7 +532,7 @@ function UserDialog({
         setErrors(next);
         if (Object.keys(next).length) return;
         const done = (message: string) => () => {
-            toast(message);
+            toast.success(message);
             onClose();
         };
         if (user) {
@@ -783,7 +783,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
             {
                 onSuccess: () => {
                     setDraft(null);
-                    toast(`角色【${roleNameOf(activeRole)}】授权已保存`);
+                    toast.success(`角色【${roleNameOf(activeRole)}】授权已保存`);
                     // 若改的是当前登录用户的角色，刷新自身权限（菜单/按钮立即生效）
                     void refreshProfile();
                 },

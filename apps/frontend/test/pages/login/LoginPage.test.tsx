@@ -12,7 +12,7 @@ import { LoginPage, REMEMBER_KEY } from "@/pages/login/LoginPage";
 
 const { loginSpy, toastSpy, notificationSpy } = vi.hoisted(() => ({
     loginSpy: vi.fn(),
-    toastSpy: vi.fn(),
+    toastSpy: { success: vi.fn(), error: vi.fn() },
     notificationSpy: vi.fn(),
 }));
 
@@ -87,7 +87,7 @@ describe("LoginPage", () => {
 
         await user.click(screen.getByRole("button", { name: "登录" }));
 
-        await waitFor(() => expect(toastSpy).toHaveBeenCalledWith("登录服务暂时不可用，请稍后重试", true));
+        await waitFor(() => expect(toastSpy.error).toHaveBeenCalledWith("登录服务暂时不可用，请稍后重试"));
         expect(screen.getByText("请按住滑块拖动")).toBeInTheDocument();
         expect(notificationSpy).not.toHaveBeenCalled();
         expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -118,7 +118,8 @@ describe("LoginPage", () => {
         await waitFor(() => expect(loginSpy).toHaveBeenCalledWith("sys_admin", "123456"));
         await waitFor(() => expect(screen.getByRole("button", { name: "登录" })).not.toBeDisabled());
         expect(notificationSpy).toHaveBeenCalledWith({ title: "登录成功", message: "欢迎回来" });
-        expect(toastSpy).not.toHaveBeenCalled();
+        expect(toastSpy.success).not.toHaveBeenCalled();
+        expect(toastSpy.error).not.toHaveBeenCalled();
     });
 
     it("welcomes the signed-in user through the notification channel", async () => {
@@ -136,7 +137,8 @@ describe("LoginPage", () => {
                 message: "欢迎回来，系统管理员",
             }),
         );
-        expect(toastSpy).not.toHaveBeenCalled();
+        expect(toastSpy.success).not.toHaveBeenCalled();
+        expect(toastSpy.error).not.toHaveBeenCalled();
     });
 
     it("persists the account when checked, prefills it next visit and clears when unchecked", async () => {

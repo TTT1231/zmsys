@@ -20,24 +20,24 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
 
     const submitPassword = async () => {
         if (!oldPassword || !newPassword) {
-            toast("请输入旧密码与新密码", true);
+            toast.error("请输入旧密码与新密码");
             return;
         }
         if (newPassword.length < 6) {
-            toast("新密码至少 6 位", true);
+            toast.error("新密码至少 6 位");
             return;
         }
         if (newPassword !== confirmPassword) {
-            toast("两次输入的新密码不一致", true);
+            toast.error("两次输入的新密码不一致");
             return;
         }
         setChangingPwd(true);
         try {
             await changePassword({ oldPassword, newPassword });
-            toast("密码已修改，请重新登录");
+            toast.success("密码已修改，请重新登录");
             await logout();
         } catch (error) {
-            toast(isApiError(error) ? error.message : "密码修改失败，请稍后重试", true);
+            toast.error(isApiError(error) ? error.message : "密码修改失败，请稍后重试");
         } finally {
             setChangingPwd(false);
         }

@@ -29,7 +29,7 @@ export function UserMenu() {
         setLoggingOut(true);
         try {
             await logout();
-            toast("已退出登录");
+            toast.success("已退出登录");
             navigate("/login", { replace: true });
         } finally {
             setLoggingOut(false);

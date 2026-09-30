@@ -160,7 +160,7 @@ export function InboundModal({
             { bomCode, qty: Number(qty), date: todayIso(), remark },
             {
                 onSuccess: row => {
-                    toast(`入库单 ${row.no} 已登记`);
+                    toast.success(`入库单 ${row.no} 已登记`);
                     onClose();
                     reset();
                 },
@@ -334,7 +334,7 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
             },
             {
                 onSuccess: updated => {
-                    toast(`入库单 ${updated.no} 已修正`);
+                    toast.success(`入库单 ${updated.no} 已修正`);
                     onClose();
                 },
             },
@@ -914,7 +914,9 @@ export function InboundPage() {
                             {
                                 onSuccess: updated => {
                                     setVoidTarget(null);
-                                    toast(`${updated.no} 已作废，${updated.bomCode} 库存减少 ${num(updated.qty)} 个`);
+                                    toast.success(
+                                        `${updated.no} 已作废，${updated.bomCode} 库存减少 ${num(updated.qty)} 个`,
+                                    );
                                 },
                             },
                         )
@@ -933,7 +935,7 @@ export function InboundPage() {
                                 onSuccess: () => {
                                     setDeleteTarget(null);
                                     setVoucher(null);
-                                    toast(`入库单 ${deleteTarget.no} 已删除`);
+                                    toast.success(`入库单 ${deleteTarget.no} 已删除`);
                                 },
                             },
                         )

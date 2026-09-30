@@ -1,20 +1,13 @@
 import type { ReactNode } from "react";
 import { Toaster, toast } from "sonner";
 import { Icon } from "@/lib/icons";
-import {
-    MessageContext,
-    NotificationContext,
-    type MessagePush,
-    type NotificationPush,
-    type Tone,
-} from "./toastContexts";
+import { MessageContext, NotificationContext, type NotificationPush, type Tone, type ToastApi } from "./toastContexts";
 
 /* 此文件只导出 ToastProvider 组件;useToast/useNotification 在 ./toastContexts.ts */
 
 let activeMessageId: string | number | undefined;
 
-const pushMessage: MessagePush = (message, error) => {
-    const tone: Tone = (error ?? /请|未找到|超过|必须|失败|不能/.test(message)) ? "error" : "success";
+const pushMessage = (message: string, tone: Tone) => {
     const show = tone === "error" ? toast.error : toast.success;
     if (activeMessageId !== undefined) toast.dismiss(activeMessageId);
     activeMessageId = show(message, {
@@ -35,9 +28,15 @@ const pushNotification: NotificationPush = ({ title, message, tone = "success", 
     show(title, { toasterId: "notification", description: message, duration, closeButton: true });
 };
 
+/* 模块级单例：context value 引用稳定，避免消费者因新对象重渲 */
+const messageApi: ToastApi = {
+    success: message => pushMessage(message, "success"),
+    error: message => pushMessage(message, "error"),
+};
+
 export function ToastProvider({ children }: { children: ReactNode }) {
     return (
-        <MessageContext.Provider value={pushMessage}>
+        <MessageContext.Provider value={messageApi}>
             <NotificationContext.Provider value={pushNotification}>
                 {children}
                 <Toaster

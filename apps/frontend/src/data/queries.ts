@@ -191,7 +191,7 @@ function useWbMutation<TInput, TOutput>(mutationFn: (input: TInput) => Promise<T
         mutationFn,
         // 失败弹错误提示是全部写操作的统一行为，在工厂收口（调用方 mutate 级
         // onError 会与本默认并存执行，追加逻辑无需重写 toast）
-        onError: error => toast(error.message, true),
+        onError: error => toast.error(error.message),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: wbKeys.all });
             queryClient.invalidateQueries({ queryKey: bomKeys.stocks });
@@ -230,7 +230,7 @@ export const useCreateBom = () => {
     const toast = useToast();
     return useMutation({
         mutationFn: createBom,
-        onError: error => toast(error.message, true),
+        onError: error => toast.error(error.message),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: bomKeys.list });
             queryClient.invalidateQueries({ queryKey: wbKeys.all });
@@ -243,7 +243,7 @@ export const useDeleteBom = () => {
     const toast = useToast();
     return useMutation({
         mutationFn: deleteBom,
-        onError: error => toast(error.message, true),
+        onError: error => toast.error(error.message),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: bomKeys.list });
             queryClient.invalidateQueries({ queryKey: wbKeys.all });
@@ -338,7 +338,7 @@ export function useSaveGrants() {
                 expectedVersion: input.grant.version,
                 note: input.note,
             }),
-        onError: error => toast(error.message, true),
+        onError: error => toast.error(error.message),
         onSuccess: (_data, variables) => {
             queryClient.invalidateQueries({ queryKey: wbKeys.grants });
             queryClient.invalidateQueries({ queryKey: wbKeys.grantLog });

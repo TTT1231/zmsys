@@ -9,10 +9,10 @@ import { toast } from "sonner";
 import { ToastProvider } from "@/components/ui/Toast";
 import { useNotification, useToast } from "@/components/ui/toastContexts";
 
-function ToastTrigger({ message, error }: { message: string; error?: boolean }) {
-    const push = useToast();
+function ToastTrigger({ message, method = "success" }: { message: string; method?: "success" | "error" }) {
+    const toast = useToast();
     return (
-        <button type="button" onClick={() => push(message, error)}>
+        <button type="button" onClick={() => toast[method](message)}>
             触发
         </button>
     );
@@ -48,24 +48,25 @@ describe("ToastProvider", () => {
         expect(screen.queryByRole("button", { name: "关闭通知" })).not.toBeInTheDocument();
     });
 
-    it("infers error tone and also honors an explicit error flag", async () => {
+    it("keeps success tone regardless of wording and honors an explicit error call", async () => {
         const { rerender } = render(
             <ToastProvider>
                 <ToastTrigger message="请输入有效的发货数量" />
             </ToastProvider>,
         );
         fireEvent.click(screen.getByRole("button", { name: "触发" }));
-        const inferred = await screen.findByText("请输入有效的发货数量");
-        expect(inferred.closest("[data-sonner-toast]")).toHaveAttribute("data-type", "error");
+        // 语义显式（toast.success/toast.error），文案含「请/必须」等字不再推断为错误
+        const success = await screen.findByText("请输入有效的发货数量");
+        expect(success.closest("[data-sonner-toast]")).toHaveAttribute("data-type", "success");
 
         rerender(
             <ToastProvider>
-                <ToastTrigger message="plain" error />
+                <ToastTrigger message="plain" method="error" />
             </ToastProvider>,
         );
         fireEvent.click(screen.getByRole("button", { name: "触发" }));
-        const explicit = await screen.findByText("plain");
-        expect(explicit.closest("[data-sonner-toast]")).toHaveAttribute("data-type", "error");
+        const error = await screen.findByText("plain");
+        expect(error.closest("[data-sonner-toast]")).toHaveAttribute("data-type", "error");
         await waitFor(() => expect(screen.queryByText("请输入有效的发货数量")).not.toBeInTheDocument());
     });
 

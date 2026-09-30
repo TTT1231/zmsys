@@ -92,9 +92,9 @@ export function BackupPage() {
             anchor.download = result.fileName;
             anchor.click();
             URL.revokeObjectURL(url);
-            toast(`备份完成：${result.fileName}`);
+            toast.success(`备份完成：${result.fileName}`);
         },
-        onError: (error: Error) => toast(error.message || "备份失败，请稍后重试", true),
+        onError: (error: Error) => toast.error(error.message || "备份失败，请稍后重试"),
     });
     const busy = backupMutation.isPending;
 

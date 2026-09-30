@@ -273,7 +273,7 @@ export function OutboundModal({
             },
             {
                 onSuccess: row => {
-                    toast(`出库单 ${row.no} 已登记`);
+                    toast.success(`出库单 ${row.no} 已登记`);
                     onClose();
                     reset();
                 },
@@ -646,7 +646,7 @@ export function OutboundPage() {
         if (printRequest.isPending) return;
         const win = window.open("", "_blank", "width=760,height=640");
         if (!win) {
-            toast("浏览器拦截了打印窗口，请允许本站打开新窗口后重试", true);
+            toast.error("浏览器拦截了打印窗口，请允许本站打开新窗口后重试");
             return;
         }
         win.opener = null;
@@ -657,7 +657,7 @@ export function OutboundPage() {
             {
                 onError: error => {
                     win.close();
-                    toast(error.message, true);
+                    toast.error(error.message);
                 },
                 onSuccess: document => {
                     if (!win.closed) renderOutboundDocument(document, win);
@@ -996,7 +996,7 @@ export function OutboundPage() {
                             {
                                 onSuccess: updated => {
                                     setVoidTarget(null);
-                                    toast(
+                                    toast.success(
                                         `${updated.no} 已作废，库存增加 ${num(updated.qty)} 个，订单已发减少 ${num(updated.qty)} 个`,
                                     );
                                 },
@@ -1017,7 +1017,7 @@ export function OutboundPage() {
                                 onSuccess: () => {
                                     setDeleteTarget(null);
                                     setDetail(null);
-                                    toast(`出库单 ${deleteTarget.no} 已删除`);
+                                    toast.success(`出库单 ${deleteTarget.no} 已删除`);
                                 },
                             },
                         )

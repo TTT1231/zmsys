@@ -75,7 +75,7 @@ export function LoginPage() {
             notify({ title: "登录成功", message: user?.name ? `欢迎回来，${user.name}` : "欢迎回来" });
             navigate("/workbench", { replace: true });
         } catch (err) {
-            toast(loginErrorMessage(err), true);
+            toast.error(loginErrorMessage(err));
             /* vben 同款：登录失败重置滑块，要求重新验证 */
             setCaptchaPassed(false);
         } finally {

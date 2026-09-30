@@ -114,7 +114,7 @@ function CustomerFormModal({
             payTerms: payTerms.trim(),
         };
         const onSuccess = (saved: Customer) => {
-            toast(customer ? `客户档案 ${saved.code} 已更新` : `客户档案 ${saved.code} 已创建`);
+            toast.success(customer ? `客户档案 ${saved.code} 已更新` : `客户档案 ${saved.code} 已创建`);
             onClose();
         };
         if (customer) {

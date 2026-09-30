@@ -284,7 +284,7 @@ export function RestorePage() {
                 if (outcome.job) setJob(outcome.job);
                 return;
             }
-            toast("恢复任务已受理，执行期间系统进入维护态");
+            toast.success("恢复任务已受理，执行期间系统进入维护态");
         },
         onError: (error: Error) => {
             // 确定性拒绝（400 预检/409 冲突/413 超限/404 路由）：回提交表单纠错重试；
@@ -292,10 +292,10 @@ export function RestorePage() {
             const code = isApiError(error) ? error.code : -1;
             if (code === 400 || code === 409 || code === 413 || code === 404) {
                 clearSubmission();
-                toast(error.message || "提交被拒绝，请调整后重试", true);
+                toast.error(error.message || "提交被拒绝，请调整后重试");
                 return;
             }
-            toast(error.message || "提交失败（requestKey 已保留，可稍后重查）", true);
+            toast.error(error.message || "提交失败（requestKey 已保留，可稍后重查）");
         },
     });
 
@@ -548,7 +548,9 @@ export function RestorePage() {
                                     className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input border border-line text-muted hover:text-primary-strong focus-visible:outline-2 focus-visible:outline-primary"
                                     onClick={() =>
                                         void copyText(pending.requestKey).then(ok =>
-                                            ok ? toast("任务编号已复制") : toast("复制失败，请手动选择任务编号", true),
+                                            ok
+                                                ? toast.success("任务编号已复制")
+                                                : toast.error("复制失败，请手动选择任务编号"),
                                         )
                                     }
                                 >
