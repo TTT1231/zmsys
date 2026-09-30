@@ -9,7 +9,7 @@ import {
 } from "./change-details";
 
 describe("changesOfOpLog", () => {
-    it("create_order：客户/数量/交期关键事实（before=null，数量带单位）", () => {
+    it("create_order：客户/BOM 冻结快照/数量/交期关键事实（before=null，数量带单位）", () => {
         expect(
             changesOfOpLog("create_order", {
                 orderNo: "ZM260927001",
@@ -18,11 +18,85 @@ describe("changesOfOpLog", () => {
                 remark: "",
                 lifecycleStatus: "ACTIVE",
                 customer: "华辰电器",
+                bomCode: "ZMKW0001",
+                bomName: "新微动",
+                bomModel: "KW-2A",
+                bomSpec: {
+                    items: [
+                        {
+                            materialId: "9001",
+                            groupKey: "base",
+                            groupName: "底座",
+                            name: "三脚底座（有挡脚）",
+                            position: 1,
+                            quantity: 1,
+                        },
+                        {
+                            materialId: "9002",
+                            groupKey: "button",
+                            groupName: "按钮",
+                            name: "8.5mm",
+                            position: 2,
+                            quantity: 1,
+                        },
+                    ],
+                    modelCode: "KW-2A",
+                    spec: "底座：三脚底座（有挡脚） · 按钮：8.5mm",
+                },
             }),
         ).toEqual([
             { key: "customer", label: "客户", before: null, after: "华辰电器" },
+            { key: "bomCode", label: "BOM 编码", before: null, after: "ZMKW0001" },
+            { key: "bomName", label: "成品名称", before: null, after: "新微动" },
+            { key: "bomSpec", label: "规格构成", before: null, after: "底座：三脚底座（有挡脚） · 按钮：8.5mm" },
             { key: "qty", label: "订单数量", before: null, after: "240 个" },
             { key: "deliverDate", label: "交货日期", before: null, after: "2026-10-18" },
+        ]);
+    });
+
+    it("delete_order：同 create 口径透出 BOM 快照；存量快照缺 spec 时按冻结明细拼装", () => {
+        expect(
+            changesOfOpLog("delete_order", {
+                orderNo: "ZM260927002",
+                qty: 100,
+                deliverDate: "2026-10-20",
+                remark: null,
+                lifecycleStatus: "ACTIVE",
+                customer: "锦泰科技",
+                bomCode: "ZMKW0002",
+                bomName: "新微动",
+                bomModel: "",
+                // 20260922000000 之前的订单快照无 spec 字段，按 items 同规则拼装
+                bomSpec: {
+                    items: [
+                        {
+                            materialId: "9003",
+                            groupKey: "base",
+                            groupName: "底座",
+                            name: "三脚底座（有挡脚）",
+                            position: 1,
+                            quantity: 1,
+                        },
+                        {
+                            materialId: "9004",
+                            groupKey: "lever",
+                            groupName: "杠杆",
+                            name: "中支点",
+                            position: 2,
+                            quantity: 2,
+                        },
+                    ],
+                    modelCode: "",
+                },
+                deletedAt: "2026-09-27T10:00:00.000Z",
+            }),
+        ).toEqual([
+            { key: "customer", label: "客户", before: null, after: "锦泰科技" },
+            { key: "bomCode", label: "BOM 编码", before: null, after: "ZMKW0002" },
+            { key: "bomName", label: "成品名称", before: null, after: "新微动" },
+            { key: "bomSpec", label: "规格构成", before: null, after: "底座：三脚底座（有挡脚） · 杠杆：中支点 ×2" },
+            { key: "qty", label: "订单数量", before: null, after: "100 个" },
+            { key: "deliverDate", label: "交货日期", before: null, after: "2026-10-20" },
         ]);
     });
 

@@ -385,6 +385,9 @@ describe("系统日志 (e2e)", () => {
         expect(created.actor).toEqual({ name: "郭均", role: "super" });
         expect(created.changes).toEqual([
             { key: "customer", label: "客户", before: null, after: `日志客户甲_${RUN}` },
+            { key: "bomCode", label: "BOM 编码", before: null, after: BOM_CODE },
+            { key: "bomName", label: "成品名称", before: null, after: "新微动" },
+            { key: "bomSpec", label: "规格构成", before: null, after: "底座：三脚底座（有挡脚） · 按钮：8.5mm" },
             { key: "qty", label: "订单数量", before: null, after: "500 个" },
             { key: "deliverDate", label: "交货日期", before: null, after: "2027-06-30" },
             { key: "remark", label: "备注", before: null, after: `e2e 系统日志订单 ${RUN}` },

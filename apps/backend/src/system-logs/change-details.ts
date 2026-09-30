@@ -2,6 +2,7 @@
  * JSON 产出统一的中文字段变更列表；值格式贴近时间线展示（数量带单位"个"、
  * 日期 yyyy-MM-dd、状态中文），before=null 表示新建记录。每行携带语义 key
  * （源字段名），前端据此把 BOM 编码/订单号等渲染为可点击编号链接。 */
+import { bomSpecOf } from "../common/bom-display";
 import type { SystemLogChange } from "./types";
 
 /** JSON detail 的宽松读取类型（快照字段形态随动作不同，逐键判型） */
@@ -95,10 +96,14 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
     switch (action) {
         case "create_order":
         case "delete_order": {
-            // detail 为订单完整快照：创建/删除展示关键事实（before=null）
+            // detail 为订单完整快照：创建/删除展示关键事实（before=null）；BOM 冻结
+            // 快照一并透出——删除后订单与 BOM 行均可能不复存在，本日志是唯一留存
             const snapshot = detail ?? {};
             return [
                 { key: "customer", label: "客户", before: null, after: asText(snapshot.customer) },
+                { key: "bomCode", label: "BOM 编码", before: null, after: asText(snapshot.bomCode) },
+                { key: "bomName", label: "成品名称", before: null, after: asText(snapshot.bomName) },
+                { key: "bomSpec", label: "规格构成", before: null, after: asText(bomSpecOf(snapshot.bomSpec)) },
                 { key: "qty", label: "订单数量", before: null, after: qtyText(snapshot.qty) },
                 { key: "deliverDate", label: "交货日期", before: null, after: asText(snapshot.deliverDate) },
                 { key: "remark", label: "备注", before: null, after: asText(snapshot.remark) },
