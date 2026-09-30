@@ -1,19 +1,21 @@
 // @vitest-environment jsdom
-/* 前端主线程纯计算成本微基准（对应 out/perf-lab/original-report.md §2/§3）：
- * - p2-ready-counts  按订单数 N 等价复走 OrdersPage counts.ready 派生路径（apps/frontend/src/data/views.ts）：
- *                    每个活跃订单各调一次真实 maxShipOf，内部完整执行 readyToShip（过滤+排序+BOM 线性查找+find）。
+/* 前端主线程纯计算成本微基准（对应报告见 git 历史 d885ec1:out/perf-lab/original-report.md §2/§3，
+ * out/ 工作区已随 4bc9976 移出仓库树）：
+ * - p2-ready-counts  按订单数 N 等价复走 OrdersPage P2 前的 counts.ready 调用模式（apps/frontend/src/data/views.ts）：
+ *                    每个活跃订单各调一次真实 maxShipOf——单次调用内部完整执行一次全量分配
+ *                    （过滤+按交期排序+库存分配），二次方成本来自逐单重复全量派生这一调用模式本身。
  * - p5-search-filter 挂真实 BomPage（apps/frontend/src/pages/bom/BomPage.tsx filtered useMemo），
  *                    关键词从空变非空触发检索文本重建，用 React Profiler actualDuration(update) 计时。
  * - p6-page-summary  N 条 BOM 数据池按 10/50 一页挂载真实 BomCell（apps/frontend/src/components/bom/BomCell.tsx，
  *                    内部执行真实 bomComposition/bomSummary）。
  * - picker-mount     真实 BomPicker 传入 M 条匹配项的一次性全量挂载（apps/frontend/src/components/bom/BomPicker.tsx）。
  * 组件与计算全部 import 真实源码，仅数据层 hook 按现有 test/pages/bom/BomPage.test.tsx 的 provider/mock 写法注入内存数据。
- * 合成数据形状按 out/perf-lab/volume.json：BOM 明细 7–15 条（均值≈11，口径 avgBomItems=10.8/max 15/min 7）、
+ * 合成数据形状按 git 历史 d885ec1:out/perf-lab/volume.json：BOM 明细 7–15 条（均值≈11，口径 avgBomItems=10.8/max 15/min 7）、
  * 订单:BOM≈1:1（1x≈40）、品类 9（含跌倒开关组合品类与 2 个目录容器子品类）、客户 20；纯内存对象，不接数据库。
  * 梯度 N ∈ {40, 400, 2000, 4000, 10000}；p2/p5 为 2 预热 + 9 计时轮、p6/picker/p6-update 为 1 次预热 + 9 计时轮，取中位数；单档预估超 30s 预算自动跳过。
- * 结果写 out/perf-lab/micro.json 并在 bench 控制台输出同样数据。本文件命名 *.bench.ts，不被普通 vitest run 拾取。 */
+ * 结果写 out/perf-lab/v2/micro.json 并在 bench 控制台输出同样数据。本文件命名 *.bench.ts，不被普通 vitest run 拾取。 */
 import { act, createElement as h, Profiler, type ProfilerOnRenderCallback } from "react";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterAll, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -274,7 +276,7 @@ function materialIdOf(idOf: Map<string, string>, def: CategoryDef, group: GroupD
     return idOf.get(`${def.prefix}|${group.key}|${option}`);
 }
 
-/** 从组的候选物料中取一项（qty 组偶带 2–99 数量，对齐真实目录语义） */
+/** 从组的候选物料中取一项（qty 组偶带 2–9 数量，对齐真实目录语义） */
 function pickItem(def: CategoryDef, group: GroupDef, rng: () => number, idOf: Map<string, string>): BomItemView {
     const name = group.options[Math.floor(rng() * group.options.length)];
     return {
@@ -356,7 +358,8 @@ function buildBomPool(count: number) {
     return { boms, categories };
 }
 
-/** 订单池：订单:BOM≈1:1，交付日分布 today−30..+59（排序/逾期有真实工作量），约 5% 归档、55% 未发满 */
+/** 订单池：订单:BOM≈1:1，交付日分布 today−30..+59（排序/逾期有真实工作量），约 5% 归档、
+ *  75% 未发满（35% outbound=0 全未发 + 40% 部分发货），25% 已发满 */
 function buildOrderPool(count: number, boms: Bom[]) {
     const rng = mulberry32(3092602);
     const today = todayIso();
@@ -435,8 +438,22 @@ function flush() {
     if (flushed) return;
     flushed = true;
     mkdirSync(OUT_DIR, { recursive: true });
-    writeFileSync(OUT_FILE, `${JSON.stringify({ resultsPath: RESULTS_PATH, entries: ENTRIES }, null, 4)}\n`, "utf8");
-    console.log(`[perf-lab] micro.json ← ${ENTRIES.length} entries (${OUT_FILE})`);
+    /* 按 (target, n) 合并已有文件：过滤/部分运行只更新本次跑过的档位，不再整体覆盖——
+     * out/ 已移出仓库，磁盘文件是唯一副本，覆盖会毁掉未跑 target 的既有测量 */
+    let entries = ENTRIES;
+    if (existsSync(OUT_FILE)) {
+        try {
+            const existing = JSON.parse(readFileSync(OUT_FILE, "utf8")) as { entries?: Entry[] };
+            const keyOf = (entry: Entry) => `${entry.target}|${entry.n}`;
+            const merged = new Map((existing.entries ?? []).map(entry => [keyOf(entry), entry]));
+            for (const entry of ENTRIES) merged.set(keyOf(entry), entry);
+            entries = [...merged.values()];
+        } catch {
+            // 旧文件损坏/形态不符时退回仅本次结果
+        }
+    }
+    writeFileSync(OUT_FILE, `${JSON.stringify({ resultsPath: RESULTS_PATH, entries }, null, 4)}\n`, "utf8");
+    console.log(`[perf-lab] micro.json ← ${entries.length} entries (${OUT_FILE})`);
     for (const entry of ENTRIES) {
         console.log(`[perf-lab] ${entry.target} n=${entry.n} ms=${entry.ms} | ${entry.notes}`);
     }
@@ -497,7 +514,7 @@ function runP2() {
             "p2-ready-counts",
             n,
             median(samples),
-            `每个活跃订单各调一次真实 maxShipOf（内部完整执行 readyToShip：过滤+按交期排序+BOM 线性查找+find 定位），等价复走 OrdersPage counts.ready；订单 ${snap.orders.length}（活跃 ${activeOrders.length}，命中可发 ${ready}）× BOM ${snap.boms.length}，明细均值 ${avgItemsOf(
+            `每个活跃订单各调一次真实 maxShipOf（单次调用内部完整执行一次全量分配：过滤+按交期排序+库存分配，即 P2 前页面逐单调用的成本模式），等价复走 OrdersPage P2 前的 counts.ready；订单 ${snap.orders.length}（活跃 ${activeOrders.length}，命中可发 ${ready}）× BOM ${snap.boms.length}，明细均值 ${avgItemsOf(
                 snap.boms,
             )}；${WARMUP} 预热 + ${ROUNDS} 计时轮取中位数`,
         );
@@ -532,7 +549,7 @@ function runP2Once() {
             "p2-derived-once",
             n,
             median(samples),
-            `P2 实施后页面级路径：一次 deriveOrders（过滤+按交期排序+库存分配+BOM 索引 Map+订单号索引 Map）+ counts.ready 计数，等价于优化后 OrdersPage 每次数据变化的派生成本；订单 ${snap.orders.length}（活跃 ${activeOrders.length}）× BOM ${snap.boms.length}，ready=${ready}；对照 p2-ready-counts（逐单 maxShipOf 的旧调用模式，实施后仅存于弹窗等单点调用）；${WARMUP} 预热 + ${ROUNDS} 计时轮取中位数`,
+            `P2 实施后页面级路径：一次 deriveOrders（过滤+按交期排序+库存分配+BOM 索引 Map+订单号索引 Map）+ counts.ready 计数，等价于优化后 OrdersPage 每次数据变化的派生成本；订单 ${snap.orders.length}（活跃 ${activeOrders.length}）× BOM ${snap.boms.length}，ready=${ready}；对照 p2-ready-counts（逐单 maxShipOf 的旧调用模式，实施后仅存于未传 derived 的单点 fallback）；${WARMUP} 预热 + ${ROUNDS} 计时轮取中位数`,
         );
     }
 }
