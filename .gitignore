@@ -81,6 +81,5 @@ datalog
 # 原型 
 docs/prototypes
 
-# perf-lab：原始 trace（~10MB gz，本地保留供定向复查，可整目录删除）与 P4 实验构建不入库
-out/perf-lab/v2/traces/
-apps/frontend/dist-exp/
+# perf-lab 工作区已从仓库移除（数据与脚本在 git 历史 d885ec1/3a9490f）；微基准复跑会自建输出目录，忽略之
+out/
