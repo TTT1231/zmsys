@@ -506,6 +506,14 @@ describe("系统日志 (e2e)", () => {
         expect(items[0]!.domain).toBe("customer");
     });
 
+    it("action 筛选：archive 仅归档订单事件", async () => {
+        const page = await logs(superToken, `?action=archive&keyword=${orderNo}&limit=100`);
+        expect(page.statusCode).toBe(200);
+        const items = entriesOf(page);
+        expect(items).toHaveLength(1);
+        expect(items[0]).toMatchObject({ domain: "order", action: "archive", targetCode: orderNo });
+    });
+
     it("作废动作聚合：出库数量与订单号快照、原因透出", async () => {
         // 关键词按名称路径命中（void 的 detail.customer 为客户名快照；订单号不在搜索三项内）
         const page = await logs(superToken, `?action=void&domain=outbound&keyword=${RUN}&limit=100`);

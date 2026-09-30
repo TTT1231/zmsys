@@ -107,6 +107,9 @@ const beijingTimeOf = (iso: string): string =>
         hour12: false,
     }).format(new Date(iso));
 
+/** ISO 时刻 → 北京 yyyy-MM-dd HH:mm（卡片时间带完整日期，跨日回看不依赖分组标题） */
+const beijingDateTimeOf = (iso: string): string => `${beijingDayOf(iso)} ${beijingTimeOf(iso)}`;
+
 const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
 /** 日标题：今天 · 9 月 27 日 周六；非今日仅 N 月 N 日 周X */
@@ -480,7 +483,7 @@ function EventCard({
                         <span>{meta.verb}</span>
                         {objectOf(entry) && <span>{objectOf(entry)}</span>}
                         <span className="tnum ml-auto pl-2 text-12 font-normal text-muted">
-                            {beijingTimeOf(entry.occurredAt)}
+                            {beijingDateTimeOf(entry.occurredAt)}
                         </span>
                     </h3>
                     <div className="mt-0.5 flex flex-wrap items-center gap-2 text-12 text-muted">
