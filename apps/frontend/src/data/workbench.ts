@@ -51,17 +51,25 @@ export const withinRange = (date: string, range: WorkbenchRange) => date >= rang
 
 export function summarizeWorkbench(data: WorkbenchData, range: WorkbenchRange) {
     const orders = data.orders.filter(order => withinRange(order.date, range));
+    /* 一次遍历按 bomCode 分桶（范围内订单 + 全量未交），替代逐产品两轮全量扫描 O(P×O) → O(P+O) */
+    const byBomInRange = new Map<string, WorkbenchOrder[]>();
+    for (const order of orders) {
+        const bucket = byBomInRange.get(order.bomCode);
+        if (bucket) bucket.push(order);
+        else byBomInRange.set(order.bomCode, [order]);
+    }
+    const currentDemand = new Map<string, number>();
+    for (const order of data.orders) {
+        currentDemand.set(order.bomCode, (currentDemand.get(order.bomCode) ?? 0) + openQty(order));
+    }
     const products = data.products.map(product => {
-        const selected = orders.filter(order => order.bomCode === product.code);
-        const currentDemand = data.orders
-            .filter(order => order.bomCode === product.code)
-            .reduce((sum, order) => sum + openQty(order), 0);
+        const selected = byBomInRange.get(product.code) ?? [];
         return {
             ...product,
             qty: selected.reduce((sum, order) => sum + demandQty(order), 0),
             shipped: selected.reduce((sum, order) => sum + order.shipped, 0),
             remaining: selected.reduce((sum, order) => sum + openQty(order), 0),
-            gap: Math.max(0, currentDemand - product.stock),
+            gap: Math.max(0, (currentDemand.get(product.code) ?? 0) - product.stock),
         };
     });
     const categories = [...new Set(products.map(product => product.category))].map(name => {

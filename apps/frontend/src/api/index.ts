@@ -11,7 +11,6 @@ export {
     voidInbound,
     deleteInbound,
     fetchStockAdjustments,
-    createStockAdjustment,
 } from "./inbound";
 export { fetchOutboundLedger, createOutbound, voidOutbound, deleteOutbound, printOutboundDocument } from "./outbound";
 export {

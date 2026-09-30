@@ -9,7 +9,7 @@ import { PageLoading } from "@/components/ui/PageLoading";
 import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { Icon } from "@/lib/icons";
 import { num } from "@/lib/format";
-import { addDays } from "@/lib/date";
+import { addDays, monthStartOf } from "@/lib/date";
 import {
     customerRanking,
     demandQty,
@@ -93,7 +93,7 @@ function OwnerWorkbench() {
             : period === "year"
               ? `${data.asOf.slice(0, 4)}-01-01`
               : period === "month"
-                ? `${data.asOf.slice(0, 7)}-01`
+                ? monthStartOf(data.asOf)
                 : customStart;
     const end = period === "custom" ? customEnd : data.asOf;
     const validRange = !!start && !!end && start <= end && end <= data.asOf;
@@ -102,12 +102,12 @@ function OwnerWorkbench() {
         [data, start, end, validRange],
     );
     const risks = useMemo(() => workbenchRisks(data), [data]);
+    const ranking = useMemo(() => customerRanking(summary.orders, metric), [summary.orders, metric]);
     // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
     const overlay = useDelayedFlag(isFetching && !isLoading);
     if (isLoading) return <PageLoading className="min-h-96" />;
     const overdue = risks.filter(order => order.kind === "overdue");
     const upcoming = risks.filter(order => order.kind === "upcoming");
-    const ranking = customerRanking(summary.orders, metric);
     const periodLabel =
         period === "all" ? "累计" : period === "year" ? "今年" : period === "month" ? "本月" : "所选期间";
     const productName = (code: string) => {

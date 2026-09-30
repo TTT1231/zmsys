@@ -1,6 +1,5 @@
 import type {
     CreateInboundInput,
-    CreateStockAdjustmentInput,
     DeleteInboundInput,
     InboundRow,
     StockAdjustmentRow,
@@ -33,8 +32,4 @@ export function deleteInbound(no: string, input: DeleteInboundInput): Promise<nu
 
 export function fetchStockAdjustments(): Promise<StockAdjustmentRow[]> {
     return requestClient.get<StockAdjustmentRow[]>("/stock-adjustments");
-}
-
-export function createStockAdjustment(input: CreateStockAdjustmentInput): Promise<StockAdjustmentRow> {
-    return requestClient.post<StockAdjustmentRow>("/stock-adjustments", input, idempotencyConfig());
 }

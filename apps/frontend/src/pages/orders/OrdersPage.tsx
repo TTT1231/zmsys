@@ -58,7 +58,8 @@ import {
     stockOf,
     type DerivedOrders,
 } from "@/data/views";
-import { addDays, addMonths, formatDateTime, todayIso } from "@/lib/date";
+import { addDays, addMonths, formatDateTime, monthStartOf, shortDate, todayIso } from "@/lib/date";
+import { focusFirstInvalid } from "@/lib/formFocus";
 import { useToast } from "@/components/ui/toastContexts";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
@@ -78,9 +79,6 @@ const ORDER_SORT_COLUMNS: Array<{ key: OrderSortKey; label: string }> = [
     { key: "outbound", label: "交付情况" },
     { key: "createdAt", label: "创建时间" },
 ];
-
-/* 交期筛选激活时在按钮上回显的简写日期（MM/DD） */
-const shortDate = (isoDate: string) => `${isoDate.slice(5, 7)}/${isoDate.slice(8, 10)}`;
 
 /* 新建销售订单弹窗（三步表单：客户与交付 → BOM 编码 → 备注） */
 export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -140,11 +138,10 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
         if (!bomCode.trim()) nextErrors.bom = "请输入 BOM 编码";
         else if (!matchedBom) nextErrors.bom = "未找到该 BOM 编码，请核对";
         setErrors(nextErrors);
-        if (Object.keys(nextErrors).length)
-            requestAnimationFrame(() =>
-                document.querySelector<HTMLElement>('[role="dialog"] [aria-invalid="true"]')?.focus(),
-            );
-        if (Object.keys(nextErrors).length > 0) return;
+        if (Object.keys(nextErrors).length > 0) {
+            focusFirstInvalid();
+            return;
+        }
 
         createOrder.mutate(
             {
@@ -156,7 +153,6 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
                 remark,
             },
             {
-                onError: error => toast(error.message, true),
                 onSuccess: () => {
                     toast("订单已创建，可在订单列表查看");
                     onClose();
@@ -328,7 +324,6 @@ function EditOrderModal({
     const canArchive = can("orders:archive") && order.outbound > 0;
 
     const submit = () => {
-        if (!order) return;
         const nextErrors: Record<string, string> = {};
         if (!locked) {
             if (!qty || Number(qty) <= 0) nextErrors.qty = "请填写订单数量";
@@ -336,11 +331,10 @@ function EditOrderModal({
             if (!deliverDate) nextErrors.deliverDate = "请选择交货日期";
         }
         setErrors(nextErrors);
-        if (Object.keys(nextErrors).length)
-            requestAnimationFrame(() =>
-                document.querySelector<HTMLElement>('[role="dialog"] [aria-invalid="true"]')?.focus(),
-            );
-        if (Object.keys(nextErrors).length > 0) return;
+        if (Object.keys(nextErrors).length > 0) {
+            focusFirstInvalid();
+            return;
+        }
         updateOrder.mutate(
             {
                 orderNo: order.orderNo,
@@ -354,7 +348,6 @@ function EditOrderModal({
                     toast(`订单 ${order.orderNo} 已更新`);
                     onClose();
                 },
-                onError: error => toast(error.message, true),
             },
         );
     };
@@ -369,7 +362,6 @@ function EditOrderModal({
                     setConfirmDelete(false);
                     onClose();
                 },
-                onError: error => toast(error.message, true),
             },
         );
     };
@@ -384,7 +376,6 @@ function EditOrderModal({
                     setConfirmArchive(false);
                     onClose();
                 },
-                onError: error => toast(error.message, true),
             },
         );
     };
@@ -394,7 +385,7 @@ function EditOrderModal({
             open={!!order}
             onClose={onClose}
             title="编辑销售订单"
-            subtitle={order ? `${order.orderNo} · ${order.customer}` : ""}
+            subtitle={`${order.orderNo} · ${order.customer}`}
             width={520}
             footer={
                 <>
@@ -436,46 +427,44 @@ function EditOrderModal({
                 </>
             }
         >
-            {order && (
-                <div className="grid gap-3 sm:grid-cols-2">
-                    <TextField
-                        label="订单数量（个）"
-                        required
-                        inputMode="numeric"
-                        value={qty}
-                        error={errors.qty}
-                        disabled={locked}
-                        onChange={event => setQty(event.target.value.replace(/\D/g, ""))}
-                    />
-                    <DateField
-                        label="交货日期"
-                        required
-                        error={errors.deliverDate}
-                        value={deliverDate}
-                        disabled={locked}
-                        onChange={event => setDeliverDate(event.target.value)}
-                    />
-                    <div className="sm:col-span-2">
-                        <TextArea label="订单备注" value={remark} onChange={event => setRemark(event.target.value)} />
-                    </div>
-                    {locked && (
-                        <p className="text-13 text-subtle sm:col-span-2">
-                            该订单累计已发 {order.outbound} 个，数量与交货日期不可修改，仅可修改备注。
-                        </p>
-                    )}
-                    {canDelete && (
-                        <p className="text-13 text-subtle sm:col-span-2">
-                            该订单一件未发，可由超级管理员删除；删除前需二次确认。
-                        </p>
-                    )}
+            <div className="grid gap-3 sm:grid-cols-2">
+                <TextField
+                    label="订单数量（个）"
+                    required
+                    inputMode="numeric"
+                    value={qty}
+                    error={errors.qty}
+                    disabled={locked}
+                    onChange={event => setQty(event.target.value.replace(/\D/g, ""))}
+                />
+                <DateField
+                    label="交货日期"
+                    required
+                    error={errors.deliverDate}
+                    value={deliverDate}
+                    disabled={locked}
+                    onChange={event => setDeliverDate(event.target.value)}
+                />
+                <div className="sm:col-span-2">
+                    <TextArea label="订单备注" value={remark} onChange={event => setRemark(event.target.value)} />
                 </div>
-            )}
+                {locked && (
+                    <p className="text-13 text-subtle sm:col-span-2">
+                        该订单累计已发 {order.outbound} 个，数量与交货日期不可修改，仅可修改备注。
+                    </p>
+                )}
+                {canDelete && (
+                    <p className="text-13 text-subtle sm:col-span-2">
+                        该订单一件未发，可由超级管理员删除；删除前需二次确认。
+                    </p>
+                )}
+            </div>
             {confirmDelete && (
                 <Modal
                     open
                     onClose={() => setConfirmDelete(false)}
                     title="删除销售订单"
-                    subtitle={order ? `${order.orderNo} · ${order.customer}` : ""}
+                    subtitle={`${order.orderNo} · ${order.customer}`}
                     width={440}
                     footer={
                         <>
@@ -499,7 +488,7 @@ function EditOrderModal({
                     />
                 </Modal>
             )}
-            {confirmArchive && order && (
+            {confirmArchive && (
                 <Modal
                     open
                     onClose={() => setConfirmArchive(false)}
@@ -639,7 +628,7 @@ export function OrderDetailModal({
                         ...(order.archivedAt
                             ? [
                                   { label: "归档人", value: order.archivedBy || "—" },
-                                  { label: "归档时间", value: new Date(order.archivedAt).toLocaleString() },
+                                  { label: "归档时间", value: formatDateTime(order.archivedAt) },
                                   { label: "归档备注", value: order.archiveReason || "—", fullWidth: true },
                               ]
                             : []),
@@ -800,7 +789,7 @@ export function OrdersPage() {
                 ? `交期：至 ${shortDate(dateEnd)}`
                 : "交期";
     /* 交期快捷区间：手机上免滚原生日期选择器（today 声明在派生 memo 处，两处共用） */
-    const monthStart = `${today.slice(0, 8)}01`;
+    const monthStart = monthStartOf(today);
     const quickRanges = [
         { label: "近 7 天", start: addDays(today, -6), end: today },
         { label: "近 30 天", start: addDays(today, -29), end: today },

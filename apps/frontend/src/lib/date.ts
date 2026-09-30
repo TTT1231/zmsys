@@ -44,3 +44,9 @@ export const formatDateTime = (iso: string) => {
     const date = new Date(iso);
     return `${toIso(date)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
+
+/** MM/DD 简写（交期筛选按钮回显用，保留前导零） */
+export const shortDate = (isoDate: string) => `${isoDate.slice(5, 7)}/${isoDate.slice(8, 10)}`;
+
+/** 当月第一天 yyyy-MM-01（默认区间、快捷月区间共用） */
+export const monthStartOf = (isoDate: string) => `${isoDate.slice(0, 7)}-01`;

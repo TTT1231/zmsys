@@ -3,7 +3,7 @@ import type { Order, Snapshot } from "@/api";
 import { BomCell } from "@/components/bom/BomCell";
 import { bomByCode, maxShipOf, orderStatusOfMax, remainingOf, stockOf, type DerivedOrders } from "@/data/views";
 import { num } from "@/lib/format";
-import { todayIso } from "@/lib/date";
+import { formatDateTime, todayIso } from "@/lib/date";
 import { Badge, Button, StatusBadge } from "./Badge";
 import { EmptyState } from "./EmptyState";
 import { Loader } from "./Loader";
@@ -127,10 +127,7 @@ export function OrderTaskCard({
                 {!archived && <CardField label="库存数量" value={`${num(stockOf(snap, order.bomCode))} 个`} />}
                 {!archived && <CardField label="待交数量" value={`${num(remaining)} 个`} strong />}
                 {archived && (
-                    <CardField
-                        label="归档时间"
-                        value={order.archivedAt ? new Date(order.archivedAt).toLocaleString() : "—"}
-                    />
+                    <CardField label="归档时间" value={order.archivedAt ? formatDateTime(order.archivedAt) : "—"} />
                 )}
                 {archived && <CardField label="归档人" value={order.archivedBy || "—"} />}
                 {archived && <CardField label="归档备注" value={order.archiveReason || "—"} />}

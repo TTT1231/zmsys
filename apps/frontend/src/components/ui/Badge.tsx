@@ -4,7 +4,9 @@ import type { StatusKey } from "@/api";
 
 /* 状态徽章：一律走语义 token（soft 底 + 语义字色 + 基色 30% 透明边框），
    边框不用固定浅色 hex——暗色下 base token 整体提亮，透明度随动，浅暗共用一份定义 */
-const STATUS_STYLES: Record<string, string> = {
+type BadgeTone = "done" | "ready" | "partReady" | "progress" | "pending" | "archived" | "danger" | "success";
+
+const STATUS_STYLES: Record<BadgeTone, string> = {
     done: "bg-accent-soft text-accent border-accent/30",
     ready: "bg-accent-soft text-accent border-accent/30",
     partReady: "bg-warning-soft text-warning border-warning/30",
@@ -34,10 +36,10 @@ export function StatusBadge({ status, label }: { status: StatusKey; label?: stri
     );
 }
 
-export function Badge({ tone = "progress", children }: { tone?: string; children: ReactNode }) {
+export function Badge({ tone = "progress", children }: { tone?: BadgeTone; children: ReactNode }) {
     return (
         <span
-            className={`table-badge inline-flex items-center rounded-full border px-2.5 py-0.75 text-13 font-medium whitespace-nowrap ${STATUS_STYLES[tone] || STATUS_STYLES.progress}`}
+            className={`table-badge inline-flex items-center rounded-full border px-2.5 py-0.75 text-13 font-medium whitespace-nowrap ${STATUS_STYLES[tone]}`}
         >
             {children}
         </span>

@@ -144,7 +144,6 @@ function DeleteBomModal({ bom, onClose }: { bom: Bom | null; onClose: () => void
                 toast(`BOM ${bom.code} 已删除`);
                 onClose();
             },
-            onError: error => toast(error.message, true),
         });
     };
     return (
@@ -353,16 +352,13 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
             },
             {
                 /* 判重命中（品类+构成+备注 完全一致）：数据库未插入新档案，
-                 * 弹层展示已有编码供复制，直接复用该编码下订单 */
+                 * 弹层展示已有编码供复制，直接复用该编码下订单；
+                 * 其余错误提示由 useCreateBom 的默认 onError 处理 */
                 onError: error => {
                     if (isApiError(error) && error.code === 409) {
                         const code = error.message.match(/BOM 已存在：(\S+)/)?.[1];
-                        if (code) {
-                            setDuplicateCode(code);
-                            return;
-                        }
+                        if (code) setDuplicateCode(code);
                     }
-                    toast(error.message, true);
                 },
                 onSuccess: bom => {
                     toast(`BOM ${bom.code} 已创建`);
@@ -606,30 +602,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                 <legend className="px-1.5 text-13 font-semibold text-primary-strong">可选物料</legend>
                                 <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-3">
                                     {/* 本品类物料（跌倒开关：跌倒盖/跌倒底/钢球/翘板） */}
-                                    {tipoverBlocks.map(({ section, groups }) => {
-                                        const sectionCollapsed = section ? collapsed.has(section.id) : false;
-                                        return (
-                                            <div key={section?.id ?? groups[0]?.id ?? "root"}>
-                                                {section && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => toggleCollapse(section.id)}
-                                                        aria-expanded={!sectionCollapsed}
-                                                        className="flex min-h-8 w-full items-center gap-1.5 rounded-md px-1.5 text-13 font-semibold text-muted transition hover:text-td"
-                                                    >
-                                                        <Icon
-                                                            name={sectionCollapsed ? "chevron-right" : "chevron-down"}
-                                                            size={14}
-                                                        />
-                                                        {section.name}
-                                                    </button>
-                                                )}
-                                                <div className={cn("space-y-2", section && "mt-1.5 pl-4")}>
-                                                    {!sectionCollapsed && groups.map(renderGroup)}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                                    {tipoverBlocks.map(renderChildBlock)}
                                     {/* 子品类物料树：父品类无自有目录（旋转XK3 选完工艺）时直接平铺，
                                      * 有自有目录（跌倒开关）时收进可折叠大类，与父品类物料区分 */}
                                     {childBlocks.length > 0 && tipoverBlocks.length === 0 && (

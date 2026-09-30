@@ -69,16 +69,13 @@ function readPreferences(key: string): Preferences {
                       ? "compact"
                       : "standard",
             hidden: Array.isArray(saved.hidden) ? saved.hidden.filter((item: unknown) => typeof item === "string") : [],
-            widths: current
-                ? Object.fromEntries(
-                      Object.entries(saved.widths ?? {})
-                          .filter(
-                              (entry): entry is [string, number] =>
-                                  typeof entry[1] === "number" && Number.isFinite(entry[1]),
-                          )
-                          .map(([label, width]) => [label, Math.min(800, Math.max(96, Math.round(width)))]),
-                  )
-                : {},
+            widths: Object.fromEntries(
+                Object.entries(saved.widths ?? {})
+                    .filter(
+                        (entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1]),
+                    )
+                    .map(([label, width]) => [label, Math.min(800, Math.max(96, Math.round(width)))]),
+            ),
         };
     } catch {
         return emptyPreferences();

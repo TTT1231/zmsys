@@ -2,7 +2,7 @@ import { bomComposition } from "@/data/bomComposition";
 import type { Bom, BomCategory } from "@/api";
 import { bomSummary } from "@/data/bomSummary";
 import { BomSpecs } from "./BomSpecs";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 
 /** 列表显示关键规格，完整物料用显式展开入口核对。 */
@@ -21,8 +21,8 @@ export function BomCell({
     categories?: BomCategory[];
 }) {
     const [open, setOpen] = useState(false);
-    const composition = bom ? bomComposition(bom, categories) : undefined;
-    const summary = bom ? bomSummary(bom) : "暂无物料信息";
+    const composition = useMemo(() => (bom ? bomComposition(bom, categories) : undefined), [bom, categories]);
+    const summary = useMemo(() => (bom ? bomSummary(bom) : "暂无物料信息"), [bom]);
     return (
         <div className="bom-cell min-w-0 text-left" data-identity={showIdentity}>
             {showIdentity && (

@@ -5,7 +5,7 @@ import { EChart } from "@/components/charts/EChart";
 import { usePreferences } from "@/context/usePreferences";
 import { workbenchTrend, type WorkbenchData } from "@/data/workbench";
 import { chartPalette, withAlpha } from "@/lib/chartTheme";
-import { addDays } from "@/lib/date";
+import { addDays, monthStartOf } from "@/lib/date";
 import { num } from "@/lib/format";
 
 export const workbenchSelectClass =
@@ -22,7 +22,7 @@ export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
         period === "year"
             ? `${data.asOf.slice(0, 4)}-01-01`
             : period === "month"
-              ? `${data.asOf.slice(0, 7)}-01`
+              ? monthStartOf(data.asOf)
               : period === "custom"
                 ? customStart
                 : addDays(data.asOf, -29);

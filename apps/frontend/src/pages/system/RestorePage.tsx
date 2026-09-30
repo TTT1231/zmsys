@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/Badge";
 import { fetchRestoreJobByKey, previewRestore, runRestore } from "@/api";
 import { useToast } from "@/components/ui/toastContexts";
 import { useApp } from "@/context/useApp";
+import { formatDateTime } from "@/lib/date";
+import { copyText } from "@/lib/clipboard";
 import { isApiError } from "@/http/errors";
-import type { BackupPreviewResult, RestoreJob, RestoreMode } from "@/api";
+import type { BackupPreviewResult, RestoreJob, RestoreJobStatus, RestoreMode } from "@/api";
 
 /** localStorage 持久化的待核实提交（刷新/断线/401 后凭同一 key 继续） */
 interface PendingSubmission {
@@ -27,7 +29,7 @@ const loadPending = (): PendingSubmission | null => {
     }
 };
 
-const TERMINAL: ReadonlySet<string> = new Set(["SUCCEEDED", "SUCCEEDED_AUDIT_FAILED", "FAILED"]);
+const TERMINAL: ReadonlySet<RestoreJobStatus> = new Set(["SUCCEEDED", "SUCCEEDED_AUDIT_FAILED", "FAILED"]);
 
 const newRequestKey = (): string => {
     const bytes = new Uint8Array(16);
@@ -55,58 +57,30 @@ const modeLabel = (mode: RestoreMode): string => (mode === "replace" ? "恢复�
 const ackWord = (mode: RestoreMode): string => (mode === "replace" ? "REPLACE" : "RESTORE");
 
 /** 原型左侧步骤轨道：纵向圆点 + 连接线，未提交任务时已完成步骤可点击回退（窄屏转为顶部横向） */
-function StepRail({
-    step,
-    jobStarted,
-    finished,
-    failed,
-    onGoto,
-}: {
-    step: number;
-    jobStarted: boolean;
-    finished: boolean;
-    failed: boolean;
-    onGoto: (step: number) => void;
-}) {
+function StepRail({ step, onGoto }: { step: number; onGoto: (step: number) => void }) {
     return (
         <nav className="border-b border-line bg-soft px-4 py-5 md:border-b-0 md:border-r md:py-9" aria-label="恢复步骤">
             <ol className="grid grid-cols-4 gap-2 md:flex md:flex-col md:gap-0">
                 {STEPS.map((label, index) => {
                     const n = index + 1;
-                    const complete = n < step || (n === 4 && finished && !failed);
-                    const errored = n === 4 && failed;
-                    const current = n === step && !errored;
-                    const canReturn = complete && !jobStarted;
-                    const state = errored ? "error" : complete ? "done" : current ? "current" : "todo";
+                    const complete = n < step;
+                    const current = n === step;
+                    const state = complete ? "done" : current ? "current" : "todo";
                     const dotClass =
                         state === "current"
                             ? "border-primary bg-primary text-white ring-4 ring-primary-soft"
                             : state === "done"
                               ? "border-primary bg-surface text-primary"
-                              : state === "error"
-                                ? "border-danger bg-danger-soft text-danger"
-                                : "border-line-strong bg-soft text-muted";
+                              : "border-line-strong bg-soft text-muted";
                     const labelClass =
-                        state === "current"
-                            ? "font-semibold text-ink"
-                            : state === "error"
-                              ? "text-danger"
-                              : complete
-                                ? "text-td"
-                                : "text-muted";
+                        state === "current" ? "font-semibold text-ink" : complete ? "text-td" : "text-muted";
                     const item = (
                         <>
                             <span
                                 aria-hidden="true"
                                 className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-12 tabular-nums ${dotClass}`}
                             >
-                                {state === "done" ? (
-                                    <Icon name="check" size={14} />
-                                ) : errored ? (
-                                    <Icon name="alert" size={13} />
-                                ) : (
-                                    n
-                                )}
+                                {state === "done" ? <Icon name="check" size={14} /> : n}
                             </span>
                             <span className={`text-13 ${labelClass}`}>{label}</span>
                         </>
@@ -119,7 +93,7 @@ function StepRail({
                                     className="absolute top-3.5 left-[calc(50%+22px)] h-px w-[calc(100%-44px)] bg-line md:top-9 md:bottom-1.5 md:left-3.5 md:h-auto md:w-px"
                                 />
                             )}
-                            {canReturn ? (
+                            {complete ? (
                                 <button
                                     type="button"
                                     onClick={() => onGoto(n)}
@@ -305,11 +279,7 @@ export function RestorePage() {
             return runRestore({ file: input.file, mode: input.mode, ack: input.ack, requestKey });
         },
         onSuccess: outcome => {
-            if (
-                outcome.status === "SUCCEEDED" ||
-                outcome.status === "SUCCEEDED_AUDIT_FAILED" ||
-                outcome.status === "FAILED"
-            ) {
+            if (TERMINAL.has(outcome.status)) {
                 // 同 key 重提：服务端回放原终态
                 if (outcome.job) setJob(outcome.job);
                 return;
@@ -577,9 +547,8 @@ export function RestorePage() {
                                     title="复制任务编号"
                                     className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input border border-line text-muted hover:text-primary-strong focus-visible:outline-2 focus-visible:outline-primary"
                                     onClick={() =>
-                                        void navigator.clipboard.writeText(pending.requestKey).then(
-                                            () => toast("任务编号已复制"),
-                                            () => toast("复制失败，请手动选择任务编号", true),
+                                        void copyText(pending.requestKey).then(ok =>
+                                            ok ? toast("任务编号已复制") : toast("复制失败，请手动选择任务编号", true),
                                         )
                                     }
                                 >
@@ -625,7 +594,7 @@ export function RestorePage() {
                 className="grid grid-cols-1 overflow-hidden rounded-panel border border-line bg-surface shadow-card md:grid-cols-[196px_minmax(0,1fr)]"
                 aria-label="恢复流程"
             >
-                <StepRail step={step} jobStarted={false} finished={false} failed={false} onGoto={gotoStep} />
+                <StepRail step={step} onGoto={gotoStep} />
                 <div className="flex min-w-0 flex-col">
                     <div className="min-h-96 flex-1 px-6 py-7 sm:px-10 sm:py-9">
                         {step === 1 && (
@@ -743,7 +712,7 @@ export function RestorePage() {
                                 {file !== null && preview !== null && (
                                     <p className="mt-4 flex items-center gap-2 text-13 text-success">
                                         <Icon name="check" size={16} />
-                                        检查通过 · {new Date(preview.meta.createdAt).toLocaleString()} 备份
+                                        检查通过 · {formatDateTime(preview.meta.createdAt)} 备份
                                     </p>
                                 )}
                             </>
@@ -811,9 +780,7 @@ export function RestorePage() {
                                     {preview && (
                                         <div className="grid grid-cols-[76px_minmax(0,1fr)] gap-5 py-2 sm:grid-cols-[88px_minmax(0,1fr)]">
                                             <dt className="text-13 text-muted">备份时间</dt>
-                                            <dd className="text-14">
-                                                {new Date(preview.meta.createdAt).toLocaleString()}
-                                            </dd>
+                                            <dd className="text-14">{formatDateTime(preview.meta.createdAt)}</dd>
                                         </div>
                                     )}
                                     <div className="grid grid-cols-[76px_minmax(0,1fr)] gap-5 py-2 sm:grid-cols-[88px_minmax(0,1fr)]">

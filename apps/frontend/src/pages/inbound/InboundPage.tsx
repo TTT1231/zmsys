@@ -9,9 +9,10 @@ import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { num } from "@/lib/format";
+import { focusFirstInvalid } from "@/lib/formFocus";
 import { useApp } from "@/context/useApp";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
-import { Badge, Button } from "@/components/ui/Badge";
+import { Badge, Button, TableLink } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { QtyCell } from "@/components/ui/cells";
@@ -49,6 +50,9 @@ const LEDGER_SORT_COLUMNS: Array<{ key: LedgerSortKey; label: string }> = [
     { key: "qty", label: "入库数量" },
     { key: "date", label: "入库日期" },
 ];
+
+/* 状态 → 文案/徽章色单一来源（详情、筛选比较、移动卡共用） */
+const inboundStateLabel = (row: InboundRow) => (row.status === "voided" ? "已作废" : "已入库");
 
 /**
  * 成品选择（入库建档用）：品类 → 按编码 / 物料关键字搜索 + 列表点选；
@@ -147,16 +151,14 @@ export function InboundModal({
         if (!qty) nextErrors.qty = "请填写入库数量";
         else if (Number(qty) <= 0) nextErrors.qty = "入库数量必须大于 0";
         setErrors(nextErrors);
-        if (Object.keys(nextErrors).length)
-            requestAnimationFrame(() =>
-                document.querySelector<HTMLElement>('[role="dialog"] [aria-invalid="true"]')?.focus(),
-            );
-        if (Object.keys(nextErrors).length > 0) return;
+        if (Object.keys(nextErrors).length > 0) {
+            focusFirstInvalid();
+            return;
+        }
         createInbound.mutate(
             // 入库日期固定为当天（当天录入当天入库，杜绝误选日期）
             { bomCode, qty: Number(qty), date: todayIso(), remark },
             {
-                onError: error => toast(error.message, true),
                 onSuccess: row => {
                     toast(`入库单 ${row.no} 已登记`);
                     onClose();
@@ -274,9 +276,7 @@ export function VoucherModal({
                 <RecordSummary
                     metrics={[{ label: "入库数量", value: row.qty }]}
                     status={
-                        <Badge tone={row.status === "voided" ? "danger" : "progress"}>
-                            {row.status === "voided" ? "已作废" : "已入库"}
-                        </Badge>
+                        <Badge tone={row.status === "voided" ? "danger" : "success"}>{inboundStateLabel(row)}</Badge>
                     }
                     note={row.status === "voided" ? "此记录已作废，以上数量不再计入库存。" : undefined}
                 />
@@ -317,11 +317,10 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
         else if (Number(qty) <= 0) nextErrors.qty = "入库数量必须大于 0";
         if (reason.trim().length < 2) nextErrors.reason = "请填写修正原因（至少 2 个字）";
         setErrors(nextErrors);
-        if (Object.keys(nextErrors).length)
-            requestAnimationFrame(() =>
-                document.querySelector<HTMLElement>('[role="dialog"] [aria-invalid="true"]')?.focus(),
-            );
-        if (Object.keys(nextErrors).length > 0) return;
+        if (Object.keys(nextErrors).length > 0) {
+            focusFirstInvalid();
+            return;
+        }
         updateInbound.mutate(
             {
                 no: row.no,
@@ -334,7 +333,6 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
                 reason: reason.trim(),
             },
             {
-                onError: error => toast(error.message, true),
                 onSuccess: updated => {
                     toast(`入库单 ${updated.no} 已修正`);
                     onClose();
@@ -574,8 +572,7 @@ export function InboundPage() {
     const filtered = useMemo(() => {
         const kw = keyword.trim().toLowerCase();
         return rows.filter(row => {
-            if (statusFilter !== "全部状态" && (row.status === "voided" ? "已作废" : "已入库") !== statusFilter)
-                return false;
+            if (statusFilter !== "全部状态" && inboundStateLabel(row) !== statusFilter) return false;
             if (category !== "全部品类" && bomCategory.get(row.bomCode) !== category) return false;
             if (inspectorFilter !== "全部登记人" && row.inspector !== inspectorFilter) return false;
             return !kw || `${row.no} ${row.bomCode} ${row.inspector}`.toLowerCase().includes(kw);
@@ -731,7 +728,7 @@ export function InboundPage() {
                                     voided={row.status === "voided"}
                                     badge={
                                         <Badge tone={row.status === "voided" ? "danger" : "success"}>
-                                            {row.status === "voided" ? "已作废" : "已入库"}
+                                            {inboundStateLabel(row)}
                                         </Badge>
                                     }
                                     actions={
@@ -837,13 +834,7 @@ export function InboundPage() {
                                             <td className="tnum text-14 text-td">{row.date}</td>
                                             <td className="text-14 text-td">{row.inspector}</td>
                                             <td className="cell-pad-wide text-center">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setVoucher(row)}
-                                                    className="text-14 font-medium text-primary-strong underline-offset-2 hover:underline"
-                                                >
-                                                    查看详情
-                                                </button>
+                                                <TableLink onClick={() => setVoucher(row)}>查看详情</TableLink>
                                             </td>
                                         </tr>
                                     );
@@ -921,7 +912,6 @@ export function InboundPage() {
                         voidRequest.mutate(
                             { no: voidTarget.no, expectedVersion: voidTarget.version, reason },
                             {
-                                onError: error => toast(error.message, true),
                                 onSuccess: updated => {
                                     setVoidTarget(null);
                                     toast(`${updated.no} 已作废，${updated.bomCode} 库存减少 ${num(updated.qty)} 个`);
@@ -940,7 +930,6 @@ export function InboundPage() {
                         deleteRequest.mutate(
                             { no: deleteTarget.no, expectedVersion: deleteTarget.version },
                             {
-                                onError: error => toast(error.message, true),
                                 onSuccess: () => {
                                     setDeleteTarget(null);
                                     setVoucher(null);

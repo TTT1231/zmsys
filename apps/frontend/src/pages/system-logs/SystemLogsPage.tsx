@@ -27,15 +27,6 @@ function useDebouncedValue<T>(value: T, delay = 300): T {
 
 type DomainKey = SystemLogDomain | "all";
 
-const DOMAIN_TABS: Array<{ key: DomainKey; label: string }> = [
-    { key: "all", label: "全部" },
-    { key: "customer", label: "客户档案" },
-    { key: "order", label: "销售订单" },
-    { key: "bom", label: "物料与 BOM" },
-    { key: "inbound", label: "成品入库" },
-    { key: "outbound", label: "成品出库" },
-];
-
 const DOMAIN_LABELS: Record<SystemLogDomain, string> = {
     customer: "客户档案",
     order: "销售订单",
@@ -43,6 +34,12 @@ const DOMAIN_LABELS: Record<SystemLogDomain, string> = {
     inbound: "成品入库",
     outbound: "成品出库",
 };
+
+/** 筛选 tab：由 DOMAIN_LABELS 派生（域文案单一来源），前置「全部」 */
+const DOMAIN_TABS: Array<{ key: DomainKey; label: string }> = [
+    { key: "all", label: "全部" },
+    ...(Object.entries(DOMAIN_LABELS) as Array<[DomainKey, string]>).map(([key, label]) => ({ key, label })),
+];
 
 /** 域徽章的短标签（卡片目标行用两字域） */
 const DOMAIN_CHIPS: Record<SystemLogDomain, string> = {
@@ -60,17 +57,77 @@ interface ActionMeta {
     icon: string;
     /** 图标圆底与强调色（soft 底 + 语义字色） */
     tone: string;
+    /** 时间线圆点色 */
+    dot: string;
+    /** 明细变更值文字色 */
+    text: string;
 }
 
 const ACTION_META: Record<SystemLogAction, ActionMeta> = {
-    create: { label: "新建", verb: "新建了", icon: "plus", tone: "bg-success-soft text-success" },
-    edit: { label: "编辑", verb: "编辑了", icon: "edit", tone: "bg-primary-soft text-primary-strong" },
-    transfer: { label: "负责人移交", verb: "移交了客户负责人", icon: "transfer", tone: "bg-teal-soft text-teal" },
-    archive: { label: "归档", verb: "归档了", icon: "archive", tone: "bg-violet-soft text-violet" },
-    delete: { label: "删除", verb: "删除了", icon: "trash", tone: "bg-danger-soft text-danger" },
-    void: { label: "作废", verb: "作废了", icon: "cancel", tone: "bg-warning-soft text-warning" },
-    ship: { label: "登记发货", verb: "登记了发货", icon: "truck", tone: "bg-teal-soft text-teal" },
-    adjust: { label: "库存调整", verb: "调整了库存", icon: "minus", tone: "bg-primary-soft text-primary-strong" },
+    create: {
+        label: "新建",
+        verb: "新建了",
+        icon: "plus",
+        tone: "bg-success-soft text-success",
+        dot: "bg-success",
+        text: "text-success",
+    },
+    edit: {
+        label: "编辑",
+        verb: "编辑了",
+        icon: "edit",
+        tone: "bg-primary-soft text-primary-strong",
+        dot: "bg-primary",
+        text: "text-primary-strong",
+    },
+    transfer: {
+        label: "负责人移交",
+        verb: "移交了客户负责人",
+        icon: "transfer",
+        tone: "bg-teal-soft text-teal",
+        dot: "bg-teal",
+        text: "text-teal",
+    },
+    archive: {
+        label: "归档",
+        verb: "归档了",
+        icon: "archive",
+        tone: "bg-violet-soft text-violet",
+        dot: "bg-violet",
+        text: "text-violet",
+    },
+    delete: {
+        label: "删除",
+        verb: "删除了",
+        icon: "trash",
+        tone: "bg-danger-soft text-danger",
+        dot: "bg-danger",
+        text: "text-danger",
+    },
+    void: {
+        label: "作废",
+        verb: "作废了",
+        icon: "cancel",
+        tone: "bg-warning-soft text-warning",
+        dot: "bg-warning",
+        text: "text-warning",
+    },
+    ship: {
+        label: "登记发货",
+        verb: "登记了发货",
+        icon: "truck",
+        tone: "bg-teal-soft text-teal",
+        dot: "bg-teal",
+        text: "text-teal",
+    },
+    adjust: {
+        label: "库存调整",
+        verb: "调整了库存",
+        icon: "minus",
+        tone: "bg-primary-soft text-primary-strong",
+        dot: "bg-primary",
+        text: "text-primary-strong",
+    },
 };
 
 const ACTION_OPTIONS: Array<{ value: string; label: string }> = [
@@ -94,18 +151,20 @@ const ROLE_LABELS: Record<string, string> = {
     staff: "员工",
 };
 
+/* formatter 参数全是常量，模块级实例化一次（Intl.DateTimeFormat 构造涉及 CLDR 解析，逐次新建昂贵） */
+const BEIJING_DAY_FMT = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" });
+const BEIJING_TIME_FMT = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+});
+
 /** ISO 时刻 → 北京日期键 yyyy-MM-dd（与后端时间窗口同界） */
-const beijingDayOf = (iso: string): string =>
-    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(new Date(iso));
+const beijingDayOf = (iso: string): string => BEIJING_DAY_FMT.format(new Date(iso));
 
 /** ISO 时刻 → 北京 HH:mm（卡片右上角时间） */
-const beijingTimeOf = (iso: string): string =>
-    new Intl.DateTimeFormat("zh-CN", {
-        timeZone: "Asia/Shanghai",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-    }).format(new Date(iso));
+const beijingTimeOf = (iso: string): string => BEIJING_TIME_FMT.format(new Date(iso));
 
 /** ISO 时刻 → 北京 yyyy-MM-dd HH:mm（卡片时间带完整日期，跨日回看不依赖分组标题） */
 const beijingDateTimeOf = (iso: string): string => `${beijingDayOf(iso)} ${beijingTimeOf(iso)}`;
@@ -116,16 +175,14 @@ const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "�
 const dayHeadingOf = (day: string): string => {
     const [, month, date] = day.split("-");
     const weekday = WEEKDAYS[new Date(`${day}T12:00:00+08:00`).getDay()] ?? "";
-    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(new Date());
+    const today = BEIJING_DAY_FMT.format(new Date());
     const label = `${Number(month)} 月 ${Number(date)} 日 ${weekday}`;
     return day === today ? `今天 · ${label}` : label;
 };
 
 /** 事件卡片标题宾语：移交/发货/调整为固定宾语，其余拼接域名 */
 const objectOf = (entry: SystemLogEntry): string => {
-    if (entry.action === "transfer") return "";
-    if (entry.action === "ship") return "";
-    if (entry.action === "adjust") return "";
+    if (entry.action === "transfer" || entry.action === "ship" || entry.action === "adjust") return "";
     if (entry.action === "void") {
         return entry.domain === "inbound" ? "入库记录" : "出库记录";
     }
@@ -135,20 +192,29 @@ const objectOf = (entry: SystemLogEntry): string => {
 /** 编号点击 → 详情弹窗目标（存业务码，渲染时从快照回捞整行数据） */
 type DetailTarget = { kind: SystemLogDomain; code: string };
 
-/** 快照回捞：编号是否对应存活实体行（删除类事件的目标行不在快照，编号降级为纯文本） */
-function hasLiveEntity(domain: SystemLogDomain, code: string, snap: Snapshot): boolean {
-    switch (domain) {
-        case "order":
-            return snap.orders.some(item => item.orderNo === code);
-        case "bom":
-            return snap.boms.some(item => item.code === code);
-        case "inbound":
-            return snap.inboundLedger.some(item => item.no === code);
-        case "outbound":
-            return snap.outboundLedger.some(item => item.no === code);
-        case "customer":
-            return snap.customers.some(item => item.code === code);
-    }
+/** 快照索引：各域业务码集合 + 客户名→编码（卡片/链接渲染 O(1) 判定，避免逐卡全表扫描） */
+interface SnapshotIndex {
+    codes: Record<SystemLogDomain, Set<string>>;
+    customerCodeByName: Map<string, string>;
+}
+
+function indexSnapshot(snap: Snapshot): SnapshotIndex {
+    return {
+        codes: {
+            order: new Set(snap.orders.map(item => item.orderNo)),
+            bom: new Set(snap.boms.map(item => item.code)),
+            inbound: new Set(snap.inboundLedger.map(item => item.no)),
+            outbound: new Set(snap.outboundLedger.map(item => item.no)),
+            customer: new Set(snap.customers.map(item => item.code)),
+        },
+        /* 客户档案不可删，同名取首个（与 find 语义一致） */
+        customerCodeByName: new Map(snap.customers.map(item => [item.name, item.code])),
+    };
+}
+
+/** 编号是否对应存活实体行（删除类事件的目标行不在快照，编号降级为纯文本） */
+function hasLiveEntity(domain: SystemLogDomain, code: string, index: SnapshotIndex): boolean {
+    return index.codes[domain].has(code);
 }
 
 /** 变更值链接语义：key → 详情域（BOM 编码 → BOM 详情、订单号 → 订单详情、
@@ -160,15 +226,10 @@ function linkDomainOf(key: string | undefined): SystemLogDomain | null {
     return null;
 }
 
-/** 客户行值为名称：回捞客户编码用于弹窗定位与存活判定（客户档案不可删，同名取首个） */
-function customerCodeOfName(name: string | null | undefined, snap: Snapshot): string | null {
-    return (name && snap.customers.find(customer => customer.name === name)?.code) || null;
-}
-
-/** 变更值的链接定位编码：普通 key 值即编码；客户 key 值为名称需回捞 */
-function linkCodeOf(linkDomain: SystemLogDomain, change: SystemLogChange, snap: Snapshot): string | null {
+/** 变更值的链接定位编码：普通 key 值即编码；客户 key 值为名称需经索引回捞 */
+function linkCodeOf(linkDomain: SystemLogDomain, change: SystemLogChange, index: SnapshotIndex): string | null {
     if (linkDomain === "customer") {
-        return customerCodeOfName(change.after, snap);
+        return (change.after && index.customerCodeByName.get(change.after)) || null;
     }
     return change.after ?? null;
 }
@@ -190,6 +251,7 @@ export function SystemLogsPage() {
     // 业务详情弹窗数据源：全量聚合快照（与搜索页同源共享 React Query 缓存）
     const { data: snapData } = useWbSnapshot();
     const snap = snapData ?? EMPTY_SNAPSHOT;
+    const liveIndex = useMemo(() => indexSnapshot(snap), [snap]);
     const [detail, setDetail] = useState<DetailTarget | null>(null);
 
     // 自定义范围未应用有效日期前不发起查询（缺 from/to 会被后端 400 拒绝）
@@ -216,7 +278,7 @@ export function SystemLogsPage() {
         hasNextPage,
         fetchNextPage,
     } = useSystemLogs(filters, !pendingCustom);
-    const entries = data?.pages.flatMap(page => page.items) ?? [];
+    const entries = useMemo(() => data?.pages.flatMap(page => page.items) ?? [], [data]);
 
     const applyCustomRange = () => {
         if (!draftFrom || !draftTo || draftFrom > draftTo) {
@@ -240,16 +302,15 @@ export function SystemLogsPage() {
 
     // 按北京日分组（保持服务端降序）；相邻同日事件归入同组（依赖查询结果引用而非派生数组）
     const groups = useMemo(() => {
-        const items = data?.pages.flatMap(page => page.items) ?? [];
         const byDay = new Map<string, SystemLogEntry[]>();
-        for (const entry of items) {
+        for (const entry of entries) {
             const day = beijingDayOf(entry.occurredAt);
             const bucket = byDay.get(day) ?? [];
             bucket.push(entry);
             byDay.set(day, bucket);
         }
         return [...byDay.entries()];
-    }, [data]);
+    }, [entries]);
 
     return (
         <div className="flex flex-col gap-5">
@@ -392,7 +453,7 @@ export function SystemLogsPage() {
                                             <EventCard
                                                 key={entry.id}
                                                 entry={entry}
-                                                snap={snap}
+                                                index={liveIndex}
                                                 onOpenDetail={setDetail}
                                             />
                                         ))}
@@ -468,11 +529,11 @@ export function SystemLogsPage() {
 
 function EventCard({
     entry,
-    snap,
+    index,
     onOpenDetail,
 }: {
     entry: SystemLogEntry;
-    snap: Snapshot;
+    index: SnapshotIndex;
     onOpenDetail: (target: DetailTarget) => void;
 }) {
     const meta = ACTION_META[entry.action];
@@ -488,7 +549,7 @@ function EventCard({
             {/* 时间线圆点（动作色） */}
             <span
                 aria-hidden="true"
-                className={`absolute top-5 -left-[27px] h-2.5 w-2.5 rounded-full ring-3 ring-surface ${dotToneOf(entry.action)}`}
+                className={`absolute top-5 -left-[27px] h-2.5 w-2.5 rounded-full ring-3 ring-surface ${meta.dot}`}
             />
             <div className="flex items-start gap-3">
                 <span className={`grid h-8.5 w-8.5 shrink-0 place-items-center rounded-btn ${meta.tone}`}>
@@ -518,7 +579,7 @@ function EventCard({
                 </span>
                 {/* 编号可点击弹详情：库存调整无专属详情视图；目标已删除（快照无行）时降级为纯文本。
                     编号后的名称快照不再展示——与首条变更（客户/成品名称等）重复，上下文由变更行承载 */}
-                {entry.action !== "adjust" && hasLiveEntity(entry.domain, entry.targetCode, snap) ? (
+                {entry.action !== "adjust" && hasLiveEntity(entry.domain, entry.targetCode, index) ? (
                     <button
                         type="button"
                         onClick={() => onOpenDetail({ kind: entry.domain, code: entry.targetCode })}
@@ -539,7 +600,7 @@ function EventCard({
                             </span>
                         )}
                         {first.before !== null && <Icon name="chevron-right" size={13} className="text-placeholder" />}
-                        <FirstChangeAfter entry={entry} change={first} snap={snap} onOpenDetail={onOpenDetail} />
+                        <FirstChangeAfter entry={entry} change={first} index={index} onOpenDetail={onOpenDetail} />
                     </>
                 )}
                 {bomCodeChange && bomCodeChange !== first && (
@@ -549,7 +610,7 @@ function EventCard({
                         <FirstChangeAfter
                             entry={entry}
                             change={bomCodeChange}
-                            snap={snap}
+                            index={index}
                             onOpenDetail={onOpenDetail}
                         />
                     </>
@@ -591,14 +652,12 @@ function EventCard({
                                         )}
                                         <span
                                             className={
-                                                change.before === null
-                                                    ? "font-semibold"
-                                                    : `font-semibold ${textToneOf(entry.action)}`
+                                                change.before === null ? "font-semibold" : `font-semibold ${meta.text}`
                                             }
                                         >
                                             <LinkedChangeValue
                                                 change={change}
-                                                snap={snap}
+                                                index={index}
                                                 onOpenDetail={onOpenDetail}
                                             />
                                         </span>
@@ -625,18 +684,18 @@ function EventCard({
 function FirstChangeAfter({
     entry,
     change,
-    snap,
+    index,
     onOpenDetail,
 }: {
     entry: SystemLogEntry;
     change: SystemLogChange;
-    snap: Snapshot;
+    index: SnapshotIndex;
     onOpenDetail: (target: DetailTarget) => void;
 }) {
     const linkDomain = linkDomainOf(change.key);
-    const linkCode = linkDomain ? linkCodeOf(linkDomain, change, snap) : null;
-    const chipClass = `rounded-md px-1.5 py-0.5 text-12 font-semibold ${chipToneOf(entry.action)}`;
-    if (!linkDomain || !linkCode || !hasLiveEntity(linkDomain, linkCode, snap)) {
+    const linkCode = linkDomain ? linkCodeOf(linkDomain, change, index) : null;
+    const chipClass = `rounded-md px-1.5 py-0.5 text-12 font-semibold ${ACTION_META[entry.action].tone}`;
+    if (!linkDomain || !linkCode || !hasLiveEntity(linkDomain, linkCode, index)) {
         return <span className={chipClass}>{change.after ?? "—"}</span>;
     }
     return (
@@ -653,16 +712,16 @@ function FirstChangeAfter({
 /** 明细行值 */
 function LinkedChangeValue({
     change,
-    snap,
+    index,
     onOpenDetail,
 }: {
     change: SystemLogChange;
-    snap: Snapshot;
+    index: SnapshotIndex;
     onOpenDetail: (target: DetailTarget) => void;
 }) {
     const linkDomain = linkDomainOf(change.key);
-    const linkCode = linkDomain ? linkCodeOf(linkDomain, change, snap) : null;
-    if (!linkDomain || !linkCode || !hasLiveEntity(linkDomain, linkCode, snap)) {
+    const linkCode = linkDomain ? linkCodeOf(linkDomain, change, index) : null;
+    if (!linkDomain || !linkCode || !hasLiveEntity(linkDomain, linkCode, index)) {
         return <>{change.after ?? "—"}</>;
     }
     return (
@@ -674,47 +733,4 @@ function LinkedChangeValue({
             {change.after}
         </button>
     );
-}
-
-/* 动作 → 三档色类（圆点 / 文字 / 新值 chip），全部走语义令牌 */
-function dotToneOf(action: SystemLogAction): string {
-    const map: Record<SystemLogAction, string> = {
-        create: "bg-success",
-        edit: "bg-primary",
-        transfer: "bg-teal",
-        archive: "bg-violet",
-        delete: "bg-danger",
-        void: "bg-warning",
-        ship: "bg-teal",
-        adjust: "bg-primary",
-    };
-    return map[action];
-}
-
-function textToneOf(action: SystemLogAction): string {
-    const map: Record<SystemLogAction, string> = {
-        create: "text-success",
-        edit: "text-primary-strong",
-        transfer: "text-teal",
-        archive: "text-violet",
-        delete: "text-danger",
-        void: "text-warning",
-        ship: "text-teal",
-        adjust: "text-primary-strong",
-    };
-    return map[action];
-}
-
-function chipToneOf(action: SystemLogAction): string {
-    const map: Record<SystemLogAction, string> = {
-        create: "bg-success-soft text-success",
-        edit: "bg-primary-soft text-primary-strong",
-        transfer: "bg-teal-soft text-teal",
-        archive: "bg-violet-soft text-violet",
-        delete: "bg-danger-soft text-danger",
-        void: "bg-warning-soft text-warning",
-        ship: "bg-teal-soft text-teal",
-        adjust: "bg-primary-soft text-primary-strong",
-    };
-    return map[action];
 }

@@ -417,14 +417,6 @@ export interface DeleteInboundInput {
     expectedVersion: number;
 }
 
-export interface CreateStockAdjustmentInput {
-    bomCode: string;
-    qtyDelta: number;
-    date: string;
-    reason: string;
-    relatedInboundNo?: string;
-}
-
 export interface CreateOutboundInput {
     orderNo: string;
     qty: number;
@@ -480,29 +472,6 @@ export interface ReadyToShipRow {
     maxShip: number;
     status: OrderStatus;
     overdue: boolean;
-}
-
-export interface StockGapRow {
-    bomCode: string;
-    gapQty: number;
-    demandQty: number;
-    stockQty: number;
-    orderCount: number;
-    earliestDate: string;
-    earliestOrderNo: string;
-    earliestCustomer: string;
-    earliestOverdue: boolean;
-}
-
-export interface TrendRow {
-    date: string;
-    label: string;
-    orderedQty: number;
-    orderedCount: number;
-    inboundQty: number;
-    inboundCount: number;
-    outboundQty: number;
-    outboundCount: number;
 }
 
 /* ---------- 系统备份/恢复 ---------- */

@@ -1,4 +1,4 @@
-/* views 派生视图纯函数：固定系统时间后断言订单各状态、共享库存分配、缺口聚合与趋势分桶 */
+/* views 派生视图纯函数：固定系统时间后断言订单各状态、共享库存分配 */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Bom, Order, Snapshot } from "@/api";
@@ -7,14 +7,12 @@ import {
     EMPTY_SNAPSHOT,
     bomByCode,
     bomIndexOf,
-    dailyTrend,
     deriveOrders,
     maxShipOf,
     orderStatusOf,
     orderStatusOfMax,
     readyToShip,
     remainingOf,
-    stockGapList,
     stockOf,
 } from "@/data/views";
 
@@ -286,112 +284,5 @@ describe("maxShipOf", () => {
     it("short-circuits fulfilled orders to zero without allocation", () => {
         const fixture = snap({ stock: { ZMXK001: 4 }, orders: [order({ outbound: 10 })] });
         expect(maxShipOf(fixture, "ZM260315001")).toBe(0);
-    });
-});
-
-describe("stockGapList", () => {
-    it("aggregates demand per bom and reports only shortfalls", () => {
-        const rows = stockGapList(
-            snap({
-                stock: { ZMXK001: 5 },
-                orders: [
-                    order({ orderNo: "ZM-1", qty: 10, deliverDate: "2026-03-22" }),
-                    order({ orderNo: "ZM-2", qty: 10, deliverDate: "2026-03-18" }),
-                    // 已完成订单不占需求
-                    order({ orderNo: "ZM-DONE", qty: 99, outbound: 99 }),
-                ],
-            }),
-        );
-        expect(rows).toHaveLength(1);
-        expect(rows[0]).toMatchObject({
-            bomCode: "ZMXK001",
-            gapQty: 15,
-            demandQty: 20,
-            stockQty: 5,
-            orderCount: 2,
-            earliestDate: "2026-03-18",
-            earliestOrderNo: "ZM-2",
-            earliestOverdue: false,
-        });
-    });
-
-    it("omits boms whose demand fits stock", () => {
-        expect(stockGapList(snap({ stock: { ZMXK001: 10 }, orders: [order({ qty: 10 })] }))).toEqual([]);
-    });
-
-    it("sorts gap rows by earliest deliver date across boms", () => {
-        const rows = stockGapList(
-            snap({
-                stock: {},
-                orders: [
-                    order({ orderNo: "ZM-LATE", bomCode: "ZMXK001", deliverDate: "2026-03-25" }),
-                    order({ orderNo: "ZM-EARLY", bomCode: "ZMKQ001", deliverDate: "2026-03-16" }),
-                ],
-            }),
-        );
-        expect(rows.map(row => row.bomCode)).toEqual(["ZMKQ001", "ZMXK001"]);
-        expect(rows[0].earliestOverdue).toBe(false);
-        expect(rows[1].earliestOverdue).toBe(false);
-    });
-});
-
-describe("dailyTrend", () => {
-    it("builds day buckets ending today and aggregates ledgers into them", () => {
-        const rows = dailyTrend(
-            snap({
-                orders: [
-                    order({ orderDate: TODAY, qty: 10 }),
-                    order({ orderDate: "2026-03-14", qty: 2 }),
-                    order({ orderDate: "2026-03-01", qty: 50 }),
-                ],
-                inboundLedger: [
-                    {
-                        no: "RK26031401",
-                        bomCode: "ZMXK001",
-                        qty: 4,
-                        date: "2026-03-14",
-                        time: "09:00",
-                        inspector: "测试",
-                        status: "active",
-                        version: 1,
-                        createdAt: "2026-03-14T09:00:00+08:00",
-                    },
-                ],
-                outboundLedger: [
-                    {
-                        no: "CK26031401",
-                        orderNo: "ZM260315001",
-                        customer: "华兴精密",
-                        customerCode: "CUS-1024",
-                        bomCode: "ZMXK001",
-                        qty: 3,
-                        date: TODAY,
-                        time: "10:00",
-                        operator: "测试",
-                        state: "registered",
-                        version: 2,
-                    },
-                ],
-            }),
-            3,
-        );
-        expect(rows.map(row => row.date)).toEqual(["2026-03-13", "2026-03-14", "2026-03-15"]);
-        expect(rows.map(row => row.label)).toEqual(["3/13", "3/14", "3/15"]);
-        expect(rows[1]).toMatchObject({
-            orderedQty: 2,
-            orderedCount: 1,
-            inboundQty: 4,
-            inboundCount: 1,
-            outboundQty: 0,
-        });
-        expect(rows[2]).toMatchObject({ orderedQty: 10, orderedCount: 1, outboundQty: 3, outboundCount: 1 });
-        // 窗口外的 2026-03-01 订单不计入任何桶
-        expect(rows.reduce((sum, row) => sum + row.orderedQty, 0)).toBe(12);
-    });
-
-    it("returns zeroed buckets when snapshot is empty", () => {
-        const rows = dailyTrend(EMPTY_SNAPSHOT, 7);
-        expect(rows).toHaveLength(7);
-        expect(rows.every(row => row.orderedQty === 0 && row.inboundQty === 0 && row.outboundQty === 0)).toBe(true);
     });
 });

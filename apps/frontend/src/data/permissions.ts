@@ -182,8 +182,6 @@ export const ROLES: Array<{ id: RoleId; name: string; locked?: boolean }> = [
     { id: "staff", name: "员工" },
 ];
 
-export const ROLE_IDS = ROLES.map(role => role.id);
-
 export interface RoleGrant {
     /** 后端整组授权的乐观锁版本 */
     version: number;

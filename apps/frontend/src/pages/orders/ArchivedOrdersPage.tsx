@@ -6,6 +6,7 @@ import { BomCell } from "@/components/bom/BomCell";
 import { OrderDetailModal } from "@/pages/orders/OrdersPage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/lib/icons";
+import { formatDateTime, shortDate } from "@/lib/date";
 import { num } from "@/lib/format";
 import { useWbRefresh, useWbSnapshot } from "@/data/queries";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
@@ -34,11 +35,6 @@ const SORT_COLUMNS: Array<{ key: ArchivedSortKey; label: string }> = [
     { key: "deliverDate", label: "交货日期" },
     { key: "archivedAt", label: "归档时间" },
 ];
-
-/* 交期筛选激活时在按钮上回显的简写日期（MM/DD） */
-const shortDate = (isoDate: string) => `${isoDate.slice(5, 7)}/${isoDate.slice(8, 10)}`;
-
-const datetimeOf = (iso: string) => new Date(iso).toLocaleString();
 
 /** 归档订单：终态存档仅供查询（编辑/发货/取消入口均不提供），归档人与时间见详情 */
 export function ArchivedOrdersPage() {
@@ -383,7 +379,7 @@ export function ArchivedOrdersPage() {
                                             </td>
                                             <td>
                                                 <div className="text-13 text-muted">
-                                                    {order.archivedAt ? datetimeOf(order.archivedAt) : "—"}
+                                                    {order.archivedAt ? formatDateTime(order.archivedAt) : "—"}
                                                 </div>
                                             </td>
                                             <td>

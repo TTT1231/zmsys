@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 import { ROLE_META, useApp, type Role } from "@/context/useApp";
 import { ContentMaximizeContext } from "@/context/useContentMaximize";
@@ -35,6 +35,8 @@ export function AppLayout() {
     const toggleMaximize = useCallback(() => {
         setMaximizedPath(current => (current === location.pathname ? null : location.pathname));
     }, [location.pathname]);
+    // context value 稳定引用：否则每次 render 新对象会击穿消费者的引用比对
+    const maximizeValue = useMemo(() => ({ maximized, toggle: toggleMaximize }), [maximized, toggleMaximize]);
 
     // Esc 退出最大化；有弹窗打开时让弹窗先消费 Esc（弹窗自身也监听 Escape 关闭）
     useEffect(() => {
@@ -122,7 +124,7 @@ export function AppLayout() {
     );
 
     return (
-        <ContentMaximizeContext.Provider value={{ maximized, toggle: toggleMaximize }}>
+        <ContentMaximizeContext.Provider value={maximizeValue}>
             {headerFull ? (
                 // 骨架 B：通栏顶栏（水平 / 侧边导航 / 混合垂直 / 混合双列），侧栏从顶栏下方开始。
                 // Sidebar 始终渲染：水平模式仅桌面隐藏（lg:hidden），移动端抽屉仍由它承载

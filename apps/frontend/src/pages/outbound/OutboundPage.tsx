@@ -13,9 +13,10 @@ import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { num } from "@/lib/format";
+import { focusFirstInvalid } from "@/lib/formFocus";
 import { useApp } from "@/context/useApp";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
-import { Badge, Button, ProgressTrack, StatusBadge } from "@/components/ui/Badge";
+import { Badge, Button, ProgressTrack, StatusBadge, TableLink } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { SearchSelect } from "@/components/ui/SearchSelect";
@@ -192,7 +193,7 @@ export function OutboundModal({
     const orders = snap.orders;
     // 候选 = 还有待交数量的订单（已取消/已发完的不算，可发量可能为 0，等入库后可发）；
     // 客户选项也从这里派生，不走客户档案（仓管无客户档案权限，订单上的客户信息全员可见）
-    const candidateOrders = orders.filter(order => remainingOf(order) > 0);
+    const candidateOrders = useMemo(() => orders.filter(order => remainingOf(order) > 0), [orders]);
     const [customerCode, setCustomerCode] = useState(() => {
         const initial = orders.find(order => order.orderNo === initialOrderNo);
         return initial?.customerCode ?? "";
@@ -203,14 +204,26 @@ export function OutboundModal({
     const [remark, setRemark] = useState("");
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    const customerOrders = candidateOrders.filter(order => order.customerCode === customerCode);
-    const customerOptions = candidateOrders
-        .filter((order, index, list) => list.findIndex(item => item.customerCode === order.customerCode) === index)
-        .map(order => ({ value: order.customerCode, label: `${order.customer}（${order.customerCode}）` }));
-    const orderOptions = customerOrders.map(order => ({
-        value: order.orderNo,
-        label: `${order.orderNo} · ${order.bomCode} · 交期 ${order.deliverDate}`,
-    }));
+    const customerOrders = useMemo(
+        () => candidateOrders.filter(order => order.customerCode === customerCode),
+        [candidateOrders, customerCode],
+    );
+    /* 客户去重按 code 收敛首例（Map 一次 O(O)），替代逐项回头 findIndex 的 O(U²) */
+    const customerOptions = useMemo(() => {
+        const seen = new Map<string, string>();
+        for (const order of candidateOrders) {
+            if (!seen.has(order.customerCode)) seen.set(order.customerCode, order.customer);
+        }
+        return [...seen.entries()].map(([value, name]) => ({ value, label: `${name}（${value}）` }));
+    }, [candidateOrders]);
+    const orderOptions = useMemo(
+        () =>
+            customerOrders.map(order => ({
+                value: order.orderNo,
+                label: `${order.orderNo} · ${order.bomCode} · 交期 ${order.deliverDate}`,
+            })),
+        [customerOrders],
+    );
 
     const selectedOrder = orders.find(order => order.orderNo === orderNo);
     /* P2 一次分配：可发量/状态/BOM 档案共用一次派生，替代每次渲染两趟互相独立的全量分配 */
@@ -247,11 +260,10 @@ export function OutboundModal({
         else if (Number(qty) <= 0) nextErrors.qty = "发货数量必须大于 0";
         if (over) nextErrors.qty = "超过可发库存，已被拦截";
         setErrors(nextErrors);
-        if (Object.keys(nextErrors).length)
-            requestAnimationFrame(() =>
-                document.querySelector<HTMLElement>('[role="dialog"] [aria-invalid="true"]')?.focus(),
-            );
-        if (Object.keys(nextErrors).length > 0 || !selectedOrder) return;
+        if (Object.keys(nextErrors).length > 0 || !selectedOrder) {
+            focusFirstInvalid();
+            return;
+        }
         createOutbound.mutate(
             {
                 orderNo: selectedOrder.orderNo,
@@ -260,7 +272,6 @@ export function OutboundModal({
                 remark,
             },
             {
-                onError: error => toast(error.message, true),
                 onSuccess: row => {
                     toast(`出库单 ${row.no} 已登记`);
                     onClose();
@@ -894,23 +905,15 @@ export function OutboundPage() {
                                             <td className="tnum text-14 text-td">{row.date}</td>
                                             <td className="text-14 text-td">{row.operator}</td>
                                             <td>
-                                                {row.state === "voided" ? (
-                                                    <Badge tone="danger">已作废</Badge>
-                                                ) : (
-                                                    <Badge tone="pending">已登记</Badge>
-                                                )}
+                                                <Badge tone={row.state === "voided" ? "danger" : "pending"}>
+                                                    {outboundStateLabel(row)}
+                                                </Badge>
                                             </td>
                                             <td>
                                                 <RemarkCell remark={row.remark} />
                                             </td>
                                             <td className="cell-pad-wide text-center">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setDetail(row)}
-                                                    className="text-14 font-medium text-primary-strong underline-offset-2 hover:underline"
-                                                >
-                                                    查看详情
-                                                </button>
+                                                <TableLink onClick={() => setDetail(row)}>查看详情</TableLink>
                                             </td>
                                         </tr>
                                     );
@@ -991,7 +994,6 @@ export function OutboundPage() {
                         voidRequest.mutate(
                             { no: voidTarget.no, expectedVersion: voidTarget.version, reason },
                             {
-                                onError: error => toast(error.message, true),
                                 onSuccess: updated => {
                                     setVoidTarget(null);
                                     toast(
@@ -1012,7 +1014,6 @@ export function OutboundPage() {
                         deleteRequest.mutate(
                             { no: deleteTarget.no, expectedVersion: deleteTarget.version },
                             {
-                                onError: error => toast(error.message, true),
                                 onSuccess: () => {
                                     setDeleteTarget(null);
                                     setDetail(null);

@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { num } from "@/lib/format";
+import { focusFirstInvalid } from "@/lib/formFocus";
 import { useApp } from "@/context/useApp";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { Pagination } from "@/components/ui/Pagination";
@@ -96,11 +97,10 @@ function CustomerFormModal({
         }
         if (!ownerAccount) nextErrors.owner = "请选择客户负责人";
         setErrors(nextErrors);
-        if (Object.keys(nextErrors).length)
-            requestAnimationFrame(() =>
-                document.querySelector<HTMLElement>('[role="dialog"] [aria-invalid="true"]')?.focus(),
-            );
-        if (Object.keys(nextErrors).length > 0) return;
+        if (Object.keys(nextErrors).length > 0) {
+            focusFirstInvalid();
+            return;
+        }
         const body = {
             name: name.trim(),
             contact: contact.trim(),
@@ -312,7 +312,7 @@ export function CustomerDetailModal({
                                 ["详细地址", cleanAddressPart(customer.address) || "未填写"],
                                 ["付款方式", customer.payTerms || "—"],
                                 ["客户负责人", customer.owner],
-                                ["待交付数量", `${pendingQty.toLocaleString("zh-CN")} 个`],
+                                ["待交付数量", `${num(pendingQty)} 个`],
                             ] as Array<[string, ReactNode]>
                         ).map(([label, value]) => (
                             <div
@@ -330,13 +330,12 @@ export function CustomerDetailModal({
                             {timeline.length === 0 && <li className="text-13 text-subtle">暂无订单记录。</li>}
                             {timeline.map(order => {
                                 const archived = order.lifecycleStatus === "archived";
-                                const inactive = archived;
                                 const status =
                                     derived.byOrderNo.get(order.orderNo)?.status ?? orderStatusOfMax(order, 0);
                                 return (
                                     <li key={order.orderNo} className="relative">
                                         <span
-                                            className={`absolute top-1.5 -left-5.25 h-2 w-2 rounded-full ${inactive ? "bg-subtle" : "bg-primary"}`}
+                                            className={`absolute top-1.5 -left-5.25 h-2 w-2 rounded-full ${archived ? "bg-subtle" : "bg-primary"}`}
                                         />
                                         {/* 整行可点保证触屏命中区，订单号 hover 出下划线 */}
                                         <button
@@ -348,14 +347,12 @@ export function CustomerDetailModal({
                                             <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                                                 <span
                                                     className={`tnum text-13 font-semibold underline-offset-2 group-hover:underline ${
-                                                        inactive ? "text-td-strong" : "text-primary-strong"
+                                                        archived ? "text-td-strong" : "text-primary-strong"
                                                     }`}
                                                 >
                                                     {order.orderNo}
                                                 </span>
-                                                <span className="text-13 text-muted">
-                                                    · {order.qty.toLocaleString("zh-CN")} 个
-                                                </span>
+                                                <span className="text-13 text-muted">· {num(order.qty)} 个</span>
                                                 <StatusBadge status={status.key} />
                                             </span>
                                             <span className="tnum text-12 text-muted">{order.orderDate}</span>
@@ -407,6 +404,13 @@ export function CustomersPage() {
 
     const rows = useMemo(() => {
         const kw = keyword.trim().toLowerCase();
+        // 一次遍历按客户分桶订单（O(C+O)），替代逐客户全量 filter
+        const ordersByCustomer = new Map<string, typeof orders>();
+        for (const order of orders) {
+            const bucket = ordersByCustomer.get(order.customerCode);
+            if (bucket) bucket.push(order);
+            else ordersByCustomer.set(order.customerCode, [order]);
+        }
         return customers
             .filter(customer => {
                 if (statusFilter !== "全部状态" && customer.cooperation !== statusFilter) return false;
@@ -414,18 +418,18 @@ export function CustomersPage() {
                 return true;
             })
             .map(customer => {
-                const own = orders.filter(order => order.customerCode === customer.code);
+                const own = ordersByCustomer.get(customer.code) ?? [];
                 const pendingQty = own.reduce((sum, order) => sum + remainingOf(order), 0);
-                const lastOrderDate =
-                    own
-                        .map(order => order.orderDate)
-                        .sort()
-                        .at(-1) ?? "—";
+                // ISO 日期字典序即时间序：max 即最近下单（免 map+sort）
+                const lastOrderDate = own.reduce<string | null>(
+                    (latest, order) => (latest === null || order.orderDate > latest ? order.orderDate : latest),
+                    null,
+                );
                 return {
                     customer,
                     orderCount: own.length,
                     pendingQty,
-                    lastOrderDate,
+                    lastOrderDate: lastOrderDate ?? "—",
                 };
             });
     }, [customers, orders, statusFilter, keyword]);
@@ -543,7 +547,7 @@ export function CustomersPage() {
                                 title={customer.name}
                                 subtitle={`${customer.code} · ${regionText(customer) || "未填写"}`}
                                 badge={
-                                    <Badge tone={customer.cooperation === "合作中" ? "success" : "pending"}>
+                                    <Badge tone={customer.cooperation === "合作中" ? "done" : "pending"}>
                                         {customer.cooperation}
                                     </Badge>
                                 }

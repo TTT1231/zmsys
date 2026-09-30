@@ -258,7 +258,6 @@ function ResetPasswordModal({ user, onClose }: { user: WbUser; onClose: () => vo
             { account: user.account, expectedVersion: user.version },
             {
                 onSuccess: () => setDone(true),
-                onError: error => toast(error.message, true),
             },
         );
     };
@@ -377,7 +376,6 @@ function UserActiveToggle({
             {
                 onSuccess: () =>
                     toast(user.active ? `已停用【${user.name}】，其登录会话已失效` : `已启用【${user.name}】`),
-                onError: error => toast(error.message, true),
             },
         );
     };
@@ -451,7 +449,6 @@ function DeactivateTransferModal({
                     toast(`已停用【${user.name}】，名下 ${ownedCount} 个客户已移交给接任销售`);
                     onClose();
                 },
-                onError: error => toast(error.message, true),
             },
         );
     };
@@ -538,7 +535,6 @@ function UserDialog({
             toast(message);
             onClose();
         };
-        const onError = (error: Error) => toast(error.message, true);
         if (user) {
             // account 创建后不可改，仅更新姓名与角色；离岗移交随角色变更一并提交
             updateUser.mutate(
@@ -553,14 +549,13 @@ function UserDialog({
                     onSuccess: done(
                         `用户【${name.trim()}】已更新${needTransfer ? `，名下 ${ownedCount} 个客户已移交` : ""}`,
                     ),
-                    onError,
                 },
             );
         } else {
             if (role === "super") return;
             createUser.mutate(
                 { name: name.trim(), account: account.trim(), role },
-                { onSuccess: done(`用户【${name.trim()}】已创建，初始密码为 ${INITIAL_PASSWORD}`), onError },
+                { onSuccess: done(`用户【${name.trim()}】已创建，初始密码为 ${INITIAL_PASSWORD}`) },
             );
         }
     };
@@ -707,6 +702,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
     const [draft, setDraft] = useState<RoleGrant | null>(null);
     const locked = ROLES.find(role => role.id === activeRole)?.locked ?? false;
     const effective = draft ?? grants[activeRole] ?? { version: 0, menus: [], actions: {} };
+    const roleMembers = users.filter(user => user.role === activeRole);
 
     const selectRole = (id: RoleId) => {
         if (id === activeRole) return;
@@ -792,7 +788,6 @@ function RolesTab({ users }: { users: WbUser[] }) {
                     void refreshProfile();
                 },
                 // 乐观锁冲突（他人已保存）等失败：保留草稿并提示，用户可刷新后重勾
-                onError: error => toast(error.message, true),
             },
         );
     };
@@ -1009,27 +1004,23 @@ function RolesTab({ users }: { users: WbUser[] }) {
                     </div>
 
                     <div>
-                        <h3 className="mb-1 text-14 font-semibold text-ink">
-                            该角色成员（{users.filter(user => user.role === activeRole).length}）
-                        </h3>
-                        {users.filter(user => user.role === activeRole).length ? (
+                        <h3 className="mb-1 text-14 font-semibold text-ink">该角色成员（{roleMembers.length}）</h3>
+                        {roleMembers.length ? (
                             <div className="divide-y divide-dashed divide-line">
-                                {users
-                                    .filter(user => user.role === activeRole)
-                                    .map(user => (
-                                        <div key={user.account} className="flex items-center gap-2.5 py-2.5">
-                                            <span className="flex h-7.5 w-7.5 items-center justify-center rounded-full bg-primary-soft text-13 font-semibold text-primary-strong">
-                                                {user.name.slice(0, 1)}
-                                            </span>
-                                            <span className="text-14 font-medium text-ink">{user.name}</span>
-                                            <span className="text-12 text-muted">{user.account}</span>
-                                            <span className="ml-auto">
-                                                <Badge tone={user.active ? "success" : "progress"}>
-                                                    {user.active ? "启用" : "已停用"}
-                                                </Badge>
-                                            </span>
-                                        </div>
-                                    ))}
+                                {roleMembers.map(user => (
+                                    <div key={user.account} className="flex items-center gap-2.5 py-2.5">
+                                        <span className="flex h-7.5 w-7.5 items-center justify-center rounded-full bg-primary-soft text-13 font-semibold text-primary-strong">
+                                            {user.name.slice(0, 1)}
+                                        </span>
+                                        <span className="text-14 font-medium text-ink">{user.name}</span>
+                                        <span className="text-12 text-muted">{user.account}</span>
+                                        <span className="ml-auto">
+                                            <Badge tone={user.active ? "success" : "progress"}>
+                                                {user.active ? "启用" : "已停用"}
+                                            </Badge>
+                                        </span>
+                                    </div>
+                                ))}
                             </div>
                         ) : (
                             <p className="py-2 text-13 text-subtle">暂无成员，可在「账号管理」中分配。</p>
@@ -1146,6 +1137,8 @@ function MatrixTab() {
 
 /* 日志文本形如「角色【仓管】授权变更：新增 …」，拆出角色与动作类型分区展示 */
 const LOG_ACTIONS = ["授权变更", "授权确认", "授权保存"] as const;
+/** 从 LOG_ACTIONS 生成，避免动作清单与剥离正则两处维护 */
+const LOG_ACTION_PATTERN = new RegExp(`^(${LOG_ACTIONS.join("|")})[：:]?\\s*`);
 const LOG_ACTION_DOTS: Record<(typeof LOG_ACTIONS)[number], string> = {
     授权变更: "bg-primary",
     授权确认: "bg-success",
@@ -1172,7 +1165,7 @@ function parseGrantLog(text: string) {
         role,
         roleIcon: roleDef ? ROLE_ICONS[roleDef.id] : "users",
         action: action ?? "授权记录",
-        detail: rest.replace(/^(授权变更|授权确认|授权保存)[：:]?\s*/, ""),
+        detail: rest.replace(LOG_ACTION_PATTERN, ""),
         dot: (action && LOG_ACTION_DOTS[action]) || "bg-primary",
     };
 }

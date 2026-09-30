@@ -42,19 +42,30 @@ export function SearchPage() {
         : (categories[0]?.key ?? "orders");
 
     // 归档单已分流到「归档订单」页，全局搜索不返回（口径与销售订单列表一致）
-    const orders = snap.orders.filter(
-        order =>
-            order.lifecycleStatus !== "archived" &&
-            `${order.orderNo} ${order.customer} ${order.customerCode} ${order.bomCode} ${derived.bomIndex.get(order.bomCode)?.spec}`
-                .toLowerCase()
-                .includes(keyword),
+    const orders = useMemo(
+        () =>
+            snap.orders.filter(
+                order =>
+                    order.lifecycleStatus !== "archived" &&
+                    `${order.orderNo} ${order.customer} ${order.customerCode} ${order.bomCode} ${derived.bomIndex.get(order.bomCode)?.spec}`
+                        .toLowerCase()
+                        .includes(keyword),
+            ),
+        [snap, keyword, derived],
     );
-    const customers = snap.customers.filter(customer =>
-        `${customer.name} ${customer.code} ${customer.contact} ${customer.phone} ${customer.province}${customer.city}${customer.district}${customer.town}`
-            .toLowerCase()
-            .includes(keyword),
+    const customers = useMemo(
+        () =>
+            snap.customers.filter(customer =>
+                `${customer.name} ${customer.code} ${customer.contact} ${customer.phone} ${customer.province}${customer.city}${customer.district}${customer.town}`
+                    .toLowerCase()
+                    .includes(keyword),
+            ),
+        [snap, keyword],
     );
-    const boms = snap.boms.filter(bom => `${bom.code} ${bom.name} ${bom.spec}`.toLowerCase().includes(keyword));
+    const boms = useMemo(
+        () => snap.boms.filter(bom => `${bom.code} ${bom.name} ${bom.spec}`.toLowerCase().includes(keyword)),
+        [snap, keyword],
+    );
     const count =
         effectiveCategory === "orders"
             ? orders.length

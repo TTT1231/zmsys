@@ -10,7 +10,7 @@
 | `bomSummary.ts`     | 列表关键规格摘要的展示优先级，不参与目录校验；完整物料仍可展开核对                                  |
 | `views.ts`          | 派生统计纯函数（快照 → 待发货 / 缺口 / 趋势 / TOP），出库可发量的前端口径                           |
 | `queries.ts`        | react-query hooks，页面数据入口，含签名适配                                                         |
-| `workbench.ts`      | 工作台读模型与纯聚合函数                                                                              |
+| `workbench.ts`      | 工作台读模型与纯聚合函数                                                                            |
 
 链路：`页面 → queries.ts → api/ → http/ → 后端`。工作台统计由 `/workbench/overview` 聚合端点供给；列表页统计仍由 `views.ts` 按完整快照派生，后端分页前须补聚合端点。
 

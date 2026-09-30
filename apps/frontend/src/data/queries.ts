@@ -1,4 +1,5 @@
 import { useInfiniteQuery, useIsFetching, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/components/ui/toastContexts";
 import type { GrantMap, RoleId } from "./permissions";
 import type { Snapshot, SystemLogCursor, SystemLogQuery, UpdateCustomerInput, UpdateUserInput } from "@/api";
 import { useApp } from "@/context/useApp";
@@ -9,7 +10,6 @@ import {
     createInbound,
     createOrder,
     createOutbound,
-    createStockAdjustment,
     createUser,
     deleteBom,
     deleteInbound,
@@ -186,8 +186,12 @@ export function useWbRefresh() {
 
 function useWbMutation<TInput, TOutput>(mutationFn: (input: TInput) => Promise<TOutput>) {
     const queryClient = useQueryClient();
+    const toast = useToast();
     return useMutation({
         mutationFn,
+        // 失败弹错误提示是全部写操作的统一行为，在工厂收口（调用方 mutate 级
+        // onError 会与本默认并存执行，追加逻辑无需重写 toast）
+        onError: error => toast(error.message, true),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: wbKeys.all });
             queryClient.invalidateQueries({ queryKey: bomKeys.stocks });
@@ -223,8 +227,10 @@ export const useUpdateCustomer = () =>
 /** 新建 BOM 只失效 BOM 列表与聚合快照；不动随台账变化的库存余量 */
 export const useCreateBom = () => {
     const queryClient = useQueryClient();
+    const toast = useToast();
     return useMutation({
         mutationFn: createBom,
+        onError: error => toast(error.message, true),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: bomKeys.list });
             queryClient.invalidateQueries({ queryKey: wbKeys.all });
@@ -234,8 +240,10 @@ export const useCreateBom = () => {
 /** 删除 BOM 仅超级管理员可用；同新建只失效 BOM 列表与聚合快照 */
 export const useDeleteBom = () => {
     const queryClient = useQueryClient();
+    const toast = useToast();
     return useMutation({
         mutationFn: deleteBom,
+        onError: error => toast(error.message, true),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: bomKeys.list });
             queryClient.invalidateQueries({ queryKey: wbKeys.all });
@@ -258,7 +266,6 @@ export const useDeleteInbound = () =>
         const { no, ...body } = input;
         return deleteInbound(no, body);
     });
-export const useCreateStockAdjustment = () => useWbMutation(createStockAdjustment);
 export const useCreateOutbound = () => useWbMutation(createOutbound);
 export const useVoidOutbound = () =>
     useWbMutation((input: { no: string; expectedVersion: number; reason: string }) =>
@@ -323,6 +330,7 @@ export function useGrantLog() {
 /** 保存单角色授权：成功后同时失效聚合快照与授权日志 */
 export function useSaveGrants() {
     const queryClient = useQueryClient();
+    const toast = useToast();
     return useMutation({
         mutationFn: (input: { roleId: RoleId; grant: GrantMap[RoleId]; note: string }) =>
             saveRoleGrants(input.roleId, {
@@ -330,6 +338,7 @@ export function useSaveGrants() {
                 expectedVersion: input.grant.version,
                 note: input.note,
             }),
+        onError: error => toast(error.message, true),
         onSuccess: (_data, variables) => {
             queryClient.invalidateQueries({ queryKey: wbKeys.grants });
             queryClient.invalidateQueries({ queryKey: wbKeys.grantLog });

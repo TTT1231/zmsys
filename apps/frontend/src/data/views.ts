@@ -1,8 +1,8 @@
 /* 派生视图（纯函数）：输入聚合快照，输出工作台/列表页所需行。
  * 服务端不出统计端点，全部在前端基于快照计算（与旧 store.ts 的派生函数同口径）。 */
-import type { Bom, Order, OrderStatus, ReadyToShipRow, Snapshot, StockGapRow, TrendRow } from "@/api";
+import type { Bom, Order, OrderStatus, ReadyToShipRow, Snapshot } from "@/api";
 // 注意：本文件被 node --test 直跑，运行时值导入保留相对路径 + .ts 扩展名
-import { addDays, todayIso } from "../lib/date.ts";
+import { todayIso } from "../lib/date.ts";
 
 /** 加载中/无数据时的空快照，页面可直接对视图函数传值 */
 export const EMPTY_SNAPSHOT: Snapshot = {
@@ -112,78 +112,4 @@ export function maxShipOf(snap: Snapshot, orderNo: string): number {
     const order = snap.orders.find(item => item.orderNo === orderNo);
     if (!order || remainingOf(order) <= 0) return 0;
     return readyToShip(snap).find(row => row.orderNo === orderNo)?.maxShip ?? 0;
-}
-
-export function stockGapList(snap: Snapshot): StockGapRow[] {
-    const today = todayIso();
-    const list: StockGapRow[] = [];
-    const byBom = new Map<string, Order[]>();
-    snap.orders
-        .filter(order => remainingOf(order) > 0)
-        .forEach(order => {
-            if (!byBom.has(order.bomCode)) byBom.set(order.bomCode, []);
-            byBom.get(order.bomCode)!.push(order);
-        });
-    byBom.forEach((orders, bomCode) => {
-        const stockQty = stockOf(snap, bomCode);
-        const demandQty = orders.reduce((sum, order) => sum + remainingOf(order), 0);
-        if (demandQty <= stockQty) return;
-        const sorted = [...orders].sort((a, b) => a.deliverDate.localeCompare(b.deliverDate));
-        const earliest = sorted[0];
-        list.push({
-            bomCode,
-            gapQty: demandQty - stockQty,
-            demandQty,
-            stockQty,
-            orderCount: orders.length,
-            earliestDate: earliest.deliverDate,
-            earliestOrderNo: earliest.orderNo,
-            earliestCustomer: earliest.customer,
-            earliestOverdue: earliest.deliverDate < today,
-        });
-    });
-    return list.sort((a, b) => a.earliestDate.localeCompare(b.earliestDate));
-}
-
-export function dailyTrend(snap: Snapshot, days: number): TrendRow[] {
-    const today = todayIso();
-    const buckets: string[] = [];
-    for (let offset = days - 1; offset >= 0; offset -= 1) buckets.push(addDays(today, -offset));
-    const result: TrendRow[] = buckets.map(date => ({
-        date,
-        label: `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`,
-        orderedQty: 0,
-        orderedCount: 0,
-        inboundQty: 0,
-        inboundCount: 0,
-        outboundQty: 0,
-        outboundCount: 0,
-    }));
-    const index = new Map(result.map(row => [row.date, row]));
-    snap.orders.forEach(order => {
-        const row = index.get(order.orderDate);
-        if (row) {
-            row.orderedQty += order.qty;
-            row.orderedCount += 1;
-        }
-    });
-    snap.inboundLedger
-        .filter(row => row.status === "active")
-        .forEach(row => {
-            const bucket = index.get(row.date);
-            if (bucket) {
-                bucket.inboundQty += row.qty;
-                bucket.inboundCount += 1;
-            }
-        });
-    snap.outboundLedger
-        .filter(row => row.state !== "voided")
-        .forEach(row => {
-            const bucket = index.get(row.date);
-            if (bucket) {
-                bucket.outboundQty += row.qty;
-                bucket.outboundCount += 1;
-            }
-        });
-    return result;
 }
