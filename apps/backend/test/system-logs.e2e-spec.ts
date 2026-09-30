@@ -486,11 +486,13 @@ describe("系统日志 (e2e)", () => {
         // 两笔发货（订单 1 首批 40 + 订单 2 整单 50）；降序排列，晚发生的在前
         expect(ships).toHaveLength(2);
         expect(ships[0]!.changes).toEqual([
+            { key: "customer", label: "客户", before: null, after: `日志客户甲_${RUN}` },
             { key: "qty", label: "发货数量", before: null, after: "50 个" },
             { key: "orderNo", label: "订单号", before: null, after: orderNo2 },
             { key: "remark", label: "备注", before: null, after: "整单发" },
         ]);
         expect(ships[1]!.changes).toEqual([
+            { key: "customer", label: "客户", before: null, after: `日志客户甲_${RUN}` },
             { key: "qty", label: "发货数量", before: null, after: "40 个" },
             { key: "orderNo", label: "订单号", before: null, after: orderNo },
             { key: "remark", label: "备注", before: null, after: "首批" },
@@ -522,6 +524,45 @@ describe("系统日志 (e2e)", () => {
         const items = entriesOf(page);
         expect(items).toHaveLength(1);
         expect(items[0]).toMatchObject({ domain: "order", action: "archive", targetCode: orderNo });
+    });
+
+    it("老订单日志按 bomCode 回填 BOM 备注（bomRemark 入快照前的存量）", async () => {
+        const oldOrderNo = `ZMOLD${RUN}`;
+        await prisma.opLog.create({
+            data: {
+                id: snowflake.next(),
+                operatorId: 1n,
+                operatorNameSnapshot: "郭均",
+                operatorRoleSnapshot: "super",
+                action: "create_order",
+                targetType: "order",
+                targetId: 0n,
+                targetCode: oldOrderNo,
+                // bomRemark 入快照之前的老式 detail：行内字段 + 关联编码
+                detailJson: {
+                    orderNo: oldOrderNo,
+                    qty: 10,
+                    deliverDate: "2027-01-31",
+                    remark: "",
+                    customer: `日志客户甲_${RUN}`,
+                    bomCode,
+                },
+                createdAt: new Date(),
+            },
+        });
+        try {
+            const page = await logs(superToken, `?keyword=${oldOrderNo}&limit=10`);
+            expect(page.statusCode).toBe(200);
+            const changes = entriesOf(page)[0]!.changes!;
+            expect(changes).toContainEqual({
+                key: "bomRemark",
+                label: "BOM 备注",
+                before: null,
+                after: BOM_REMARK,
+            });
+        } finally {
+            await prisma.opLog.deleteMany({ where: { targetCode: oldOrderNo } });
+        }
     });
 
     it("作废动作聚合：出库数量与订单号快照、原因透出", async () => {
