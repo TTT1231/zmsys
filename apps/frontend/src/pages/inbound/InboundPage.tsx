@@ -31,7 +31,7 @@ import {
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { PageLoading } from "@/components/ui/PageLoading";
-import { EMPTY_SNAPSHOT, bomByCode } from "@/data/views";
+import { EMPTY_SNAPSHOT, bomByCode, bomIndexOf } from "@/data/views";
 import { beijingDateOf, beijingTodayIso, todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/toastContexts";
 
@@ -567,7 +567,9 @@ export function InboundPage() {
     const inspectors = useMemo(() => [...new Set(rows.map(row => row.inspector))], [rows]);
     const boms = snap.boms;
     const bomCategory = useMemo(() => new Map(boms.map(bom => [bom.code, bom.name])), [boms]);
-    const categories = [...new Set(boms.map(bom => bom.name))];
+    /* 行渲染 BOM 档案走索引，替代逐行线性查找（VoucherModal 单点仍用 bomByCode） */
+    const bomIndex = useMemo(() => bomIndexOf(snap), [snap]);
+    const categories = useMemo(() => [...new Set(boms.map(bom => bom.name))], [boms]);
 
     const filtered = useMemo(() => {
         const kw = keyword.trim().toLowerCase();
@@ -720,7 +722,7 @@ export function InboundPage() {
                 <div className="mobile-records">
                     <ListState loading={isLoading} empty={!pageRows.length}>
                         {pageRows.map(row => {
-                            const bom = bomByCode(snap, row.bomCode);
+                            const bom = bomIndex.get(row.bomCode);
                             return (
                                 <RecordCard
                                     key={row.no}
@@ -797,7 +799,7 @@ export function InboundPage() {
                             <tbody>
                                 {pageRows.length === 0 && <EmptyRow colSpan={7} description="没有找到匹配的入库记录" />}
                                 {pageRows.map(row => {
-                                    const bom = bomByCode(snap, row.bomCode);
+                                    const bom = bomIndex.get(row.bomCode);
                                     const voided = row.status === "voided";
                                     return (
                                         <tr key={row.no} className={voided ? "row-voided" : undefined}>

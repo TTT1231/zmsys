@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useWbSnapshot } from "@/data/queries";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
@@ -12,7 +12,7 @@ import { OrderDetailModal } from "@/pages/orders/OrdersPage";
 import { CustomerDetailModal } from "@/pages/customers/CustomersPage";
 import { BomDetailModal } from "@/pages/bom/BomPage";
 import { OutboundModal } from "@/pages/outbound/OutboundPage";
-import { EMPTY_SNAPSHOT, bomByCode } from "@/data/views";
+import { EMPTY_SNAPSHOT, deriveOrders } from "@/data/views";
 
 export function SearchPage() {
     const { data, isLoading, isFetching } = useWbSnapshot();
@@ -28,6 +28,9 @@ export function SearchPage() {
     const [ship, setShip] = useState<string | null>(null);
     const keyword = query.trim().toLowerCase();
 
+    /* P2 一次分配：结果卡片/详情弹窗与订单过滤共用页面级派生（BOM 索引替代逐单线性查找） */
+    const derived = useMemo(() => deriveOrders(snap), [snap]);
+
     // 类目按菜单授权过滤：客户档案等未授权模块不出现在搜索结果
     const categories = [
         { key: "orders", label: "订单", menu: "orders" },
@@ -42,7 +45,7 @@ export function SearchPage() {
     const orders = snap.orders.filter(
         order =>
             order.lifecycleStatus !== "archived" &&
-            `${order.orderNo} ${order.customer} ${order.customerCode} ${order.bomCode} ${bomByCode(snap, order.bomCode)?.spec}`
+            `${order.orderNo} ${order.customer} ${order.customerCode} ${order.bomCode} ${derived.bomIndex.get(order.bomCode)?.spec}`
                 .toLowerCase()
                 .includes(keyword),
     );
@@ -123,6 +126,7 @@ export function SearchPage() {
                                             key={item.orderNo}
                                             order={item}
                                             snap={snap}
+                                            derived={derived}
                                             onDetail={() => setSelected({ kind: "orders", id: item.orderNo })}
                                             onShip={can("outbound:ship") ? () => setShip(item.orderNo) : undefined}
                                         />
@@ -171,6 +175,7 @@ export function SearchPage() {
             <OrderDetailModal
                 order={order}
                 snap={snap}
+                derived={derived}
                 onClose={() => setSelected(null)}
                 onShip={
                     can("outbound:ship") && order

@@ -53,10 +53,10 @@ import {
     bomByCode,
     deriveOrders,
     maxShipOf,
-    orderStatusOf,
     orderStatusOfMax,
     remainingOf,
     stockOf,
+    type DerivedOrders,
 } from "@/data/views";
 import { addDays, addMonths, formatDateTime, todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/toastContexts";
@@ -557,19 +557,23 @@ function EditOrderModal({
 export function OrderDetailModal({
     order,
     snap,
+    derived,
     onClose,
     onShip,
     onEdit,
 }: {
     order: Order | null;
     snap: Snapshot;
+    /** 页面级一次分配结果（P2）：传入时弹窗复用预计算可发量/索引，不再单点全量派生 */
+    derived?: DerivedOrders;
     onClose: () => void;
     onShip?: () => void;
     onEdit?: () => void;
 }) {
     if (!order) return null;
-    const bom = bomByCode(snap, order.bomCode);
-    const status = orderStatusOf(snap, order);
+    const bom = derived ? derived.bomIndex.get(order.bomCode) : bomByCode(snap, order.bomCode);
+    const maxShip = derived ? (derived.byOrderNo.get(order.orderNo)?.maxShip ?? 0) : maxShipOf(snap, order.orderNo);
+    const status = orderStatusOfMax(order, maxShip);
     const remaining = remainingOf(order);
     const shipments = snap.outboundLedger.filter(row => row.orderNo === order.orderNo);
     return (
@@ -588,7 +592,7 @@ export function OrderDetailModal({
                             编辑订单
                         </Button>
                     )}
-                    {onShip && maxShipOf(snap, order.orderNo) > 0 && (
+                    {onShip && maxShip > 0 && (
                         <Button icon="truck" onClick={onShip}>
                             登记发货
                         </Button>
@@ -723,25 +727,25 @@ export function OrdersPage() {
         void today;
         return deriveOrders(snap);
     }, [snap, today]);
-    const maxShipOfOrder = (order: Order) => derived.byOrderNo.get(order.orderNo)?.maxShip ?? 0;
-
     /* 归档单分流到「归档订单」页，销售订单页只展示活跃订单 */
-    const orders = snap.orders.filter(order => order.lifecycleStatus !== "archived");
+    const orders = useMemo(() => snap.orders.filter(order => order.lifecycleStatus !== "archived"), [snap.orders]);
     const boms = snap.boms;
-    const bomCategory = new Map(boms.map(bom => [bom.code, bom.name]));
-    const categories = [...new Set(boms.map(bom => bom.name))];
+    const bomCategory = useMemo(() => new Map(boms.map(bom => [bom.code, bom.name])), [boms]);
+    const categories = useMemo(() => [...new Set(boms.map(bom => bom.name))], [boms]);
     const counts = {
         total: orders.length,
         unfinished: orders.filter(order => remainingOf(order) > 0).length,
-        ready: derived.rows.reduce((sum, row) => sum + (row.maxShip > 0 ? 1 : 0), 0),
+        ready: derived.rows.filter(row => row.maxShip > 0).length,
     };
 
-    const filtered = (() => {
+    const filtered = useMemo(() => {
         const kw = keyword.trim().toLowerCase();
-        const rows = orders.filter(order => {
+        return orders.filter(order => {
             if (taskFilter === "pending" && remainingOf(order) <= 0) return false;
-            if (taskFilter === "ready" && maxShipOfOrder(order) <= 0) return false;
-            if (statusFilter !== "全部状态" && orderStatusOfMax(order, maxShipOfOrder(order)).label !== statusFilter)
+            // 可发量/状态读一次分配的预计算行；不在分配行内（已交满）按可发 0 判状态
+            const row = derived.byOrderNo.get(order.orderNo);
+            if (taskFilter === "ready" && (row?.maxShip ?? 0) <= 0) return false;
+            if (statusFilter !== "全部状态" && (row?.status ?? orderStatusOfMax(order, 0)).label !== statusFilter)
                 return false;
             if (categoryFilter !== "全部品类" && bomCategory.get(order.bomCode) !== categoryFilter) return false;
             if (dateStart && order.deliverDate < dateStart) return false;
@@ -754,10 +758,9 @@ export function OrdersPage() {
             }
             return true;
         });
-        return rows;
-    })();
+    }, [orders, keyword, taskFilter, statusFilter, categoryFilter, dateStart, dateEnd, derived, bomCategory]);
 
-    const sorted = (() => {
+    const sorted = useMemo(() => {
         if (!sort) return filtered; // 取消排序：数据顺序，手动行序接管显示
         const factor = sort.dir === "asc" ? 1 : -1;
         return [...filtered].sort((a, b) => {
@@ -773,16 +776,16 @@ export function OrdersPage() {
                           : a.orderNo.localeCompare(b.orderNo);
             return byKey * factor || a.orderNo.localeCompare(b.orderNo);
         });
-    })();
+    }, [filtered, sort]);
 
     // 手动行序生效（无排序时）：已记录的行按手动序，未记录的新行（新建订单）按数据序补尾
-    const ordered = (() => {
+    const ordered = useMemo(() => {
         if (sort || !manualOrder) return sorted;
         const byNo = new Map(sorted.map(order => [order.orderNo, order]));
         const ranked = manualOrder.map(no => byNo.get(no)).filter(Boolean) as Order[];
         const rankedSet = new Set(ranked.map(order => order.orderNo));
         return [...ranked, ...sorted.filter(order => !rankedSet.has(order.orderNo))];
-    })();
+    }, [sorted, sort, manualOrder]);
 
     const pageRows = ordered.slice((page - 1) * pageSize, page * pageSize);
     const dateFilterActive = !!dateStart || !!dateEnd;
@@ -1279,7 +1282,8 @@ export function OrdersPage() {
                                     )}
                                     {pageRows.map(order => {
                                         const bom = derived.bomIndex.get(order.bomCode);
-                                        const status = orderStatusOfMax(order, maxShipOfOrder(order));
+                                        const status =
+                                            derived.byOrderNo.get(order.orderNo)?.status ?? orderStatusOfMax(order, 0);
                                         const remaining = remainingOf(order);
                                         const done = remaining === 0;
                                         // 库存列三档字色：0 即缺货；盖不住本单剩余待交为不足；其余充裕
@@ -1432,6 +1436,7 @@ export function OrdersPage() {
             <OrderDetailModal
                 order={detail ? (orders.find(order => order.orderNo === detail.orderNo) ?? null) : null}
                 snap={snap}
+                derived={derived}
                 onClose={() => setDetail(null)}
                 onEdit={
                     canEdit && detail?.lifecycleStatus === "active"

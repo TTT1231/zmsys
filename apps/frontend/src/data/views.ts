@@ -23,6 +23,13 @@ export function bomByCode(snap: Pick<Snapshot, "boms">, code: string): Bom | und
     return snap.boms.find(bom => bom.code === code);
 }
 
+/** BOM 索引：列表行渲染与 deriveOrders 共用，替代逐行线性查找；重复 code 首条胜出（与 find 语义一致） */
+export function bomIndexOf(snap: Pick<Snapshot, "boms">): Map<string, Bom> {
+    const index = new Map<string, Bom>();
+    for (const bom of snap.boms) if (!index.has(bom.code)) index.set(bom.code, bom);
+    return index;
+}
+
 export function stockOf(snap: Pick<Snapshot, "stock">, bomCode: string): number {
     return Math.max(0, snap.stock[bomCode] ?? 0);
 }
@@ -63,18 +70,18 @@ export interface DerivedOrders {
 }
 
 export function deriveOrders(snap: Snapshot): DerivedOrders {
-    const rows = readyToShip(snap);
-    return {
-        rows,
-        byOrderNo: new Map(rows.map(row => [row.orderNo, row])),
-        bomIndex: new Map(snap.boms.map(bom => [bom.code, bom])),
-    };
+    const bomIndex = bomIndexOf(snap);
+    const rows = readyToShip(snap, bomIndex);
+    /* 订单索引首条胜出（与旧 readyToShip().find 定位一致），重复单号时派生/单点路径取同一条 */
+    const byOrderNo = new Map<string, ReadyToShipRow>();
+    for (const row of rows) if (!byOrderNo.has(row.orderNo)) byOrderNo.set(row.orderNo, row);
+    return { rows, byOrderNo, bomIndex };
 }
 
-/* 待发货明细：按交期顺序在共享库存池上做可发量分配（同一 BOM 库存不重复承诺） */
-export function readyToShip(snap: Snapshot): ReadyToShipRow[] {
+/* 待发货明细：按交期顺序在共享库存池上做可发量分配（同一 BOM 库存不重复承诺）；
+ * bomIndex 可由调用方传入复用（deriveOrders 已建好，避免重复构建） */
+export function readyToShip(snap: Snapshot, bomIndex = bomIndexOf(snap)): ReadyToShipRow[] {
     const left = new Map(Object.entries(snap.stock));
-    const bomIndex = new Map(snap.boms.map(bom => [bom.code, bom]));
     const today = todayIso();
     return snap.orders
         .filter(order => remainingOf(order) > 0)
@@ -101,7 +108,10 @@ export function readyToShip(snap: Snapshot): ReadyToShipRow[] {
 }
 
 export function maxShipOf(snap: Snapshot, orderNo: string): number {
-    return deriveOrders(snap).byOrderNo.get(orderNo)?.maxShip ?? 0;
+    // 单点查询短路：已归档/交满订单不参与分配，可发量结构上恒为 0，免跑全量派生
+    const order = snap.orders.find(item => item.orderNo === orderNo);
+    if (!order || remainingOf(order) <= 0) return 0;
+    return readyToShip(snap).find(row => row.orderNo === orderNo)?.maxShip ?? 0;
 }
 
 export function stockGapList(snap: Snapshot): StockGapRow[] {

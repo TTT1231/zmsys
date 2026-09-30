@@ -16,7 +16,7 @@ import { SortTh } from "@/components/ui/SortTh";
 import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { nextSortState, type SortState } from "@/lib/tableSort";
 import { Field } from "@/components/ui/Field";
-import { EMPTY_SNAPSHOT, bomByCode, orderStatusOf, remainingOf } from "@/data/views";
+import { EMPTY_SNAPSHOT, deriveOrders, orderStatusOfMax, remainingOf } from "@/data/views";
 import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
@@ -59,21 +59,28 @@ export function ArchivedOrdersPage() {
     /* 只展示归档单；排序默认按归档时间倒序（近期的在前） */
     const archived = useMemo(() => snap.orders.filter(order => order.lifecycleStatus === "archived"), [snap.orders]);
 
+    /* P2 一次分配：状态筛选/行渲染/卡片与详情弹窗共用页面级派生（归档单 remainingOf=0
+     * 不在分配行内，byOrderNo 未命中 → 可发 0，状态回落交付进度口径，与逐单派生完全一致） */
+    const derived = useMemo(() => deriveOrders(snap), [snap]);
+
     const filtered = useMemo(() => {
         const kw = keyword.trim().toLowerCase();
         return archived.filter(order => {
-            if (statusFilter !== "全部状态" && orderStatusOf(snap, order).label !== statusFilter) return false;
+            if (statusFilter !== "全部状态") {
+                const status = derived.byOrderNo.get(order.orderNo)?.status ?? orderStatusOfMax(order, 0);
+                if (status.label !== statusFilter) return false;
+            }
             if (dateStart && order.deliverDate < dateStart) return false;
             if (dateEnd && order.deliverDate > dateEnd) return false;
             if (kw) {
-                const bom = bomByCode(snap, order.bomCode);
+                const bom = derived.bomIndex.get(order.bomCode);
                 const text =
                     `${order.orderNo} ${order.customer} ${order.customerCode} ${order.bomCode} ${bom?.spec ?? ""} ${order.archivedBy ?? ""}`.toLowerCase();
                 if (!text.includes(kw)) return false;
             }
             return true;
         });
-    }, [archived, keyword, statusFilter, dateStart, dateEnd, snap]);
+    }, [archived, keyword, statusFilter, dateStart, dateEnd, derived]);
 
     const sorted = useMemo(() => {
         const factor = sort.dir === "asc" ? 1 : -1;
@@ -255,6 +262,7 @@ export function ArchivedOrdersPage() {
                                 key={order.orderNo}
                                 order={order}
                                 snap={snap}
+                                derived={derived}
                                 onDetail={() => setDetail(order)}
                             />
                         ))}
@@ -321,8 +329,9 @@ export function ArchivedOrdersPage() {
                                     />
                                 )}
                                 {pageRows.map(order => {
-                                    const bom = bomByCode(snap, order.bomCode);
-                                    const status = orderStatusOf(snap, order);
+                                    const bom = derived.bomIndex.get(order.bomCode);
+                                    const status =
+                                        derived.byOrderNo.get(order.orderNo)?.status ?? orderStatusOfMax(order, 0);
                                     return (
                                         <tr key={order.orderNo}>
                                             <td className="cell-pad-wide">
@@ -420,6 +429,7 @@ export function ArchivedOrdersPage() {
             <OrderDetailModal
                 order={detail ? (archived.find(order => order.orderNo === detail.orderNo) ?? null) : null}
                 snap={snap}
+                derived={derived}
                 onClose={() => setDetail(null)}
             />
         </div>

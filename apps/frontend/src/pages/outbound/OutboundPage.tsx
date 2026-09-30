@@ -35,7 +35,7 @@ import {
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { PageLoading } from "@/components/ui/PageLoading";
-import { EMPTY_SNAPSHOT, bomByCode, maxShipOf, orderStatusOf, remainingOf } from "@/data/views";
+import { EMPTY_SNAPSHOT, bomByCode, bomIndexOf, deriveOrders, orderStatusOfMax, remainingOf } from "@/data/views";
 import { todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/toastContexts";
 import type { OutboundPrintDocument, OutboundRow, Snapshot } from "@/api";
@@ -213,12 +213,14 @@ export function OutboundModal({
     }));
 
     const selectedOrder = orders.find(order => order.orderNo === orderNo);
-    const selectedBom = selectedOrder ? bomByCode(snap, selectedOrder.bomCode) : undefined;
-    const status = selectedOrder ? orderStatusOf(snap, selectedOrder) : undefined;
+    /* P2 一次分配：可发量/状态/BOM 档案共用一次派生，替代每次渲染两趟互相独立的全量分配 */
+    const derived = useMemo(() => deriveOrders(snap), [snap]);
+    const selectedBom = selectedOrder ? derived.bomIndex.get(selectedOrder.bomCode) : undefined;
     const remaining = selectedOrder ? remainingOf(selectedOrder) : 0;
     const shipped = selectedOrder?.outbound ?? 0;
     const shareStock = selectedOrder ? stock[selectedOrder.bomCode] || 0 : 0;
-    const maxShip = selectedOrder ? maxShipOf(snap, selectedOrder.orderNo) : 0;
+    const maxShip = selectedOrder ? (derived.byOrderNo.get(selectedOrder.orderNo)?.maxShip ?? 0) : 0;
+    const status = selectedOrder ? orderStatusOfMax(selectedOrder, maxShip) : undefined;
     const inputQty = Number(qty) || 0;
     const over = selectedOrder ? inputQty > maxShip : false;
     const overdue = !!selectedOrder && remaining > 0 && selectedOrder.deliverDate < todayIso();
@@ -589,7 +591,9 @@ export function OutboundPage() {
     const currentDetail = detail ? (rows.find(row => row.no === detail.no) ?? null) : null;
     const boms = snap.boms;
     const bomCategory = useMemo(() => new Map(boms.map(bom => [bom.code, bom.name])), [boms]);
-    const categories = [...new Set(boms.map(bom => bom.name))];
+    /* 行渲染 BOM 档案走索引，替代逐行线性查找（OutboundDetailModal 单点仍用 bomByCode） */
+    const bomIndex = useMemo(() => bomIndexOf(snap), [snap]);
+    const categories = useMemo(() => [...new Set(boms.map(bom => bom.name))], [boms]);
 
     const filtered = useMemo(() => {
         const kw = keyword.trim().toLowerCase();
@@ -758,7 +762,7 @@ export function OutboundPage() {
                 <div className="mobile-records">
                     <ListState loading={isLoading} empty={!pageRows.length}>
                         {pageRows.map(row => {
-                            const bom = bomByCode(snap, row.bomCode);
+                            const bom = bomIndex.get(row.bomCode);
                             return (
                                 <RecordCard
                                     key={row.no}
@@ -843,7 +847,7 @@ export function OutboundPage() {
                                     <EmptyRow colSpan={11} description="没有找到匹配的出库记录" />
                                 )}
                                 {pageRows.map(row => {
-                                    const bom = bomByCode(snap, row.bomCode);
+                                    const bom = bomIndex.get(row.bomCode);
                                     return (
                                         <tr
                                             key={row.no}

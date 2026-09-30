@@ -23,7 +23,7 @@ import { useCreateCustomer, useUpdateCustomer, useWbRefresh, useWbSnapshot } fro
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { PageLoading } from "@/components/ui/PageLoading";
-import { EMPTY_SNAPSHOT, orderStatusOf, remainingOf } from "@/data/views";
+import { EMPTY_SNAPSHOT, deriveOrders, orderStatusOfMax, remainingOf } from "@/data/views";
 import { useToast } from "@/components/ui/toastContexts";
 import type { Customer, Snapshot } from "@/api";
 
@@ -230,6 +230,8 @@ export function CustomerDetailModal({
         setOrderNo(null);
         setExpanded(false);
     }
+    /* P2 一次分配：时间线逐行状态查预计算索引，不再逐行全量派生（组件自建，调用方无需传） */
+    const derived = useMemo(() => deriveOrders(snap), [snap]);
     if (!customer) return null;
     const orders = snap.orders.filter(order => order.customerCode === customer.code);
     // 待交付口径与订单列表一致：已取消/已归档订单剩余按 0，不再计入
@@ -329,7 +331,8 @@ export function CustomerDetailModal({
                             {timeline.map(order => {
                                 const archived = order.lifecycleStatus === "archived";
                                 const inactive = archived;
-                                const status = orderStatusOf(snap, order);
+                                const status =
+                                    derived.byOrderNo.get(order.orderNo)?.status ?? orderStatusOfMax(order, 0);
                                 return (
                                     <li key={order.orderNo} className="relative">
                                         <span
@@ -375,7 +378,9 @@ export function CustomerDetailModal({
                     </div>
                 </div>
             </Modal>
-            {orderDetail && <OrderDetailModal order={orderDetail} snap={snap} onClose={() => setOrderNo(null)} />}
+            {orderDetail && (
+                <OrderDetailModal order={orderDetail} snap={snap} derived={derived} onClose={() => setOrderNo(null)} />
+            )}
         </>
     );
 }
