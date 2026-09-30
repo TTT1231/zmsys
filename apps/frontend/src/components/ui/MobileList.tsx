@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { Order, Snapshot } from "@/api";
 import { BomCell } from "@/components/bom/BomCell";
-import { bomByCode, maxShipOf, orderStatusOf, remainingOf, stockOf } from "@/data/views";
+import { bomByCode, maxShipOf, orderStatusOfMax, remainingOf, stockOf, type DerivedOrders } from "@/data/views";
 import { num } from "@/lib/format";
 import { todayIso } from "@/lib/date";
 import { Badge, Button, StatusBadge } from "./Badge";
@@ -72,21 +72,24 @@ export function CardField({ label, value, strong }: { label: string; value: Reac
 export function OrderTaskCard({
     order,
     snap,
+    derived,
     onDetail,
     onShip,
     onEdit,
 }: {
     order: Order;
     snap: Snapshot;
+    /** 页面级一次分配结果（P2）：传入时卡片复用预计算可发量/索引，不再逐卡全量派生 */
+    derived?: DerivedOrders;
     onDetail: () => void;
     onShip?: () => void;
     onEdit?: () => void;
 }) {
-    const bom = bomByCode(snap, order.bomCode);
+    const bom = derived ? derived.bomIndex.get(order.bomCode) : bomByCode(snap, order.bomCode);
     const remaining = remainingOf(order);
     const archived = order.lifecycleStatus === "archived";
-    const status = orderStatusOf(snap, order);
-    const maxShip = maxShipOf(snap, order.orderNo);
+    const maxShip = derived ? (derived.byOrderNo.get(order.orderNo)?.maxShip ?? 0) : maxShipOf(snap, order.orderNo);
+    const status = orderStatusOfMax(order, maxShip);
     const daysLate = Math.max(0, Math.floor((Date.parse(todayIso()) - Date.parse(order.deliverDate)) / 86400000));
     return (
         <RecordCard

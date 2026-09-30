@@ -48,7 +48,16 @@ import {
     useWbRefresh,
     useWbSnapshot,
 } from "@/data/queries";
-import { EMPTY_SNAPSHOT, bomByCode, maxShipOf, orderStatusOf, remainingOf, stockOf } from "@/data/views";
+import {
+    EMPTY_SNAPSHOT,
+    bomByCode,
+    deriveOrders,
+    maxShipOf,
+    orderStatusOf,
+    orderStatusOfMax,
+    remainingOf,
+    stockOf,
+} from "@/data/views";
 import { addDays, addMonths, formatDateTime, todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/toastContexts";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
@@ -707,6 +716,15 @@ export function OrdersPage() {
     // “客户/备注”列点客户名打开客户档案详情；存编码渲染时回捞，刷新后数据保持同步
     const [customerDetailCode, setCustomerDetailCode] = useState<string | null>(null);
 
+    /* P2 一次分配：全部订单可发量/状态与 BOM 索引单次派生，统计、筛选与行组件共用；
+     * 逾期随业务日期变化——today 不参与计算，仅作跨天后的缓存失效键 */
+    const today = todayIso();
+    const derived = useMemo(() => {
+        void today;
+        return deriveOrders(snap);
+    }, [snap, today]);
+    const maxShipOfOrder = (order: Order) => derived.byOrderNo.get(order.orderNo)?.maxShip ?? 0;
+
     /* 归档单分流到「归档订单」页，销售订单页只展示活跃订单 */
     const orders = snap.orders.filter(order => order.lifecycleStatus !== "archived");
     const boms = snap.boms;
@@ -715,20 +733,21 @@ export function OrdersPage() {
     const counts = {
         total: orders.length,
         unfinished: orders.filter(order => remainingOf(order) > 0).length,
-        ready: orders.filter(order => maxShipOf(snap, order.orderNo) > 0).length,
+        ready: derived.rows.reduce((sum, row) => sum + (row.maxShip > 0 ? 1 : 0), 0),
     };
 
     const filtered = (() => {
         const kw = keyword.trim().toLowerCase();
         const rows = orders.filter(order => {
             if (taskFilter === "pending" && remainingOf(order) <= 0) return false;
-            if (taskFilter === "ready" && maxShipOf(snap, order.orderNo) <= 0) return false;
-            if (statusFilter !== "全部状态" && orderStatusOf(snap, order).label !== statusFilter) return false;
+            if (taskFilter === "ready" && maxShipOfOrder(order) <= 0) return false;
+            if (statusFilter !== "全部状态" && orderStatusOfMax(order, maxShipOfOrder(order)).label !== statusFilter)
+                return false;
             if (categoryFilter !== "全部品类" && bomCategory.get(order.bomCode) !== categoryFilter) return false;
             if (dateStart && order.deliverDate < dateStart) return false;
             if (dateEnd && order.deliverDate > dateEnd) return false;
             if (kw) {
-                const bom = bomByCode(snap, order.bomCode);
+                const bom = derived.bomIndex.get(order.bomCode);
                 const text =
                     `${order.orderNo} ${order.customer} ${order.customerCode} ${order.bomCode} ${bom?.spec}`.toLowerCase();
                 if (!text.includes(kw)) return false;
@@ -777,8 +796,7 @@ export function OrdersPage() {
               : dateEnd
                 ? `交期：至 ${shortDate(dateEnd)}`
                 : "交期";
-    /* 交期快捷区间：手机上免滚原生日期选择器 */
-    const today = todayIso();
+    /* 交期快捷区间：手机上免滚原生日期选择器（today 声明在派生 memo 处，两处共用） */
     const monthStart = `${today.slice(0, 8)}01`;
     const quickRanges = [
         { label: "近 7 天", start: addDays(today, -6), end: today },
@@ -1176,6 +1194,7 @@ export function OrdersPage() {
                                 key={order.orderNo}
                                 order={order}
                                 snap={snap}
+                                derived={derived}
                                 onDetail={() => setDetail(order)}
                             />
                         ))}
@@ -1259,8 +1278,8 @@ export function OrdersPage() {
                                         <EmptyRow colSpan={13} description="没有找到匹配的订单" />
                                     )}
                                     {pageRows.map(order => {
-                                        const bom = bomByCode(snap, order.bomCode);
-                                        const status = orderStatusOf(snap, order);
+                                        const bom = derived.bomIndex.get(order.bomCode);
+                                        const status = orderStatusOfMax(order, maxShipOfOrder(order));
                                         const remaining = remainingOf(order);
                                         const done = remaining === 0;
                                         // 库存列三档字色：0 即缺货；盖不住本单剩余待交为不足；其余充裕

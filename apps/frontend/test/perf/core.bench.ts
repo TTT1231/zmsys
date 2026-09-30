@@ -21,7 +21,7 @@ import { MemoryRouter } from "react-router";
 import { BomPage } from "@/pages/bom/BomPage";
 import { BomCell } from "@/components/bom/BomCell";
 import { BomPicker } from "@/components/bom/BomPicker";
-import { EMPTY_SNAPSHOT, maxShipOf } from "@/data/views";
+import { EMPTY_SNAPSHOT, deriveOrders, maxShipOf } from "@/data/views";
 import { addDays, todayIso } from "@/lib/date";
 import type { Bom, BomCategory, BomItemView, Order, Snapshot } from "@/api";
 
@@ -504,6 +504,39 @@ function runP2() {
     }
 }
 
+/* p2-once：P2 实施后的页面级路径——整页一次 deriveOrders（OrdersPage 的 counts/筛选/行共用它） */
+function runP2Once() {
+    for (const n of NS) {
+        const snap = snapshotFor(n);
+        const activeOrders = snap.orders.filter(order => order.lifecycleStatus !== "archived");
+        const once = () => {
+            const start = performance.now();
+            const derived = deriveOrders(snap);
+            let ready = 0;
+            for (const row of derived.rows) if (row.maxShip > 0) ready += 1;
+            return { ms: performance.now() - start, ready };
+        };
+        const warm = once();
+        if (warm.ms * (WARMUP + ROUNDS) > BUDGET_MS) {
+            push("p2-derived-once", n, warm.ms, `超预算跳过：试跑单轮 ${round3(warm.ms)} ms；ms 为试跑值`);
+            continue;
+        }
+        const samples: number[] = [];
+        let ready = warm.ready;
+        for (let round = 0; round < WARMUP + ROUNDS; round += 1) {
+            const hit = once();
+            if (round >= WARMUP) samples.push(hit.ms);
+            else ready = hit.ready;
+        }
+        push(
+            "p2-derived-once",
+            n,
+            median(samples),
+            `P2 实施后页面级路径：一次 deriveOrders（过滤+按交期排序+库存分配+BOM 索引 Map+订单号索引 Map）+ counts.ready 计数，等价于优化后 OrdersPage 每次数据变化的派生成本；订单 ${snap.orders.length}（活跃 ${activeOrders.length}）× BOM ${snap.boms.length}，ready=${ready}；对照 p2-ready-counts（逐单 maxShipOf 的旧调用模式，实施后仅存于弹窗等单点调用）；${WARMUP} 预热 + ${ROUNDS} 计时轮取中位数`,
+        );
+    }
+}
+
 /* p5：真实 BomPage，关键词空 → 非空触发 filtered 重算（检索文本重建满额），Profiler actualDuration(update) */
 function mountBomPageProbe(n: number) {
     bomsRef.current = bomPool.slice(0, n);
@@ -710,7 +743,7 @@ function runPicker() {
  * tinybench 表格里的单样本即下面整段 fn 的墙钟时长，逐档数字以 micro.json 为准。 */
 const RUN_ONCE = { iterations: 1, time: 0, warmupIterations: 0, warmupTime: 0 };
 /** 注册制落盘：新增 target 必须同时登记 RUNNER_KEYS 并在文件尾加对应 test，否则不会触发 flush */
-const RUNNER_KEYS = ["p2", "p5", "p6", "picker", "p6update"];
+const RUNNER_KEYS = ["p2", "p2once", "p5", "p6", "picker", "p6update"];
 const executed = new Set<string>();
 function oncePer(target: string, fn: () => void) {
     return () => {
@@ -723,6 +756,9 @@ function oncePer(target: string, fn: () => void) {
 
 test("p2-ready-counts", async ({ bench }) => {
     await bench("p2-ready-counts", oncePer("p2", runP2)).run(RUN_ONCE);
+});
+test("p2-derived-once", async ({ bench }) => {
+    await bench("p2-derived-once", oncePer("p2once", runP2Once)).run(RUN_ONCE);
 });
 test("p5-search-filter", async ({ bench }) => {
     await bench("p5-search-filter", oncePer("p5", runP5)).run(RUN_ONCE);

@@ -49,9 +49,32 @@ export function orderStatusOf(snap: Snapshot, order: Order): OrderStatus {
     return statusOf(order, maxShipOf(snap, order.orderNo));
 }
 
+/** 状态判定（statusOf 的公开包装）：配合 deriveOrders 预计算的可发量使用，避免逐单全量派生 */
+export function orderStatusOfMax(order: Order, maxShip: number): OrderStatus {
+    return statusOf(order, maxShip);
+}
+
+/* 一次分配的派生结果：可发量表 + 订单/BOM 索引，统计、筛选与行组件共用
+ * （替代逐单 maxShipOf 的 N 次全量 readyToShip：N² → 一次 O(N·logN)） */
+export interface DerivedOrders {
+    rows: ReadyToShipRow[];
+    byOrderNo: Map<string, ReadyToShipRow>;
+    bomIndex: Map<string, Bom>;
+}
+
+export function deriveOrders(snap: Snapshot): DerivedOrders {
+    const rows = readyToShip(snap);
+    return {
+        rows,
+        byOrderNo: new Map(rows.map(row => [row.orderNo, row])),
+        bomIndex: new Map(snap.boms.map(bom => [bom.code, bom])),
+    };
+}
+
 /* 待发货明细：按交期顺序在共享库存池上做可发量分配（同一 BOM 库存不重复承诺） */
 export function readyToShip(snap: Snapshot): ReadyToShipRow[] {
     const left = new Map(Object.entries(snap.stock));
+    const bomIndex = new Map(snap.boms.map(bom => [bom.code, bom]));
     const today = todayIso();
     return snap.orders
         .filter(order => remainingOf(order) > 0)
@@ -66,7 +89,7 @@ export function readyToShip(snap: Snapshot): ReadyToShipRow[] {
                 customer: order.customer,
                 customerCode: order.customerCode,
                 bomCode: order.bomCode,
-                bomLabel: bomByCode(snap, order.bomCode)?.spec ?? "",
+                bomLabel: bomIndex.get(order.bomCode)?.spec ?? "",
                 deliverDate: order.deliverDate,
                 remaining,
                 stock: stockOf(snap, order.bomCode),
@@ -78,7 +101,7 @@ export function readyToShip(snap: Snapshot): ReadyToShipRow[] {
 }
 
 export function maxShipOf(snap: Snapshot, orderNo: string): number {
-    return readyToShip(snap).find(row => row.orderNo === orderNo)?.maxShip ?? 0;
+    return deriveOrders(snap).byOrderNo.get(orderNo)?.maxShip ?? 0;
 }
 
 export function stockGapList(snap: Snapshot): StockGapRow[] {
