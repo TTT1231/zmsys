@@ -1157,28 +1157,45 @@ CREATE TABLE outbound_ledger (
     CONSTRAINT ck_outbound_ledger_request CHECK (CHAR_LENGTH(request_key) BETWEEN 8 AND 128)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- 有效出库净额的事件级判据（迁移 20260946000000）：未软删出库单的全部台账事件，
+-- 不按 state 过滤（作废单 = NORMAL + 等额 CORRECTION，未来部分冲销时残值即实际出库）
+CREATE SQL SECURITY INVOKER VIEW v_outbound_effective_event AS
+SELECT
+    shipment.shipment_no,
+    shipment.order_id,
+    sales_order.bom_id,
+    event.entry_type,
+    event.qty_delta,
+    event.business_date,
+    event.created_at,
+    operator.name AS operator,
+    CASE WHEN event.entry_type = 'CORRECTION' THEN event.correction_reason ELSE event.remark END AS remark,
+    sales_order.customer_name_snapshot AS customer
+FROM outbound_ledger AS event
+JOIN outbound_shipment AS shipment ON shipment.id = event.shipment_id
+JOIN sales_order_table AS sales_order ON sales_order.id = shipment.order_id
+JOIN sys_user AS operator ON operator.id = event.operator_id
+WHERE shipment.deleted_at IS NULL;
+
 CREATE SQL SECURITY INVOKER VIEW v_order_outbound_qty AS
 SELECT
-    shipment.order_id,
+    event.order_id,
     COALESCE(SUM(event.qty_delta), 0) AS outbound_qty
-FROM outbound_shipment AS shipment
-JOIN outbound_ledger AS event ON event.shipment_id = shipment.id
-GROUP BY shipment.order_id;
+FROM v_outbound_effective_event AS event
+GROUP BY event.order_id;
 
 CREATE SQL SECURITY INVOKER VIEW v_bom_stock AS
 SELECT movement.bom_id, SUM(movement.qty_delta) AS stock_qty
 FROM (
     SELECT inbound.bom_id, CAST(inbound.qty AS SIGNED) AS qty_delta
     FROM inbound_ledger AS inbound
-    WHERE inbound.status = 'ACTIVE'
+    WHERE inbound.status = 'ACTIVE' AND inbound.deleted_at IS NULL
     UNION ALL
     SELECT adjustment.bom_id, adjustment.qty_delta
     FROM stock_adjustment AS adjustment
     UNION ALL
-    SELECT sales_order.bom_id, -event.qty_delta AS qty_delta
-    FROM outbound_ledger AS event
-    JOIN outbound_shipment AS shipment ON shipment.id = event.shipment_id
-    JOIN sales_order_table AS sales_order ON sales_order.id = shipment.order_id
+    SELECT event.bom_id, -event.qty_delta AS qty_delta
+    FROM v_outbound_effective_event AS event
 ) AS movement
 GROUP BY movement.bom_id;
 

@@ -232,6 +232,8 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 
 建表脚本提供 `v_bom_stock` 与 `v_order_outbound_qty` 作为统一聚合口径。无任何流水的 BOM/订单不会出现在视图中，业务查询必须从主表 `LEFT JOIN` 并用 `COALESCE(..., 0)`，不能把缺行理解为资源不存在。
 
+出库事件自迁移 `20260946000000` 起以 `v_outbound_effective_event`（未软删出库单的全部台账事件，不按 `state` 过滤）为事件级判据单一来源：`v_order_outbound_qty`、`v_bom_stock` 出库臂、BOM 台账流水的出库臂与工作台 movements 统一从该视图取数。作废单净额 = `NORMAL` + 等额 `CORRECTION`（净 0）自然抵消；未来若引入部分冲销，作废单残值即实际出库，同样进入净额与流水（台账流水会成对展示作废单的正向与冲销行，净额与结余恒等）。
+
 ### 7.3 `outbound_shipment` / `outbound_ledger`
 
 出库单头只有两个状态：`REGISTERED`（已登记）与 `VOIDED`（已作废）。2026-09 迁移将历史 `PRINTED` 单头回退为 `REGISTERED`（打印不再是状态），该回退不产生 `outbound_state_log` 事件。

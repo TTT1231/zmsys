@@ -14,7 +14,6 @@ function createService() {
         apiIdempotency: { deleteMany: vi.fn().mockResolvedValue({ count: 3 }) },
     } as unknown as PrismaService;
     const snowflake = { next: vi.fn().mockReturnValue(1001n) } as unknown as SnowflakeGenerator;
-    const service = new IdempotencyService(prisma, snowflake);
     const tx = {
         apiIdempotency: {
             findUnique: vi.fn(),
@@ -22,6 +21,9 @@ function createService() {
             update: vi.fn().mockResolvedValue({}),
         },
     };
+    // runGuarded 的事务执行器假件：直接执行回调（不模拟重试）
+    const txRunner = { run: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(tx)) };
+    const service = new IdempotencyService(prisma, snowflake, txRunner as never);
     return { service, prisma, snowflake, tx };
 }
 

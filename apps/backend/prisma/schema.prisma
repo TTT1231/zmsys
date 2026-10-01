@@ -135,7 +135,7 @@ model SysRole {
   locked       Boolean    @default(false)
   grantVersion BigInt     @default(1) @map("grant_version") @db.UnsignedBigInt
   createdAt    DateTime   @map("created_at") @db.DateTime(3)
-  updatedAt    DateTime   @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  updatedAt    DateTime   @default(now()) @map("updated_at") @db.DateTime(3)
   users        SysUser[]
   grants       SysGrant[]
 
@@ -155,7 +155,7 @@ model SysUser {
   passwordChangedAt  DateTime?          @map("password_changed_at") @db.DateTime(3)
   lastLoginAt        DateTime?          @map("last_login_at") @db.DateTime(3)
   createdAt          DateTime           @map("created_at") @db.DateTime(3)
-  updatedAt          DateTime           @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  updatedAt          DateTime           @default(now()) @map("updated_at") @db.DateTime(3)
   role               SysRole               @relation(fields: [roleCode], references: [code])
   changeLogs         SysUserChangeLog[]    @relation("SysUserChangeLogUser")
   operatedLogs       SysUserChangeLog[]    @relation("SysUserChangeLogOperator")
@@ -269,7 +269,7 @@ model ApiIdempotency {
   resourceType   String?             @map("resource_type") @db.VarChar(40)
   resourceCode   String?             @map("resource_code") @db.VarChar(64)
   createdAt      DateTime            @map("created_at") @db.DateTime(3)
-  updatedAt      DateTime            @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  updatedAt      DateTime            @default(now()) @map("updated_at") @db.DateTime(3)
   expiresAt      DateTime            @map("expires_at") @db.DateTime(3)
   actor          SysUser             @relation(fields: [actorId], references: [id])
 
@@ -282,7 +282,7 @@ model ApiIdempotency {
 model BizSequence {
   sequenceKey String   @id @map("sequence_key") @db.VarChar(80)
   nextValue   BigInt   @map("next_value") @db.UnsignedBigInt
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.DateTime(3)
 
   @@map("biz_sequence")
 }
@@ -299,7 +299,7 @@ model BomCategory {
   status      Boolean  @default(true)
   rowVersion  BigInt   @default(1) @map("row_version") @db.UnsignedBigInt
   createdAt   DateTime @map("created_at") @db.DateTime(3)
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.DateTime(3)
   boms        BomTable[]
   groups      MaterialGroup[]
 
@@ -321,7 +321,7 @@ model MaterialGroup {
   sortOrder Int              @default(0) @map("sort_order") @db.UnsignedSmallInt
   status    Boolean          @default(true)
   createdAt DateTime         @map("created_at") @db.DateTime(3)
-  updatedAt DateTime         @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  updatedAt DateTime         @default(now()) @map("updated_at") @db.DateTime(3)
   category  BomCategory       @relation(fields: [categoryId], references: [id])
   parent    MaterialGroup?    @relation("MaterialGroupTree", fields: [parentId], references: [id])
   children  MaterialGroup[]   @relation("MaterialGroupTree")
@@ -342,7 +342,7 @@ model MaterialItem {
   sortOrder Int      @default(0) @map("sort_order") @db.UnsignedSmallInt
   status    Boolean  @default(true)
   createdAt DateTime @map("created_at") @db.DateTime(3)
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.DateTime(3)
   group     MaterialGroup @relation(fields: [groupId], references: [id])
   bomItems  BomItem[]
 
@@ -368,7 +368,7 @@ model BomTable {
   createdBy   BigInt   @map("created_by")
   updatedBy   BigInt   @map("updated_by")
   createdAt   DateTime @map("created_at") @db.DateTime(3)
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.DateTime(3)
   category    BomCategory @relation(fields: [categoryId], references: [id])
   creator     SysUser     @relation("BomCreator", fields: [createdBy], references: [id])
   updater     SysUser     @relation("BomUpdater", fields: [updatedBy], references: [id])
@@ -421,7 +421,7 @@ model CustomTable {
   createdBy      BigInt   @map("created_by")
   updatedBy      BigInt   @map("updated_by")
   createdAt      DateTime @map("created_at") @db.DateTime(3)
-  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.DateTime(3)
   owner          SysUser                @relation("CustomerOwner", fields: [ownerId], references: [id])
   creator        SysUser                @relation("CustomerCreator", fields: [createdBy], references: [id])
   updater        SysUser                @relation("CustomerUpdater", fields: [updatedBy], references: [id])
@@ -478,7 +478,7 @@ model SalesOrderTable {
   createdBy           BigInt                     @map("created_by")
   updatedBy           BigInt                     @map("updated_by")
   createdAt           DateTime                   @map("created_at") @db.DateTime(3)
-  updatedAt           DateTime                   @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  updatedAt           DateTime                   @default(now()) @map("updated_at") @db.DateTime(3)
   customer            CustomTable                @relation(fields: [customerId], references: [id])
   bom                 BomTable                   @relation(fields: [bomId], references: [id])
   archiver            SysUser?                   @relation("SalesOrderArchiver", fields: [archivedBy], references: [id])
@@ -528,7 +528,7 @@ model InboundLedger {
   requestKey    String         @unique(map: "uk_inbound_request") @map("request_key") @db.VarChar(128)
   updatedBy     BigInt         @map("updated_by")
   createdAt     DateTime       @map("created_at") @db.DateTime(3)
-  updatedAt     DateTime       @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  updatedAt     DateTime       @default(now()) @map("updated_at") @db.DateTime(3)
   deletedAt     DateTime?      @map("deleted_at") @db.DateTime(3)
   bom               BomTable            @relation(fields: [bomId], references: [id])
   operator          SysUser             @relation("InboundOperator", fields: [operatorId], references: [id])
@@ -602,7 +602,7 @@ model OutboundShipment {
   requestKey         String               @unique(map: "uk_outbound_shipment_request") @map("request_key") @db.VarChar(128)
   registeredBy       BigInt               @map("registered_by")
   registeredAt       DateTime             @map("registered_at") @db.DateTime(3)
-  updatedAt          DateTime             @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  updatedAt          DateTime             @default(now()) @map("updated_at") @db.DateTime(3)
   order              SalesOrderTable   @relation(fields: [orderId], references: [id])
   registrar          SysUser           @relation("OutboundRegistrar", fields: [registeredBy], references: [id])
   voider             SysUser?          @relation("OutboundVoider", fields: [voidedBy], references: [id])
@@ -712,6 +712,26 @@ model SysRestoreJob {
   @@unique([requestKey], map: "uk_sys_restore_job_request")
   @@index([createdAt(sort: Desc)], map: "idx_sys_restore_job_created")
   @@map("sys_restore_job")
+}
+
+/// 出库有效净额的事件级判据（迁移 20260946000000，SQL SECURITY INVOKER）：
+/// 未软删出库单的全部台账事件；不按 state 过滤（作废单净额 = NORMAL + 等额 CORRECTION，
+/// 未来部分冲销时残值即实际出库）。v_order_outbound_qty / v_bom_stock 出库臂与
+/// 台账流水、工作台 movements 的出库事件统一从此取数
+view VOutboundEffectiveEvent {
+  shipmentNo   String            @map("shipment_no") @db.VarChar(28)
+  orderId      BigInt            @map("order_id")
+  bomId        BigInt            @map("bom_id")
+  entryType    OutboundEntryType @map("entry_type")
+  qtyDelta     Int               @map("qty_delta")
+  businessDate DateTime          @map("business_date") @db.Date
+  createdAt    DateTime          @map("created_at") @db.DateTime(3)
+  operator     String            @db.VarChar(64)
+  /// 冲销行展示作废原因，正常行展示发货备注
+  remark       String?           @db.VarChar(500)
+  customer     String            @map("customer") @db.VarChar(160)
+
+  @@map("v_outbound_effective_event")
 }
 
 /// 每个订单累计已发数量（§6.2 分配算法的对照视图，SQL SECURITY INVOKER）

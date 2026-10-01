@@ -76,7 +76,7 @@ const orders: OrderFixture[] = [
     },
 ];
 
-// v_bom_stock / v_order_outbound_qty / inbound / outbound 四类视图查询的返回
+// v_bom_stock / v_order_outbound_qty / inbound / v_outbound_effective_event 四类视图查询的返回
 const stockRows = [{ bom_code: "ZMKW0001", stock_qty: 260n }];
 const outboundQtyRows = [
     { order_id: 21n, outbound_qty: 300n },
@@ -100,7 +100,7 @@ const mkService = (overrides?: {
         if (sql.includes("v_bom_stock")) return overrides?.stockRows ?? stockRows;
         if (sql.includes("v_order_outbound_qty")) return overrides?.outboundQtyRows ?? outboundQtyRows;
         if (sql.includes("inbound_ledger")) return overrides?.inboundRows ?? inboundRows;
-        if (sql.includes("outbound_ledger")) return overrides?.outboundRows ?? outboundRows;
+        if (sql.includes("v_outbound_effective_event")) return overrides?.outboundRows ?? outboundRows;
         throw new Error(`未预期的查询：${sql}`);
     });
     const prisma = {

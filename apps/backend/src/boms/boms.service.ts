@@ -1,7 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
-import { TransactionRunner } from "../prisma/transaction.runner";
 import type { Tx } from "../prisma/transaction.runner";
 import { SnowflakeGenerator } from "../common/snowflake";
 import { materialSetHash } from "../common/bom-spec";
@@ -84,7 +83,6 @@ export class BomsService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly snowflake: SnowflakeGenerator,
-        private readonly txRunner: TransactionRunner,
         private readonly idempotency: IdempotencyService,
         private readonly sequence: BusinessSequenceService,
     ) {}
@@ -138,12 +136,13 @@ export class BomsService {
     }
 
     /**
-     * BOM 出入库流水（契约 bom:view）：入库/调整/出库三台账按 v_bom_stock 同一
-     * 口径合并（有效入库 + 全量调整 − 有效出库）；已作废单的正向与冲销事件
-     * 净额为零，均不展示，避免在隐藏作废入库后出现难以理解的负数中间结余。
-     * 业务日升序返回并逐笔累计结余，结余与 v_bom_stock 恒等；同日内按操作时间
-     * 排序（单号字母序会把出库排在先发生的入库前，结余出现与可发量校验矛盾
-     * 的负数中间值）；BOM 不存在 404。
+     * BOM 出入库流水（契约 bom:view）：入库/调整/出库三台账与 v_bom_stock 同一
+     * 口径合并（有效入库 + 全量调整 − 有效出库）；出库臂取 v_outbound_effective_event
+     * 的全部事件（未软删单，含作废单的正向与冲销行），结余与 v_bom_stock 恒等
+     * 不依赖"作废必等额冲销"的隐式零和——未来部分冲销时作废单残值即实际出库，
+     * 同样进入流水与结余。冲销行的备注展示作废原因（视图 remark 列）。
+     * 业务日升序返回并逐笔累计结余；同日内按操作时间排序（单号字母序会把出库
+     * 排在先发生的入库前，结余出现与可发量校验矛盾的负数中间值）；BOM 不存在 404。
      */
     async stockLedger(code: string): Promise<BomStockLedger> {
         const bom = await this.prisma.bomTable.findUnique({
@@ -180,13 +179,10 @@ export class BomsService {
                 JOIN sys_user AS u ON u.id = a.operator_id
                 WHERE a.bom_id = ${bom.id}
                 UNION ALL
-                SELECT s.shipment_no, e.business_date, e.created_at, -e.qty_delta, 'out', u.name, e.remark,
-                       o.customer_name_snapshot
-                FROM outbound_ledger AS e
-                JOIN outbound_shipment AS s ON s.id = e.shipment_id
-                JOIN sales_order_table AS o ON o.id = s.order_id
-                JOIN sys_user AS u ON u.id = e.operator_id
-                WHERE o.bom_id = ${bom.id} AND s.deleted_at IS NULL AND s.state = 'REGISTERED'
+                SELECT e.shipment_no, e.business_date, e.created_at, -e.qty_delta, 'out', e.operator, e.remark,
+                       e.customer
+                FROM v_outbound_effective_event AS e
+                WHERE e.bom_id = ${bom.id}
             ) AS flow
             ORDER BY flow.biz_date ASC, flow.created_at ASC, flow.no ASC
         `;
@@ -219,127 +215,117 @@ export class BomsService {
      * 幂等与判重分开：同键同请求摘要重放原响应，换键撞同一集合才 409。
      */
     async createBom(dto: CreateBomDto, actor: AuthUser, idempotencyKey: string | undefined): Promise<Bom> {
-        const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: "POST", body: dto });
-
-        return this.txRunner.run(async (tx: Tx) => {
-            const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
+        return this.idempotency.runGuarded(
+            {
                 actorId: BigInt(actor.id),
                 operationKey: CREATE_OPERATION_KEY,
-                key,
-                requestHash,
-            });
-            if (replay) {
-                return replay.body as unknown as Bom;
-            }
-            if (placeholderId === null) {
-                throw new Error("幂等占位缺失");
-            }
-
-            const category = await this.lockCategoryByName(tx, dto.name);
-            const childCategories = childCategoriesOf(category.childCategories);
-            let childCategoryRow: BomCategoryRow | null = null;
-            if (childCategories.length > 0) {
-                if (!dto.childCategory) {
-                    throw new BadRequestException("请选择微动开关类型");
+                idempotencyKey,
+                digest: { method: "POST", body: dto },
+            },
+            async (tx: Tx, { idempotencyKey: key }) => {
+                const category = await this.lockCategoryByName(tx, dto.name);
+                const childCategories = childCategoriesOf(category.childCategories);
+                let childCategoryRow: BomCategoryRow | null = null;
+                if (childCategories.length > 0) {
+                    if (!dto.childCategory) {
+                        throw new BadRequestException("请选择微动开关类型");
+                    }
+                    if (!childCategories.includes(dto.childCategory)) {
+                        throw new BadRequestException("微动开关类型不在本品类允许范围内");
+                    }
+                    childCategoryRow = await tx.bomCategory.findUnique({ where: { categoryKey: dto.childCategory } });
+                    // 目录容器品类（焊线/插线）停用仅表示不出现在建档下拉，仍可被引用合并目录
+                    if (!childCategoryRow) {
+                        throw new BadRequestException("微动开关类型不存在或已停用");
+                    }
                 }
-                if (!childCategories.includes(dto.childCategory)) {
-                    throw new BadRequestException("微动开关类型不在本品类允许范围内");
+
+                const catalog = [
+                    ...(await this.loadCatalog(tx, category.id)),
+                    ...(childCategoryRow ? await this.loadCatalog(tx, childCategoryRow.id) : []),
+                ];
+                const selection = resolveMaterialSelection(catalog, dto.materialItemIds, dto.quantities);
+                const hash = materialSetHash(
+                    category.id,
+                    selection.snapshots.map(snapshot => ({
+                        id: snapshot.materialId.toString(),
+                        quantity: snapshot.quantity,
+                    })),
+                    dto.remark ?? "",
+                );
+
+                const duplicate = await tx.bomTable.findFirst({
+                    where: { categoryId: category.id, specHash: hash },
+                    select: { bomCode: true },
+                });
+                if (duplicate) {
+                    throw new ConflictException(`BOM 已存在：${duplicate.bomCode}`);
                 }
-                childCategoryRow = await tx.bomCategory.findUnique({ where: { categoryKey: dto.childCategory } });
-                // 目录容器品类（焊线/插线）停用仅表示不出现在建档下拉，仍可被引用合并目录
-                if (!childCategoryRow) {
-                    throw new BadRequestException("微动开关类型不存在或已停用");
-                }
-            }
 
-            const catalog = [
-                ...(await this.loadCatalog(tx, category.id)),
-                ...(childCategoryRow ? await this.loadCatalog(tx, childCategoryRow.id) : []),
-            ];
-            const selection = resolveMaterialSelection(catalog, dto.materialItemIds, dto.quantities);
-            const hash = materialSetHash(
-                category.id,
-                selection.snapshots.map(snapshot => ({
-                    id: snapshot.materialId.toString(),
-                    quantity: snapshot.quantity,
-                })),
-                dto.remark ?? "",
-            );
+                const now = new Date();
+                const bomCode = await this.sequence.nextBomCode(tx, {
+                    categoryKey: category.categoryKey,
+                    codePrefix: category.codePrefix,
+                    seqWidth: category.seqWidth,
+                });
+                const bomId = this.snowflake.next();
+                await tx.bomTable.create({
+                    data: {
+                        id: bomId,
+                        bomCode,
+                        categoryId: category.id,
+                        specHash: hash,
+                        remark: dto.remark ?? "",
+                        unit: "个",
+                        requestKey: this.idempotency.requestKey(BigInt(actor.id), CREATE_OPERATION_KEY, key),
+                        createdBy: BigInt(actor.id),
+                        updatedBy: BigInt(actor.id),
+                        createdAt: now,
+                    },
+                });
+                // 建档冻结快照：目录后续改名/排序/停用不影响本档展示与判重
+                await tx.bomItem.createMany({
+                    data: selection.snapshots.map(snapshot => ({
+                        id: this.snowflake.next(),
+                        bomId,
+                        materialId: snapshot.materialId,
+                        groupKey: snapshot.groupKey,
+                        groupName: snapshot.groupName,
+                        name: snapshot.name,
+                        position: snapshot.position,
+                        quantity: snapshot.quantity,
+                        createdAt: now,
+                    })),
+                });
 
-            const duplicate = await tx.bomTable.findFirst({
-                where: { categoryId: category.id, specHash: hash },
-                select: { bomCode: true },
-            });
-            if (duplicate) {
-                throw new ConflictException(`BOM 已存在：${duplicate.bomCode}`);
-            }
-
-            const now = new Date();
-            const bomCode = await this.sequence.nextBomCode(tx, {
-                categoryKey: category.categoryKey,
-                codePrefix: category.codePrefix,
-                seqWidth: category.seqWidth,
-            });
-            const bomId = this.snowflake.next();
-            await tx.bomTable.create({
-                data: {
-                    id: bomId,
-                    bomCode,
-                    categoryId: category.id,
-                    specHash: hash,
+                const snapshot = bomItemsSnapshotOf(selection.snapshots);
+                const bom: Bom = {
+                    code: bomCode,
+                    name: category.name,
+                    modelCode: snapshot.modelCode,
+                    items: toBomItemViews(snapshot),
+                    spec: snapshot.spec,
                     remark: dto.remark ?? "",
+                    creator: actor.name,
+                    created: now.toISOString(),
                     unit: "个",
-                    requestKey: this.idempotency.requestKey(BigInt(actor.id), CREATE_OPERATION_KEY, key),
-                    createdBy: BigInt(actor.id),
-                    updatedBy: BigInt(actor.id),
-                    createdAt: now,
-                },
-            });
-            // 建档冻结快照：目录后续改名/排序/停用不影响本档展示与判重
-            await tx.bomItem.createMany({
-                data: selection.snapshots.map(snapshot => ({
-                    id: this.snowflake.next(),
-                    bomId,
-                    materialId: snapshot.materialId,
-                    groupKey: snapshot.groupKey,
-                    groupName: snapshot.groupName,
-                    name: snapshot.name,
-                    position: snapshot.position,
-                    quantity: snapshot.quantity,
-                    createdAt: now,
-                })),
-            });
-
-            const snapshot = bomItemsSnapshotOf(selection.snapshots);
-            const bom: Bom = {
-                code: bomCode,
-                name: category.name,
-                modelCode: snapshot.modelCode,
-                items: toBomItemViews(snapshot),
-                spec: snapshot.spec,
-                remark: dto.remark ?? "",
-                creator: actor.name,
-                created: now.toISOString(),
-                unit: "个",
-            };
-            // 审计清单：建档动作留档案快照（与 delete_bom 的详存风格一致）
-            await recordOpLog(tx, this.snowflake, actor, {
-                action: "create_bom",
-                targetType: "bom",
-                targetId: bomId,
-                targetCode: bomCode,
-                detail: bom as unknown as Prisma.InputJsonValue,
-                now,
-            });
-            await this.idempotency.complete(tx, {
-                id: placeholderId,
-                httpStatus: 200,
-                responseBody: bom as unknown as Prisma.InputJsonValue,
-                resource: { type: "bom", code: bomCode },
-            });
-            return bom;
-        });
+                };
+                // 审计清单：建档动作留档案快照（与 delete_bom 的详存风格一致）
+                await recordOpLog(tx, this.snowflake, actor, {
+                    action: "create_bom",
+                    targetType: "bom",
+                    targetId: bomId,
+                    targetCode: bomCode,
+                    detail: bom as unknown as Prisma.InputJsonValue,
+                    now,
+                });
+                return {
+                    httpStatus: 200,
+                    responseBody: bom,
+                    resource: { type: "bom", code: bomCode },
+                };
+            },
+        );
     }
 
     /**
@@ -352,73 +338,70 @@ export class BomsService {
      * op_log 记录 delete_bom 与删除前快照。BOM 建档后不可修改，无乐观锁版本。
      */
     async deleteBom(code: string, actor: AuthUser, idempotencyKey: string | undefined): Promise<null> {
-        const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: "POST", pathParams: { code } });
-
-        return this.txRunner.run(async (tx: Tx) => {
-            const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
+        // 删除的契约响应恒为 data:null：重放与成功均归一返回 null（runGuardedVoid）
+        return this.idempotency.runGuardedVoid(
+            {
                 actorId: BigInt(actor.id),
                 operationKey: DELETE_OPERATION_KEY,
-                key,
-                requestHash,
-            });
-            // 删除的契约响应恒为 data:null，重放无需读快照，直接归一返回
-            if (replay) {
-                return null;
-            }
-            if (placeholderId === null) {
-                throw new Error("幂等占位缺失");
-            }
+                idempotencyKey,
+                digest: { method: "POST", pathParams: { code } },
+            },
+            async (tx: Tx) => {
+                const bom = await tx.bomTable.findUnique({ where: { bomCode: code } });
+                if (!bom) {
+                    throw new NotFoundException("BOM 不存在");
+                }
+                await lockRowsById(tx, "bom_table", [bom.id]);
 
-            const bom = await tx.bomTable.findUnique({ where: { bomCode: code } });
-            if (!bom) {
-                throw new NotFoundException("BOM 不存在");
-            }
-            await lockRowsById(tx, "bom_table", [bom.id]);
+                // 订单引用含软删行（物理清理前行仍在、FK 仍挡删），raw 计数不经软删过滤
+                const [orderCount] = await tx.$queryRaw<Array<{ cnt: bigint | number }>>`
+                SELECT COUNT(*) AS cnt FROM sales_order_table WHERE bom_id = ${bom.id}
+            `;
+                if (Number(orderCount!.cnt) > 0) {
+                    throw new ConflictException("BOM 已被销售订单引用，不可删除");
+                }
+                // 引用计数与 fk_inbound_bom 的 ON DELETE RESTRICT 同口径：软删行物理上
+                // 仍在库、外键仍会挡删，须看到已删行——raw 计数不经全局软删过滤
+                // （db-scheme.md §7.1 设计说明③），物理清理后自然放行
+                const [ledgerCount] = await tx.$queryRaw<Array<{ cnt: bigint | number }>>`
+                SELECT (SELECT COUNT(*) FROM inbound_ledger WHERE bom_id = ${bom.id})
+                     + (SELECT COUNT(*) FROM stock_adjustment WHERE bom_id = ${bom.id}) AS cnt
+            `;
+                if (Number(ledgerCount!.cnt) > 0) {
+                    throw new ConflictException("BOM 已有入库或库存调整流水，不可删除");
+                }
 
-            const orderRefs = await tx.salesOrderTable.count({ where: { bomId: bom.id } });
-            if (orderRefs > 0) {
-                throw new ConflictException("BOM 已被销售订单引用，不可删除");
-            }
-            const ledgerRefs =
-                (await tx.inboundLedger.count({ where: { bomId: bom.id } })) +
-                (await tx.stockAdjustment.count({ where: { bomId: bom.id } }));
-            if (ledgerRefs > 0) {
-                throw new ConflictException("BOM 已有入库或库存调整流水，不可删除");
-            }
+                const [category, creator, items] = await Promise.all([
+                    tx.bomCategory.findUnique({ where: { id: bom.categoryId }, select: { name: true } }),
+                    tx.sysUser.findUnique({ where: { id: bom.createdBy }, select: { name: true } }),
+                    tx.bomItem.findMany({ where: { bomId: bom.id } }),
+                ]);
+                const snapshot = this.toBom({
+                    ...bom,
+                    category: { name: category?.name ?? "" },
+                    creator: { name: creator?.name ?? "" },
+                    items,
+                });
 
-            const [category, creator, items] = await Promise.all([
-                tx.bomCategory.findUnique({ where: { id: bom.categoryId }, select: { name: true } }),
-                tx.sysUser.findUnique({ where: { id: bom.createdBy }, select: { name: true } }),
-                tx.bomItem.findMany({ where: { bomId: bom.id } }),
-            ]);
-            const snapshot = this.toBom({
-                ...bom,
-                category: { name: category?.name ?? "" },
-                creator: { name: creator?.name ?? "" },
-                items,
-            });
-
-            await tx.bomItem.deleteMany({ where: { bomId: bom.id } });
-            await tx.bomTable.delete({ where: { id: bom.id } });
-            const now = new Date();
-            await recordOpLog(tx, this.snowflake, actor, {
-                action: "delete_bom",
-                targetType: "bom",
-                targetId: bom.id,
-                targetCode: bom.bomCode,
-                detail: snapshot as unknown as Prisma.InputJsonValue,
-                now,
-            });
-            await this.idempotency.complete(tx, {
-                id: placeholderId,
-                httpStatus: 200,
+                await tx.bomItem.deleteMany({ where: { bomId: bom.id } });
+                await tx.bomTable.delete({ where: { id: bom.id } });
+                const now = new Date();
+                await recordOpLog(tx, this.snowflake, actor, {
+                    action: "delete_bom",
+                    targetType: "bom",
+                    targetId: bom.id,
+                    targetCode: bom.bomCode,
+                    detail: snapshot as unknown as Prisma.InputJsonValue,
+                    now,
+                });
                 // JSON 列不接受 null 占位；重放路径已归一为 null，此快照仅审计兜底
-                responseBody: { deleted: true, code: bom.bomCode },
-                resource: { type: "bom", code: bom.bomCode },
-            });
-            return null;
-        });
+                return {
+                    httpStatus: 200,
+                    responseBody: { deleted: true, code: bom.bomCode },
+                    resource: { type: "bom", code: bom.bomCode },
+                };
+            },
+        );
     }
 
     /** 定位启用品类并锁定其行：同品类建档串行化，判重与取号在锁内无并发窗口 */ private async lockCategoryByName(

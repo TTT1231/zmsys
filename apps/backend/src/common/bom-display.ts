@@ -89,17 +89,11 @@ export function bomItemViewsOf(items: readonly BomItemSnapshotInput[]): BomItemV
 }
 
 /**
- * 打印文档 bomSpec（契约 outbound:print）：直接取订单冻结快照的 spec 字符串；
- * 存量/异常快照缺失 spec 时按冻结 items 以同一规则拼装，绝不读当前目录。
+ * 打印文档 bomSpec（契约 outbound:print）：取订单冻结快照的 spec 字符串；
+ * 存量快照缺失的 spec 已由迁移 20260947000000 一次性回填，读侧不再按 items
+ * 兜底重拼——异常缺失返回空串（与空值不展示口径一致）。
  */
 export function bomSpecOf(snapshot: unknown): string {
-    const shape = snapshot as { spec?: unknown; items?: unknown } | null;
-    if (typeof shape?.spec === "string" && shape.spec.trim()) {
-        return shape.spec;
-    }
-    const items = Array.isArray(shape?.items) ? (shape!.items as Array<{ groupName?: unknown; name?: unknown }>) : [];
-    return items
-        .filter(item => typeof item?.groupName === "string" && typeof item?.name === "string")
-        .map(item => summaryPartOf(item as { groupName: string; name: string }))
-        .join(" · ");
+    const shape = snapshot as { spec?: unknown } | null;
+    return typeof shape?.spec === "string" && shape.spec.trim() ? shape.spec : "";
 }

@@ -2,6 +2,7 @@ import { Prisma } from "../generated/prisma/client";
 import type { SnowflakeGenerator } from "../common/snowflake";
 import type { AuthUser } from "../common/types/auth-user";
 import type { Tx } from "../prisma/transaction.runner";
+import type { OpLogDetailOf } from "./snapshots";
 
 /**
  * op_log 同事务审计（db-scheme.md §7）：覆盖审计清单——订单创建/删除、客户创建/更新、
@@ -27,21 +28,27 @@ export type OpLogAction =
     | "db_backup"
     | "db_restore";
 
-export interface RecordOpLogParams {
-    action: OpLogAction;
+/** 进入系统日志业务时间线的动作（db_backup/db_restore 为系统审计，不进时间线）；
+ *  新增 OpLogAction 后必须显式归类：登记到 system-logs 的域映射（加入本别名）
+ *  或明确留作审计动作——两侧编译期都会强制这一决策 */
+export type TimelineOpLogAction = Exclude<OpLogAction, "db_backup" | "db_restore">;
+
+export interface RecordOpLogParams<A extends OpLogAction = OpLogAction> {
+    action: A;
     targetType: string;
     targetId: bigint;
     targetCode: string;
-    detail: Prisma.InputJsonValue;
+    /** detail 形态按动作收窄（domain/snapshots.ts 的契约）；未登记动作为宽松 JSON */
+    detail: A extends keyof OpLogDetailOf ? OpLogDetailOf[A] : Prisma.InputJsonValue;
     /** 事务内统一时刻（与业务行 created_at 同源） */
     now: Date;
 }
 
-export async function recordOpLog(
+export async function recordOpLog<A extends OpLogAction>(
     tx: Tx,
     snowflake: SnowflakeGenerator,
     operator: Pick<AuthUser, "id" | "name" | "role">,
-    params: RecordOpLogParams,
+    params: RecordOpLogParams<A>,
 ): Promise<void> {
     await tx.opLog.create({
         data: {
@@ -53,7 +60,7 @@ export async function recordOpLog(
             targetType: params.targetType,
             targetId: params.targetId,
             targetCode: params.targetCode,
-            detailJson: params.detail,
+            detailJson: params.detail as Prisma.InputJsonValue,
             createdAt: params.now,
         },
     });

@@ -1,5 +1,4 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { TransactionRunner } from "../prisma/transaction.runner";
 import type { Tx } from "../prisma/transaction.runner";
@@ -9,7 +8,7 @@ import { maskPhone } from "../common/phone";
 import { formatDateColumn } from "../common/datetime";
 import { beijingDayKey } from "../common/beijing-day";
 import { CUSTOMER_OWNER_ROLE_CODES, isEligibleCustomerOwner } from "../constants";
-import { assertVersionMatches, lockRowByKey } from "../domain/concurrency";
+import { assertVersionMatches, lockRowForWrite, lockRowByKey } from "../domain/concurrency";
 import { recordOpLog } from "../domain/op-log";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
 import type { AuthUser } from "../common/types/auth-user";
@@ -98,66 +97,56 @@ export class CustomersService {
         actor: AuthUser,
         idempotencyKey: string | undefined,
     ): Promise<Customer> {
-        const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: "POST", body: dto });
-
-        return this.txRunner.run(async (tx: Tx) => {
-            const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
+        return this.idempotency.runGuarded(
+            {
                 actorId: BigInt(actor.id),
                 operationKey: CREATE_OPERATION_KEY,
-                key,
-                requestHash,
-            });
-            if (replay) {
-                return replay.body as unknown as Customer;
-            }
-            if (placeholderId === null) {
-                throw new Error("幂等占位缺失");
-            }
+                idempotencyKey,
+                digest: { method: "POST", body: dto },
+            },
+            async (tx: Tx, { idempotencyKey: key }) => {
+                const owner = await this.lockOwnerByAccount(tx, dto.ownerAccount);
+                const now = new Date();
+                const id = this.snowflake.next();
+                const customerCode = await this.sequence.nextCode(tx, "customer", "");
+                const created = await tx.customTable.create({
+                    data: {
+                        id,
+                        customerCode,
+                        name: dto.name,
+                        contactPerson: dto.contact,
+                        contactPhone: dto.phone,
+                        // 省市/地址可空：空串规范化为 NULL（db-scheme.md §1.1 无值统一 NULL）
+                        province: dto.province || null,
+                        city: dto.city || null,
+                        district: dto.district || null,
+                        town: dto.town || null,
+                        address: dto.address || null,
+                        ownerId: owner.id,
+                        payTerms: dto.payTerms,
+                        requestKey: this.idempotency.requestKey(BigInt(actor.id), CREATE_OPERATION_KEY, key),
+                        createdBy: BigInt(actor.id),
+                        updatedBy: BigInt(actor.id),
+                        createdAt: now,
+                    },
+                });
+                await recordOpLog(tx, this.snowflake, actor, {
+                    action: "create_customer",
+                    targetType: "customer",
+                    targetId: id,
+                    targetCode: customerCode,
+                    detail: { name: dto.name, ownerAccount: dto.ownerAccount },
+                    now,
+                });
 
-            const owner = await this.lockOwnerByAccount(tx, dto.ownerAccount);
-            const now = new Date();
-            const id = this.snowflake.next();
-            const customerCode = await this.sequence.nextCode(tx, "customer", "");
-            const created = await tx.customTable.create({
-                data: {
-                    id,
-                    customerCode,
-                    name: dto.name,
-                    contactPerson: dto.contact,
-                    contactPhone: dto.phone,
-                    // 省市/地址可空：空串规范化为 NULL（db-scheme.md §1.1 无值统一 NULL）
-                    province: dto.province || null,
-                    city: dto.city || null,
-                    district: dto.district || null,
-                    town: dto.town || null,
-                    address: dto.address || null,
-                    ownerId: owner.id,
-                    payTerms: dto.payTerms,
-                    requestKey: this.idempotency.requestKey(BigInt(actor.id), CREATE_OPERATION_KEY, key),
-                    createdBy: BigInt(actor.id),
-                    updatedBy: BigInt(actor.id),
-                    createdAt: now,
-                },
-            });
-            await recordOpLog(tx, this.snowflake, actor, {
-                action: "create_customer",
-                targetType: "customer",
-                targetId: id,
-                targetCode: customerCode,
-                detail: { name: dto.name, ownerAccount: dto.ownerAccount },
-                now,
-            });
-
-            const customer = this.toCustomer({ ...created, owner }, false);
-            await this.idempotency.complete(tx, {
-                id: placeholderId,
-                httpStatus: 200,
-                responseBody: customer as unknown as Prisma.InputJsonValue,
-                resource: { type: "customer", code: customerCode },
-            });
-            return customer;
-        });
+                const customer = this.toCustomer({ ...created, owner }, false);
+                return {
+                    httpStatus: 200,
+                    responseBody: customer,
+                    resource: { type: "customer", code: customerCode },
+                };
+            },
+        );
     }
 
     /**
@@ -251,7 +240,6 @@ export class CustomersService {
                 where: {
                     customerId: current.id,
                     lifecycleStatus: "ACTIVE",
-                    deletedAt: null,
                     orderDate: { gte: this.cooperationWindowStart() },
                 },
                 select: { id: true },
@@ -272,7 +260,7 @@ export class CustomersService {
     private async cooperatingCustomerIds(db: Pick<PrismaService, "salesOrderTable">): Promise<Set<bigint>> {
         const rows = await db.salesOrderTable.groupBy({
             by: ["customerId"],
-            where: { lifecycleStatus: "ACTIVE", deletedAt: null, orderDate: { gte: this.cooperationWindowStart() } },
+            where: { lifecycleStatus: "ACTIVE", orderDate: { gte: this.cooperationWindowStart() } },
         });
         return new Set(rows.map(row => row.customerId));
     }
@@ -290,17 +278,19 @@ export class CustomersService {
         return owner;
     }
 
-    /** 锁定目标客户行并携带当前负责人；不存在抛 404 */
-    private async lockByCode(tx: Tx, code: string): Promise<CustomerRow> {
-        await lockRowByKey(tx, "custom_table", code);
-        const customer = await tx.customTable.findUnique({
-            where: { customerCode: code },
-            include: { owner: { select: { id: true, name: true, account: true } } },
-        });
-        if (!customer) {
-            throw new NotFoundException("客户不存在");
-        }
-        return customer;
+    /** 锁定目标客户行并携带当前负责人；不存在抛 404（序列收口于 lockRowForWrite） */
+    private lockByCode(tx: Tx, code: string): Promise<CustomerRow> {
+        return lockRowForWrite(
+            tx,
+            "custom_table",
+            code,
+            inner =>
+                inner.customTable.findUnique({
+                    where: { customerCode: code },
+                    include: { owner: { select: { id: true, name: true, account: true } } },
+                }),
+            "客户不存在",
+        );
     }
 
     /** 契约 Customer 映射：version 序列化为 number，日期列 yyyy-MM-dd，手机号掩码 */

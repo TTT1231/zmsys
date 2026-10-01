@@ -138,7 +138,8 @@ export class LedgerPurgeService implements OnApplicationBootstrap, OnApplication
                 ).map(row => row.id),
             async (tx, batch) => {
                 await tx.inboundChangeLog.deleteMany({ where: { inboundId: { in: batch } } });
-                await tx.inboundLedger.deleteMany({ where: { id: { in: batch } } });
+                // deletedAt 显式条件即软删过滤扩展的豁免声明：物理清理只删已软删行
+                await tx.inboundLedger.deleteMany({ where: { id: { in: batch }, deletedAt: { not: null } } });
             },
         );
     }
@@ -160,7 +161,8 @@ export class LedgerPurgeService implements OnApplicationBootstrap, OnApplication
                     where: { shipmentId: { in: batch }, correctionOfId: { not: null } },
                 });
                 await tx.outboundLedger.deleteMany({ where: { shipmentId: { in: batch } } });
-                await tx.outboundShipment.deleteMany({ where: { id: { in: batch } } });
+                // deletedAt 显式条件即软删过滤扩展的豁免声明：物理清理只删已软删行
+                await tx.outboundShipment.deleteMany({ where: { id: { in: batch }, deletedAt: { not: null } } });
             },
         );
     }
@@ -181,7 +183,8 @@ export class LedgerPurgeService implements OnApplicationBootstrap, OnApplication
                 ).map(row => row.id),
             async (tx, batch) => {
                 await tx.salesOrderChangeLog.deleteMany({ where: { orderId: { in: batch } } });
-                await tx.salesOrderTable.deleteMany({ where: { id: { in: batch } } });
+                // deletedAt 显式条件即软删过滤扩展的豁免声明：物理清理只删已软删行
+                await tx.salesOrderTable.deleteMany({ where: { id: { in: batch }, deletedAt: { not: null } } });
             },
         );
     }

@@ -554,11 +554,14 @@ describe("系统日志 (e2e)", () => {
             const page = await logs(superToken, `?keyword=${oldOrderNo}&limit=10`);
             expect(page.statusCode).toBe(200);
             const changes = entriesOf(page)[0]!.changes!;
+            // 读时回填已由迁移 20260947000000 一次性回填取代：新写入的 create_order
+            // 恒带 bomRemark,缺该键的行按空值不展示口径降级（卡片不出现 BOM 备注字段）
+            expect((changes as Array<{ key: string }>).some(change => change.key === "bomRemark")).toBe(false);
             expect(changes).toContainEqual({
-                key: "bomRemark",
-                label: "BOM 备注",
+                key: "customer",
+                label: "客户",
                 before: null,
-                after: BOM_REMARK,
+                after: `日志客户甲_${RUN}`,
             });
         } finally {
             await prisma.opLog.deleteMany({ where: { targetCode: oldOrderNo } });

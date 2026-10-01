@@ -1,5 +1,4 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { TransactionRunner } from "../prisma/transaction.runner";
 import type { Tx } from "../prisma/transaction.runner";
@@ -9,9 +8,10 @@ import { formatDateColumn, formatBeijingStamp, toDateColumn } from "../common/da
 import { beijingDayWindow } from "../common/beijing-day";
 import { PERMISSIONS } from "../constants";
 import type { ExpectedVersionDto } from "../common/dto/expected-version.dto";
-import { assertVersionMatches, lockRowByKey, lockRowsById } from "../domain/concurrency";
+import { assertVersionMatches, lockRowForWrite, lockRowsById } from "../domain/concurrency";
 import { getStockQty } from "../domain/inventory";
 import { recordOpLog } from "../domain/op-log";
+import type { EntrySnapshotCore } from "../domain/snapshots";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
 import type { AuthUser } from "../common/types/auth-user";
 import type { InboundLedger, StockAdjustment } from "../generated/prisma/client";
@@ -53,7 +53,6 @@ export class InboundService {
     /** 入库台账（契约 inbound:view）：含 active/voided 便于审计，已删除行不返回，新记录在前 */
     async listInbound(): Promise<InboundRow[]> {
         const rows = await this.prisma.inboundLedger.findMany({
-            where: { deletedAt: null },
             orderBy: [{ createdAt: "desc" }, { id: "desc" }],
             include: {
                 bom: { select: { bomCode: true } },
@@ -74,65 +73,55 @@ export class InboundService {
         actor: AuthUser,
         idempotencyKey: string | undefined,
     ): Promise<InboundRow> {
-        const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: "POST", body: dto });
-
-        return this.txRunner.run(async (tx: Tx) => {
-            const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
+        return this.idempotency.runGuarded(
+            {
                 actorId: BigInt(actor.id),
                 operationKey: CREATE_OPERATION_KEY,
-                key,
-                requestHash,
-            });
-            if (replay) {
-                return replay.body as unknown as InboundRow;
-            }
-            if (placeholderId === null) {
-                throw new Error("幂等占位缺失");
-            }
+                idempotencyKey,
+                digest: { method: "POST", body: dto },
+            },
+            async (tx: Tx, { idempotencyKey: key }) => {
+                const bom = await this.lockBomByCode(tx, dto.bomCode);
+                const now = new Date();
+                const entryNo = await this.sequence.nextCode(tx, "inbound", dto.date);
+                const created = await tx.inboundLedger.create({
+                    data: {
+                        id: this.snowflake.next(),
+                        entryNo,
+                        bomId: bom.id,
+                        qty: dto.qty,
+                        businessDate: toDateColumn(dto.date),
+                        operatorId: BigInt(actor.id),
+                        remark: dto.remark,
+                        status: "ACTIVE",
+                        requestKey: this.idempotency.requestKey(BigInt(actor.id), CREATE_OPERATION_KEY, key),
+                        updatedBy: BigInt(actor.id),
+                        createdAt: now,
+                        updatedAt: now,
+                    },
+                    include: {
+                        bom: { select: { bomCode: true } },
+                        operator: { select: { name: true } },
+                        updater: { select: { name: true } },
+                    },
+                });
 
-            const bom = await this.lockBomByCode(tx, dto.bomCode);
-            const now = new Date();
-            const entryNo = await this.sequence.nextCode(tx, "inbound", dto.date);
-            const created = await tx.inboundLedger.create({
-                data: {
-                    id: this.snowflake.next(),
-                    entryNo,
-                    bomId: bom.id,
-                    qty: dto.qty,
-                    businessDate: toDateColumn(dto.date),
-                    operatorId: BigInt(actor.id),
-                    remark: dto.remark,
-                    status: "ACTIVE",
-                    requestKey: this.idempotency.requestKey(BigInt(actor.id), CREATE_OPERATION_KEY, key),
-                    updatedBy: BigInt(actor.id),
-                    createdAt: now,
-                    updatedAt: now,
-                },
-                include: {
-                    bom: { select: { bomCode: true } },
-                    operator: { select: { name: true } },
-                    updater: { select: { name: true } },
-                },
-            });
-
-            const row = this.toInboundRow(created);
-            await recordOpLog(tx, this.snowflake, actor, {
-                action: "create_inbound",
-                targetType: "inbound",
-                targetId: created.id,
-                targetCode: entryNo,
-                detail: this.entrySnapshot(created),
-                now,
-            });
-            await this.idempotency.complete(tx, {
-                id: placeholderId,
-                httpStatus: 200,
-                responseBody: row as unknown as Prisma.InputJsonValue,
-                resource: { type: "inbound", code: entryNo },
-            });
-            return row;
-        });
+                const row = this.toInboundRow(created);
+                await recordOpLog(tx, this.snowflake, actor, {
+                    action: "create_inbound",
+                    targetType: "inbound",
+                    targetId: created.id,
+                    targetCode: entryNo,
+                    detail: this.entrySnapshot(created),
+                    now,
+                });
+                return {
+                    httpStatus: 200,
+                    responseBody: row,
+                    resource: { type: "inbound", code: entryNo },
+                };
+            },
+        );
     }
 
     /**
@@ -169,7 +158,6 @@ export class InboundService {
                     businessDate: toDateColumn(dto.date),
                     remark: dto.remark,
                     updatedBy: BigInt(actor.id),
-                    updatedAt: now,
                     rowVersion: { increment: 1 },
                 },
                 include: {
@@ -208,81 +196,74 @@ export class InboundService {
         idempotencyKey: string | undefined,
     ): Promise<InboundRow> {
         const operationKey = voidOperationKeyOf(entryNo);
-        const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: "POST", pathParams: { entryNo }, body: dto });
-
-        return this.txRunner.run(async (tx: Tx) => {
-            const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
+        return this.idempotency.runGuarded(
+            {
                 actorId: BigInt(actor.id),
                 operationKey,
-                key,
-                requestHash,
-            });
-            if (replay) {
-                return replay.body as unknown as InboundRow;
-            }
-            if (placeholderId === null) {
-                throw new Error("幂等占位缺失");
-            }
+                idempotencyKey,
+                digest: { method: "POST", pathParams: { entryNo }, body: dto },
+            },
+            async (tx: Tx, { idempotencyKey: key }) => {
+                const now = new Date();
+                const { row: current } = await this.lockEntryForWrite(tx, entryNo);
+                this.assertEditableToday(current, "void", actor);
+                assertVersionMatches(current.rowVersion, dto.expectedVersion, "入库记录已被其他人修改，请刷新后重试");
+                const stock = await getStockQty(tx, current.bomId);
+                if (stock - current.qty < 0) {
+                    throw new ConflictException(
+                        "这笔入库作废后库存不足。请先到「成品出库」处理该成品的有效出库单，或核对库存调整",
+                    );
+                }
 
-            const now = new Date();
-            const { row: current } = await this.lockEntryForWrite(tx, entryNo);
-            this.assertEditableToday(current, "void", actor);
-            assertVersionMatches(current.rowVersion, dto.expectedVersion, "入库记录已被其他人修改，请刷新后重试");
-            const stock = await getStockQty(tx, current.bomId);
-            if (stock - current.qty < 0) {
-                throw new ConflictException(
-                    "这笔入库作废后库存不足。请先到「成品出库」处理该成品的有效出库单，或核对库存调整",
-                );
-            }
+                const updated = await tx.inboundLedger.update({
+                    where: { id: current.id },
+                    data: {
+                        status: "VOIDED",
+                        updatedBy: BigInt(actor.id),
+                        rowVersion: { increment: 1 },
+                    },
+                    include: {
+                        bom: { select: { bomCode: true } },
+                        operator: { select: { name: true } },
+                        updater: { select: { name: true } },
+                    },
+                });
+                await tx.inboundChangeLog.create({
+                    data: {
+                        id: this.snowflake.next(),
+                        inboundId: current.id,
+                        operatorId: BigInt(actor.id),
+                        eventType: "VOID",
+                        beforeVersion: current.rowVersion,
+                        afterVersion: updated.rowVersion,
+                        reason: dto.reason,
+                        requestKey: this.idempotency.requestKey(BigInt(actor.id), operationKey, key),
+                        beforeJson: this.entrySnapshot(current),
+                        afterJson: this.entrySnapshot(updated),
+                        createdAt: now,
+                    },
+                });
+                await recordOpLog(tx, this.snowflake, actor, {
+                    action: "void_inbound",
+                    targetType: "inbound",
+                    targetId: current.id,
+                    targetCode: entryNo,
+                    detail: {
+                        before: this.entrySnapshot(current),
+                        after: this.entrySnapshot(updated),
+                        reason: dto.reason,
+                    },
+                    now,
+                });
 
-            const updated = await tx.inboundLedger.update({
-                where: { id: current.id },
-                data: {
-                    status: "VOIDED",
-                    updatedBy: BigInt(actor.id),
-                    updatedAt: now,
-                    rowVersion: { increment: 1 },
-                },
-                include: {
-                    bom: { select: { bomCode: true } },
-                    operator: { select: { name: true } },
-                    updater: { select: { name: true } },
-                },
-            });
-            await tx.inboundChangeLog.create({
-                data: {
-                    id: this.snowflake.next(),
-                    inboundId: current.id,
-                    operatorId: BigInt(actor.id),
-                    eventType: "VOID",
-                    beforeVersion: current.rowVersion,
-                    afterVersion: updated.rowVersion,
-                    reason: dto.reason,
-                    requestKey: this.idempotency.requestKey(BigInt(actor.id), operationKey, key),
-                    beforeJson: this.entrySnapshot(current),
-                    afterJson: this.entrySnapshot(updated),
-                    createdAt: now,
-                },
-            });
-            await recordOpLog(tx, this.snowflake, actor, {
-                action: "void_inbound",
-                targetType: "inbound",
-                targetId: current.id,
-                targetCode: entryNo,
-                detail: { before: this.entrySnapshot(current), after: this.entrySnapshot(updated), reason: dto.reason },
-                now,
-            });
-
-            const row = this.toInboundRow(updated);
-            await this.idempotency.complete(tx, {
-                id: placeholderId,
-                httpStatus: 200,
-                responseBody: row as unknown as Prisma.InputJsonValue,
-                resource: { type: "inbound", code: entryNo },
-            });
-            return row;
-        });
+                const row = this.toInboundRow(updated);
+                return {
+                    httpStatus: 200,
+                    responseBody: row,
+                    resource: { type: "inbound", code: entryNo },
+                };
+            },
+        );
     }
 
     /**
@@ -300,62 +281,49 @@ export class InboundService {
         idempotencyKey: string | undefined,
     ): Promise<null> {
         const operationKey = deleteOperationKeyOf(entryNo);
-        const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: "POST", pathParams: { entryNo }, body: dto });
-
-        return this.txRunner.run(async (tx: Tx) => {
-            const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
+        // 删除的契约响应恒为 data:null：重放与成功均归一返回 null（runGuardedVoid）
+        return this.idempotency.runGuardedVoid(
+            {
                 actorId: BigInt(actor.id),
                 operationKey,
-                key,
-                requestHash,
-            });
-            // 删除的契约响应恒为 data:null，重放无需读快照，直接归一返回
-            if (replay) {
-                return null;
-            }
-            if (placeholderId === null) {
-                throw new Error("幂等占位缺失");
-            }
+                idempotencyKey,
+                digest: { method: "POST", pathParams: { entryNo }, body: dto },
+            },
+            async (tx: Tx) => {
+                const now = new Date();
+                const { row: current } = await this.lockEntryForWrite(tx, entryNo);
+                assertVersionMatches(current.rowVersion, dto.expectedVersion, "入库记录已被其他人修改，请刷新后重试");
+                if (current.status !== "VOIDED") {
+                    throw new ConflictException("仅已作废的入库记录可删除，请先作废");
+                }
+                const adjustmentRefs = await tx.stockAdjustment.count({ where: { relatedInboundId: current.id } });
+                if (adjustmentRefs > 0) {
+                    throw new ConflictException("存在关联的库存调整单，不可删除");
+                }
 
-            const now = new Date();
-            const { row: current } = await this.lockEntryForWrite(tx, entryNo);
-            assertVersionMatches(current.rowVersion, dto.expectedVersion, "入库记录已被其他人修改，请刷新后重试");
-            if (current.status !== "VOIDED") {
-                throw new ConflictException("仅已作废的入库记录可删除，请先作废");
-            }
-            if (current.deletedAt !== null) {
-                throw new ConflictException("该入库记录已删除");
-            }
-            const adjustmentRefs = await tx.stockAdjustment.count({ where: { relatedInboundId: current.id } });
-            if (adjustmentRefs > 0) {
-                throw new ConflictException("存在关联的库存调整单，不可删除");
-            }
-
-            await tx.inboundLedger.update({
-                where: { id: current.id },
-                data: { deletedAt: now },
-            });
-            await recordOpLog(tx, this.snowflake, actor, {
-                action: "delete_inbound",
-                targetType: "inbound",
-                targetId: current.id,
-                targetCode: entryNo,
-                detail: {
-                    ...this.entrySnapshot(current),
-                    voidReason: await this.lastVoidReasonOf(tx, current.id),
-                    deletedBy: actor.name,
-                },
-                now,
-            });
-            await this.idempotency.complete(tx, {
-                id: placeholderId,
-                httpStatus: 200,
-                responseBody: { deleted: true, entryNo },
-                resource: { type: "inbound", code: entryNo },
-            });
-            return null;
-        });
+                await tx.inboundLedger.update({
+                    where: { id: current.id },
+                    data: { deletedAt: now },
+                });
+                await recordOpLog(tx, this.snowflake, actor, {
+                    action: "delete_inbound",
+                    targetType: "inbound",
+                    targetId: current.id,
+                    targetCode: entryNo,
+                    detail: {
+                        ...this.entrySnapshot(current),
+                        voidReason: await this.lastVoidReasonOf(tx, current.id),
+                        deletedBy: actor.name,
+                    },
+                    now,
+                });
+                return {
+                    httpStatus: 200,
+                    responseBody: { deleted: true, entryNo },
+                    resource: { type: "inbound", code: entryNo },
+                };
+            },
+        );
     }
 
     /** 该单最后一条 VOID 变更日志的原因（删除快照冻结作废原因，清理后仍可审计） */
@@ -391,85 +359,76 @@ export class InboundService {
         actor: AuthUser,
         idempotencyKey: string | undefined,
     ): Promise<StockAdjustmentRow> {
-        const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: "POST", body: dto });
-
-        return this.txRunner.run(async (tx: Tx) => {
-            const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
+        return this.idempotency.runGuarded(
+            {
                 actorId: BigInt(actor.id),
                 operationKey: ADJUST_OPERATION_KEY,
-                key,
-                requestHash,
-            });
-            if (replay) {
-                return replay.body as unknown as StockAdjustmentRow;
-            }
-            if (placeholderId === null) {
-                throw new Error("幂等占位缺失");
-            }
+                idempotencyKey,
+                digest: { method: "POST", body: dto },
+            },
+            async (tx: Tx, { idempotencyKey: key }) => {
+                const bom = await this.lockBomByCode(tx, dto.bomCode);
+                let relatedInboundId: bigint | null = null;
+                if (dto.relatedInboundNo) {
+                    // 已软删除的入库单不可再被新调整单关联——否则清理任务会因引用永久跳过该行
+                    const related = await tx.inboundLedger.findFirst({
+                        where: { entryNo: dto.relatedInboundNo },
+                        select: { id: true, bomId: true },
+                    });
+                    if (!related) {
+                        throw new NotFoundException("关联入库单不存在或已删除");
+                    }
+                    if (related.bomId !== bom.id) {
+                        throw new ConflictException("库存调整与关联入库单的 BOM 必须一致");
+                    }
+                    relatedInboundId = related.id;
+                }
+                const stock = await getStockQty(tx, bom.id);
+                if (stock + dto.qtyDelta < 0) {
+                    throw new ConflictException("调整后库存不能小于 0");
+                }
 
-            const bom = await this.lockBomByCode(tx, dto.bomCode);
-            let relatedInboundId: bigint | null = null;
-            if (dto.relatedInboundNo) {
-                // 已软删除的入库单不可再被新调整单关联——否则清理任务会因引用永久跳过该行
-                const related = await tx.inboundLedger.findFirst({
-                    where: { entryNo: dto.relatedInboundNo, deletedAt: null },
-                    select: { id: true, bomId: true },
+                const now = new Date();
+                const adjustmentNo = await this.sequence.nextCode(tx, "adjust", dto.date);
+                const created = await tx.stockAdjustment.create({
+                    data: {
+                        id: this.snowflake.next(),
+                        adjustmentNo,
+                        bomId: bom.id,
+                        qtyDelta: dto.qtyDelta,
+                        businessDate: toDateColumn(dto.date),
+                        relatedInboundId,
+                        operatorId: BigInt(actor.id),
+                        reason: dto.reason,
+                        requestKey: this.idempotency.requestKey(BigInt(actor.id), ADJUST_OPERATION_KEY, key),
+                        createdAt: now,
+                    },
+                    include: {
+                        bom: { select: { bomCode: true } },
+                        operator: { select: { name: true } },
+                        relatedInbound: { select: { entryNo: true } },
+                    },
                 });
-                if (!related) {
-                    throw new NotFoundException("关联入库单不存在或已删除");
-                }
-                if (related.bomId !== bom.id) {
-                    throw new ConflictException("库存调整与关联入库单的 BOM 必须一致");
-                }
-                relatedInboundId = related.id;
-            }
-            const stock = await getStockQty(tx, bom.id);
-            if (stock + dto.qtyDelta < 0) {
-                throw new ConflictException("调整后库存不能小于 0");
-            }
 
-            const now = new Date();
-            const adjustmentNo = await this.sequence.nextCode(tx, "adjust", dto.date);
-            const created = await tx.stockAdjustment.create({
-                data: {
-                    id: this.snowflake.next(),
-                    adjustmentNo,
-                    bomId: bom.id,
-                    qtyDelta: dto.qtyDelta,
-                    businessDate: toDateColumn(dto.date),
-                    relatedInboundId,
-                    operatorId: BigInt(actor.id),
-                    reason: dto.reason,
-                    requestKey: this.idempotency.requestKey(BigInt(actor.id), ADJUST_OPERATION_KEY, key),
-                    createdAt: now,
-                },
-                include: {
-                    bom: { select: { bomCode: true } },
-                    operator: { select: { name: true } },
-                    relatedInbound: { select: { entryNo: true } },
-                },
-            });
-
-            const row = this.toAdjustmentRow(created);
-            await this.idempotency.complete(tx, {
-                id: placeholderId,
-                httpStatus: 200,
-                responseBody: row as unknown as Prisma.InputJsonValue,
-                resource: { type: "stock-adjustment", code: adjustmentNo },
-            });
-            return row;
-        });
+                const row = this.toAdjustmentRow(created);
+                return {
+                    httpStatus: 200,
+                    responseBody: row,
+                    resource: { type: "stock-adjustment", code: adjustmentNo },
+                };
+            },
+        );
     }
 
     /** 锁定 BOM 行并返回最小行（含 id）；不存在抛 404 */
-    private async lockBomByCode(tx: Tx, bomCode: string): Promise<{ id: bigint }> {
-        await lockRowByKey(tx, "bom_table", bomCode);
-        const bom = await tx.bomTable.findUnique({ where: { bomCode }, select: { id: true } });
-        if (!bom) {
-            throw new NotFoundException("成品不存在");
-        }
-        return bom;
+    private lockBomByCode(tx: Tx, bomCode: string): Promise<{ id: bigint }> {
+        return lockRowForWrite(
+            tx,
+            "bom_table",
+            bomCode,
+            inner => inner.bomTable.findUnique({ where: { bomCode }, select: { id: true } }),
+            "成品不存在",
+        );
     }
 
     /** 编码定位 BOM id（不锁定；调用方应已按锁序持有该 BOM 行锁） */
@@ -501,18 +460,21 @@ export class InboundService {
         const nextBomId = nextBomCode ? await this.resolveBomIdByCode(tx, nextBomCode) : located.bomId;
         // id 升序去重由 lockRowsById 统一完成
         await lockRowsById(tx, "bom_table", [located.bomId, nextBomId]);
-        await lockRowByKey(tx, "inbound_ledger", entryNo);
-        const row = await tx.inboundLedger.findUnique({
-            where: { entryNo },
-            include: {
-                bom: { select: { bomCode: true } },
-                operator: { select: { name: true } },
-                updater: { select: { name: true } },
-            },
-        });
-        if (!row) {
-            throw new NotFoundException("入库记录不存在");
-        }
+        const row = await lockRowForWrite(
+            tx,
+            "inbound_ledger",
+            entryNo,
+            inner =>
+                inner.inboundLedger.findUnique({
+                    where: { entryNo },
+                    include: {
+                        bom: { select: { bomCode: true } },
+                        operator: { select: { name: true } },
+                        updater: { select: { name: true } },
+                    },
+                }),
+            "入库记录不存在",
+        );
         return { row, nextBomId };
     }
 
@@ -543,7 +505,7 @@ export class InboundService {
     }
 
     /** 变更日志快照：行内业务字段（before/after 同构，便于审计比对） */
-    private entrySnapshot(row: InboundLedgerRow) {
+    private entrySnapshot(row: InboundLedgerRow): EntrySnapshotCore {
         return {
             no: row.entryNo,
             bomCode: row.bom.bomCode,

@@ -663,9 +663,11 @@ describe("成品出入库 (e2e)", () => {
         // 列表不再返回；数据库行保留软删除标记；op_log 冻结快照（含作废原因）
         const list = await app.inject({ method: "GET", url: "/api/inbound", headers: authHeaders(superToken) });
         expect(list.json().data.some((row: { no: string }) => row.no === inNo)).toBe(false);
-        const dbRow = await prisma.inboundLedger.findUnique({ where: { entryNo: inNo } });
-        expect(dbRow).not.toBeNull();
-        expect(dbRow!.deletedAt).not.toBeNull();
+        // 行保留软删除标记：e2e 侧 PrismaService 同样带全局软删注入,改用 raw 断言
+        const [softDeleted] = await prisma.$queryRaw<Array<{ deleted_at: Date | null }>>`
+            SELECT deleted_at FROM inbound_ledger WHERE entry_no = ${inNo}
+        `;
+        expect(softDeleted?.deleted_at).not.toBeNull();
         const opLog = await prisma.opLog.findFirst({ where: { action: "delete_inbound", targetCode: inNo } });
         expect(opLog).not.toBeNull();
         expect(opLog!.detailJson).toMatchObject({ no: inNo, voidReason: "录错了走删除链" });
@@ -759,9 +761,11 @@ describe("成品出入库 (e2e)", () => {
             headers: authHeaders(superToken),
         });
         expect(stockLedgerBefore.statusCode).toBe(200);
-        expect(stockLedgerBefore.json().data.flows.filter((flow: { no: string }) => flow.no === shipNo)).toHaveLength(
-            0,
-        );
+        // 净额口径统一(v_outbound_effective_event):作废单的正向与冲销事件成对入流水,
+        // 净额 0、结余与 v_bom_stock 恒等;软删后才随事件一并消失
+        const voidedFlows = stockLedgerBefore.json().data.flows.filter((flow: { no: string }) => flow.no === shipNo);
+        expect(voidedFlows).toHaveLength(2);
+        expect(voidedFlows.reduce((sum: number, flow: { qty: number }) => sum + flow.qty, 0)).toBe(0);
 
         const shipDel = await post(
             `/api/outbound/${shipNo}/delete`,
@@ -833,7 +837,10 @@ describe("成品出入库 (e2e)", () => {
         expect(bomBlocked.json().message).toBe("BOM 已有入库或库存调整流水，不可删除");
 
         // 物理清理（cutoff 传未来时刻 = 全部到期）：行与子日志同清、op_log 快照仍在
-        const shipmentRow = await prisma.outboundShipment.findUnique({ where: { shipmentNo: shipNo } });
+        // 软删行断言走 raw：e2e 侧 PrismaService 带全局软删注入，已删行对 findUnique 不可见
+        const [shipmentRow] = await prisma.$queryRaw<Array<{ id: bigint }>>`
+            SELECT id FROM outbound_shipment WHERE shipment_no = ${shipNo}
+        `;
         expect(shipmentRow).not.toBeNull();
         expect(await prisma.outboundLedger.count({ where: { shipmentId: shipmentRow!.id } })).toBe(2); // NORMAL + CORRECTION
         expect(await prisma.outboundStateLog.count({ where: { shipmentId: shipmentRow!.id } })).toBeGreaterThanOrEqual(

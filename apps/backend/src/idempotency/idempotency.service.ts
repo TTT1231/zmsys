@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
 import { Prisma } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { TransactionRunner } from "../prisma/transaction.runner";
 import type { Tx } from "../prisma/transaction.runner";
 import { SnowflakeGenerator } from "../common/snowflake";
 import { markTransactionRetryable } from "../common/errors/transaction-retry-exhausted.error";
@@ -24,6 +25,28 @@ export interface DigestInput {
 export interface StoredReplay {
     httpStatus: number;
     body: Prisma.InputJsonValue;
+}
+
+/** runGuarded 业务回调的产物：complete 所需的成功三要素 */
+export interface GuardedResult<T> {
+    httpStatus: number;
+    responseBody: T;
+    resource?: { type: string; code: string };
+}
+
+/** runGuarded 回调上下文：占位 id 与校验后的原始键（业务行 request_key 派生用） */
+export interface GuardContext {
+    placeholderId: bigint;
+    idempotencyKey: string;
+}
+
+/** runGuarded/runGuardedVoid 的公共参数（键校验、摘要与幂等三元组由服务内折叠） */
+export interface RunGuardedParams {
+    actorId: bigint;
+    operationKey: string;
+    /** 控制器透传的 Idempotency-Key 头（requireKey 校验收口于此） */
+    idempotencyKey: string | undefined;
+    digest: DigestInput;
 }
 
 /** beginOrReplay 结果：replay 非空时直接重放，不得再执行业务；否则用 placeholderId 调 complete */
@@ -87,6 +110,7 @@ export class IdempotencyService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly snowflake: SnowflakeGenerator,
+        private readonly txRunner: TransactionRunner,
     ) {}
 
     /** 校验并返回 Idempotency-Key；缺失/含控制字符/超长一律 400 */
@@ -213,5 +237,77 @@ export class IdempotencyService {
             where: { expiresAt: { lt: new Date() } },
         });
         return result.count;
+    }
+
+    /**
+     * 幂等序言/收尾收口（此前同构样板在 6 个服务手写 14 处）：键校验 → 摘要 →
+     * 事务（可重试）→ beginOrReplay → 命中重放直接返回原响应 → 占位 null 检查 →
+     * 业务回调（同事务）→ complete 落响应快照 → 返回响应体。回调返回
+     * GuardedResult（成功三要素），重放转型的 as 断言只存在于本方法内。
+     */
+    async runGuarded<T>(
+        params: RunGuardedParams,
+        fn: (tx: Tx, guard: GuardContext) => Promise<GuardedResult<T>>,
+    ): Promise<T> {
+        const key = this.requireKey(params.idempotencyKey);
+        const requestHash = this.digest(params.digest);
+        return this.txRunner.run(async (tx: Tx) => {
+            const { replay, placeholderId } = await this.beginOrReplay(tx, {
+                actorId: params.actorId,
+                operationKey: params.operationKey,
+                key,
+                requestHash,
+            });
+            if (replay) {
+                return replay.body as unknown as T;
+            }
+            if (placeholderId === null) {
+                // BeginResult 契约：replay 为空时占位必然存在；走到这里即基础设施缺陷
+                throw new Error("幂等占位缺失");
+            }
+            const guarded = await fn(tx, { placeholderId, idempotencyKey: key });
+            await this.complete(tx, {
+                id: placeholderId,
+                httpStatus: guarded.httpStatus,
+                responseBody: guarded.responseBody as unknown as Prisma.InputJsonValue,
+                resource: guarded.resource,
+            });
+            return guarded.responseBody;
+        });
+    }
+
+    /**
+     * 删除类端点的 runGuarded 变体：契约响应恒为 data:null，重放不读快照、
+     * 成功亦返回 null（complete 仍落响应快照供审计兜底）。
+     */
+    async runGuardedVoid(
+        params: RunGuardedParams,
+        fn: (tx: Tx, guard: GuardContext) => Promise<GuardedResult<Prisma.InputJsonValue>>,
+    ): Promise<null> {
+        const key = this.requireKey(params.idempotencyKey);
+        const requestHash = this.digest(params.digest);
+        await this.txRunner.run(async (tx: Tx) => {
+            const { replay, placeholderId } = await this.beginOrReplay(tx, {
+                actorId: params.actorId,
+                operationKey: params.operationKey,
+                key,
+                requestHash,
+            });
+            if (replay) {
+                return null;
+            }
+            if (placeholderId === null) {
+                throw new Error("幂等占位缺失");
+            }
+            const guarded = await fn(tx, { placeholderId, idempotencyKey: key });
+            await this.complete(tx, {
+                id: placeholderId,
+                httpStatus: guarded.httpStatus,
+                responseBody: guarded.responseBody,
+                resource: guarded.resource,
+            });
+            return null;
+        });
+        return null;
     }
 }

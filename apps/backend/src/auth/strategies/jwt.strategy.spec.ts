@@ -11,6 +11,7 @@ const baseUser = {
     status: true,
     tokenVersion: 2n,
     rowVersion: 1n,
+    role: { grantVersion: 1n },
 };
 
 function createStrategy(user: unknown, grants: { permissionCode: string }[] = []) {
@@ -78,5 +79,28 @@ describe("JwtStrategy.validate（每次请求回查数据库）", () => {
                 where: expect.objectContaining({ roleCode: "sales", permission: { isProtected: false } }),
             }),
         );
+    });
+
+    it("同 grantVersion 的后续请求命中缓存，不再重查 sys_grant", async () => {
+        const { strategy, prisma } = createStrategy(baseUser, grants);
+        await strategy.validate({ sub: "1", ver: 2, iat: 0, exp: 0, jti: "x" });
+        await strategy.validate({ sub: "1", ver: 2, iat: 0, exp: 0, jti: "x" });
+        expect(prisma.sysGrant.findMany).toHaveBeenCalledTimes(1);
+    });
+
+    it("grantVersion 递增（saveGrant 整组保存）后缓存失效，重查拿到新权限集", async () => {
+        const { strategy, prisma } = createStrategy(baseUser, grants);
+        const grantFindMany = prisma.sysGrant.findMany as ReturnType<typeof vi.fn>;
+        const userFindUnique = prisma.sysUser.findUnique as ReturnType<typeof vi.fn>;
+        await strategy.validate({ sub: "1", ver: 2, iat: 0, exp: 0, jti: "x" });
+        await strategy.validate({ sub: "1", ver: 2, iat: 0, exp: 0, jti: "x" });
+        expect(grantFindMany).toHaveBeenCalledTimes(1);
+        // 整组保存后 grant_version 递增 → 缓存失效，下一次请求重查
+        userFindUnique.mockResolvedValueOnce({ ...baseUser, role: { grantVersion: 2n } });
+        grantFindMany.mockResolvedValueOnce([{ permissionCode: "orders:view" }]);
+        const refreshed = await strategy.validate({ sub: "1", ver: 2, iat: 0, exp: 0, jti: "x" });
+        expect(grantFindMany).toHaveBeenCalledTimes(2);
+        expect(refreshed.permissions.has("orders:view")).toBe(true);
+        expect(refreshed.permissions.has("orders:create")).toBe(false);
     });
 });

@@ -41,8 +41,9 @@ export class AuthService {
         const now = new Date();
         await this.prisma.sysUser.update({
             where: { id: user.id },
-            // 登录只更新 last_login_at；显式回写 updated_at，避免 @updatedAt 把
-            // “上一次修改时间”刷成最近登录时间（个人中心展示语义：仅资料/状态/密码变更）
+            // 登录只更新 last_login_at；显式回写 updated_at 旧值，压制全局扩展的
+            // 自动注入（prisma-extensions.ts），避免"上一次修改时间"刷成最近登录时间
+            // （个人中心展示语义：仅资料/状态/密码变更）
             data: { lastLoginAt: now, updatedAt: user.updatedAt },
         });
 

@@ -4,7 +4,7 @@ import { OrdersService } from "./orders.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { TransactionRunner } from "../prisma/transaction.runner";
 import { SnowflakeGenerator } from "../common/snowflake";
-import { IdempotencyService } from "../idempotency/idempotency.service";
+import { mkIdempotencyMock, type BeginFn } from "../idempotency/idempotency.mock";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
 import type { BomTable, CustomTable, OutboundShipment, SalesOrderTable } from "../generated/prisma/client";
 
@@ -207,11 +207,10 @@ const createStore = (store: Store) => {
                 async ({ where }: { where: { orderId: bigint; state: string } }) =>
                     store.shipments.find(s => s.orderId === where.orderId && s.state === where.state) ?? null,
             ),
+            // 全局软删注入(prisma-extensions.ts)在 mock 层的等价物:无条件滤已删行
             count: vi.fn(
-                async ({ where }: { where: { orderId: bigint; deletedAt?: null } }) =>
-                    store.shipments.filter(
-                        s => s.orderId === where.orderId && (where.deletedAt === undefined || s.deletedAt === null),
-                    ).length,
+                async ({ where }: { where: { orderId: bigint } }) =>
+                    store.shipments.filter(s => s.orderId === where.orderId && s.deletedAt === null).length,
             ),
         },
         salesOrderChangeLog: {
@@ -249,18 +248,7 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>) => {
         salesOrderTable: { findMany: tx.salesOrderTable.findMany },
     } as unknown as PrismaService;
     const snowflake = { next: vi.fn(() => 9000000000000000n) } as unknown as SnowflakeGenerator;
-    const idempotency = {
-        requireKey: vi.fn((key?: string) => {
-            if (!key || key.length < 8) {
-                throw new BadRequestException("Idempotency-Key 必须为 8–128 个可见 ASCII 字符");
-            }
-            return key;
-        }),
-        digest: vi.fn(() => new Uint8Array(32)),
-        requestKey: vi.fn(() => "a".repeat(64)),
-        beginOrReplay: beginOrReplay ?? vi.fn(async () => ({ replay: null, placeholderId: 8000000000000000n })),
-        complete: vi.fn(),
-    } as unknown as IdempotencyService & Record<string, ReturnType<typeof vi.fn>>;
+    const idempotency = mkIdempotencyMock(tx.$transaction as never, beginOrReplay as BeginFn | undefined);
     const sequence = {
         nextCode: vi.fn(async (_tx: unknown, type: string, businessDate: string) =>
             type === "order" ? `ZM${businessDate.slice(2).replaceAll("-", "")}001` : "CUS-0042",

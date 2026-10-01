@@ -1,8 +1,21 @@
 /** 系统日志卡片变更提取（纯函数，node 直跑单测）：从各来源的 detail/before/after
  * JSON 产出统一的中文字段变更列表；值格式贴近时间线展示（数量带单位"个"、
  * 日期 yyyy-MM-dd、状态中文），before=null 表示新建记录。每行携带语义 key
- * （源字段名），前端据此把 BOM 编码/订单号等渲染为可点击编号链接。 */
+ * （源字段名），前端据此把 BOM 编码/订单号等渲染为可点击编号链接。
+ * 字段目录与 detail 形态的类型契约来自 domain/snapshots.ts（读写共享单一来源）：
+ * 目录 key 受 keyof 约束、手写卡片的键名经类型化视图访问——写侧改快照键名
+ * 或读侧目录漂移都会编译期报错。运行时保持逐键宽松判型（存量行可能为旧形态）。 */
 import { bomSpecOf } from "../common/bom-display";
+import type {
+    CustomerEditableFields,
+    EntrySnapshotCore,
+    InboundVoidEventDetail,
+    OrderArchiveEventDetail,
+    OrderCreateEventDetail,
+    OrderSnapshotCore,
+    ShipEventDetail,
+    ShipmentSnapshotCore,
+} from "../domain/snapshots";
 import type { SystemLogChange } from "./types";
 
 /** JSON detail 的宽松读取类型（快照字段形态随动作不同，逐键判型） */
@@ -17,9 +30,15 @@ const asText = (value: unknown): string | null => {
 };
 const qtyText = (value: unknown): string | null => (typeof value === "number" ? `${value} 个` : asText(value));
 
-/** 订单快照字段目录（orderSnapshot 同构）：label 中文映射；rowVersion 为技术字段跳过 */
-const ORDER_FIELDS: Array<{ key: string; label: string; format?: (value: unknown) => string | null }> = [
-    { key: "customer", label: "客户" },
+interface FieldSpec<K extends string> {
+    key: K;
+    label: string;
+    format?: (value: unknown) => string | null;
+}
+
+/** 订单快照字段目录（orderSnapshot 同构）：label 中文映射；rowVersion 等技术字段不在目录
+ *  （customer 关联字段不在 changeLog 的 before/after 内，编辑卡片不展示客户） */
+const ORDER_FIELDS: ReadonlyArray<FieldSpec<keyof OrderSnapshotCore>> = [
     { key: "qty", label: "订单数量", format: qtyText },
     { key: "orderDate", label: "下单日期" },
     { key: "deliverDate", label: "交货日期" },
@@ -34,7 +53,7 @@ const ORDER_FIELDS: Array<{ key: string; label: string; format?: (value: unknown
 ];
 
 /** 入库快照字段目录（entrySnapshot 同构） */
-const INBOUND_FIELDS: Array<{ key: string; label: string; format?: (value: unknown) => string | null }> = [
+const INBOUND_FIELDS: ReadonlyArray<FieldSpec<keyof EntrySnapshotCore>> = [
     { key: "bomCode", label: "BOM 编码" },
     { key: "qty", label: "入库数量", format: qtyText },
     { key: "date", label: "业务日期" },
@@ -47,7 +66,7 @@ const INBOUND_FIELDS: Array<{ key: string; label: string; format?: (value: unkno
 ];
 
 /** 客户编辑 detail.before/after 字段目录（updateCustomer 写入的 8 字段） */
-const CUSTOMER_FIELDS: Array<{ key: string; label: string }> = [
+const CUSTOMER_FIELDS: ReadonlyArray<FieldSpec<keyof CustomerEditableFields>> = [
     { key: "name", label: "客户名称" },
     { key: "contactPerson", label: "联系人" },
     { key: "province", label: "省" },
@@ -58,10 +77,10 @@ const CUSTOMER_FIELDS: Array<{ key: string; label: string }> = [
     { key: "payTerms", label: "付款条件" },
 ];
 
-function diffByFields(
+function diffByFields<K extends string>(
     before: Json | null,
     after: Json | null,
-    fields: Array<{ key: string; label: string; format?: (value: unknown) => string | null }>,
+    fields: ReadonlyArray<FieldSpec<K>>,
 ): SystemLogChange[] {
     const source = after ?? before ?? {};
     const changes: SystemLogChange[] = [];
@@ -99,7 +118,7 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
         case "delete_order": {
             // detail 为订单完整快照：创建/删除展示关键事实（before=null）；BOM 冻结
             // 快照一并透出——删除后订单与 BOM 行均可能不复存在，本日志是唯一留存
-            const snapshot = detail ?? {};
+            const snapshot = (detail ?? {}) as OrderCreateEventDetail;
             return [
                 { key: "customer", label: "客户", before: null, after: asText(snapshot.customer) },
                 { key: "bomCode", label: "BOM 编码", before: null, after: asText(snapshot.bomCode) },
@@ -111,13 +130,15 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
                 { key: "remark", label: "备注", before: null, after: asText(snapshot.remark) },
             ].filter(change => change.after !== null);
         }
-        case "archive_order":
+        case "archive_order": {
             // 归档前必为 ACTIVE（终态不可再归档），状态变更可推断；数量为归档时口径
+            const snapshot = (detail ?? {}) as OrderArchiveEventDetail;
             return [
-                { key: "customer", label: "客户", before: null, after: asText(detail?.customer) },
+                { key: "customer", label: "客户", before: null, after: asText(snapshot.customer) },
                 { key: "lifecycleStatus", label: "订单状态", before: "进行中", after: "已归档" },
-                { key: "qty", label: "订单数量", before: null, after: qtyText(detail?.qty) },
+                { key: "qty", label: "订单数量", before: null, after: qtyText(snapshot.qty) },
             ].filter(change => change.after !== null);
+        }
         case "update_customer": {
             if (!detail) return null;
             const ownerChanged = asJson(detail.ownerChanged);
@@ -160,7 +181,7 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
         }
         case "create_inbound":
         case "delete_inbound": {
-            const snapshot = detail ?? {};
+            const snapshot = (detail ?? {}) as EntrySnapshotCore;
             return INBOUND_FIELDS.map(field => ({
                 key: field.key,
                 label: field.label,
@@ -169,22 +190,26 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
             })).filter(change => change.after !== null);
         }
         case "void_inbound": {
-            return diffByFields(asJson(detail?.before), asJson(detail?.after), INBOUND_FIELDS);
+            const snapshot = (detail ?? {}) as InboundVoidEventDetail;
+            return diffByFields(asJson(snapshot.before), asJson(snapshot.after), INBOUND_FIELDS);
         }
-        case "ship":
+        case "ship": {
+            const snapshot = (detail ?? {}) as ShipEventDetail;
             return [
-                { key: "customer", label: "客户", before: null, after: asText(detail?.customer) },
-                { key: "qty", label: "发货数量", before: null, after: qtyText(detail?.qty) },
-                { key: "orderNo", label: "订单号", before: null, after: asText(detail?.orderNo) },
-                { key: "remark", label: "备注", before: null, after: asText(detail?.remark) },
+                { key: "customer", label: "客户", before: null, after: asText(snapshot.customer) },
+                { key: "qty", label: "发货数量", before: null, after: qtyText(snapshot.qty) },
+                { key: "orderNo", label: "订单号", before: null, after: asText(snapshot.orderNo) },
+                { key: "remark", label: "备注", before: null, after: asText(snapshot.remark) },
             ].filter(change => change.after !== null);
+        }
         case "void_outbound":
         case "delete_outbound": {
             // shipmentSnapshot：客户与数量/订单号关键事实
+            const snapshot = (detail ?? {}) as ShipmentSnapshotCore;
             return [
-                { key: "customer", label: "客户", before: null, after: asText(detail?.customer) },
-                { key: "qty", label: "出库数量", before: null, after: qtyText(detail?.qty) },
-                { key: "orderNo", label: "订单号", before: null, after: asText(detail?.orderNo) },
+                { key: "customer", label: "客户", before: null, after: asText(snapshot.customer) },
+                { key: "qty", label: "出库数量", before: null, after: qtyText(snapshot.qty) },
+                { key: "orderNo", label: "订单号", before: null, after: asText(snapshot.orderNo) },
             ].filter(change => change.after !== null);
         }
         default:

@@ -56,7 +56,7 @@ describe("changesOfOpLog", () => {
         ]);
     });
 
-    it("delete_order：同 create 口径透出 BOM 快照；存量快照缺 spec 时按冻结明细拼装", () => {
+    it("delete_order：同 create 口径透出 BOM 快照；spec 缺失的存量行已由迁移回填，读侧不再拼装", () => {
         expect(
             changesOfOpLog("delete_order", {
                 orderNo: "ZM260927002",
@@ -68,7 +68,8 @@ describe("changesOfOpLog", () => {
                 bomCode: "ZMKW0002",
                 bomName: "新微动",
                 bomModel: "",
-                // 20260922000000 之前的订单快照无 spec 字段，按 items 同规则拼装
+                // 迁移 20260947000000 已把存量缺 spec 的行回填，读时按 items 兜底
+                // 拼装的分支已退役：异常缺失按空值不展示口径降级
                 bomSpec: {
                     items: [
                         {
@@ -96,7 +97,6 @@ describe("changesOfOpLog", () => {
             { key: "customer", label: "客户", before: null, after: "锦泰科技" },
             { key: "bomCode", label: "BOM 编码", before: null, after: "ZMKW0002" },
             { key: "bomName", label: "成品名称", before: null, after: "新微动" },
-            { key: "bomSpec", label: "规格构成", before: null, after: "底座：三脚底座（有挡脚） · 杠杆：中支点 ×2" },
             { key: "qty", label: "订单数量", before: null, after: "100 个" },
             { key: "deliverDate", label: "交货日期", before: null, after: "2026-10-20" },
         ]);

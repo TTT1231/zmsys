@@ -23,8 +23,9 @@ const unitLabelOf = (products: WorkbenchProduct[]): string => {
 /**
  * 工作台经营总览聚合：products 含 v_bom_stock 实时库存，orders 的 shipped 经
  * v_order_outbound_qty 统一净额口径（无流水订单不在视图，缺行按 0 理解），
- * movements 按业务日聚合有效入库与出库净额（含作废冲销 CORRECTION），
- * 与 v_bom_stock 的库存推导一致；库存调整计入库存但不当作出入库趋势。
+ * movements 按业务日聚合有效入库与出库事件（v_outbound_effective_event，
+ * 含作废冲销 CORRECTION；软删单不参与），与 v_bom_stock 的库存推导一致；
+ * 库存调整计入库存但不当作出入库趋势。
  */
 @Injectable()
 export class WorkbenchService {
@@ -37,7 +38,6 @@ export class WorkbenchService {
                 include: { category: { select: { name: true } }, items: true },
             }),
             this.prisma.salesOrderTable.findMany({
-                where: { deletedAt: null },
                 orderBy: { orderNo: "asc" },
                 select: {
                     id: true,
@@ -61,10 +61,8 @@ export class WorkbenchService {
             `,
             this.prisma.$queryRaw<MovementRow[]>`
                 SELECT b.bom_code, e.business_date, SUM(e.qty_delta) AS total
-                FROM outbound_ledger AS e
-                JOIN outbound_shipment AS s ON s.id = e.shipment_id
-                JOIN sales_order_table AS o ON o.id = s.order_id
-                JOIN bom_table AS b ON b.id = o.bom_id
+                FROM v_outbound_effective_event AS e
+                JOIN bom_table AS b ON b.id = e.bom_id
                 GROUP BY b.bom_code, e.business_date
             `,
         ]);

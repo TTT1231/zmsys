@@ -1,4 +1,4 @@
-import { ConflictException } from "@nestjs/common";
+import { ConflictException, NotFoundException } from "@nestjs/common";
 import { Prisma } from "../generated/prisma/client";
 import type { Tx } from "../prisma/transaction.runner";
 
@@ -54,6 +54,27 @@ export async function lockRowsById(tx: Tx, table: LockableTable, ids: readonly b
  */
 export async function lockRowByKey(tx: Tx, table: LockableKeyTable, value: string): Promise<void> {
     await tx.$queryRaw`SELECT id FROM ${Prisma.raw(table)} WHERE ${Prisma.raw(LOCKABLE_KEY_COLUMNS[table])} = ${value} FOR UPDATE`;
+}
+
+/**
+ * 写前统一锁序列：按自然键锁定后重读，行不存在（含已软删——全局软删注入见
+ * prisma-extensions.ts，已删行重读即为 null）抛 404。此前"锁 → 重读 → 404"
+ * 在各服务手写、null 检查与文案临场决定，收口于此；锁序前置（如订单先 BOM
+ * 后订单的多行锁）由调用方在调用前完成，read 回调携带各自的 include。
+ */
+export async function lockRowForWrite<T>(
+    tx: Tx,
+    table: LockableKeyTable,
+    key: string,
+    read: (tx: Tx) => Promise<T | null>,
+    notFoundMessage: string,
+): Promise<T> {
+    await lockRowByKey(tx, table, key);
+    const row = await read(tx);
+    if (!row) {
+        throw new NotFoundException(notFoundMessage);
+    }
+    return row;
 }
 
 /**

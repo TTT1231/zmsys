@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from "@nestjs/common";
 import { Prisma } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { beijingDayWindow } from "../common/beijing-day";
+import type { TimelineOpLogAction } from "../domain/op-log";
 import {
     changesOfAdjustment,
     changesOfInboundEdit,
@@ -37,8 +38,9 @@ interface LogSourceRow {
     related_no: string | null;
 }
 
-/** op_log 动作 → 业务域 */
-const OP_LOG_DOMAIN = {
+/** op_log 动作 → 业务域（TimelineOpLogAction 全集约束：新增时间线动作漏登记即编译错；
+ *  db_backup/db_restore 为系统审计动作，已在 domain 侧显式排除） */
+const OP_LOG_DOMAIN: Record<TimelineOpLogAction, SystemLogDomain> = {
     create_order: "order",
     archive_order: "order",
     delete_order: "order",
@@ -52,10 +54,10 @@ const OP_LOG_DOMAIN = {
     ship: "outbound",
     void_outbound: "outbound",
     delete_outbound: "outbound",
-} as const;
+};
 
 /** op_log 动作 → 操作类型（update_customer 再按 ownerChanged 拆分 transfer/edit） */
-const OP_LOG_ACTION = {
+const OP_LOG_ACTION: Record<TimelineOpLogAction, SystemLogAction> = {
     create_order: "create",
     archive_order: "archive",
     delete_order: "delete",
@@ -69,7 +71,7 @@ const OP_LOG_ACTION = {
     ship: "ship",
     void_outbound: "void",
     delete_outbound: "delete",
-} as const;
+};
 
 const actionsOfDomain = (domain: SystemLogDomain): string =>
     Object.entries(OP_LOG_DOMAIN)
@@ -136,45 +138,11 @@ export class SystemLogsService {
 
         const hasMore = rows.length > query.limit;
         const batch = hasMore ? rows.slice(0, query.limit) : rows;
-        await this.backfillOrderBomRemark(batch);
         const last = batch.at(-1);
         return {
             items: batch.map(row => this.toEntry(row)),
             nextCursor: hasMore && last ? { at: last.created_at.toISOString(), id: last.id.toString() } : null,
         };
-    }
-
-    /**
-     * 老订单日志（bomRemark 入快照之前写入）按 detail.bomCode 回填 BOM 建档
-     * 备注：BOM 建档后不可修改且被订单引用即不可删除，实时值恒等于建档值，
-     * 回填不引入漂移；BOM 备注为空时不改写（与空值不展示口径一致）
-     */
-    private async backfillOrderBomRemark(rows: LogSourceRow[]): Promise<void> {
-        const pending = new Map<string, Record<string, unknown>>();
-        for (const row of rows) {
-            const detail = (row.detail_json ?? null) as Record<string, unknown> | null;
-            if (
-                (row.op_action === "create_order" || row.op_action === "delete_order") &&
-                detail !== null &&
-                detail.bomRemark === undefined &&
-                typeof detail.bomCode === "string" &&
-                detail.bomCode.length > 0
-            ) {
-                pending.set(detail.bomCode, detail);
-            }
-        }
-        if (pending.size === 0) {
-            return;
-        }
-        const boms = await this.prisma.bomTable.findMany({
-            where: { bomCode: { in: [...pending.keys()] } },
-            select: { bomCode: true, remark: true },
-        });
-        for (const bom of boms) {
-            if (bom.remark.length > 0) {
-                pending.get(bom.bomCode)!.bomRemark = bom.remark;
-            }
-        }
     }
 
     /** 时间范围 → [start, end) UTC 时刻（北京日界；today/7d/30d 均含今天） */

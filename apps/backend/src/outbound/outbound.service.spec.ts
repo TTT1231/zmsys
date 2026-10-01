@@ -1,10 +1,9 @@
-import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
+import { ConflictException, NotFoundException } from "@nestjs/common";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OutboundService } from "./outbound.service";
 import { PrismaService } from "../prisma/prisma.service";
-import { TransactionRunner } from "../prisma/transaction.runner";
 import { SnowflakeGenerator } from "../common/snowflake";
-import { IdempotencyService } from "../idempotency/idempotency.service";
+import { mkIdempotencyMock, type BeginFn } from "../idempotency/idempotency.mock";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
 import type { OutboundLedger, OutboundShipment, SalesOrderTable } from "../generated/prisma/client";
 
@@ -151,10 +150,13 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>) => {
             ),
         },
         outboundShipment: {
+            // 全局软删注入(prisma-extensions.ts)在 mock 层的等价物:已删行视为不存在
             findUnique: vi.fn(
                 async ({ where }: { where: { shipmentNo?: string; id?: bigint } }) =>
-                    store.shipments.find(s =>
-                        where.shipmentNo ? s.shipmentNo === where.shipmentNo : s.id === where.id,
+                    store.shipments.find(
+                        s =>
+                            (where.shipmentNo ? s.shipmentNo === where.shipmentNo : s.id === where.id) &&
+                            s.deletedAt === null,
                     ) ?? null,
             ),
             findMany: vi.fn(async () => store.shipments.filter(s => s.deletedAt === null)),
@@ -226,25 +228,14 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>) => {
         outboundShipment: { findMany: tx.outboundShipment.findMany, findUnique: tx.outboundShipment.findUnique },
     } as unknown as PrismaService;
     const snowflake = { next: vi.fn(() => 9000000000000000n) } as unknown as SnowflakeGenerator;
-    const idempotency = {
-        requireKey: vi.fn((key?: string) => {
-            if (!key || key.length < 8) {
-                throw new BadRequestException("Idempotency-Key 必须为 8–128 个可见 ASCII 字符");
-            }
-            return key;
-        }),
-        digest: vi.fn(() => new Uint8Array(32)),
-        requestKey: vi.fn(() => "a".repeat(64)),
-        beginOrReplay: beginOrReplay ?? vi.fn(async () => ({ replay: null, placeholderId: 8000000000000000n })),
-        complete: vi.fn(),
-    } as unknown as IdempotencyService & Record<string, ReturnType<typeof vi.fn>>;
+    const idempotency = mkIdempotencyMock(prisma.$transaction as never, beginOrReplay as BeginFn | undefined);
     const sequence = {
         nextCode: vi.fn(async (_tx: unknown, type: string, businessDate: string) =>
             type === "outbound" ? `CK${businessDate.slice(2).replaceAll("-", "")}01` : "ZM000000001",
         ),
     } as unknown as BusinessSequenceService;
     return {
-        service: new OutboundService(prisma, snowflake, new TransactionRunner(prisma), idempotency, sequence),
+        service: new OutboundService(prisma, snowflake, idempotency, sequence),
         idempotency,
         store,
     };
@@ -363,7 +354,7 @@ describe("OutboundService.voidOutbound", () => {
 });
 
 describe("OutboundService.deleteOutbound", () => {
-    it("非作废 409；已删除 409；成功打标不动版本，op_log 快照含作废原因，列表不再返回", async () => {
+    it("非作废 409；已删除 404（与不存在同口径）；成功打标不动版本，op_log 快照含作废原因，列表不再返回", async () => {
         const store = emptyStore();
         store.shipments.push(mkShipment()); // REGISTERED：必须先作废
         const { service } = mkService(store);
@@ -371,9 +362,10 @@ describe("OutboundService.deleteOutbound", () => {
             new ConflictException("仅已作废的出库单可删除，请先作废"),
         );
 
+        // 已删除行经全局软删过滤后与不存在同口径(404)，不再单列 409
         store.shipments[0] = mkShipment({ state: "VOIDED", deletedAt: new Date() });
         await expect(service.deleteOutbound("CK26091301", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
-            new ConflictException("该出库单已删除"),
+            new NotFoundException("出库单不存在"),
         );
 
         store.shipments[0] = mkShipment({

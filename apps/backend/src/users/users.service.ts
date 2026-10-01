@@ -69,70 +69,59 @@ export class UsersService {
      * 响应快照只存 WbUser 本体：信封由 TransformInterceptor 统一包裹，重放形态一致。
      */
     async createUser(dto: CreateUserDto, actor: AuthUser, idempotencyKey: string | undefined): Promise<WbUser> {
-        const key = this.idempotency.requireKey(idempotencyKey);
-        const requestHash = this.idempotency.digest({ method: "POST", body: dto });
         const passwordHash = await bcrypt.hash(INITIAL_PASSWORD, 10);
-
-        return this.txRunner.run(async (tx: Tx) => {
-            const { replay, placeholderId } = await this.idempotency.beginOrReplay(tx, {
+        return this.idempotency.runGuarded(
+            {
                 actorId: BigInt(actor.id),
                 operationKey: CREATE_OPERATION_KEY,
-                key,
-                requestHash,
-            });
-            if (replay) {
-                // 占位时存的是成功响应数据本体，直接原样返回
-                return replay.body as unknown as WbUser;
-            }
-            if (placeholderId === null) {
-                // BeginResult 契约：replay 为空时占位必然存在；走到这里即基础设施缺陷
-                throw new Error("幂等占位缺失");
-            }
-
-            const existing = await tx.sysUser.findUnique({ where: { account: dto.account } });
-            if (existing) {
-                throw new ConflictException("账号已存在");
-            }
-            const now = new Date();
-            const id = this.snowflake.next();
-            let user: SysUser;
-            try {
-                user = await tx.sysUser.create({
-                    data: {
-                        id,
-                        account: dto.account,
-                        name: dto.name,
-                        roleCode: dto.role,
-                        passwordHash,
-                        createdAt: now,
-                    },
-                });
-            } catch (error) {
-                // 并发创建同账号：预检查之外的唯一约束兜底，映射为 409
-                if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+                idempotencyKey,
+                digest: { method: "POST", body: dto },
+            },
+            // 事务回调必须可重入:bcrypt 在事务外计算,回调内只含数据库写入
+            async (tx: Tx) => {
+                const existing = await tx.sysUser.findUnique({ where: { account: dto.account } });
+                if (existing) {
                     throw new ConflictException("账号已存在");
                 }
-                throw error;
-            }
-            await writeUserChangeLog(tx, this.snowflake, {
-                userId: id,
-                operatorId: BigInt(actor.id),
-                eventType: "CREATE",
-                now,
-                afterVersion: user.rowVersion,
-                reason: "新增用户（初始密码为契约默认值）",
-                afterJson: userSnapshot(user),
-            });
+                const now = new Date();
+                const id = this.snowflake.next();
+                let user: SysUser;
+                try {
+                    user = await tx.sysUser.create({
+                        data: {
+                            id,
+                            account: dto.account,
+                            name: dto.name,
+                            roleCode: dto.role,
+                            passwordHash,
+                            createdAt: now,
+                        },
+                    });
+                } catch (error) {
+                    // 并发创建同账号：预检查之外的唯一约束兜底，映射为 409
+                    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+                        throw new ConflictException("账号已存在");
+                    }
+                    throw error;
+                }
+                await writeUserChangeLog(tx, this.snowflake, {
+                    userId: id,
+                    operatorId: BigInt(actor.id),
+                    eventType: "CREATE",
+                    now,
+                    afterVersion: user.rowVersion,
+                    reason: "新增用户（初始密码为契约默认值）",
+                    afterJson: userSnapshot(user),
+                });
 
-            const wbUser = toWbUser(user);
-            await this.idempotency.complete(tx, {
-                id: placeholderId,
-                httpStatus: 200,
-                responseBody: wbUser as unknown as Prisma.InputJsonValue,
-                resource: { type: "user", code: user.account },
-            });
-            return wbUser;
-        });
+                const wbUser = toWbUser(user);
+                return {
+                    httpStatus: 200,
+                    responseBody: wbUser,
+                    resource: { type: "user", code: user.account },
+                };
+            },
+        );
     }
 
     /**

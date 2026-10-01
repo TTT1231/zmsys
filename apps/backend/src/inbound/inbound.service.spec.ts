@@ -1,10 +1,10 @@
-import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
+import { ConflictException, NotFoundException } from "@nestjs/common";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { InboundService } from "./inbound.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { TransactionRunner } from "../prisma/transaction.runner";
 import { SnowflakeGenerator } from "../common/snowflake";
-import { IdempotencyService } from "../idempotency/idempotency.service";
+import { mkIdempotencyMock, type BeginFn } from "../idempotency/idempotency.mock";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
 import type { BomTable, InboundLedger, StockAdjustment } from "../generated/prisma/client";
 
@@ -116,9 +116,10 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>) => {
             ),
         },
         inboundLedger: {
+            // 全局软删注入(prisma-extensions.ts)在 mock 层的等价物:已删行视为不存在
             findUnique: vi.fn(
                 async ({ where }: { where: { entryNo: string } }) =>
-                    store.entries.find(e => e.entryNo === where.entryNo) ?? null,
+                    store.entries.find(e => e.entryNo === where.entryNo && e.deletedAt === null) ?? null,
             ),
             // 调整单关联与删除校验走 findFirst（entryNo + 未删除过滤）
             findFirst: vi.fn(
@@ -216,18 +217,7 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>) => {
         stockAdjustment: { findMany: tx.stockAdjustment.findMany },
     } as unknown as PrismaService;
     const snowflake = { next: vi.fn(() => 9000000000000000n) } as unknown as SnowflakeGenerator;
-    const idempotency = {
-        requireKey: vi.fn((key?: string) => {
-            if (!key || key.length < 8) {
-                throw new BadRequestException("Idempotency-Key 必须为 8–128 个可见 ASCII 字符");
-            }
-            return key;
-        }),
-        digest: vi.fn(() => new Uint8Array(32)),
-        requestKey: vi.fn(() => "a".repeat(64)),
-        beginOrReplay: beginOrReplay ?? vi.fn(async () => ({ replay: null, placeholderId: 8000000000000000n })),
-        complete: vi.fn(),
-    } as unknown as IdempotencyService & Record<string, ReturnType<typeof vi.fn>>;
+    const idempotency = mkIdempotencyMock(prisma.$transaction as never, beginOrReplay as BeginFn | undefined);
     const sequence = {
         nextCode: vi.fn(async (_tx: unknown, type: string, businessDate: string) =>
             type === "inbound"
@@ -408,7 +398,7 @@ describe("InboundService.voidInbound", () => {
 });
 
 describe("InboundService.deleteInbound", () => {
-    it("非作废 409；已删除 409；被库存调整单引用 409", async () => {
+    it("非作废 409；已删除 404（与不存在同口径）；被库存调整单引用 409", async () => {
         const store = emptyStore();
         store.entries.push(mkEntry()); // ACTIVE：必须先作废再删除
         const { service } = mkService(store);
@@ -416,9 +406,10 @@ describe("InboundService.deleteInbound", () => {
             new ConflictException("仅已作废的入库记录可删除，请先作废"),
         );
 
+        // 已删除行经全局软删过滤后与不存在同口径(404),不再单列 409
         store.entries[0] = mkEntry({ status: "VOIDED", deletedAt: new Date() });
         await expect(service.deleteInbound("RK26091301", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
-            new ConflictException("该入库记录已删除"),
+            new NotFoundException("入库记录不存在"),
         );
 
         store.entries[0] = mkEntry({ status: "VOIDED" });

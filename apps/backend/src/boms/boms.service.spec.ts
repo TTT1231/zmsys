@@ -5,10 +5,9 @@ import { BadRequestException, ConflictException, NotFoundException } from "@nest
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BomsService } from "./boms.service";
 import { PrismaService } from "../prisma/prisma.service";
-import { TransactionRunner } from "../prisma/transaction.runner";
 import { SnowflakeGenerator } from "../common/snowflake";
 import { materialSetHash } from "../common/bom-spec";
-import { IdempotencyService } from "../idempotency/idempotency.service";
+import { mkIdempotencyMock, type BeginFn } from "../idempotency/idempotency.mock";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
 import type { BomCategory, BomTable } from "../generated/prisma/client";
 import type { CreateBomDto } from "./dto/create-bom.dto";
@@ -296,7 +295,21 @@ const mkBom = (overrides: Partial<BomTable> = {}): BomTable =>
  */
 const createStore = (store: Store) => {
     const tx = {
-        $queryRaw: vi.fn(async (..._parts: unknown[]): Promise<unknown[]> => []),
+        // raw 直查应答:锁查询返回空行集;deleteBom 的 FK 口径引用计数按 store 应答
+        $queryRaw: vi.fn(async (...parts: unknown[]): Promise<unknown[]> => {
+            const strings = (Array.isArray(parts[0]) ? parts[0] : []) as readonly string[];
+            const sql = strings.join("?");
+            const bomId = parts[1] as bigint | undefined;
+            if (sql.includes("FROM sales_order_table WHERE bom_id")) {
+                return [{ cnt: BigInt(store.orderRefs.filter(id => id === bomId).length) }];
+            }
+            if (sql.includes("FROM inbound_ledger WHERE bom_id")) {
+                const inbound = store.inboundRefs.filter(id => id === bomId).length;
+                const adjustment = store.adjustmentRefs.filter(id => id === bomId).length;
+                return [{ cnt: BigInt(inbound + adjustment) }];
+            }
+            return [];
+        }),
         bomCategory: {
             findUnique: vi.fn(
                 async ({ where }: { where: { name?: string; id?: bigint } }) =>
@@ -463,23 +476,12 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>, nextB
         bomTable: ctx.prisma.bomTable,
     } as unknown as PrismaService;
     const snowflake = { next: vi.fn(() => 9000000000000000n) } as unknown as SnowflakeGenerator;
-    const idempotency = {
-        requireKey: vi.fn((key?: string) => {
-            if (!key || key.length < 8) {
-                throw new BadRequestException("Idempotency-Key 必须为 8–128 个可见 ASCII 字符");
-            }
-            return key;
-        }),
-        digest: vi.fn(() => new Uint8Array(32)),
-        requestKey: vi.fn(() => "a".repeat(64)),
-        beginOrReplay: beginOrReplay ?? vi.fn(async () => ({ replay: null, placeholderId: 8000000000000000n })),
-        complete: vi.fn(),
-    } as unknown as IdempotencyService & Record<string, ReturnType<typeof vi.fn>>;
+    const idempotency = mkIdempotencyMock(prisma.$transaction as never, beginOrReplay as BeginFn | undefined);
     const sequence = {
         nextBomCode: nextBomCode ?? vi.fn(async () => "XK2011"),
     } as unknown as BusinessSequenceService & Record<string, ReturnType<typeof vi.fn>>;
     return {
-        service: new BomsService(prisma, snowflake, new TransactionRunner(prisma), idempotency, sequence),
+        service: new BomsService(prisma, snowflake, idempotency, sequence),
         tx: ctx,
         idempotency,
         sequence,

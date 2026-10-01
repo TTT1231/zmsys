@@ -95,7 +95,8 @@ describe("LedgerPurgeService.purge", () => {
             "inboundLedger",
         ]);
         expect(ops[0]!.where).toEqual({ inboundId: { in: ids(1, 2) } });
-        expect(ops[1]!.where).toEqual({ id: { in: ids(1, 2) } });
+        // 主表 deleteMany 带显式 deletedAt 条件:软删过滤扩展的豁免声明,亦防误删未软删行
+        expect(ops[1]!.where).toEqual({ id: { in: ids(1, 2) }, deletedAt: { not: null } });
     });
 
     it("出库：状态日志 → CORRECTION 冲销行 → NORMAL 正向行 → 单头，顺序不变（自引用外键）", async () => {
