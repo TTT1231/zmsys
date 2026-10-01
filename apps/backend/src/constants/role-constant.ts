@@ -19,3 +19,13 @@ export const isRoleCode = (value: string): value is RoleCode => (ROLE_CODES as r
 
 /** super 为内置锁定角色，服务端固定视为全量权限，不依赖 sys_grant 行 */
 export const SUPER_ROLE_CODE = "super" as const;
+
+/** sales 为客户归属与离岗移交的业务主体（db-scheme.md §4.1） */
+export const SALES_ROLE_CODE = "sales" as const;
+
+/** 合法客户负责人角色：启用中的销售或超级管理员方可持有/接手客户 */
+export const CUSTOMER_OWNER_ROLE_CODES = [SALES_ROLE_CODE, SUPER_ROLE_CODE] as const;
+
+/** 角色是否具备客户负责人资格（负责人校验与移交的唯一判定口径） */
+export const isEligibleCustomerOwner = (roleCode: string): boolean =>
+    (CUSTOMER_OWNER_ROLE_CODES as readonly string[]).includes(roleCode);

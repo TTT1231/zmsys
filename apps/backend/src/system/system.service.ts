@@ -38,8 +38,8 @@ import { SnowflakeGenerator } from "../common/snowflake";
 import { recordOpLog } from "../domain/op-log";
 import { MaintenanceState } from "../domain/maintenance-state";
 import type { AuthUser } from "../common/types/auth-user";
-import { BACKUP_GROUPS } from "./backup.catalog";
-import { restoreLockName } from "./restore-lock";
+import { ALL_GROUP_KEYS, BACKUP_GROUPS } from "./backup.catalog";
+import { acquireRestoreLock, restoreLockName } from "./restore-lock";
 import { backupFileName, createBackupStream, type SqlStreamingExecutor } from "./engine/backup-writer";
 import {
     BackupLimitError,
@@ -48,7 +48,6 @@ import {
     RestoreAbortedError,
     RestoreUnknownError,
     RestoreValidationError,
-    toMariaDatetime,
     validateBackup,
     type RestoreCredential,
     type RestoreMode,
@@ -220,7 +219,7 @@ export class SystemService implements OnApplicationBootstrap {
         let connection: mariadb.Connection | null = null;
         try {
             connection = await this.createConnection();
-            const locked = await this.acquireRestoreLock(connection, 5);
+            const locked = await acquireRestoreLock(connection, this.restoreLockName, 5);
             if (locked) {
                 await this.releaseRestoreLock(connection);
                 await this.cleanupStaleTempFiles();
@@ -260,7 +259,7 @@ export class SystemService implements OnApplicationBootstrap {
     /* ---------------------------------------------------------------- */
 
     getBackupCatalog(): { groups: typeof BACKUP_GROUPS; allGroupKeys: string[] } {
-        return { groups: BACKUP_GROUPS, allGroupKeys: BACKUP_GROUPS.map(group => group.key) };
+        return { groups: BACKUP_GROUPS, allGroupKeys: [...ALL_GROUP_KEYS] };
     }
 
     /* ---------------------------------------------------------------- */
@@ -503,7 +502,7 @@ export class SystemService implements OnApplicationBootstrap {
             }
             let locked: boolean;
             try {
-                locked = await this.acquireRestoreLock(connection, 0);
+                locked = await acquireRestoreLock(connection, this.restoreLockName, 0);
             } catch (error) {
                 fail(error);
                 return;
@@ -616,7 +615,7 @@ export class SystemService implements OnApplicationBootstrap {
             let connection: mariadb.Connection | null = null;
             try {
                 connection = await this.createConnection();
-                const locked = await this.acquireRestoreLock(connection, 0);
+                const locked = await acquireRestoreLock(connection, this.restoreLockName, 0);
                 if (!locked) {
                     await this.endConnection(connection);
                     await new Promise(resolve => setTimeout(resolve, VERIFY_RETRY_MS));
@@ -636,22 +635,21 @@ export class SystemService implements OnApplicationBootstrap {
                     } else {
                         // 锁在手（旧会话已结束）且无成功凭证 ⇒ 确认未提交
                         const now = new Date();
-                        await connection.query(
-                            `INSERT INTO sys_restore_job
-                                 (id, request_key, file_sha256, mode, status, operator_id, operator_name, report_json, error_text, created_at, finished_at)
-                             VALUES (?, ?, ?, ?, 'FAILED', ?, ?, ?, ?, ?, ?)`,
-                            [
-                                this.snowflake.next(),
-                                job.requestKey,
-                                job.fileSha256,
-                                job.mode,
-                                job.operatorId,
-                                job.operatorName,
-                                JSON.stringify({ mode: job.mode, verified: "no-success-credential" }),
-                                "提交结果未知，但已确认旧会话结束且无成功凭证，判定为未提交",
-                                toMariaDatetime(new Date(job.createdAt)),
-                                toMariaDatetime(now),
-                            ],
+                        await insertCredentialRow(
+                            new MariaDbExecutor(connection),
+                            {
+                                jobId: this.snowflake.next(),
+                                requestKey: job.requestKey,
+                                fileSha256: job.fileSha256,
+                                mode: job.mode,
+                                operatorId: job.operatorId,
+                                operatorName: job.operatorName,
+                            },
+                            "FAILED",
+                            { mode: job.mode, verified: "no-success-credential" },
+                            "提交结果未知，但已确认旧会话结束且无成功凭证，判定为未提交",
+                            new Date(job.createdAt),
+                            now,
                         );
                         job.status = "FAILED";
                         job.errorText = "提交结果未知，核实后确认未提交";
@@ -719,15 +717,6 @@ export class SystemService implements OnApplicationBootstrap {
             password: this.config.getOrThrow("database.password", { infer: true }),
             name: this.database,
         });
-    }
-
-    private async acquireRestoreLock(connection: mariadb.Connection, waitSeconds: number): Promise<boolean> {
-        const rows = (await connection.query("SELECT GET_LOCK(?, ?) AS locked", [
-            this.restoreLockName,
-            waitSeconds,
-        ])) as Array<{ locked: number | bigint | null }>;
-        // prepared 路径下 GET_LOCK 标量可能返回 BigInt：统一数值化后再比较
-        return Number(rows[0]?.locked) === 1;
     }
 
     private async releaseRestoreLock(connection: mariadb.Connection): Promise<void> {

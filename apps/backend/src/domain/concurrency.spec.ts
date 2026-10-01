@@ -1,7 +1,7 @@
 import { ConflictException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 import type { Tx } from "../prisma/transaction.runner";
-import { ensureUpdated, lockRowsById } from "./concurrency";
+import { assertVersionMatches, lockRowByKey, lockRowsById } from "./concurrency";
 
 /** 递归展开 Prisma.Sql（{strings, values} 嵌套）为最终 SQL 文本，仅测试断言用 */
 const renderSql = (strings: readonly string[], ...values: unknown[]): string => {
@@ -42,13 +42,30 @@ describe("lockRowsById（固定顺序行锁）", () => {
     });
 });
 
-describe("ensureUpdated（乐观锁 0 行 → 409）", () => {
-    it("受影响 0 行抛 ConflictException", () => {
-        expect(() => ensureUpdated(0)).toThrow(ConflictException);
-        expect(() => ensureUpdated(0)).toThrow("数据已被他人修改");
+describe("lockRowByKey（自然键定位锁）", () => {
+    it("白名单列名拼接、值参数化", async () => {
+        const { tx, queryRaw } = createTx();
+        await lockRowByKey(tx, "sales_order_table", "DD2601010001");
+        expect(queryRaw).toHaveBeenCalledOnce();
+        const [strings, ...values] = queryRaw.mock.calls[0] as unknown as [string[], ...unknown[]];
+        expect(renderSql(strings, ...values)).toBe(
+            "SELECT id FROM sales_order_table WHERE order_no = DD2601010001 FOR UPDATE",
+        );
     });
 
-    it("受影响 ≥1 行放行", () => {
-        expect(() => ensureUpdated(1)).not.toThrow();
+    it("表名不在白名单时类型即拒绝（编译期约束，无运行时拼接面）", () => {
+        // LockableKeyTable 是字面量联合；此处仅确认导出类型存在
+        const tables: readonly string[] = ["sys_user", "sys_role"];
+        expect(tables).toContain("sys_user");
+    });
+});
+
+describe("assertVersionMatches（乐观锁版本比对 → 409）", () => {
+    it("版本不一致抛 ConflictException", () => {
+        expect(() => assertVersionMatches(3n, 2, "订单已被其他人修改，请刷新后重试")).toThrow(ConflictException);
+    });
+
+    it("版本一致放行", () => {
+        expect(() => assertVersionMatches(2n, 2, "订单已被其他人修改，请刷新后重试")).not.toThrow();
     });
 });

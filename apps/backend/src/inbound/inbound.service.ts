@@ -7,7 +7,9 @@ import { SnowflakeGenerator } from "../common/snowflake";
 import { IdempotencyService } from "../idempotency/idempotency.service";
 import { formatDateColumn, formatBeijingStamp, toDateColumn } from "../common/datetime";
 import { beijingDayWindow } from "../common/beijing-day";
-import { lockRowsById } from "../domain/concurrency";
+import { PERMISSIONS } from "../constants";
+import type { ExpectedVersionDto } from "../common/dto/expected-version.dto";
+import { assertVersionMatches, lockRowByKey, lockRowsById } from "../domain/concurrency";
 import { getStockQty } from "../domain/inventory";
 import { recordOpLog } from "../domain/op-log";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
@@ -17,7 +19,6 @@ import type { InboundRow, StockAdjustmentRow } from "./types";
 import type { CreateInboundDto } from "./dto/create-inbound.dto";
 import type { UpdateInboundDto } from "./dto/update-inbound.dto";
 import type { CreateStockAdjustmentDto } from "./dto/create-stock-adjustment.dto";
-import type { DeleteInboundDto } from "./dto/delete-inbound.dto";
 
 /** api_idempotency 的 operation_key，与前端 mock 同粒度 */
 const CREATE_OPERATION_KEY = "inbound:create";
@@ -143,13 +144,10 @@ export class InboundService {
     async updateInbound(entryNo: string, dto: UpdateInboundDto, actor: AuthUser): Promise<InboundRow> {
         return this.txRunner.run(async (tx: Tx) => {
             const now = new Date();
-            const current = await this.lockEntryForWrite(tx, entryNo, dto.bomCode);
-            this.assertEditableToday(current, "修正", actor);
-            if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException("入库记录已被其他人修改，请刷新后重试");
-            }
+            const { row: current, nextBomId } = await this.lockEntryForWrite(tx, entryNo, dto.bomCode);
+            this.assertEditableToday(current, "edit", actor);
+            assertVersionMatches(current.rowVersion, dto.expectedVersion, "入库记录已被其他人修改，请刷新后重试");
 
-            const nextBomId = await this.resolveBomIdByCode(tx, dto.bomCode);
             if (current.bomId !== nextBomId) {
                 // 换 BOM：旧 BOM 失去本条贡献后、新 BOM 并入后都必须保持非负
                 const oldStock = await getStockQty(tx, current.bomId);
@@ -228,11 +226,9 @@ export class InboundService {
             }
 
             const now = new Date();
-            const current = await this.lockEntryForWrite(tx, entryNo);
-            this.assertEditableToday(current, "作废", actor);
-            if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException("入库记录已被其他人修改，请刷新后重试");
-            }
+            const { row: current } = await this.lockEntryForWrite(tx, entryNo);
+            this.assertEditableToday(current, "void", actor);
+            assertVersionMatches(current.rowVersion, dto.expectedVersion, "入库记录已被其他人修改，请刷新后重试");
             const stock = await getStockQty(tx, current.bomId);
             if (stock - current.qty < 0) {
                 throw new ConflictException(
@@ -299,7 +295,7 @@ export class InboundService {
      */
     async deleteInbound(
         entryNo: string,
-        dto: DeleteInboundDto,
+        dto: ExpectedVersionDto,
         actor: AuthUser,
         idempotencyKey: string | undefined,
     ): Promise<null> {
@@ -323,10 +319,8 @@ export class InboundService {
             }
 
             const now = new Date();
-            const current = await this.lockEntryForWrite(tx, entryNo);
-            if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException("入库记录已被其他人修改，请刷新后重试");
-            }
+            const { row: current } = await this.lockEntryForWrite(tx, entryNo);
+            assertVersionMatches(current.rowVersion, dto.expectedVersion, "入库记录已被其他人修改，请刷新后重试");
             if (current.status !== "VOIDED") {
                 throw new ConflictException("仅已作废的入库记录可删除，请先作废");
             }
@@ -470,12 +464,12 @@ export class InboundService {
 
     /** 锁定 BOM 行并返回最小行（含 id）；不存在抛 404 */
     private async lockBomByCode(tx: Tx, bomCode: string): Promise<{ id: bigint }> {
-        const located = await tx.bomTable.findUnique({ where: { bomCode }, select: { id: true } });
-        if (!located) {
+        await lockRowByKey(tx, "bom_table", bomCode);
+        const bom = await tx.bomTable.findUnique({ where: { bomCode }, select: { id: true } });
+        if (!bom) {
             throw new NotFoundException("成品不存在");
         }
-        await lockRowsById(tx, "bom_table", [located.id]);
-        return located;
+        return bom;
     }
 
     /** 编码定位 BOM id（不锁定；调用方应已按锁序持有该 BOM 行锁） */
@@ -492,7 +486,11 @@ export class InboundService {
      * 先无锁读定位 bomId（修改 BOM 需要新旧两个），BOM 引用漂移不构成竞争
      * （锁定读返回最新已提交行，校验都在锁内完成）。
      */
-    private async lockEntryForWrite(tx: Tx, entryNo: string, nextBomCode?: string): Promise<InboundLedgerRow> {
+    private async lockEntryForWrite(
+        tx: Tx,
+        entryNo: string,
+        nextBomCode?: string,
+    ): Promise<{ row: InboundLedgerRow; nextBomId: bigint }> {
         const located = await tx.inboundLedger.findUnique({
             where: { entryNo },
             select: { id: true, bomId: true },
@@ -501,9 +499,9 @@ export class InboundService {
             throw new NotFoundException("入库记录不存在");
         }
         const nextBomId = nextBomCode ? await this.resolveBomIdByCode(tx, nextBomCode) : located.bomId;
-        const bomIds = [...new Set([located.bomId, nextBomId])].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-        await lockRowsById(tx, "bom_table", bomIds);
-        await tx.$queryRaw`SELECT id FROM inbound_ledger WHERE entry_no = ${entryNo} FOR UPDATE`;
+        // id 升序去重由 lockRowsById 统一完成
+        await lockRowsById(tx, "bom_table", [located.bomId, nextBomId]);
+        await lockRowByKey(tx, "inbound_ledger", entryNo);
         const row = await tx.inboundLedger.findUnique({
             where: { entryNo },
             include: {
@@ -515,7 +513,7 @@ export class InboundService {
         if (!row) {
             throw new NotFoundException("入库记录不存在");
         }
-        return row;
+        return { row, nextBomId };
     }
 
     /**
@@ -523,7 +521,7 @@ export class InboundService {
      * 例外：持 inbound:void-any-day（或超管）可作废任意天数的记录——跨天修正仍走库存调整，
      * 不放开；库存非负校验对跨天作废同样生效（数据一致性不得绕过）。
      */
-    private assertEditableToday(row: InboundLedgerRow, action: string, actor: AuthUser): void {
+    private assertEditableToday(row: InboundLedgerRow, mode: "edit" | "void", actor: AuthUser): void {
         if (row.status === "VOIDED") {
             throw new ConflictException("已作废入库记录不可再次修改");
         }
@@ -531,14 +529,16 @@ export class InboundService {
         if (row.createdAt >= start && row.createdAt < nextStart) {
             return;
         }
-        const mayCrossDay = action === "作废" && (actor.isSuper || actor.permissions.has("inbound:void-any-day"));
+        // 授权分支按 mode 判别而非展示文案：措辞调整不会静默改变权限语义
+        const mayCrossDay =
+            mode === "void" && (actor.isSuper || actor.permissions.has(PERMISSIONS.INBOUND_VOID_ANY_DAY));
         if (mayCrossDay) {
             return;
         }
         throw new ConflictException(
-            action === "作废"
+            mode === "void"
                 ? "只能作废北京时间当天录入的入库记录，跨日作废需超级管理员"
-                : `只能${action}北京时间当天录入的入库记录`,
+                : "只能修正北京时间当天录入的入库记录",
         );
     }
 

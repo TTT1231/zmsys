@@ -66,10 +66,11 @@ function diffByFields(
     const source = after ?? before ?? {};
     const changes: SystemLogChange[] = [];
     for (const field of fields) {
-        // 省市区县乡镇四段合并为一条"所在地区"变更（碎片化展示不可读）
-        if (field.label === "市" || field.label === "区县" || field.label === "乡镇") continue;
+        // 省市区县乡镇四段合并为一条"所在地区"变更（碎片化展示不可读）。
+        // 按 key 判别而非 label 文案：改展示措辞不会改变合并行为
+        if (field.key === "city" || field.key === "district" || field.key === "town") continue;
         const format = field.format ?? asText;
-        if (field.label === "省") {
+        if (field.key === "province") {
             const regionOf = (row: Json | null) =>
                 ["province", "city", "district", "town"]
                     .map(key => asText(row?.[key]))

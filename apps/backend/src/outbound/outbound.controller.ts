@@ -4,8 +4,8 @@ import { Permissions } from "../common/decorators/permissions.decorator";
 import { PERMISSIONS } from "../constants";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { CreateOutboundDto } from "./dto/create-outbound.dto";
-import { VoidOutboundDto } from "./dto/void-outbound.dto";
-import { DeleteOutboundDto } from "./dto/delete-outbound.dto";
+import { VoidResourceDto } from "../common/dto/void-resource.dto";
+import { ExpectedVersionDto } from "../common/dto/expected-version.dto";
 import type { AuthUser } from "../common/types/auth-user";
 import type { OutboundPrintDocument, OutboundRow } from "./types";
 
@@ -36,7 +36,7 @@ export class OutboundController {
     @HttpCode(HttpStatus.OK)
     async voidOutbound(
         @Param("no") no: string,
-        @Body() dto: VoidOutboundDto,
+        @Body() dto: VoidResourceDto,
         @CurrentUser() actor: AuthUser,
         @Headers("idempotency-key") idempotencyKey: string | undefined,
     ): Promise<OutboundRow> {
@@ -48,7 +48,7 @@ export class OutboundController {
     @HttpCode(HttpStatus.OK)
     async deleteOutbound(
         @Param("no") no: string,
-        @Body() dto: DeleteOutboundDto,
+        @Body() dto: ExpectedVersionDto,
         @CurrentUser() actor: AuthUser,
         @Headers("idempotency-key") idempotencyKey: string | undefined,
     ): Promise<null> {

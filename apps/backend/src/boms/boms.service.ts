@@ -5,11 +5,13 @@ import { TransactionRunner } from "../prisma/transaction.runner";
 import type { Tx } from "../prisma/transaction.runner";
 import { SnowflakeGenerator } from "../common/snowflake";
 import { materialSetHash } from "../common/bom-spec";
-import { bomItemViewsOf, bomItemsSnapshotOf } from "../common/bom-display";
+import { bomItemsSnapshotOf, toBomItemViews } from "../common/bom-display";
 import { IdempotencyService } from "../idempotency/idempotency.service";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
 import { recordOpLog } from "../domain/op-log";
 import { formatDateColumn } from "../common/datetime";
+import { lockRowsById } from "../domain/concurrency";
+import { stockByBomCodeMap } from "../domain/inventory";
 import type { Bom, BomCategory, BomCatalogNode, BomStockLedger, StockFlowRow } from "./types";
 import { resolveMaterialSelection, type CatalogEntry } from "./bom-rules";
 import type { CreateBomDto } from "./dto/create-bom.dto";
@@ -91,24 +93,27 @@ export class BomsService {
      * 旋转变体（焊线/插线）等「目录容器品类」停用后不出现在建档下拉，但被启用
      * 品类的 child_categories 引用，仍随本接口下发（status=false）供前端合并目录。 */
     async listCategories(): Promise<BomCategory[]> {
-        const rows = await this.prisma.bomCategory.findMany({
-            where: { status: true },
+        // 一次取全量品类，内存按启用位与 child 引用分流（免第二段容器品类查询）；
+        // items 只取展示所需列。输出集合与旧两段查询等价：启用品类 + 被启用品类
+        // 引用的容器品类（可能停用如焊线/插线，启用者去重）
+        const all = await this.prisma.bomCategory.findMany({
             orderBy: { id: "asc" },
-            include: { groups: { include: { items: { where: { status: true } } } } },
+            include: {
+                groups: {
+                    include: {
+                        items: {
+                            where: { status: true },
+                            select: { id: true, name: true, sortOrder: true, status: true },
+                        },
+                    },
+                },
+            },
         });
-        const childKeys = new Set(rows.flatMap(row => childCategoriesOf(row.childCategories).filter(Boolean)));
-        // 被引用的目录容器品类（可能启用如微动，也可能停用如焊线/插线）；启用者已在 rows，去重
-        const seen = new Set(rows.map(row => row.id.toString()));
-        const containers = childKeys.size
-            ? (
-                  await this.prisma.bomCategory.findMany({
-                      where: { categoryKey: { in: [...childKeys] } },
-                      orderBy: { id: "asc" },
-                      include: { groups: { include: { items: { where: { status: true } } } } },
-                  })
-              ).filter(row => !seen.has(row.id.toString()))
-            : [];
-        return [...rows, ...containers].sort((a, b) => (a.id < b.id ? -1 : 1)).map(row => this.toCategory(row));
+        const enabled = all.filter(row => row.status);
+        const enabledIds = new Set(enabled.map(row => row.id.toString()));
+        const childKeys = new Set(enabled.flatMap(row => childCategoriesOf(row.childCategories).filter(Boolean)));
+        const containers = all.filter(row => childKeys.has(row.categoryKey) && !enabledIds.has(row.id.toString()));
+        return [...enabled, ...containers].sort((a, b) => (a.id < b.id ? -1 : 1)).map(row => this.toCategory(row));
     }
 
     /**
@@ -129,12 +134,7 @@ export class BomsService {
      * 由前端按 0 展示。
      */
     async listStocks(): Promise<Record<string, number>> {
-        const rows = await this.prisma.$queryRaw<Array<{ bom_code: string; stock_qty: bigint | number }>>`
-            SELECT b.bom_code, v.stock_qty
-            FROM v_bom_stock AS v
-            JOIN bom_table AS b ON b.id = v.bom_id
-        `;
-        return Object.fromEntries(rows.map(row => [row.bom_code, Number(row.stock_qty)]));
+        return Object.fromEntries(await stockByBomCodeMap(this.prisma));
     }
 
     /**
@@ -316,13 +316,7 @@ export class BomsService {
                 code: bomCode,
                 name: category.name,
                 modelCode: snapshot.modelCode,
-                items: snapshot.items.map(({ materialId, groupKey, groupName, name, quantity }) => ({
-                    materialId,
-                    groupKey,
-                    groupName,
-                    name,
-                    quantity,
-                })),
+                items: toBomItemViews(snapshot),
                 spec: snapshot.spec,
                 remark: dto.remark ?? "",
                 creator: actor.name,
@@ -380,7 +374,7 @@ export class BomsService {
             if (!bom) {
                 throw new NotFoundException("BOM 不存在");
             }
-            await tx.$queryRaw`SELECT id FROM bom_table WHERE id = ${bom.id} FOR UPDATE`;
+            await lockRowsById(tx, "bom_table", [bom.id]);
 
             const orderRefs = await tx.salesOrderTable.count({ where: { bomId: bom.id } });
             if (orderRefs > 0) {
@@ -435,6 +429,7 @@ export class BomsService {
         if (!located || !located.status) {
             throw new NotFoundException("品类不存在");
         }
+        // 品类表不在 LOCKABLE_TABLES：建档锁品类是单点用法，保留就地 raw SQL
         await tx.$queryRaw`SELECT id FROM bom_category WHERE id = ${located.id} FOR UPDATE`;
         return located;
     }
@@ -445,9 +440,10 @@ export class BomsService {
      * 超两级目录）防御性跳过。目录锁跟随品类行锁，与建档同事务。
      */
     private async loadCatalog(tx: Tx, categoryId: bigint): Promise<CatalogEntry[]> {
+        // items 只取校验/建档所需列
         const groups = (await tx.materialGroup.findMany({
             where: { categoryId },
-            include: { items: true },
+            include: { items: { select: { id: true, name: true, sortOrder: true, status: true } } },
         })) as CatalogNodeRow[];
         const entries: CatalogEntry[] = [];
         for (const { isSection, node } of orderedCatalog(groups)) {
@@ -510,7 +506,7 @@ export class BomsService {
             code: row.bomCode,
             name: row.category.name,
             modelCode: snapshot.modelCode,
-            items: bomItemViewsOf(row.items),
+            items: toBomItemViews(snapshot),
             spec: snapshot.spec,
             remark: row.remark,
             creator: row.creator.name,

@@ -5,6 +5,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { TransactionRunner } from "../prisma/transaction.runner";
 import type { Tx } from "../prisma/transaction.runner";
 import { MaintenanceState } from "../domain/maintenance-state";
+import { IdempotencyService } from "../idempotency/idempotency.service";
 import type { AppConfig } from "../configuration";
 
 /** 软删除保留期（天）：过期后物理清理，op_log 的 delete 快照成为唯一残留 */
@@ -36,6 +37,7 @@ export class LedgerPurgeService implements OnApplicationBootstrap, OnApplication
         private readonly txRunner: TransactionRunner,
         private readonly maintenance: MaintenanceState,
         private readonly config: ConfigService<AppConfig>,
+        private readonly idempotency: IdempotencyService,
     ) {}
 
     onApplicationBootstrap(): void {
@@ -76,6 +78,12 @@ export class LedgerPurgeService implements OnApplicationBootstrap, OnApplication
                     `台账清理完成：入库 ${counts.inbound} 条、出库 ${counts.outbound} 条、订单 ${counts.orders} 条`,
                 );
             }
+            // 顺带清理过期幂等记录（48h 保留期，见 IdempotencyService）：不恢复的库上
+            // api_idempotency 只增不减，挂到本调度随台账清理一同回收
+            const expiredIdempotency = await this.idempotency.cleanup();
+            if (expiredIdempotency > 0) {
+                this.logger.log(`幂等记录清理完成：${expiredIdempotency} 条`);
+            }
         } catch (error) {
             this.logger.error(`台账清理失败，将于下个调度周期重试: ${String(error)}`);
         } finally {
@@ -94,42 +102,58 @@ export class LedgerPurgeService implements OnApplicationBootstrap, OnApplication
         return { inbound, outbound, orders };
     }
 
-    private async purgeInbound(cutoff: Date): Promise<number> {
+    /**
+     * 分批清理骨架（三臂共用）：选批闭包捕获各自 cutoff → 事务删除 → 计数，
+     * 查空即退出；各臂只提供选批 SQL 与批内删除序列。
+     */
+    private async purgeInBatches(
+        selectBatchIds: () => Promise<bigint[]>,
+        deleteBatch: (tx: Tx, ids: bigint[]) => Promise<void>,
+    ): Promise<number> {
         let purged = 0;
         for (;;) {
-            const rows = await this.prisma.$queryRaw<Array<{ id: bigint }>>(
-                Prisma.sql`SELECT id FROM inbound_ledger
-                    WHERE deleted_at IS NOT NULL AND deleted_at < ${cutoff}
-                      AND NOT EXISTS (
-                          SELECT 1 FROM stock_adjustment WHERE related_inbound_id = inbound_ledger.id
-                      )
-                    ORDER BY id ASC LIMIT ${BATCH_SIZE}`,
-            );
-            if (rows.length === 0) {
+            const batch = await selectBatchIds();
+            if (batch.length === 0) {
                 return purged;
             }
-            const batch = rows.map(row => row.id);
             await this.txRunner.run(async (tx: Tx) => {
-                await tx.inboundChangeLog.deleteMany({ where: { inboundId: { in: batch } } });
-                await tx.inboundLedger.deleteMany({ where: { id: { in: batch } } });
+                await deleteBatch(tx, batch);
             });
             purged += batch.length;
         }
     }
 
+    private async purgeInbound(cutoff: Date): Promise<number> {
+        return this.purgeInBatches(
+            async () =>
+                (
+                    await this.prisma.$queryRaw<Array<{ id: bigint }>>(
+                        Prisma.sql`SELECT id FROM inbound_ledger
+                            WHERE deleted_at IS NOT NULL AND deleted_at < ${cutoff}
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM stock_adjustment WHERE related_inbound_id = inbound_ledger.id
+                              )
+                            ORDER BY id ASC LIMIT ${BATCH_SIZE}`,
+                    )
+                ).map(row => row.id),
+            async (tx, batch) => {
+                await tx.inboundChangeLog.deleteMany({ where: { inboundId: { in: batch } } });
+                await tx.inboundLedger.deleteMany({ where: { id: { in: batch } } });
+            },
+        );
+    }
+
     private async purgeOutbound(cutoff: Date): Promise<number> {
-        let purged = 0;
-        for (;;) {
-            const rows = await this.prisma.$queryRaw<Array<{ id: bigint }>>(
-                Prisma.sql`SELECT id FROM outbound_shipment
-                    WHERE deleted_at IS NOT NULL AND deleted_at < ${cutoff}
-                    ORDER BY id ASC LIMIT ${BATCH_SIZE}`,
-            );
-            if (rows.length === 0) {
-                return purged;
-            }
-            const batch = rows.map(row => row.id);
-            await this.txRunner.run(async (tx: Tx) => {
+        return this.purgeInBatches(
+            async () =>
+                (
+                    await this.prisma.$queryRaw<Array<{ id: bigint }>>(
+                        Prisma.sql`SELECT id FROM outbound_shipment
+                            WHERE deleted_at IS NOT NULL AND deleted_at < ${cutoff}
+                            ORDER BY id ASC LIMIT ${BATCH_SIZE}`,
+                    )
+                ).map(row => row.id),
+            async (tx, batch) => {
                 await tx.outboundStateLog.deleteMany({ where: { shipmentId: { in: batch } } });
                 // 先删 CORRECTION（子）再删 NORMAL（父）：correction_of_id 自引用外键顺序
                 await tx.outboundLedger.deleteMany({
@@ -137,30 +161,28 @@ export class LedgerPurgeService implements OnApplicationBootstrap, OnApplication
                 });
                 await tx.outboundLedger.deleteMany({ where: { shipmentId: { in: batch } } });
                 await tx.outboundShipment.deleteMany({ where: { id: { in: batch } } });
-            });
-            purged += batch.length;
-        }
+            },
+        );
     }
 
     /** 订单须先过保留期，且关联出库已物理清理；保留 op_log 删除快照。 */
     private async purgeOrders(cutoff: Date): Promise<number> {
-        let purged = 0;
-        for (;;) {
-            const rows = await this.prisma.$queryRaw<Array<{ id: bigint }>>(
-                Prisma.sql`SELECT id FROM sales_order_table
-                    WHERE deleted_at IS NOT NULL AND deleted_at < ${cutoff}
-                      AND NOT EXISTS (
-                          SELECT 1 FROM outbound_shipment WHERE order_id = sales_order_table.id
-                      )
-                    ORDER BY id ASC LIMIT ${BATCH_SIZE}`,
-            );
-            if (rows.length === 0) return purged;
-            const batch = rows.map(row => row.id);
-            await this.txRunner.run(async (tx: Tx) => {
+        return this.purgeInBatches(
+            async () =>
+                (
+                    await this.prisma.$queryRaw<Array<{ id: bigint }>>(
+                        Prisma.sql`SELECT id FROM sales_order_table
+                            WHERE deleted_at IS NOT NULL AND deleted_at < ${cutoff}
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM outbound_shipment WHERE order_id = sales_order_table.id
+                              )
+                            ORDER BY id ASC LIMIT ${BATCH_SIZE}`,
+                    )
+                ).map(row => row.id),
+            async (tx, batch) => {
                 await tx.salesOrderChangeLog.deleteMany({ where: { orderId: { in: batch } } });
                 await tx.salesOrderTable.deleteMany({ where: { id: { in: batch } } });
-            });
-            purged += batch.length;
-        }
+            },
+        );
     }
 }

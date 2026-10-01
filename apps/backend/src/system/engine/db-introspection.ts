@@ -208,9 +208,12 @@ export async function computeSchemaFingerprint(
     const tableSet = new Set(tables);
     for (const row of checkRows) {
         if (!tableSet.has(row.TABLE_NAME)) continue;
-        (checksByTable.get(row.TABLE_NAME) ?? checksByTable.set(row.TABLE_NAME, []).get(row.TABLE_NAME)!).push(
-            `${row.CONSTRAINT_NAME}:${row.CHECK_CLAUSE}`,
-        );
+        let checks = checksByTable.get(row.TABLE_NAME);
+        if (!checks) {
+            checks = [];
+            checksByTable.set(row.TABLE_NAME, checks);
+        }
+        checks.push(`${row.CONSTRAINT_NAME}:${row.CHECK_CLAUSE}`);
     }
 
     const hash = createHash("sha256");

@@ -7,7 +7,9 @@ import { SnowflakeGenerator } from "../common/snowflake";
 import { IdempotencyService } from "../idempotency/idempotency.service";
 import { formatDateColumn, toDateColumn } from "../common/datetime";
 import { bomItemsSnapshotOf } from "../common/bom-display";
-import { lockRowsById } from "../domain/concurrency";
+import type { ExpectedVersionDto } from "../common/dto/expected-version.dto";
+import { assertVersionMatches, lockRowByKey, lockRowsById } from "../domain/concurrency";
+import { outboundNetOf, outboundQtyByOrderMap } from "../domain/inventory";
 import { recordOpLog } from "../domain/op-log";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
 import type { AuthUser } from "../common/types/auth-user";
@@ -16,7 +18,6 @@ import type { Order } from "./types";
 import type { CreateOrderDto } from "./dto/create-order.dto";
 import type { UpdateOrderDto } from "./dto/update-order.dto";
 import type { ArchiveOrderDto } from "./dto/archive-order.dto";
-import type { DeleteOrderDto } from "./dto/delete-order.dto";
 
 /** api_idempotency 的 operation_key；归档/删除按订单号独立域，与前端 mock 同粒度 */
 const CREATE_OPERATION_KEY = "orders:create";
@@ -25,6 +26,31 @@ const deleteOperationKeyOf = (orderNo: string): string => `orders:delete:${order
 
 /** 订单行 + 响应映射必需的关联（archiver 仅归档后有值；creator 供审计展示） */
 type OrderRow = SalesOrderTable & {
+    customer: { customerCode: string };
+    bom: { bomCode: string };
+    creator: { name: string };
+    archiver: { name: string } | null;
+};
+
+/**
+ * 响应映射（toOrder）所需的订单投影：列表查询显式 select 仅取这些列
+ * （冻结快照 JSON 等重列只在写路径整行读出时存在），整行 OrderRow 天然满足本类型。
+ */
+type OrderProjection = Pick<
+    SalesOrderTable,
+    | "id"
+    | "rowVersion"
+    | "orderNo"
+    | "customerNameSnapshot"
+    | "qty"
+    | "orderDate"
+    | "deliverDate"
+    | "remark"
+    | "createdAt"
+    | "lifecycleStatus"
+    | "archivedAt"
+    | "archiveReason"
+> & {
     customer: { customerCode: string };
     bom: { bomCode: string };
     creator: { name: string };
@@ -47,20 +73,31 @@ export class OrdersService {
      * 统一聚合口径（db-scheme.md §7.2：无流水的订单不在视图，缺行按 0 理解）。
      */
     async listOrders(): Promise<Order[]> {
-        const rows = await this.prisma.salesOrderTable.findMany({
-            where: { deletedAt: null },
-            orderBy: { orderNo: "asc" },
-            include: {
-                customer: { select: { customerCode: true } },
-                bom: { select: { bomCode: true } },
-                creator: { select: { name: true } },
-                archiver: { select: { name: true } },
-            },
-        });
-        const outboundRows = await this.prisma.$queryRaw<Array<{ order_id: bigint; outbound_qty: bigint }>>(
-            Prisma.sql`SELECT order_id, outbound_qty FROM v_order_outbound_qty`,
-        );
-        const outboundMap = new Map(outboundRows.map(row => [row.order_id, Number(row.outbound_qty)]));
+        const [rows, outboundMap] = await Promise.all([
+            this.prisma.salesOrderTable.findMany({
+                where: { deletedAt: null },
+                orderBy: { orderNo: "asc" },
+                select: {
+                    id: true,
+                    rowVersion: true,
+                    orderNo: true,
+                    customerNameSnapshot: true,
+                    qty: true,
+                    orderDate: true,
+                    deliverDate: true,
+                    remark: true,
+                    createdAt: true,
+                    lifecycleStatus: true,
+                    archivedAt: true,
+                    archiveReason: true,
+                    customer: { select: { customerCode: true } },
+                    bom: { select: { bomCode: true } },
+                    creator: { select: { name: true } },
+                    archiver: { select: { name: true } },
+                },
+            }),
+            outboundQtyByOrderMap(this.prisma),
+        ]);
         return rows.map(row => this.toOrder(row, outboundMap.get(row.id) ?? 0));
     }
 
@@ -181,14 +218,12 @@ export class OrdersService {
         return this.txRunner.run(async (tx: Tx) => {
             const now = new Date();
             const current = await this.lockOrderForWrite(tx, orderNo);
-            if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException("订单已被其他人修改，请刷新后重试");
-            }
+            assertVersionMatches(current.rowVersion, dto.expectedVersion, "订单已被其他人修改，请刷新后重试");
             if (current.lifecycleStatus === "ARCHIVED") {
                 throw new ConflictException("订单已归档，不可修改");
             }
 
-            const outbound = await this.outboundNetOf(tx, current.id);
+            const outbound = await outboundNetOf(tx, current.id);
             if (outbound > 0 && (dto.qty !== undefined || dto.deliverDate !== undefined)) {
                 throw new ConflictException("订单已有出库记录，数量与交货日期不可修改，仅可修改备注");
             }
@@ -264,13 +299,11 @@ export class OrdersService {
 
             const now = new Date();
             const current = await this.lockOrderForWrite(tx, orderNo);
-            if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException("订单已被其他人修改，请刷新后重试");
-            }
+            assertVersionMatches(current.rowVersion, dto.expectedVersion, "订单已被其他人修改，请刷新后重试");
             if (current.lifecycleStatus === "ARCHIVED") {
                 throw new ConflictException("订单已归档");
             }
-            const outbound = await this.outboundNetOf(tx, current.id);
+            const outbound = await outboundNetOf(tx, current.id);
             if (outbound === 0) {
                 // 一件未发不归档：手误的活跃单走删除
                 throw new ConflictException("订单尚未发货，无需归档；手误订单请删除");
@@ -325,7 +358,8 @@ export class OrdersService {
                 now,
             });
 
-            const order = this.toOrder(updated, await this.outboundNetOf(tx, current.id));
+            // 归档不改变出库净额，直接复用锁定后已算出的口径
+            const order = this.toOrder(updated, outbound);
             await this.idempotency.complete(tx, {
                 id: placeholderId,
                 httpStatus: 200,
@@ -342,7 +376,7 @@ export class OrdersService {
      */
     async deleteOrder(
         orderNo: string,
-        dto: DeleteOrderDto,
+        dto: ExpectedVersionDto,
         actor: AuthUser,
         idempotencyKey: string | undefined,
     ): Promise<null> {
@@ -367,13 +401,11 @@ export class OrdersService {
 
             const now = new Date();
             const current = await this.lockOrderForWrite(tx, orderNo);
-            if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException("订单已被其他人修改，请刷新后重试");
-            }
+            assertVersionMatches(current.rowVersion, dto.expectedVersion, "订单已被其他人修改，请刷新后重试");
             if (current.lifecycleStatus === "ARCHIVED") {
                 throw new ConflictException("订单已归档，不可删除");
             }
-            const outbound = await this.outboundNetOf(tx, current.id);
+            const outbound = await outboundNetOf(tx, current.id);
             if (outbound > 0) {
                 throw new ConflictException("订单已有发货记录，不可删除");
             }
@@ -421,17 +453,9 @@ export class OrdersService {
         });
     }
 
-    /** 订单有效出库净额：v_order_outbound_qty 统一口径，无流水视为 0（db-scheme.md §7.2） */
-    private async outboundNetOf(tx: Tx, orderId: bigint): Promise<number> {
-        const rows = await tx.$queryRaw<Array<{ outbound_qty: bigint }>>(
-            Prisma.sql`SELECT outbound_qty FROM v_order_outbound_qty WHERE order_id = ${orderId}`,
-        );
-        return rows[0] ? Number(rows[0].outbound_qty) : 0;
-    }
-
     /** 锁定 BOM 行并携带品类（快照名称取品类名）；不存在抛 404 */
     private async lockBomByCode(tx: Tx, bomCode: string): Promise<BomTable & { category: { name: string } }> {
-        await tx.$queryRaw`SELECT id FROM bom_table WHERE bom_code = ${bomCode} FOR UPDATE`;
+        await lockRowByKey(tx, "bom_table", bomCode);
         const bom = await tx.bomTable.findUnique({
             where: { bomCode },
             include: { category: { select: { name: true } } },
@@ -456,7 +480,7 @@ export class OrdersService {
             throw new NotFoundException("订单不存在");
         }
         await lockRowsById(tx, "bom_table", [located.bomId]);
-        await tx.$queryRaw`SELECT id FROM sales_order_table WHERE order_no = ${orderNo} FOR UPDATE`;
+        await lockRowByKey(tx, "sales_order_table", orderNo);
         const order = await tx.salesOrderTable.findUnique({
             where: { orderNo },
             include: {
@@ -497,7 +521,7 @@ export class OrdersService {
 
     /** 契约 Order 映射：version 序列化为 number；日期列 yyyy-MM-dd；createdAt 为 ISO 时刻
         （前端 formatDateTime 展示）；归档字段仅终态且有值时返回 */
-    private toOrder(row: OrderRow, outbound: number): Order {
+    private toOrder(row: OrderProjection, outbound: number): Order {
         const archived = row.lifecycleStatus === "ARCHIVED";
         return {
             version: Number(row.rowVersion),

@@ -1,10 +1,5 @@
-import {
-    BadRequestException,
-    ConflictException,
-    ForbiddenException,
-    Injectable,
-    NotFoundException,
-} from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import type { Prisma } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { TransactionRunner } from "../prisma/transaction.runner";
 import type { Tx } from "../prisma/transaction.runner";
@@ -12,6 +7,7 @@ import { buildRoleGrant } from "../access-control/access-control.service";
 import { ROLE_CODES, SUPER_ROLE_CODE, isRoleCode } from "../constants";
 import { SnowflakeGenerator } from "../common/snowflake";
 import { formatBeijingStamp } from "../common/datetime";
+import { assertVersionMatches, lockRowByKey } from "../domain/concurrency";
 import type { AuthUser } from "../common/types/auth-user";
 import type { GrantLogEntry, GrantMap, RoleDef, RoleGrant } from "./types";
 import type { SaveRoleGrantDto } from "./dto/save-role-grant.dto";
@@ -36,12 +32,14 @@ export class RolesService {
     // 单角色授权查询 getGrant 已迁至 access-control 共享层（auth 与 roles 共用）
 
     async getGrantMap(): Promise<GrantMap> {
-        const roles = await this.prisma.sysRole.findMany();
+        const [roles, grants, catalog] = await Promise.all([
+            this.prisma.sysRole.findMany(),
+            this.prisma.sysGrant.findMany({
+                include: { permission: true },
+            }),
+            this.prisma.sysPermission.findMany(),
+        ]);
         const byCode = new Map(roles.map(role => [role.code, role]));
-        const grants = await this.prisma.sysGrant.findMany({
-            include: { permission: true },
-        });
-        const catalog = await this.prisma.sysPermission.findMany();
 
         return Object.fromEntries(
             ROLE_CODES.map(code => {
@@ -145,14 +143,12 @@ export class RolesService {
 
         return this.txRunner.run(async (tx: Tx) => {
             const now = new Date();
-            await tx.$queryRaw`SELECT code FROM sys_role WHERE code = ${roleId} FOR UPDATE`;
+            await lockRowByKey(tx, "sys_role", roleId);
             const role = await tx.sysRole.findUnique({ where: { code: roleId } });
             if (!role) {
                 throw new NotFoundException("角色不存在");
             }
-            if (role.grantVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException("角色授权已被其他人修改，请刷新后重试");
-            }
+            assertVersionMatches(role.grantVersion, dto.expectedVersion, "角色授权已被其他人修改，请刷新后重试");
 
             const currentCodes = (
                 await tx.sysGrant.findMany({
@@ -165,19 +161,15 @@ export class RolesService {
             const labelOf = (code: string): string => byCode.get(code)?.label ?? code;
 
             if (JSON.stringify(currentCodes) === JSON.stringify(permissionCodes)) {
-                await tx.sysGrantLog.create({
-                    data: {
-                        id: this.snowflake.next(),
-                        operatorId: BigInt(actor.id),
-                        roleCode: roleId,
-                        beforeVersion: role.grantVersion,
-                        afterVersion: role.grantVersion,
-                        createdAt: now,
-                        serverNote: `角色【${role.name}】授权保存（无变化）`,
-                        clientReason: dto.note ?? "",
-                        beforeJson: { permissions: currentCodes },
-                        afterJson: { permissions: currentCodes },
-                    },
+                await this.writeGrantLog(tx, actor, {
+                    roleCode: roleId,
+                    now,
+                    beforeVersion: role.grantVersion,
+                    afterVersion: role.grantVersion,
+                    serverNote: `角色【${role.name}】授权保存（无变化）`,
+                    clientReason: dto.note ?? "",
+                    beforeJson: { permissions: currentCodes },
+                    afterJson: { permissions: currentCodes },
                 });
                 return buildRoleGrant(
                     role.grantVersion,
@@ -210,25 +202,52 @@ export class RolesService {
             ]
                 .filter((part): part is string => part !== null)
                 .join("，");
-            await tx.sysGrantLog.create({
-                data: {
-                    id: this.snowflake.next(),
-                    operatorId: BigInt(actor.id),
-                    roleCode: roleId,
-                    beforeVersion: role.grantVersion,
-                    afterVersion: updated.grantVersion,
-                    createdAt: now,
-                    serverNote: `角色【${role.name}】授权变更：${detail}`,
-                    clientReason: dto.note ?? "",
-                    beforeJson: { permissions: currentCodes },
-                    afterJson: { permissions: permissionCodes },
-                },
+            await this.writeGrantLog(tx, actor, {
+                roleCode: roleId,
+                now,
+                beforeVersion: role.grantVersion,
+                afterVersion: updated.grantVersion,
+                serverNote: `角色【${role.name}】授权变更：${detail}`,
+                clientReason: dto.note ?? "",
+                beforeJson: { permissions: currentCodes },
+                afterJson: { permissions: permissionCodes },
             });
 
             return buildRoleGrant(
                 updated.grantVersion,
                 permissionCodes.flatMap(code => (byCode.get(code) ? [byCode.get(code)!] : [])),
             );
+        });
+    }
+
+    /** 授权日志（无变化与变更两路共用）：同构字段收口，差异仅在版本与前后快照 */
+    private async writeGrantLog(
+        tx: Tx,
+        actor: AuthUser,
+        params: {
+            roleCode: string;
+            now: Date;
+            beforeVersion: bigint;
+            afterVersion: bigint;
+            serverNote: string;
+            clientReason: string;
+            beforeJson: Prisma.InputJsonValue;
+            afterJson: Prisma.InputJsonValue;
+        },
+    ): Promise<void> {
+        await tx.sysGrantLog.create({
+            data: {
+                id: this.snowflake.next(),
+                operatorId: BigInt(actor.id),
+                roleCode: params.roleCode,
+                beforeVersion: params.beforeVersion,
+                afterVersion: params.afterVersion,
+                createdAt: params.now,
+                serverNote: params.serverNote,
+                clientReason: params.clientReason,
+                beforeJson: params.beforeJson,
+                afterJson: params.afterJson,
+            },
         });
     }
 }

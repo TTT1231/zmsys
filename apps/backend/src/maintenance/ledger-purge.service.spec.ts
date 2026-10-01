@@ -5,6 +5,7 @@ import type { AppConfig } from "../configuration";
 import { PrismaService } from "../prisma/prisma.service";
 import { TransactionRunner } from "../prisma/transaction.runner";
 import { MaintenanceState } from "../domain/maintenance-state";
+import { IdempotencyService } from "../idempotency/idempotency.service";
 
 /* 手写假件：$queryRaw 按批次队列返回候选 id；deleteMany 记录调用序列供顺序断言 */
 
@@ -72,7 +73,13 @@ const mkService = (inboundBatches: bigint[][], outboundBatches: bigint[][], orde
     const config = {
         getOrThrow: vi.fn((key: string) => (key === "nodeEnv" ? "production" : undefined)),
     } as unknown as ConfigService<AppConfig>;
-    return { service: new LedgerPurgeService(prisma, txRunner, maintenance, config), ops, queryRaw, maintenance };
+    const idempotency = { cleanup: vi.fn(async () => 0) } as unknown as IdempotencyService;
+    return {
+        service: new LedgerPurgeService(prisma, txRunner, maintenance, config, idempotency),
+        ops,
+        queryRaw,
+        maintenance,
+    };
 };
 
 describe("LedgerPurgeService.purge", () => {

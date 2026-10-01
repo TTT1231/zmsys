@@ -28,8 +28,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     async validate(payload: JwtPayload): Promise<AuthUser> {
+        // 只取鉴权所需列（passwordHash 等重列不逐请求回传）
         const user = await this.prisma.sysUser.findUnique({
             where: { id: BigInt(payload.sub) },
+            select: {
+                id: true,
+                account: true,
+                name: true,
+                roleCode: true,
+                status: true,
+                tokenVersion: true,
+                rowVersion: true,
+            },
         });
         // 停用或 token_version 落后的旧 JWT 立即拒绝
         if (!user || !user.status || user.tokenVersion !== BigInt(payload.ver)) {

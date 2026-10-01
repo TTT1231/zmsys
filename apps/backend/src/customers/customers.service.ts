@@ -1,10 +1,4 @@
-import {
-    BadRequestException,
-    ConflictException,
-    ForbiddenException,
-    Injectable,
-    NotFoundException,
-} from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { TransactionRunner } from "../prisma/transaction.runner";
@@ -14,6 +8,8 @@ import { IdempotencyService } from "../idempotency/idempotency.service";
 import { maskPhone } from "../common/phone";
 import { formatDateColumn } from "../common/datetime";
 import { beijingDayKey } from "../common/beijing-day";
+import { CUSTOMER_OWNER_ROLE_CODES, isEligibleCustomerOwner } from "../constants";
+import { assertVersionMatches, lockRowByKey } from "../domain/concurrency";
 import { recordOpLog } from "../domain/op-log";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
 import type { AuthUser } from "../common/types/auth-user";
@@ -56,18 +52,20 @@ export class CustomersService {
      * 全部客户一次 groupBy 取数避免 N+1。
      */
     async listCustomers(): Promise<Customer[]> {
-        const rows = await this.prisma.customTable.findMany({
-            orderBy: { customerCode: "asc" },
-            include: { owner: { select: { id: true, name: true, account: true } } },
-        });
-        const cooperatingIds = await this.cooperatingCustomerIds(this.prisma);
+        const [rows, cooperatingIds] = await Promise.all([
+            this.prisma.customTable.findMany({
+                orderBy: { customerCode: "asc" },
+                include: { owner: { select: { id: true, name: true, account: true } } },
+            }),
+            this.cooperatingCustomerIds(this.prisma),
+        ]);
         return rows.map(row => this.toCustomer(row, cooperatingIds.has(row.id)));
     }
 
     /** 启用中的销售与超级管理员即合法负责人候选（db-scheme.md §4.1）；只回展示字段 */
     async listOwnerOptions(): Promise<CustomerOwnerOption[]> {
         return this.prisma.sysUser.findMany({
-            where: { roleCode: { in: ["sales", "super"] }, status: true },
+            where: { roleCode: { in: [...CUSTOMER_OWNER_ROLE_CODES] }, status: true },
             orderBy: { account: "asc" },
             select: { name: true, account: true },
         });
@@ -170,9 +168,7 @@ export class CustomersService {
         return this.txRunner.run(async (tx: Tx) => {
             const now = new Date();
             const current = await this.lockByCode(tx, code);
-            if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException("客户信息已被其他人修改，请刷新后重试");
-            }
+            assertVersionMatches(current.rowVersion, dto.expectedVersion, "客户信息已被其他人修改，请刷新后重试");
 
             let ownerId = current.ownerId;
             if (dto.ownerAccount !== current.owner.account) {
@@ -283,12 +279,12 @@ export class CustomersService {
 
     /** 锁定并确认负责人为启用中的销售或超级管理员（db-scheme.md §4.1：资格校验在事务内完成） */
     private async lockOwnerByAccount(tx: Tx, account: string): Promise<Pick<SysUser, "id" | "name" | "account">> {
-        await tx.$queryRaw`SELECT id FROM sys_user WHERE account = ${account} FOR UPDATE`;
+        await lockRowByKey(tx, "sys_user", account);
         const owner = await tx.sysUser.findUnique({ where: { account } });
         if (!owner) {
             throw new NotFoundException("负责人账号不存在");
         }
-        if (!["sales", "super"].includes(owner.roleCode) || !owner.status) {
+        if (!isEligibleCustomerOwner(owner.roleCode) || !owner.status) {
             throw new BadRequestException("客户负责人必须是启用中的销售或超级管理员账号");
         }
         return owner;
@@ -296,7 +292,7 @@ export class CustomersService {
 
     /** 锁定目标客户行并携带当前负责人；不存在抛 404 */
     private async lockByCode(tx: Tx, code: string): Promise<CustomerRow> {
-        await tx.$queryRaw`SELECT id FROM custom_table WHERE customer_code = ${code} FOR UPDATE`;
+        await lockRowByKey(tx, "custom_table", code);
         const customer = await tx.customTable.findUnique({
             where: { customerCode: code },
             include: { owner: { select: { id: true, name: true, account: true } } },

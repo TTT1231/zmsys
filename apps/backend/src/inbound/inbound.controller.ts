@@ -5,9 +5,9 @@ import { PERMISSIONS } from "../constants";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { CreateInboundDto } from "./dto/create-inbound.dto";
 import { UpdateInboundDto } from "./dto/update-inbound.dto";
-import { VoidResourceDto } from "./dto/void-resource.dto";
-import { DeleteInboundDto } from "./dto/delete-inbound.dto";
 import { CreateStockAdjustmentDto } from "./dto/create-stock-adjustment.dto";
+import { VoidResourceDto } from "../common/dto/void-resource.dto";
+import { ExpectedVersionDto } from "../common/dto/expected-version.dto";
 import type { AuthUser } from "../common/types/auth-user";
 import type { InboundRow, StockAdjustmentRow } from "./types";
 
@@ -60,7 +60,7 @@ export class InboundController {
     @HttpCode(HttpStatus.OK)
     async deleteInbound(
         @Param("no") no: string,
-        @Body() dto: DeleteInboundDto,
+        @Body() dto: ExpectedVersionDto,
         @CurrentUser() actor: AuthUser,
         @Headers("idempotency-key") idempotencyKey: string | undefined,
     ): Promise<null> {

@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import type { Prisma } from "../generated/prisma/client";
 import { TransactionRetryExhaustedError, isMarkedRetryable } from "../common/errors/transaction-retry-exhausted.error";
+import { isDriverLockConflict } from "../common/errors/driver-lock-conflict";
 import { PrismaService } from "./prisma.service";
 
 /** 共享事务客户端类型：业务 service 一律从此导入，不再各自维护本地别名 */
@@ -11,20 +12,6 @@ export type Tx = Prisma.TransactionClient;
  * $queryRaw 中的死锁实际以 P2010 + meta.driverAdapterError.cause 形态出现（见下方判定）。
  */
 const RETRYABLE_PRISMA_CODES = new Set(["P2034", "1213", "1205"]);
-
-/** MariaDB 驱动层可重试：死锁 ER 1213 / 锁等待超时 ER 1205 */
-const isDriverLockConflict = (error: unknown): boolean => {
-    if (typeof error !== "object" || error === null) {
-        return false;
-    }
-    const candidate = error as { errno?: unknown; code?: unknown };
-    return (
-        candidate.errno === 1213 ||
-        candidate.errno === 1205 ||
-        candidate.code === "ER_LOCK_DEADLOCK" ||
-        candidate.code === "ER_LOCK_WAIT_TIMEOUT"
-    );
-};
 
 /**
  * 提取 Prisma 错误码（鸭子判定，不用 instanceof）：运行时错误实例来自 pnpm 依赖图中

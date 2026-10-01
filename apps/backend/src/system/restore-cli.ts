@@ -24,11 +24,13 @@ import { createInterface } from "node:readline";
 import bcrypt from "bcryptjs";
 import mariadb from "mariadb";
 import { createBackupConnection } from "../prisma/create-pool";
-import { restoreLockName } from "./restore-lock";
+import { loadDbEnv } from "../configuration/raw-env";
+import { acquireRestoreLock, restoreLockName } from "./restore-lock";
 import {
     executeRestore,
     RestoreAbortedError,
     RestoreUnknownError,
+    toMariaDatetime,
     type RestoreCredential,
     type RestoreMode,
 } from "./engine/restore-engine";
@@ -106,26 +108,21 @@ const readStdinToFile = async (path: string): Promise<{ sha256: string; size: nu
     return { sha256: hash.digest("hex"), size };
 };
 
-const newConnection = (database: string): Promise<mariadb.Connection> =>
-    createBackupConnection({
-        host: process.env.DB_HOST ?? "localhost",
-        port: Number.parseInt(process.env.DB_PORT ?? "3306", 10) || 3306,
-        user: process.env.DB_USERNAME ?? "root",
-        password: process.env.DB_PASSWORD ?? "",
+const newConnection = (database: string): Promise<mariadb.Connection> => {
+    // DB_* 解析与默认值收编到 raw-env 单一来源（脚本级共享层）
+    const db = loadDbEnv();
+    return createBackupConnection({
+        host: db.host,
+        port: db.port,
+        user: db.user,
+        password: db.password,
         name: database,
     });
-
-const acquireLock = async (connection: mariadb.Connection, lockName: string): Promise<boolean> => {
-    const rows = (await connection.query("SELECT GET_LOCK(?, 0) AS locked", [lockName])) as Array<{
-        locked: number | bigint | null;
-    }>;
-    // prepared 路径下 GET_LOCK 标量可能返回 BigInt：统一数值化后再比较
-    return Number(rows[0]?.locked) === 1;
 };
 
 const main = async (): Promise<void> => {
     const options = parseOptions();
-    const database = process.env.DB_DATABASE ?? "zmdb";
+    const database = loadDbEnv().database;
 
     if (options.printTarget) {
         process.stdout.write(`${JSON.stringify({ database, mode: options.mode })}\n`);
@@ -171,7 +168,7 @@ const runRestoreFromTemp = async (
     const connection = await newConnection(database);
     let lockHeld = false;
     try {
-        if (!(await acquireLock(connection, lockName))) {
+        if (!(await acquireRestoreLock(connection, lockName, 0))) {
             throw new Error("恢复锁被占用：旧恢复会话尚未结束，确认后重试");
         }
         lockHeld = true;
@@ -278,7 +275,7 @@ const resetPassword = async (account: string, database: string): Promise<void> =
     const connection = await newConnection(database);
     let lockHeld = false;
     try {
-        if (!(await acquireLock(connection, lockName))) {
+        if (!(await acquireRestoreLock(connection, lockName, 0))) {
             throw new Error("恢复锁被占用：旧恢复会话尚未结束");
         }
         lockHeld = true;
@@ -301,7 +298,7 @@ const resetPassword = async (account: string, database: string): Promise<void> =
                 status: user.status === 1,
             };
             const passwordHash = await bcrypt.hash(password, 10);
-            const utcNow = new Date().toISOString().slice(0, 23).replace("T", " ");
+            const utcNow = toMariaDatetime(new Date());
             await connection.query(
                 `UPDATE sys_user
                  SET password_hash = ?, password_changed_at = ?, token_version = token_version + 1, row_version = row_version + 1

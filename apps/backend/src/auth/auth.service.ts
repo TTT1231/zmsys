@@ -7,7 +7,8 @@ import { TransactionRunner } from "../prisma/transaction.runner";
 import type { Tx } from "../prisma/transaction.runner";
 import { SnowflakeGenerator } from "../common/snowflake";
 import { AccessControlService } from "../access-control/access-control.service";
-import { toWbUser, userSnapshot } from "../access-control/wb-user";
+import { toWbUser, userSnapshot, writeUserChangeLog } from "../access-control/wb-user";
+import { lockRowsById } from "../domain/concurrency";
 import type { RoleGrant, WbUser } from "../access-control/types";
 import type { AuthUser } from "../common/types/auth-user";
 import type { JwtPayload } from "./types";
@@ -77,7 +78,7 @@ export class AuthService {
         const newHash = await bcrypt.hash(dto.newPassword, 10);
         await this.txRunner.run(async (tx: Tx) => {
             const now = new Date();
-            await tx.$queryRaw`SELECT id FROM sys_user WHERE id = ${userId} FOR UPDATE`;
+            await lockRowsById(tx, "sys_user", [userId]);
             const current = await tx.sysUser.findUnique({ where: { id: userId } });
             if (!current) {
                 throw new BadRequestException("账号不存在或已停用");
@@ -96,19 +97,16 @@ export class AuthService {
                 },
             });
             // 密码事件只记录“已变更”及版本，不记录任何密码材料
-            await tx.sysUserChangeLog.create({
-                data: {
-                    id: this.snowflake.next(),
-                    userId,
-                    operatorId: userId,
-                    eventType: "PASSWORD_CHANGE",
-                    createdAt: now,
-                    beforeVersion: current.rowVersion,
-                    afterVersion: updated.rowVersion,
-                    reason: "自助修改密码",
-                    beforeJson: userSnapshot(current),
-                    afterJson: userSnapshot(updated),
-                },
+            await writeUserChangeLog(tx, this.snowflake, {
+                userId,
+                operatorId: userId,
+                eventType: "PASSWORD_CHANGE",
+                now,
+                beforeVersion: current.rowVersion,
+                afterVersion: updated.rowVersion,
+                reason: "自助修改密码",
+                beforeJson: userSnapshot(current),
+                afterJson: userSnapshot(updated),
             });
         });
         return null;

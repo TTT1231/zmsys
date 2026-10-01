@@ -25,6 +25,19 @@ const actor = {
 
 const ID_KEY = "idem-key-01";
 
+/** 递归展开 Prisma.Sql（{strings, values} 嵌套，lockRowsById 的表名在 Prisma.raw 值里）
+ * 为最终 SQL 文本，仅测试断言用；与 domain/concurrency.spec.ts 同一实现 */
+const renderSql = (strings: readonly string[], ...values: unknown[]): string => {
+    const isSql = (value: unknown): value is { strings: string[]; values: unknown[] } =>
+        value !== null && typeof value === "object" && "strings" in value && "values" in value;
+    let out = "";
+    values.forEach((value, i) => {
+        out += strings[i];
+        out += isSql(value) ? renderSql(value.strings, ...value.values) : String(value);
+    });
+    return out + (strings[strings.length - 1] ?? "");
+};
+
 interface ItemFixture {
     id: bigint;
     groupId: bigint;
@@ -850,8 +863,10 @@ describe("BomsService", () => {
             expect(written.boms).toHaveLength(0);
             expect(written.bomItems).toHaveLength(0);
             // BOM 行锁在引用校验之前（订单新建/入库登记竞争同一行锁，§2 锁序）
-            const calls = tx.$queryRaw.mock.calls as unknown as Array<[TemplateStringsArray]>;
-            expect(calls.some(call => /bom_table.*FOR UPDATE/s.test(String(call[0] ?? "")))).toBe(true);
+            const calls = tx.$queryRaw.mock.calls as unknown as Array<[TemplateStringsArray, ...unknown[]]>;
+            expect(calls.some(call => /bom_table.*FOR UPDATE/s.test(renderSql(call[0] ?? [], ...call.slice(1))))).toBe(
+                true,
+            );
             expect(written.opLogs).toHaveLength(1);
             expect(written.opLogs[0]).toMatchObject({
                 action: "delete_bom",

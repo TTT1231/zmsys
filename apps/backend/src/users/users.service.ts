@@ -6,9 +6,10 @@ import { TransactionRunner } from "../prisma/transaction.runner";
 import type { Tx } from "../prisma/transaction.runner";
 import { SnowflakeGenerator } from "../common/snowflake";
 import { IdempotencyService } from "../idempotency/idempotency.service";
-import { toWbUser, userSnapshot } from "../access-control/wb-user";
+import { toWbUser, userSnapshot, writeUserChangeLog } from "../access-control/wb-user";
 import type { WbUser } from "../access-control/types";
-import { SUPER_ROLE_CODE } from "../constants";
+import { SALES_ROLE_CODE, SUPER_ROLE_CODE } from "../constants";
+import { assertVersionMatches, lockRowByKey } from "../domain/concurrency";
 import { recordOpLog } from "../domain/op-log";
 import type { AuthUser } from "../common/types/auth-user";
 import type { SysUser } from "../generated/prisma/client";
@@ -45,7 +46,20 @@ export class UsersService {
     ) {}
 
     async listUsers(): Promise<WbUser[]> {
-        const users = await this.prisma.sysUser.findMany({ orderBy: { account: "asc" } });
+        // 只取映射所需列：passwordHash 不入内存
+        const users = await this.prisma.sysUser.findMany({
+            orderBy: { account: "asc" },
+            select: {
+                rowVersion: true,
+                name: true,
+                account: true,
+                roleCode: true,
+                status: true,
+                lastLoginAt: true,
+                createdAt: true,
+                updatedAt: true,
+            },
+        });
         return users.map(user => toWbUser(user));
     }
 
@@ -100,17 +114,14 @@ export class UsersService {
                 }
                 throw error;
             }
-            await tx.sysUserChangeLog.create({
-                data: {
-                    id: this.snowflake.next(),
-                    userId: id,
-                    operatorId: BigInt(actor.id),
-                    eventType: "CREATE",
-                    createdAt: now,
-                    afterVersion: user.rowVersion,
-                    reason: "新增用户（初始密码为契约默认值）",
-                    afterJson: userSnapshot(user),
-                },
+            await writeUserChangeLog(tx, this.snowflake, {
+                userId: id,
+                operatorId: BigInt(actor.id),
+                eventType: "CREATE",
+                now,
+                afterVersion: user.rowVersion,
+                reason: "新增用户（初始密码为契约默认值）",
+                afterJson: userSnapshot(user),
             });
 
             const wbUser = toWbUser(user);
@@ -132,9 +143,7 @@ export class UsersService {
         return this.txRunner.run(async (tx: Tx) => {
             const now = new Date();
             const current = await this.lockByAccount(tx, account);
-            if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException("用户信息已被其他人修改，请刷新后重试");
-            }
+            assertVersionMatches(current.rowVersion, dto.expectedVersion, "用户信息已被其他人修改，请刷新后重试");
             if (current.roleCode === SUPER_ROLE_CODE && dto.role !== SUPER_ROLE_CODE) {
                 throw new BadRequestException("内置超级管理员角色不可修改");
             }
@@ -144,7 +153,7 @@ export class UsersService {
 
             const roleChanged = current.roleCode !== dto.role;
             const transferred =
-                roleChanged && current.roleCode === "sales"
+                roleChanged && current.roleCode === SALES_ROLE_CODE
                     ? await this.transferCustomersIfNeeded(tx, current, dto, actor)
                     : 0;
 
@@ -158,21 +167,18 @@ export class UsersService {
                 },
             });
             const transferNote = transferred > 0 ? `；离岗移交 ${transferred} 个客户` : "";
-            await tx.sysUserChangeLog.create({
-                data: {
-                    id: this.snowflake.next(),
-                    userId: current.id,
-                    operatorId: BigInt(actor.id),
-                    eventType: roleChanged ? "ROLE_CHANGE" : "PROFILE_UPDATE",
-                    createdAt: now,
-                    beforeVersion: current.rowVersion,
-                    afterVersion: updated.rowVersion,
-                    reason: roleChanged
-                        ? `角色由 ${current.roleCode} 调整为 ${dto.role}${transferNote}`
-                        : `管理员修改姓名${transferNote}`,
-                    beforeJson: userSnapshot(current),
-                    afterJson: userSnapshot(updated),
-                },
+            await writeUserChangeLog(tx, this.snowflake, {
+                userId: current.id,
+                operatorId: BigInt(actor.id),
+                eventType: roleChanged ? "ROLE_CHANGE" : "PROFILE_UPDATE",
+                now,
+                beforeVersion: current.rowVersion,
+                afterVersion: updated.rowVersion,
+                reason: roleChanged
+                    ? `角色由 ${current.roleCode} 调整为 ${dto.role}${transferNote}`
+                    : `管理员修改姓名${transferNote}`,
+                beforeJson: userSnapshot(current),
+                afterJson: userSnapshot(updated),
             });
             return toWbUser(updated);
         });
@@ -186,9 +192,7 @@ export class UsersService {
         return this.txRunner.run(async (tx: Tx) => {
             const now = new Date();
             const current = await this.lockByAccount(tx, account);
-            if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException("用户信息已被其他人修改，请刷新后重试");
-            }
+            assertVersionMatches(current.rowVersion, dto.expectedVersion, "用户信息已被其他人修改，请刷新后重试");
             if (!dto.active && current.roleCode === SUPER_ROLE_CODE) {
                 throw new BadRequestException("内置超级管理员不可停用");
             }
@@ -197,7 +201,7 @@ export class UsersService {
             }
 
             const transferred =
-                !dto.active && current.roleCode === "sales"
+                !dto.active && current.roleCode === SALES_ROLE_CODE
                     ? await this.transferCustomersIfNeeded(tx, current, dto, actor)
                     : 0;
 
@@ -210,21 +214,16 @@ export class UsersService {
                     rowVersion: { increment: 1 },
                 },
             });
-            await tx.sysUserChangeLog.create({
-                data: {
-                    id: this.snowflake.next(),
-                    userId: current.id,
-                    operatorId: BigInt(actor.id),
-                    eventType: "STATUS_CHANGE",
-                    createdAt: now,
-                    beforeVersion: current.rowVersion,
-                    afterVersion: updated.rowVersion,
-                    reason: `${dto.active ? "启用" : "停用"}账号${
-                        transferred > 0 ? `；离岗移交 ${transferred} 个客户` : ""
-                    }`,
-                    beforeJson: userSnapshot(current),
-                    afterJson: userSnapshot(updated),
-                },
+            await writeUserChangeLog(tx, this.snowflake, {
+                userId: current.id,
+                operatorId: BigInt(actor.id),
+                eventType: "STATUS_CHANGE",
+                now,
+                beforeVersion: current.rowVersion,
+                afterVersion: updated.rowVersion,
+                reason: `${dto.active ? "启用" : "停用"}账号${transferred > 0 ? `；离岗移交 ${transferred} 个客户` : ""}`,
+                beforeJson: userSnapshot(current),
+                afterJson: userSnapshot(updated),
             });
             return toWbUser(updated);
         });
@@ -239,9 +238,7 @@ export class UsersService {
         return this.txRunner.run(async (tx: Tx) => {
             const now = new Date();
             const current = await this.lockByAccount(tx, account);
-            if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException("用户信息已被其他人修改，请刷新后重试");
-            }
+            assertVersionMatches(current.rowVersion, dto.expectedVersion, "用户信息已被其他人修改，请刷新后重试");
             if (current.roleCode === SUPER_ROLE_CODE) {
                 throw new BadRequestException("内置超级管理员不可重置密码");
             }
@@ -254,19 +251,16 @@ export class UsersService {
                     rowVersion: { increment: 1 },
                 },
             });
-            await tx.sysUserChangeLog.create({
-                data: {
-                    id: this.snowflake.next(),
-                    userId: current.id,
-                    operatorId: BigInt(actor.id),
-                    eventType: "PASSWORD_RESET",
-                    createdAt: now,
-                    beforeVersion: current.rowVersion,
-                    afterVersion: updated.rowVersion,
-                    reason: "管理员重置密码为初始密码",
-                    beforeJson: userSnapshot(current),
-                    afterJson: userSnapshot(updated),
-                },
+            await writeUserChangeLog(tx, this.snowflake, {
+                userId: current.id,
+                operatorId: BigInt(actor.id),
+                eventType: "PASSWORD_RESET",
+                now,
+                beforeVersion: current.rowVersion,
+                afterVersion: updated.rowVersion,
+                reason: "管理员重置密码为初始密码",
+                beforeJson: userSnapshot(current),
+                afterJson: userSnapshot(updated),
             });
             return toWbUser(updated);
         });
@@ -274,7 +268,7 @@ export class UsersService {
 
     /** 锁目标用户行并返回最新数据；不存在抛 404 */
     private async lockByAccount(tx: Tx, account: string): Promise<SysUser> {
-        await tx.$queryRaw`SELECT id FROM sys_user WHERE account = ${account} FOR UPDATE`;
+        await lockRowByKey(tx, "sys_user", account);
         const user = await tx.sysUser.findUnique({ where: { account } });
         if (!user) {
             throw new NotFoundException("用户不存在");
@@ -303,9 +297,14 @@ export class UsersService {
             throw new BadRequestException(`该销售仍负责 ${ownedCount} 个客户，必须指定接任销售并填写移交原因`);
         }
 
-        await tx.$queryRaw`SELECT id FROM sys_user WHERE account = ${dto.replacementOwnerAccount} FOR UPDATE`;
+        await lockRowByKey(tx, "sys_user", dto.replacementOwnerAccount);
         const replacement = await tx.sysUser.findUnique({ where: { account: dto.replacementOwnerAccount } });
-        if (!replacement || replacement.id === fromUser.id || replacement.roleCode !== "sales" || !replacement.status) {
+        if (
+            !replacement ||
+            replacement.id === fromUser.id ||
+            replacement.roleCode !== SALES_ROLE_CODE ||
+            !replacement.status
+        ) {
             throw new BadRequestException("接任销售必须是启用中的其他销售账号");
         }
 

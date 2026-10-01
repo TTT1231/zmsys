@@ -1,4 +1,5 @@
 import { ConflictException } from "@nestjs/common";
+import type { Prisma } from "../generated/prisma/client";
 import type { Tx } from "../prisma/transaction.runner";
 
 /**
@@ -7,12 +8,41 @@ import type { Tx } from "../prisma/transaction.runner";
  * 库存、累计已发或客户名称。
  */
 
+/** 可执行原生视图查询的最小客户端：PrismaService（列表页）与事务 Tx（锁内）均满足 */
+type RawQueryDb = Pick<Prisma.TransactionClient, "$queryRaw">;
+
 /** BOM 当前库存：有效入库 + 库存调整 − 有效出库（v_bom_stock，无行则 0） */
 export async function getStockQty(tx: Tx, bomId: bigint): Promise<number> {
     const rows = await tx.$queryRaw<Array<{ stock_qty: bigint | number }>>`
         SELECT stock_qty FROM v_bom_stock WHERE bom_id = ${bomId}
     `;
     return rows.length === 0 ? 0 : Number(rows[0]!.stock_qty);
+}
+
+/** v_bom_stock 按 bom_code 的库存映射（boms 列表/工作台共用）；无流水的 BOM 不在视图，缺行按 0 */
+export async function stockByBomCodeMap(db: RawQueryDb): Promise<Map<string, number>> {
+    const rows = await db.$queryRaw<Array<{ bom_code: string; stock_qty: bigint | number }>>`
+        SELECT b.bom_code, v.stock_qty
+        FROM v_bom_stock AS v
+        JOIN bom_table AS b ON b.id = v.bom_id
+    `;
+    return new Map(rows.map(row => [row.bom_code, Number(row.stock_qty)]));
+}
+
+/** v_order_outbound_qty 全量映射（订单列表/工作台共用）；无流水订单不在视图，缺行按 0 理解 */
+export async function outboundQtyByOrderMap(db: RawQueryDb): Promise<Map<bigint, number>> {
+    const rows = await db.$queryRaw<Array<{ order_id: bigint; outbound_qty: bigint | number }>>`
+        SELECT order_id, outbound_qty FROM v_order_outbound_qty
+    `;
+    return new Map(rows.map(row => [row.order_id, Number(row.outbound_qty)]));
+}
+
+/** 单订单有效出库净额（锁内事务路径）：v_order_outbound_qty 统一口径，无流水视为 0（db-scheme.md §7.2） */
+export async function outboundNetOf(tx: Tx, orderId: bigint): Promise<number> {
+    const rows = await tx.$queryRaw<Array<{ outbound_qty: bigint | number }>>`
+        SELECT outbound_qty FROM v_order_outbound_qty WHERE order_id = ${orderId}
+    `;
+    return rows[0] ? Number(rows[0].outbound_qty) : 0;
 }
 
 interface ActiveOrderRow {

@@ -1,6 +1,7 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from "@nestjs/common";
 import { Prisma } from "../../generated/prisma/client";
 import { TransactionRetryExhaustedError } from "../errors/transaction-retry-exhausted.error";
+import { isDriverLockConflict } from "../errors/driver-lock-conflict";
 
 /** Fastify reply 的最小结构类型，避免直接依赖 fastify 包类型 */
 interface ResponseLike {
@@ -11,20 +12,6 @@ interface ResponseLike {
 interface RequestLike {
     id?: string | number;
 }
-
-/** MariaDB 驱动的死锁 / 锁等待超时：errno 1213/1205 或语义 code */
-const isDeadlockOrLockTimeout = (exception: unknown): boolean => {
-    if (typeof exception !== "object" || exception === null) {
-        return false;
-    }
-    const candidate = exception as { errno?: unknown; code?: unknown };
-    return (
-        candidate.errno === 1213 ||
-        candidate.errno === 1205 ||
-        candidate.code === "ER_LOCK_DEADLOCK" ||
-        candidate.code === "ER_LOCK_WAIT_TIMEOUT"
-    );
-};
 
 /**
  * 统一错误信封与数据库错误识别（单过滤器完成，不依赖过滤器链次序——
@@ -60,7 +47,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         if (exception instanceof Prisma.PrismaClientKnownRequestError) {
             return this.mapPrismaKnownError(exception);
         }
-        if (isDeadlockOrLockTimeout(exception)) {
+        if (isDriverLockConflict(exception)) {
             return { status: HttpStatus.SERVICE_UNAVAILABLE, message: "数据库锁冲突，请稍后重试" };
         }
         return { status: HttpStatus.INTERNAL_SERVER_ERROR, message: "服务器内部错误" };

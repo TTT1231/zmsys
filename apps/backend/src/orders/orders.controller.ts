@@ -6,7 +6,7 @@ import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { CreateOrderDto } from "./dto/create-order.dto";
 import { UpdateOrderDto } from "./dto/update-order.dto";
 import { ArchiveOrderDto } from "./dto/archive-order.dto";
-import { DeleteOrderDto } from "./dto/delete-order.dto";
+import { ExpectedVersionDto } from "../common/dto/expected-version.dto";
 import type { AuthUser } from "../common/types/auth-user";
 import type { Order } from "./types";
 
@@ -61,7 +61,7 @@ export class OrdersController {
     @HttpCode(HttpStatus.OK)
     async deleteOrder(
         @Param("orderNo") orderNo: string,
-        @Body() dto: DeleteOrderDto,
+        @Body() dto: ExpectedVersionDto,
         @CurrentUser() actor: AuthUser,
         @Headers("idempotency-key") idempotencyKey: string | undefined,
     ): Promise<null> {

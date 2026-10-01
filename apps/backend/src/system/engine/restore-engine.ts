@@ -39,6 +39,7 @@ import {
     type ParsedValue,
 } from "./backup-format";
 import {
+    BACKTICK,
     computeSchemaFingerprint,
     loadTableSchemas,
     reverseTopologicalTableOrder,
@@ -879,7 +880,7 @@ function insertPlain(
             params.push(bindParam(row[i]));
         }
     }
-    return executor.query(`INSERT INTO ${backtick(table)} (${columnList}) VALUES ${rowPlaceholders}`, params);
+    return executor.query(`INSERT INTO ${BACKTICK(table)} (${columnList}) VALUES ${rowPlaceholders}`, params);
 }
 
 /** 单行 PRIMARY 冲突：逐列无损比对；JSON 列由数据库比较（<=> CAST(? AS JSON)），文本族按字节比较 */
@@ -897,7 +898,7 @@ async function compareAndResolve(
     }
     const pkIndexes = pkColumns.map(column => columns.indexOf(column));
     const pkParams = pkIndexes.map(index => bindParam(row[index]));
-    const pkWhere = pkColumns.map(column => `${backtick(column)} = ?`).join(" AND ");
+    const pkWhere = pkColumns.map(column => `${BACKTICK(column)} = ?`).join(" AND ");
 
     const probes: Array<{ column: string; sql: string; param: unknown }> = [];
     for (let i = 0; i < columns.length; i += 1) {
@@ -905,16 +906,16 @@ async function compareAndResolve(
         const param = bindParam(row[i]);
         let condition: string;
         if (column.family === "json") {
-            condition = `${backtick(column.name)} <=> CAST(? AS JSON)`;
+            condition = `${BACKTICK(column.name)} <=> CAST(? AS JSON)`;
         } else if (column.family === "string") {
-            condition = `CAST(${backtick(column.name)} AS BINARY) <=> CAST(? AS BINARY)`;
+            condition = `CAST(${BACKTICK(column.name)} AS BINARY) <=> CAST(? AS BINARY)`;
         } else {
-            condition = `${backtick(column.name)} <=> ?`;
+            condition = `${BACKTICK(column.name)} <=> ?`;
         }
         probes.push({ column: column.name, sql: condition, param });
     }
     const identical = await executor.query<Array<{ n: number | bigint }>>(
-        `SELECT COUNT(*) AS n FROM ${backtick(table)} WHERE ${pkWhere} AND ${probes.map(probe => probe.sql).join(" AND ")}`,
+        `SELECT COUNT(*) AS n FROM ${BACKTICK(table)} WHERE ${pkWhere} AND ${probes.map(probe => probe.sql).join(" AND ")}`,
         [...pkParams, ...probes.map(probe => probe.param)],
     );
     if (Number(identical[0]?.n ?? 0) === 1) {
@@ -924,7 +925,7 @@ async function compareAndResolve(
     const diffColumns: string[] = [];
     for (const probe of probes) {
         const result = await executor.query<Array<{ n: number | bigint }>>(
-            `SELECT COUNT(*) AS n FROM ${backtick(table)} WHERE ${pkWhere} AND NOT (${probe.sql})`,
+            `SELECT COUNT(*) AS n FROM ${BACKTICK(table)} WHERE ${pkWhere} AND NOT (${probe.sql})`,
             [...pkParams, probe.param],
         );
         if (Number(result[0]?.n ?? 0) > 0) {
@@ -1028,11 +1029,11 @@ async function precheckOutsideReferences(
     for (const entry of grouped.values()) {
         if (CLEANABLE_RUNTIME_TABLES.includes(entry.table)) continue;
         const join = entry.columns
-            .map((column, i) => `o.${backtick(column)} = i.${backtick(entry.refColumns[i])}`)
+            .map((column, i) => `o.${BACKTICK(column)} = i.${BACKTICK(entry.refColumns[i])}`)
             .join(" AND ");
         const existing = await executor.query<Array<{ n: number | bigint }>>(
-            `SELECT COUNT(*) AS n FROM ${backtick(entry.table)} o
-             WHERE EXISTS (SELECT 1 FROM ${backtick(entry.refTable)} i WHERE ${join})`,
+            `SELECT COUNT(*) AS n FROM ${BACKTICK(entry.table)} o
+             WHERE EXISTS (SELECT 1 FROM ${BACKTICK(entry.refTable)} i WHERE ${join})`,
         );
         if (Number(existing[0]?.n ?? 0) > 0) {
             throw new RestoreAbortedError(
@@ -1050,13 +1051,13 @@ async function verifyNoOrphans(executor: SqlExecutor, schemas: Map<string, Table
             const parent = schemas.get(fk.refTable);
             if (!parent || parent.primaryKey.length !== fk.refColumns.length) continue;
             const join = fk.columns
-                .map((column, i) => `c.${backtick(column)} = p.${backtick(fk.refColumns[i])}`)
+                .map((column, i) => `c.${BACKTICK(column)} = p.${BACKTICK(fk.refColumns[i])}`)
                 .join(" AND ");
-            const notNull = fk.columns.map(column => `c.${backtick(column)} IS NOT NULL`).join(" AND ");
-            const parentNull = fk.refColumns.map(column => `p.${backtick(column)} IS NULL`).join(" AND ");
+            const notNull = fk.columns.map(column => `c.${BACKTICK(column)} IS NOT NULL`).join(" AND ");
+            const parentNull = fk.refColumns.map(column => `p.${BACKTICK(column)} IS NULL`).join(" AND ");
             const orphans = await executor.query<Array<{ n: number | bigint }>>(
-                `SELECT COUNT(*) AS n FROM ${backtick(schema.table)} c
-                 LEFT JOIN ${backtick(fk.refTable)} p ON ${join}
+                `SELECT COUNT(*) AS n FROM ${BACKTICK(schema.table)} c
+                 LEFT JOIN ${BACKTICK(fk.refTable)} p ON ${join}
                  WHERE ${notNull} AND ${parentNull}`,
             );
             if (Number(orphans[0]?.n ?? 0) > 0) {
@@ -1082,7 +1083,7 @@ export async function insertCredentialRow(
     executor: SqlExecutor,
     credential: RestoreCredential,
     status: "SUCCEEDED" | "SUCCEEDED_AUDIT_FAILED" | "FAILED",
-    report: RestoreReport,
+    report: RestoreReport | Record<string, unknown>,
     errorText: string,
     createdAt: Date,
     finishedAt: Date,

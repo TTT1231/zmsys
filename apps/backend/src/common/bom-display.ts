@@ -72,15 +72,20 @@ export function bomItemsSnapshotOf(items: readonly BomItemSnapshotInput[]): BomI
     };
 }
 
-/** 规格摘要视图（不含 position，GET /boms 明细行） */
-export function bomItemViewsOf(items: readonly BomItemSnapshotInput[]): BomItemView[] {
-    return bomItemsSnapshotOf(items).items.map(({ materialId, groupKey, groupName, name, quantity }) => ({
+/** 规格摘要视图（不含 position，GET /boms 明细行）；已构建快照时直接复用，避免重复派生 */
+export function toBomItemViews(snapshot: BomItemsSnapshot): BomItemView[] {
+    return snapshot.items.map(({ materialId, groupKey, groupName, name, quantity }) => ({
         materialId,
         groupKey,
         groupName,
         name,
         quantity,
     }));
+}
+
+/** 规格摘要视图（不含 position，GET /boms 明细行） */
+export function bomItemViewsOf(items: readonly BomItemSnapshotInput[]): BomItemView[] {
+    return toBomItemViews(bomItemsSnapshotOf(items));
 }
 
 /**

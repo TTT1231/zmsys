@@ -3,6 +3,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { beijingDayKey } from "../common/beijing-day";
 import { formatDateColumn } from "../common/datetime";
 import { bomItemsSnapshotOf } from "../common/bom-display";
+import { outboundQtyByOrderMap, stockByBomCodeMap } from "../domain/inventory";
 import type { WorkbenchData, WorkbenchMovement, WorkbenchOrder, WorkbenchProduct } from "./types";
 
 /** 按 (bom_code, 业务日) 聚合的流水行 */
@@ -30,7 +31,7 @@ export class WorkbenchService {
     constructor(private readonly prisma: PrismaService) {}
 
     async getOverview(): Promise<WorkbenchData> {
-        const [bomRows, orderRows, stockRows, outboundQtyRows, inboundRows, outboundRows] = await Promise.all([
+        const [bomRows, orderRows, stockByCode, outboundByOrderId, inboundRows, outboundRows] = await Promise.all([
             this.prisma.bomTable.findMany({
                 orderBy: [{ category: { name: "asc" } }, { bomCode: "asc" }],
                 include: { category: { select: { name: true } }, items: true },
@@ -38,19 +39,19 @@ export class WorkbenchService {
             this.prisma.salesOrderTable.findMany({
                 where: { deletedAt: null },
                 orderBy: { orderNo: "asc" },
-                include: {
+                select: {
+                    id: true,
+                    orderNo: true,
+                    orderDate: true,
+                    deliverDate: true,
+                    qty: true,
+                    lifecycleStatus: true,
                     customer: { select: { customerCode: true, name: true } },
                     bom: { select: { bomCode: true } },
                 },
             }),
-            this.prisma.$queryRaw<Array<{ bom_code: string; stock_qty: bigint | number }>>`
-                SELECT b.bom_code, v.stock_qty
-                FROM v_bom_stock AS v
-                JOIN bom_table AS b ON b.id = v.bom_id
-            `,
-            this.prisma.$queryRaw<Array<{ order_id: bigint; outbound_qty: bigint | number }>>`
-                SELECT order_id, outbound_qty FROM v_order_outbound_qty
-            `,
+            stockByBomCodeMap(this.prisma),
+            outboundQtyByOrderMap(this.prisma),
             this.prisma.$queryRaw<MovementRow[]>`
                 SELECT b.bom_code, i.business_date, SUM(i.qty) AS total
                 FROM inbound_ledger AS i
@@ -68,7 +69,6 @@ export class WorkbenchService {
             `,
         ]);
 
-        const stockByCode = new Map(stockRows.map(row => [row.bom_code, Number(row.stock_qty)]));
         const products: WorkbenchProduct[] = bomRows.map(row => {
             const snapshot = bomItemsSnapshotOf(row.items);
             return {
@@ -81,7 +81,6 @@ export class WorkbenchService {
             };
         });
 
-        const outboundByOrderId = new Map(outboundQtyRows.map(row => [row.order_id, Number(row.outbound_qty)]));
         const orders: WorkbenchOrder[] = orderRows.map(row => ({
             no: row.orderNo,
             customerCode: row.customer.customerCode,

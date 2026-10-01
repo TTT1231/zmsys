@@ -7,7 +7,8 @@ import { SnowflakeGenerator } from "../common/snowflake";
 import { IdempotencyService } from "../idempotency/idempotency.service";
 import { formatDateColumn, formatBeijingStamp, toDateColumn } from "../common/datetime";
 import { bomSpecOf } from "../common/bom-display";
-import { lockRowsById } from "../domain/concurrency";
+import type { ExpectedVersionDto } from "../common/dto/expected-version.dto";
+import { assertVersionMatches, lockRowByKey, lockRowsById } from "../domain/concurrency";
 import { computeShippableQty } from "../domain/inventory";
 import { recordOpLog } from "../domain/op-log";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
@@ -15,20 +16,18 @@ import type { AuthUser } from "../common/types/auth-user";
 import type { OutboundShipment } from "../generated/prisma/client";
 import type { OutboundPrintDocument, OutboundRow } from "./types";
 import type { CreateOutboundDto } from "./dto/create-outbound.dto";
-import type { DeleteOutboundDto } from "./dto/delete-outbound.dto";
 
 /** api_idempotency 的 operation_key，与前端 mock 同粒度 */
 const CREATE_OPERATION_KEY = "outbound:create";
 const voidOperationKeyOf = (no: string): string => `outbound:void:${no}`;
 const deleteOperationKeyOf = (no: string): string => `outbound:delete:${no}`;
 
-/** 单头 + 响应映射与打印文档必需的关联（规格摘要取订单冻结快照，不读目录） */
+/** 单头 + 响应映射必需的关联（列表/作废/删除路径；打印路径另取冻结快照，见 PRINT_SHIPMENT_INCLUDE） */
 type ShipmentRow = OutboundShipment & {
     order: {
         orderNo: string;
         lifecycleStatus: string;
         customerNameSnapshot: string;
-        bomSpecSnapshot: Prisma.JsonValue;
         customer: { customerCode: string };
         bom: { bomCode: string };
     };
@@ -42,13 +41,18 @@ const SHIPMENT_INCLUDE = {
             orderNo: true,
             lifecycleStatus: true,
             customerNameSnapshot: true,
-            bomSpecSnapshot: true,
             customer: { select: { customerCode: true } },
             bom: { select: { bomCode: true } },
         },
     },
     registrar: { select: { name: true } },
     ledgers: { select: { entryType: true, remark: true } },
+} satisfies Prisma.OutboundShipmentInclude;
+
+/** 打印文档额外携带订单冻结 bomSpecSnapshot（规格摘要取快照，不读当前目录） */
+const PRINT_SHIPMENT_INCLUDE = {
+    ...SHIPMENT_INCLUDE,
+    order: { select: { ...SHIPMENT_INCLUDE.order.select, bomSpecSnapshot: true } },
 } satisfies Prisma.OutboundShipmentInclude;
 
 @Injectable()
@@ -107,7 +111,7 @@ export class OutboundService {
             }
             // 锁序（db-scheme.md §2）：BOM → 订单；订单 BOM 引用不可变，定位读与锁定间无竞争
             await lockRowsById(tx, "bom_table", [located.bomId]);
-            await tx.$queryRaw`SELECT id FROM sales_order_table WHERE order_no = ${dto.orderNo} FOR UPDATE`;
+            await lockRowByKey(tx, "sales_order_table", dto.orderNo);
             const order = await tx.salesOrderTable.findUnique({ where: { orderNo: dto.orderNo } });
             if (!order) {
                 throw new NotFoundException("订单不存在");
@@ -232,9 +236,7 @@ export class OutboundService {
 
             const now = new Date();
             const current = await this.lockShipmentForWrite(tx, shipmentNo);
-            if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException("出库单已被其他人处理，请刷新后重试");
-            }
+            assertVersionMatches(current.rowVersion, dto.expectedVersion, "出库单已被其他人处理，请刷新后重试");
             if (current.state !== "REGISTERED") {
                 throw new ConflictException("出库单已作废，不能重复作废");
             }
@@ -290,7 +292,7 @@ export class OutboundService {
      */
     async deleteOutbound(
         shipmentNo: string,
-        dto: DeleteOutboundDto,
+        dto: ExpectedVersionDto,
         actor: AuthUser,
         idempotencyKey: string | undefined,
     ): Promise<null> {
@@ -315,9 +317,7 @@ export class OutboundService {
 
             const now = new Date();
             const current = await this.lockShipmentForWrite(tx, shipmentNo);
-            if (current.rowVersion !== BigInt(dto.expectedVersion)) {
-                throw new ConflictException("出库单已被其他人处理，请刷新后重试");
-            }
+            assertVersionMatches(current.rowVersion, dto.expectedVersion, "出库单已被其他人处理，请刷新后重试");
             if (current.state !== "VOIDED") {
                 throw new ConflictException("仅已作废的出库单可删除，请先作废");
             }
@@ -380,7 +380,7 @@ export class OutboundService {
     async printOutboundDocument(shipmentNo: string, actor: AuthUser): Promise<OutboundPrintDocument> {
         const current = await this.prisma.outboundShipment.findUnique({
             where: { shipmentNo },
-            include: SHIPMENT_INCLUDE,
+            include: PRINT_SHIPMENT_INCLUDE,
         });
         if (!current || current.deletedAt !== null) {
             throw new NotFoundException("出库单不存在");
@@ -472,9 +472,12 @@ export class OutboundService {
             where: { id: located.orderId },
             select: { bomId: true },
         });
-        await lockRowsById(tx, "bom_table", [order!.bomId]);
-        await tx.$queryRaw`SELECT id FROM sales_order_table WHERE id = ${located.orderId} FOR UPDATE`;
-        await tx.$queryRaw`SELECT id FROM outbound_shipment WHERE shipment_no = ${shipmentNo} FOR UPDATE`;
+        if (!order) {
+            throw new NotFoundException("订单不存在");
+        }
+        await lockRowsById(tx, "bom_table", [order.bomId]);
+        await lockRowsById(tx, "sales_order_table", [located.orderId]);
+        await lockRowByKey(tx, "outbound_shipment", shipmentNo);
         const row = await tx.outboundShipment.findUnique({ where: { shipmentNo }, include: SHIPMENT_INCLUDE });
         if (!row) {
             throw new NotFoundException("出库单不存在");
