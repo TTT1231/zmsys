@@ -8,6 +8,7 @@ import { useApp } from "@/context/useApp";
 import { formatDateTime } from "@/lib/date";
 import { copyText } from "@/lib/clipboard";
 import { isApiError } from "@/http/errors";
+import { bytesToHex } from "@/lib/utils";
 import type { BackupPreviewResult, RestoreJob, RestoreJobStatus, RestoreMode } from "@/api";
 
 /** localStorage 持久化的待核实提交（刷新/断线/401 后凭同一 key 继续） */
@@ -34,7 +35,7 @@ const TERMINAL: ReadonlySet<RestoreJobStatus> = new Set(["SUCCEEDED", "SUCCEEDED
 const newRequestKey = (): string => {
     const bytes = new Uint8Array(16);
     crypto.getRandomValues(bytes);
-    return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+    return bytesToHex(bytes);
 };
 
 const formatFileSize = (bytes: number): string =>

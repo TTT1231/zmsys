@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { NewOrderModal } from "@/pages/orders/OrdersPage";
+import { SnapProvider } from "@/context/snap";
 import { EMPTY_SNAPSHOT } from "@/data/views";
 import { detailBom, detailOrder } from "../../fixtures/recordDetails";
 import type { Snapshot } from "@/api";
@@ -13,7 +14,7 @@ const mutate = vi.fn();
 vi.mock("@/context/useApp", () => ({ useApp: () => ({ role: "staff", can: () => true }) }));
 vi.mock("@/components/ui/toastContexts", () => ({ useToast: () => vi.fn() }));
 vi.mock("@/data/queries", () => ({
-    useWbSnapshot: () => ({ data: snapshot }),
+    useWbView: () => ({ snap: snapshot, isLoading: false, refreshing: false }),
     useWbRefresh: () => ({ refresh: vi.fn() }),
     useCreateOrder: () => ({ mutate, isPending: false }),
     useUpdateOrder: () => ({ mutate: vi.fn(), isPending: false }),
@@ -51,7 +52,11 @@ afterEach(() => {
 
 it("输入 BOM 编码即回显成品档案，容错大小写与首尾空格，提交携带档案真实编码", async () => {
     const user = userEvent.setup();
-    render(<NewOrderModal open onClose={vi.fn()} />);
+    render(
+        <SnapProvider snap={snapshot}>
+            <NewOrderModal open onClose={vi.fn()} />
+        </SnapProvider>,
+    );
     expect(screen.queryByText("已匹配")).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText(/BOM 编码/), " kw042 ");
@@ -78,7 +83,11 @@ it("输入 BOM 编码即回显成品档案，容错大小写与首尾空格，�
 
 it("编码失配：输入即出现中性核对提示，提交被拦截且不发起请求", async () => {
     const user = userEvent.setup();
-    render(<NewOrderModal open onClose={vi.fn()} />);
+    render(
+        <SnapProvider snap={snapshot}>
+            <NewOrderModal open onClose={vi.fn()} />
+        </SnapProvider>,
+    );
     await user.type(screen.getByLabelText(/BOM 编码/), "KW9999");
     expect(screen.getByText(/未找到编码「KW9999」/)).toBeInTheDocument();
 
@@ -89,7 +98,11 @@ it("编码失配：输入即出现中性核对提示，提交被拦截且不发�
 
 it("未输入编码提交提示必填，修正输入后错误即时清除", async () => {
     const user = userEvent.setup();
-    render(<NewOrderModal open onClose={vi.fn()} />);
+    render(
+        <SnapProvider snap={snapshot}>
+            <NewOrderModal open onClose={vi.fn()} />
+        </SnapProvider>,
+    );
     await user.click(screen.getByRole("button", { name: "提交订单" }));
     expect(screen.getByText("请输入 BOM 编码")).toBeInTheDocument();
     expect(mutate).not.toHaveBeenCalled();
@@ -101,7 +114,11 @@ it("未输入编码提交提示必填，修正输入后错误即时清除", asyn
 
 it("提交报错后补填某字段，只消除该字段验证词，其余保留", async () => {
     const user = userEvent.setup();
-    render(<NewOrderModal open onClose={vi.fn()} />);
+    render(
+        <SnapProvider snap={snapshot}>
+            <NewOrderModal open onClose={vi.fn()} />
+        </SnapProvider>,
+    );
     /* 「请选择客户」同时是下拉占位与报错文案，错误断言用 selector 限定到 role=alert 节点 */
     const error = (text: string) => screen.getByText(text, { selector: "[role=alert]" });
     const queryError = (text: string) => screen.queryByText(text, { selector: "[role=alert]" });

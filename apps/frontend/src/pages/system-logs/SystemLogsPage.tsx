@@ -4,8 +4,8 @@ import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Badge";
 import { PageLoading } from "@/components/ui/PageLoading";
-import { useSystemLogs, useWbSnapshot } from "@/data/queries";
-import { EMPTY_SNAPSHOT } from "@/data/views";
+import { useSystemLogs, useWbView } from "@/data/queries";
+import { SnapProvider } from "@/context/snap";
 import { OrderDetailModal } from "@/pages/orders/OrdersPage";
 import { BomDetailModal } from "@/pages/bom/BomPage";
 import { VoucherModal } from "@/pages/inbound/InboundPage";
@@ -249,8 +249,7 @@ export function SystemLogsPage() {
     const [dateError, setDateError] = useState("");
     const debouncedKeyword = useDebouncedValue(keyword);
     // 业务详情弹窗数据源：全量聚合快照（与搜索页同源共享 React Query 缓存）
-    const { data: snapData } = useWbSnapshot();
-    const snap = snapData ?? EMPTY_SNAPSHOT;
+    const { snap } = useWbView();
     const liveIndex = useMemo(() => indexSnapshot(snap), [snap]);
     const [detail, setDetail] = useState<DetailTarget | null>(null);
 
@@ -485,42 +484,40 @@ export function SystemLogsPage() {
                 客户联系电话只显示「已变更」，不会在日志中展示完整号码；编辑明细日志随业务数据的保留期清理。
             </p>
             {/* 编号点击 → 业务详情弹窗（SearchPage 同款：state 存业务码，渲染时从快照回捞；
-                目标已删除时回捞为 null，弹窗不渲染） */}
-            {detail?.kind === "order" && (
-                <OrderDetailModal
-                    order={snap.orders.find(item => item.orderNo === detail.code) ?? null}
-                    snap={snap}
-                    onClose={() => setDetail(null)}
-                />
-            )}
-            {detail?.kind === "bom" && (
-                <BomDetailModal
-                    bom={snap.boms.find(item => item.code === detail.code) ?? null}
-                    categories={snap.bomCategories}
-                    onClose={() => setDetail(null)}
-                />
-            )}
-            {detail?.kind === "inbound" && (
-                <VoucherModal
-                    row={snap.inboundLedger.find(item => item.no === detail.code) ?? null}
-                    snap={snap}
-                    onClose={() => setDetail(null)}
-                />
-            )}
-            {detail?.kind === "outbound" && (
-                <OutboundDetailModal
-                    row={snap.outboundLedger.find(item => item.no === detail.code) ?? null}
-                    snap={snap}
-                    onClose={() => setDetail(null)}
-                />
-            )}
-            {detail?.kind === "customer" && (
-                <CustomerDetailModal
-                    customer={snap.customers.find(item => item.code === detail.code) ?? null}
-                    snap={snap}
-                    onClose={() => setDetail(null)}
-                />
-            )}
+                目标已删除时回捞为 null，弹窗不渲染）；快照经 context 共享，不再逐个传 props */}
+            <SnapProvider snap={snap}>
+                {detail?.kind === "order" && (
+                    <OrderDetailModal
+                        order={snap.orders.find(item => item.orderNo === detail.code) ?? null}
+                        onClose={() => setDetail(null)}
+                    />
+                )}
+                {detail?.kind === "bom" && (
+                    <BomDetailModal
+                        bom={snap.boms.find(item => item.code === detail.code) ?? null}
+                        categories={snap.bomCategories}
+                        onClose={() => setDetail(null)}
+                    />
+                )}
+                {detail?.kind === "inbound" && (
+                    <VoucherModal
+                        row={snap.inboundLedger.find(item => item.no === detail.code) ?? null}
+                        onClose={() => setDetail(null)}
+                    />
+                )}
+                {detail?.kind === "outbound" && (
+                    <OutboundDetailModal
+                        row={snap.outboundLedger.find(item => item.no === detail.code) ?? null}
+                        onClose={() => setDetail(null)}
+                    />
+                )}
+                {detail?.kind === "customer" && (
+                    <CustomerDetailModal
+                        customer={snap.customers.find(item => item.code === detail.code) ?? null}
+                        onClose={() => setDetail(null)}
+                    />
+                )}
+            </SnapProvider>
         </div>
     );
 }

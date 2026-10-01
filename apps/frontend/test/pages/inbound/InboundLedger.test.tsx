@@ -21,8 +21,8 @@ vi.mock("@/context/useApp", () => ({
 }));
 vi.mock("@/components/ui/toastContexts", () => ({ useToast: () => vi.fn() }));
 vi.mock("@/data/queries", () => ({
-    useWbSnapshot: () => ({
-        data: {
+    useWbView: () => ({
+        snap: {
             ...detailSnapshot,
             boms: [detailBom, remarkedBom],
             inboundLedger: [remarkedInbound, detailInbound, voidedInbound],

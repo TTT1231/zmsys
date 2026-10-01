@@ -20,7 +20,7 @@ const snapshot = {
 };
 vi.mock("@/context/useApp", () => ({ useApp: () => ({ role: "staff", can: () => false }) }));
 vi.mock("@/data/queries", () => ({
-    useWbSnapshot: () => ({ data: snapshot }),
+    useWbView: () => ({ snap: snapshot, isLoading: false, refreshing: false }),
     useWbRefresh: () => ({ refresh: vi.fn() }),
 }));
 const toastSpy = vi.fn();

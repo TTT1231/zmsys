@@ -4,6 +4,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { CustomerDetailModal } from "@/pages/customers/CustomersPage";
+import { SnapProvider } from "@/context/snap";
 import { detailOrder, detailSnapshot } from "../../fixtures/recordDetails";
 import type { Customer, Order, Snapshot } from "@/api";
 
@@ -46,7 +47,11 @@ const orders: Order[] = [
 const snap: Snapshot = { ...detailSnapshot, customers: [customer], orders };
 
 const renderDetail = (onClose = vi.fn()) =>
-    render(<CustomerDetailModal customer={customer} snap={snap} onClose={onClose} />);
+    render(
+        <SnapProvider snap={snap}>
+            <CustomerDetailModal customer={customer} onClose={onClose} />
+        </SnapProvider>,
+    );
 
 it("时间线按下单日期倒序只取最近 3 笔，带状态徽章并提供查看全部入口", () => {
     renderDetail();

@@ -1,8 +1,12 @@
 import { DataTable } from "@/components/ui/DataTable";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { SearchSelect } from "@/components/ui/SearchSelect";
+import { ListToolbar } from "@/components/ui/ListToolbar";
+import { ToolbarSelect } from "@/components/ui/ToolbarSelect";
+import { DateRangeFilter } from "@/components/ui/DateRangeFilter";
 import { ListState, OrderTaskCard } from "@/components/ui/MobileList";
 import { EmptyRow } from "@/components/ui/EmptyRow";
+import { DeliveryCell } from "@/components/business/DeliveryCell";
 import { BomCell } from "@/components/bom/BomCell";
 import { RemarkCell } from "@/components/ui/RemarkCell";
 import { RecordFields, RecordProduct, RecordSummary } from "@/components/business/RecordDetails";
@@ -21,8 +25,11 @@ import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { num } from "@/lib/format";
 import { useApp } from "@/context/useApp";
+import { useTableControls } from "@/lib/useTableControls";
+import { SnapProvider } from "@/context/snap";
+import { useSnap } from "@/context/useSnap";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
-import { Badge, Button, ProgressTrack, StatusBadge, TableLink } from "@/components/ui/Badge";
+import { Badge, Button, StatusBadge, TableLink } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { CustomerCell, DateCell, QtyCell } from "@/components/ui/cells";
@@ -39,17 +46,16 @@ import {
 } from "@dnd-kit/core";
 import { cycleSortState, type SortState } from "@/lib/tableSort";
 import { mergeReordered, moveItem } from "@/lib/rowOrder";
-import { Field, TextArea, TextField, DateField } from "@/components/ui/Field";
+import { TextArea, TextField, DateField } from "@/components/ui/Field";
 import {
     useArchiveOrder,
     useCreateOrder,
     useDeleteOrder,
     useUpdateOrder,
     useWbRefresh,
-    useWbSnapshot,
+    useWbView,
 } from "@/data/queries";
 import {
-    EMPTY_SNAPSHOT,
     bomByCode,
     deriveOrders,
     maxShipOf,
@@ -58,17 +64,14 @@ import {
     stockOf,
     type DerivedOrders,
 } from "@/data/views";
-import { addDays, addMonths, formatDateTime, monthStartOf, shortDate, todayIso } from "@/lib/date";
+import { addDays, addMonths, formatDateTime, monthStartOf, todayIso } from "@/lib/date";
 import { focusFirstInvalid } from "@/lib/formFocus";
 import { useToast } from "@/components/ui/toastContexts";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
-import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { PageLoading } from "@/components/ui/PageLoading";
-import type { Order, Snapshot } from "@/api";
+import type { Order } from "@/api";
 
 const STATUS_OPTIONS = ["全部状态", "待备货", "可发货", "部分可发货", "部分发货", "已完成"];
-const EMPTY_BOMS: Snapshot["boms"] = [];
-const EMPTY_CUSTOMERS: Snapshot["customers"] = [];
 
 /* 可排序列：订单号 / 数量 / 交期 / 交付情况（按累计已发对比）/ 创建时间；桌面表头与移动端排序下拉共用 */
 type OrderSortKey = "orderNo" | "qty" | "deliverDate" | "outbound" | "createdAt";
@@ -82,11 +85,11 @@ const ORDER_SORT_COLUMNS: Array<{ key: OrderSortKey; label: string }> = [
 
 /* 新建销售订单弹窗（三步表单：客户与交付 → BOM 编码 → 备注） */
 export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-    const { data } = useWbSnapshot();
+    const snap = useSnap();
     const createOrder = useCreateOrder();
     const toast = useToast();
-    const customers = data?.customers ?? EMPTY_CUSTOMERS;
-    const boms = data?.boms ?? EMPTY_BOMS;
+    const customers = snap.customers;
+    const boms = snap.boms;
 
     const [customerCode, setCustomerCode] = useState("");
     const [qty, setQty] = useState("");
@@ -171,21 +174,12 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
             width={640}
             footer={
                 <>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
-                    >
+                    <Button size="sm" variant="secondary" onClick={onClose}>
                         取消
-                    </button>
-                    <button
-                        type="button"
-                        disabled={createOrder.isPending}
-                        onClick={submit}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
-                    >
+                    </Button>
+                    <Button size="sm" disabled={createOrder.isPending} onClick={submit}>
                         {createOrder.isPending ? "正在提交…" : "提交订单"}
-                    </button>
+                    </Button>
                 </>
             }
         >
@@ -409,21 +403,12 @@ function EditOrderModal({
                             </button>
                         )}
                     </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
-                    >
+                    <Button size="sm" variant="secondary" onClick={onClose}>
                         取消
-                    </button>
-                    <button
-                        type="button"
-                        disabled={updateOrder.isPending || (locked && !remarkDirty)}
-                        onClick={submit}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
-                    >
+                    </Button>
+                    <Button size="sm" disabled={updateOrder.isPending || (locked && !remarkDirty)} onClick={submit}>
                         {updateOrder.isPending ? "正在提交…" : "保存修改"}
-                    </button>
+                    </Button>
                 </>
             }
         >
@@ -468,10 +453,11 @@ function EditOrderModal({
                     width={440}
                     footer={
                         <>
-                            <Button variant="secondary" type="button" onClick={() => setConfirmDelete(false)}>
+                            <Button size="sm" variant="secondary" type="button" onClick={() => setConfirmDelete(false)}>
                                 取消
                             </Button>
                             <Button
+                                size="sm"
                                 variant="danger"
                                 type="button"
                                 disabled={deleteOrder.isPending}
@@ -498,21 +484,12 @@ function EditOrderModal({
                     width={480}
                     footer={
                         <>
-                            <button
-                                type="button"
-                                onClick={() => setConfirmArchive(false)}
-                                className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
-                            >
+                            <Button size="sm" variant="secondary" onClick={() => setConfirmArchive(false)}>
                                 取消
-                            </button>
-                            <button
-                                type="button"
-                                disabled={archiveOrder.isPending}
-                                onClick={submitArchive}
-                                className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
-                            >
+                            </Button>
+                            <Button size="sm" disabled={archiveOrder.isPending} onClick={submitArchive}>
                                 {archiveOrder.isPending ? "正在归档…" : "确认归档"}
-                            </button>
+                            </Button>
                         </>
                     }
                 >
@@ -545,20 +522,19 @@ function EditOrderModal({
 /* 订单详情弹窗 */
 export function OrderDetailModal({
     order,
-    snap,
     derived,
     onClose,
     onShip,
     onEdit,
 }: {
     order: Order | null;
-    snap: Snapshot;
     /** 页面级一次分配结果（P2）：传入时弹窗复用预计算可发量/索引，不再单点全量派生 */
     derived?: DerivedOrders;
     onClose: () => void;
     onShip?: () => void;
     onEdit?: () => void;
 }) {
+    const snap = useSnap();
     if (!order) return null;
     const bom = derived ? derived.bomIndex.get(order.bomCode) : bomByCode(snap, order.bomCode);
     const maxShip = derived ? (derived.byOrderNo.get(order.orderNo)?.maxShip ?? 0) : maxShipOf(snap, order.orderNo);
@@ -577,22 +553,18 @@ export function OrderDetailModal({
             footer={
                 <>
                     {onEdit && (
-                        <Button variant="secondary" onClick={onEdit}>
+                        <Button size="sm" variant="secondary" onClick={onEdit}>
                             编辑订单
                         </Button>
                     )}
                     {onShip && maxShip > 0 && (
-                        <Button icon="truck" onClick={onShip}>
+                        <Button size="sm" icon="truck" onClick={onShip}>
                             登记发货
                         </Button>
                     )}
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink"
-                    >
+                    <Button size="sm" variant="secondary" onClick={onClose}>
                         关闭
-                    </button>
+                    </Button>
                 </>
             }
         >
@@ -664,19 +636,13 @@ export function OrderDetailModal({
 
 export function OrdersPage() {
     const { role, can } = useApp();
-    const { data, isLoading, isFetching } = useWbSnapshot();
+    const { snap, isLoading, refreshing: overlay } = useWbView();
     const { refresh } = useWbRefresh();
-    // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
-    const overlay = useDelayedFlag(isFetching && !isLoading);
-    const snap = data ?? EMPTY_SNAPSHOT;
-    const [searchParams, setSearchParams] = useSearchParams();
+    const [searchParams] = useSearchParams();
     const [statusFilter, setStatusFilter] = useState("全部状态");
-    const [keyword, setKeyword] = useState(searchParams.get("q") ?? "");
     const [categoryFilter, setCategoryFilter] = useState("全部品类");
     const [dateStart, setDateStart] = useState("");
     const [dateEnd, setDateEnd] = useState("");
-    const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(10);
     // 列排序默认升序：默认按订单号；仓管视角默认交货日期（按交期备货）。
     // 三态循环（升→降→取消）：点表头即按所选序重排一次；拖拽手动序会暂停当前排序，重新点表头才恢复
     const [sort, setSort] = useState<SortState<OrderSortKey> | null>(() => ({
@@ -685,6 +651,24 @@ export function OrdersPage() {
     }));
     // 手动行序（纯前端）：拖拽/键盘提交的完整序；提交时暂停当前排序，筛选、刷新、重新排序即作废
     const [manualOrder, setManualOrder] = useState<string[] | null>(null);
+    // 深链 ?new=order 首帧开弹窗 + ?q= 预填关键字 + 翻页状态收口在 useTableControls；
+    // 订单页回顶要跳过拖拽落位那一次，滚动 effect 留在本页管理
+    const {
+        keyword,
+        setKeyword,
+        onKeywordChange,
+        page,
+        setPage,
+        pageSize,
+        onPageSizeChange,
+        tableScrollRef,
+        newOpen,
+        setNewOpen,
+    } = useTableControls({
+        deepLinkNew: "order",
+        initialKeyword: searchParams.get("q") ?? "",
+        scrollReset: false,
+    });
     // 拖拽态：拖拽中的订单号 + 插入线下标（相对 pageRows，"插到该行前"，n=追加到末尾）
     const [draggingNo, setDraggingNo] = useState<string | null>(null);
     const [dropIndex, setDropIndex] = useState<number | null>(null);
@@ -700,8 +684,6 @@ export function OrdersPage() {
         cells.forEach(td => td.classList.add("row-just-moved"));
         window.setTimeout(() => cells.forEach(td => td.classList.remove("row-just-moved")), 500);
     };
-    // 深链 ?new=order 首帧即开弹窗（初始 state 直读）；effect 只负责清参数，不在副作用里开弹窗
-    const [newOpen, setNewOpen] = useState(() => searchParams.get("new") === "order");
     const [ship, setShip] = useState<string | null>(null);
     const [taskFilter, setTaskFilter] = useState(searchParams.get("task") ?? (role === "warehouse" ? "ready" : "all"));
     const [detail, setDetail] = useState<Order | null>(null);
@@ -780,14 +762,6 @@ export function OrdersPage() {
     const dateFilterActive = !!dateStart || !!dateEnd;
     const filtersActive =
         dateFilterActive || !!keyword.trim() || statusFilter !== "全部状态" || categoryFilter !== "全部品类";
-    const dateLabel =
-        dateStart && dateEnd
-            ? `交期：${shortDate(dateStart)}–${shortDate(dateEnd)}`
-            : dateStart
-              ? `交期：${shortDate(dateStart)} 起`
-              : dateEnd
-                ? `交期：至 ${shortDate(dateEnd)}`
-                : "交期";
     /* 交期快捷区间：手机上免滚原生日期选择器（today 声明在派生 memo 处，两处共用） */
     const monthStart = monthStartOf(today);
     const quickRanges = [
@@ -797,17 +771,12 @@ export function OrdersPage() {
         { label: "下月", start: addMonths(monthStart, 1), end: addDays(addMonths(monthStart, 2), -1) },
     ];
 
-    useEffect(() => {
-        if (searchParams.get("new") === "order") setSearchParams({}, { replace: true });
-    }, [searchParams, setSearchParams]);
-
     const applySort = (key: OrderSortKey) => {
         setSort(current => cycleSortState(current, key));
         setManualOrder(null); // 点表头排序即作废手动序（最后一次操作生效）
     };
     // 排序或翻页后行序变化，滚动区回到顶部，避免误以为排错行；
     // 拖拽/键盘移动暂停排序的那一次跳过回顶（落点行就在眼前），标记由 submitMove 置位
-    const tableScrollRef = useRef<HTMLDivElement>(null);
     const skipScrollOnceRef = useRef(false);
     useEffect(() => {
         if (skipScrollOnceRef.current) {
@@ -815,7 +784,7 @@ export function OrdersPage() {
             return;
         }
         if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
-    }, [page, sort]);
+    }, [page, sort, tableScrollRef]);
 
     /* ── 行拖拽手动排序（仅桌面表格，手机端卡片不参与）──
        line 派落点指示：行全程不动，目标行上/下缘 2px 主色插入线，松手才一次落位；
@@ -953,7 +922,7 @@ export function OrdersPage() {
         };
         raf = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(raf);
-    }, [draggingNo]);
+    }, [draggingNo, tableScrollRef]);
 
     // 清空条件只作用于筛选行（搜索/状态/品类/交期）；快捷 tab 由用户自行切换
     const clearFilters = () => {
@@ -964,491 +933,359 @@ export function OrdersPage() {
         setDateEnd("");
         setPage(1);
     };
-    const clearDates = () => {
-        setDateStart("");
-        setDateEnd("");
-        setPage(1);
-    };
 
     const canCreate = can("orders:create");
     const canEdit = can("orders:edit");
     const canShip = can("outbound:ship");
 
     return (
-        <div className="flex flex-col gap-5">
-            <h1 className="sr-only">{role === "warehouse" ? "待发货订单" : "销售订单"}</h1>
+        <SnapProvider snap={snap}>
+            <div className="flex flex-col gap-5">
+                <h1 className="sr-only">{role === "warehouse" ? "待发货订单" : "销售订单"}</h1>
 
-            <section className="relative overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
-                {overlay && <LoadingOverlay />}
-                <div className="list-card-primary">
-                    <div className="table-task-tabs" aria-label="订单快捷筛选">
-                        {[
-                            { key: "all", label: "全部", count: counts.total },
-                            { key: "pending", label: "待交付", count: counts.unfinished },
-                            { key: "ready", label: "可发货", count: counts.ready },
-                        ].map(item => (
-                            <button
-                                type="button"
-                                key={item.key}
-                                aria-pressed={taskFilter === item.key}
-                                onClick={() => {
-                                    setTaskFilter(item.key);
-                                    setStatusFilter("全部状态");
-                                    setManualOrder(null);
-                                    setPage(1);
-                                }}
-                            >
-                                {item.label} <strong>{item.count}</strong>
-                            </button>
-                        ))}
-                    </div>
-                    <TableHeaderActions className="ml-auto">
-                        {canCreate && (
-                            <Button icon="plus" className="max-sm:flex-1" onClick={() => setNewOpen(true)}>
-                                新建订单
-                            </Button>
-                        )}
-                    </TableHeaderActions>
-                </div>
-                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4 lg:gap-2.5">
-                    {/* 搜索最左：窄屏由 list-toolbar 规则独占整行，宽屏固定 280px */}
-                    <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-surface px-3 lg:w-70">
-                        <Icon name="search" size={15} className="text-subtle" />
-                        <input
-                            value={keyword}
-                            onChange={event => {
-                                setKeyword(event.target.value);
-                                setPage(1);
-                            }}
-                            placeholder="客户名 / 订单号 / BOM"
-                            className="w-full bg-transparent text-14 text-ink outline-none placeholder:text-subtle"
-                        />
-                    </label>
-                    <select
-                        value={statusFilter}
-                        onChange={event => {
-                            setStatusFilter(event.target.value);
-                            setManualOrder(null);
-                            setPage(1);
-                        }}
-                        aria-label="按状态筛选"
-                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
-                    >
-                        {STATUS_OPTIONS.map(option => (
-                            <option key={option}>{option}</option>
-                        ))}
-                    </select>
-                    <select
-                        value={categoryFilter}
-                        onChange={event => {
-                            setCategoryFilter(event.target.value);
-                            setManualOrder(null);
-                            setPage(1);
-                        }}
-                        aria-label="按品类筛选"
-                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
-                    >
-                        <option>全部品类</option>
-                        {categories.map(item => (
-                            <option key={item}>{item}</option>
-                        ))}
-                    </select>
-                    <MobileSortSelect
-                        columns={ORDER_SORT_COLUMNS}
-                        value={sort}
-                        onChange={next => {
-                            setSort(next);
-                            setManualOrder(null); // 与桌面表头一致：重新选择排序（含回到默认顺序）即作废手动序
-                        }}
-                        noneLabel="默认顺序"
-                    />
-                    <details className="relative">
-                        <summary
-                            className={`flex h-10 list-none items-center gap-1.5 rounded-btn px-3 text-14 transition ${
-                                dateFilterActive
-                                    ? "bg-primary-soft text-primary-strong"
-                                    : "text-ink hover:text-primary-strong"
-                            }`}
-                        >
-                            <Icon name="calendar" size={15} />
-                            {dateLabel}
-                        </summary>
-                        {/* 移动端贴底弹层（同 Modal：scrim 关闭 + 顶圆角），宽屏锚定按钮右侧下拉；
-                            section 有 overflow-hidden，下拉面板在窄屏会被裁剪，故窄屏走 fixed 贴底 */}
-                        <div
-                            className="fixed inset-0 z-40 bg-scrim backdrop-blur-[2px] lg:hidden"
-                            onClick={event => event.currentTarget.closest("details")?.removeAttribute("open")}
-                        />
-                        <div className="absolute top-12 right-0 z-50 grid w-75 grid-cols-1 gap-2 rounded-xl border border-line bg-surface p-3 shadow-modal max-lg:fixed max-lg:inset-x-0 max-lg:top-auto max-lg:bottom-0 max-lg:left-0 max-lg:w-auto max-lg:gap-3 max-lg:rounded-b-none max-lg:rounded-t-[22px] max-lg:border-x-0 max-lg:border-b-0 max-lg:p-4 max-lg:pb-[max(16px,env(safe-area-inset-bottom))]">
-                            <div className="flex items-center justify-between lg:hidden">
-                                <span className="text-14 font-semibold text-ink">按交货日期筛选</span>
+                <section className="relative overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
+                    {overlay && <LoadingOverlay />}
+                    <div className="list-card-primary">
+                        <div className="table-task-tabs" aria-label="订单快捷筛选">
+                            {[
+                                { key: "all", label: "全部", count: counts.total },
+                                { key: "pending", label: "待交付", count: counts.unfinished },
+                                { key: "ready", label: "可发货", count: counts.ready },
+                            ].map(item => (
                                 <button
                                     type="button"
-                                    aria-label="关闭"
-                                    onClick={event => event.currentTarget.closest("details")?.removeAttribute("open")}
-                                    className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition hover:bg-soft hover:text-ink"
+                                    key={item.key}
+                                    aria-pressed={taskFilter === item.key}
+                                    onClick={() => {
+                                        setTaskFilter(item.key);
+                                        setStatusFilter("全部状态");
+                                        setManualOrder(null);
+                                        setPage(1);
+                                    }}
                                 >
-                                    <Icon name="close" size={16} />
+                                    {item.label} <strong>{item.count}</strong>
                                 </button>
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                                {quickRanges.map(item => {
-                                    const active = dateStart === item.start && dateEnd === item.end;
-                                    return (
-                                        <button
-                                            type="button"
-                                            key={item.label}
-                                            aria-pressed={active}
-                                            onClick={() => {
-                                                setDateStart(item.start);
-                                                setDateEnd(item.end);
-                                                setManualOrder(null);
-                                                setPage(1);
-                                            }}
-                                            className={`min-h-8 rounded-full border px-3 text-13 font-medium transition ${
-                                                active
-                                                    ? "border-primary-border bg-primary-soft text-primary-strong"
-                                                    : "border-line-strong bg-surface text-muted hover:text-primary-strong"
-                                            }`}
-                                        >
-                                            {item.label}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                            <Field label="开始">
-                                <input
-                                    type="date"
-                                    value={dateStart}
-                                    onChange={event => {
-                                        setDateStart(event.target.value);
-                                        setManualOrder(null);
-                                        setPage(1);
-                                    }}
-                                    className="w-full rounded-input border border-line-strong px-2.5 py-2 text-14"
-                                />
-                            </Field>
-                            <Field label="结束">
-                                <input
-                                    type="date"
-                                    value={dateEnd}
-                                    onChange={event => {
-                                        setDateEnd(event.target.value);
-                                        setManualOrder(null);
-                                        setPage(1);
-                                    }}
-                                    className="w-full rounded-input border border-line-strong px-2.5 py-2 text-14"
-                                />
-                            </Field>
-                            <div className="flex gap-2">
-                                {dateFilterActive && (
-                                    <Button variant="secondary" icon="reset" onClick={clearDates}>
-                                        清除
-                                    </Button>
-                                )}
-                                <Button
-                                    className="flex-1"
-                                    onClick={event => event.currentTarget.closest("details")?.removeAttribute("open")}
-                                >
-                                    完成筛选
-                                </Button>
-                            </div>
+                            ))}
                         </div>
-                    </details>
-                    <button
-                        type="button"
-                        onClick={clearFilters}
-                        disabled={!filtersActive}
-                        className="min-h-10 px-1 text-14 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
-                    >
-                        清空条件
-                    </button>
-                    <div className="ml-auto">
-                        <ToolbarMore>
-                            <Button
-                                variant="secondary"
-                                icon="refresh"
-                                onClick={() => {
-                                    setManualOrder(null); // 刷新即回到后端返回顺序（手动序不保存）
-                                    refresh();
-                                }}
-                            >
-                                刷新
-                            </Button>
-                        </ToolbarMore>
+                        <TableHeaderActions className="ml-auto">
+                            {canCreate && (
+                                <Button icon="plus" className="max-sm:flex-1" onClick={() => setNewOpen(true)}>
+                                    新建订单
+                                </Button>
+                            )}
+                        </TableHeaderActions>
                     </div>
-                </div>
+                    <ListToolbar
+                        keyword={keyword}
+                        onKeywordChange={onKeywordChange}
+                        placeholder="客户名 / 订单号 / BOM"
+                        onClear={clearFilters}
+                        filtersActive={filtersActive}
+                        trailing={
+                            <div className="ml-auto">
+                                <ToolbarMore>
+                                    <Button
+                                        variant="secondary"
+                                        icon="refresh"
+                                        onClick={() => {
+                                            setManualOrder(null); // 刷新即回到后端返回顺序（手动序不保存）
+                                            refresh();
+                                        }}
+                                    >
+                                        刷新
+                                    </Button>
+                                </ToolbarMore>
+                            </div>
+                        }
+                    >
+                        <ToolbarSelect
+                            value={statusFilter}
+                            onChange={value => {
+                                setStatusFilter(value);
+                                setManualOrder(null);
+                                setPage(1);
+                            }}
+                            label="按状态筛选"
+                            options={STATUS_OPTIONS}
+                        />
+                        <ToolbarSelect
+                            value={categoryFilter}
+                            onChange={value => {
+                                setCategoryFilter(value);
+                                setManualOrder(null);
+                                setPage(1);
+                            }}
+                            label="按品类筛选"
+                            options={["全部品类", ...categories]}
+                        />
+                        <MobileSortSelect
+                            columns={ORDER_SORT_COLUMNS}
+                            value={sort}
+                            onChange={next => {
+                                setSort(next);
+                                setManualOrder(null); // 与桌面表头一致：重新选择排序（含回到默认顺序）即作废手动序
+                            }}
+                            noneLabel="默认顺序"
+                        />
+                        <DateRangeFilter
+                            start={dateStart}
+                            end={dateEnd}
+                            onChange={next => {
+                                setDateStart(next.start);
+                                setDateEnd(next.end);
+                                setManualOrder(null);
+                                setPage(1);
+                            }}
+                            quickRanges={quickRanges}
+                        />
+                    </ListToolbar>
 
-                <div className="mobile-records">
-                    <ListState loading={isLoading} empty={!pageRows.length}>
-                        {pageRows.map(order => (
-                            <OrderTaskCard
-                                key={order.orderNo}
-                                order={order}
-                                snap={snap}
-                                derived={derived}
-                                onDetail={() => setDetail(order)}
-                            />
-                        ))}
-                    </ListState>
-                </div>
-                <div className="hidden lg:block">
-                    {isLoading ? (
-                        <PageLoading className="py-16" />
-                    ) : (
-                        <DndContext
-                            sensors={sensors}
-                            collisionDetection={() => []}
-                            onDragStart={onDragStart}
-                            onDragMove={onDragMove}
-                            onDragEnd={onDragEnd}
-                            onDragCancel={onDragCancel}
-                        >
-                            <DataTable
-                                tableId="orders"
-                                defaultWidths={[44, 154, 260, 397, 150, 100, 100, 120, 140, 90, 150, 125, 100]}
-                                recordCount={filtered.length}
-                                identityColumn={1}
-                                pinnedStart={[0, 1, 2, 3, 4]}
-                                scrollRef={tableScrollRef}
+                    <div className="mobile-records">
+                        <ListState loading={isLoading} empty={!pageRows.length}>
+                            {pageRows.map(order => (
+                                <OrderTaskCard
+                                    key={order.orderNo}
+                                    order={order}
+                                    derived={derived}
+                                    onDetail={() => setDetail(order)}
+                                />
+                            ))}
+                        </ListState>
+                    </div>
+                    <div className="hidden lg:block">
+                        {isLoading ? (
+                            <PageLoading className="py-16" />
+                        ) : (
+                            <DndContext
+                                sensors={sensors}
+                                collisionDetection={() => []}
+                                onDragStart={onDragStart}
+                                onDragMove={onDragMove}
+                                onDragEnd={onDragEnd}
+                                onDragCancel={onDragCancel}
                             >
-                                <thead>
-                                    <tr className="text-13 text-muted">
-                                        {/* 拖拽手柄列：sr-only 文本供 DataTable 提取稳定列标识 */}
-                                        <th aria-label="拖拽调整顺序" className="drag-col">
-                                            <span className="sr-only">拖拽调整顺序</span>
-                                        </th>
-                                        <SortTh
-                                            label="销售订单号"
-                                            active={sort?.key === "orderNo"}
-                                            dir={sort?.dir ?? "asc"}
-                                            onSort={() => applySort("orderNo")}
-                                            className="cell-pad-wide"
-                                            width="14%"
-                                        />
-                                        <th style={{ width: "14%" }}>客户 / 备注</th>
-                                        <th style={{ width: "24%" }}>成品 / BOM</th>
-                                        <th style={{ width: "12%" }}>BOM 备注</th>
-                                        <SortTh
-                                            label="订单数量"
-                                            active={sort?.key === "qty"}
-                                            dir={sort?.dir ?? "asc"}
-                                            onSort={() => applySort("qty")}
-                                            width="8%"
-                                        />
-                                        <th style={{ width: "8%" }}>库存数量</th>
-                                        <SortTh
-                                            label="交货日期"
-                                            active={sort?.key === "deliverDate"}
-                                            dir={sort?.dir ?? "asc"}
-                                            onSort={() => applySort("deliverDate")}
-                                            width="12%"
-                                        />
-                                        <SortTh
-                                            label="交付情况"
-                                            active={sort?.key === "outbound"}
-                                            dir={sort?.dir ?? "asc"}
-                                            onSort={() => applySort("outbound")}
-                                            width="12%"
-                                        />
-                                        <th style={{ width: "7%" }}>创建人</th>
-                                        <SortTh
-                                            label="创建时间"
-                                            active={sort?.key === "createdAt"}
-                                            dir={sort?.dir ?? "asc"}
-                                            onSort={() => applySort("createdAt")}
-                                            width="10%"
-                                        />
-                                        <th style={{ width: "8%" }}>状态</th>
-                                        <th className="min-w-28 cell-pad-wide text-center" style={{ width: "8%" }}>
-                                            操作
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {pageRows.length === 0 && (
-                                        <EmptyRow colSpan={13} description="没有找到匹配的订单" />
-                                    )}
-                                    {pageRows.map(order => {
-                                        const bom = derived.bomIndex.get(order.bomCode);
-                                        const status =
-                                            derived.byOrderNo.get(order.orderNo)?.status ?? orderStatusOfMax(order, 0);
-                                        const remaining = remainingOf(order);
-                                        const done = remaining === 0;
-                                        // 库存列三档字色：0 即缺货；盖不住本单剩余待交为不足；其余充裕
-                                        const stock = stockOf(snap, order.bomCode);
-                                        const stockTone =
-                                            stock === 0 ? "danger" : stock < remaining ? "warning" : "success";
-                                        // 档案已删除的客户名不可点（快照里已无对应档案）
-                                        const customer = snap.customers.find(item => item.code === order.customerCode);
-                                        return (
-                                            <tr
-                                                key={order.orderNo}
-                                                ref={el => {
-                                                    if (el) rowRefs.current.set(order.orderNo, el);
-                                                    else rowRefs.current.delete(order.orderNo);
-                                                }}
-                                                className={`${draggingNo === order.orderNo ? "row-drag-source" : ""} ${
-                                                    dropLineAbove === order.orderNo ? "row-drop-above" : ""
-                                                }${dropLineBelow === order.orderNo ? "row-drop-below" : ""}`}
-                                            >
-                                                <td className="drag-col">
-                                                    <RowDragHandle
-                                                        orderNo={order.orderNo}
-                                                        sortLabel={
-                                                            sort
-                                                                ? ORDER_SORT_COLUMNS.find(col => col.key === sort.key)
-                                                                      ?.label
-                                                                : undefined
-                                                        }
-                                                        onArrowKey={onHandleKeyDown}
-                                                    />
-                                                </td>
-                                                <td className="cell-pad-wide">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setDetail(order)}
-                                                        className="tnum text-14 font-semibold text-td-strong underline-offset-2 hover:text-primary-strong hover:underline"
-                                                    >
-                                                        {order.orderNo}
-                                                    </button>
-                                                </td>
-                                                <td>
-                                                    <CustomerCell
-                                                        name={order.customer}
-                                                        remark={order.remark}
-                                                        onClick={
-                                                            customer
-                                                                ? () => setCustomerDetailCode(customer.code)
-                                                                : undefined
-                                                        }
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <BomCell
-                                                        categories={snap.bomCategories}
-                                                        bom={bom}
-                                                        bomCode={order.bomCode}
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <RemarkCell remark={bom?.remark} variant="warning" />
-                                                </td>
-                                                <td>
-                                                    <QtyCell value={order.qty} />
-                                                </td>
-                                                <td>
-                                                    <QtyCell value={stock} tone={stockTone} />
-                                                </td>
-                                                <td>
-                                                    <DateCell
-                                                        date={order.deliverDate}
-                                                        overdue={order.deliverDate < todayIso() && remaining > 0}
-                                                    />
-                                                </td>
-                                                <td className="delivery-cell">
-                                                    {/* 已全部交付只留绿色满条（悬停 title 兜底语义），
-                                                    未交付才展开文字明细 */}
-                                                    {done ? (
-                                                        <div className="delivery-track" title="已全部交付">
-                                                            <ProgressTrack value={1} done />
-                                                        </div>
-                                                    ) : (
-                                                        <>
-                                                            <div className="text-13 text-muted">
-                                                                待交 <QtyCell value={remaining} />
-                                                            </div>
-                                                            <div className="delivery-shipped tnum mt-0.5 text-12 text-muted">
-                                                                已发 {num(order.outbound)} / {num(order.qty)}
-                                                            </div>
-                                                            <div className="delivery-track mt-1.5">
-                                                                <ProgressTrack
-                                                                    value={
-                                                                        order.qty === 0 ? 0 : order.outbound / order.qty
-                                                                    }
-                                                                />
-                                                            </div>
-                                                        </>
-                                                    )}
-                                                </td>
-                                                <td className="text-14 text-td">{order.createdBy}</td>
-                                                <td className="tnum text-14 text-td">
-                                                    {formatDateTime(order.createdAt)}
-                                                </td>
-                                                <td>
-                                                    <StatusBadge status={status.key} label={status.label} />
-                                                </td>
-                                                <td className="min-w-28 cell-pad-wide text-center whitespace-nowrap">
-                                                    <TableLink onClick={() => setDetail(order)}>查看详情</TableLink>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </DataTable>
-                            {draggingNo
-                                ? (() => {
-                                      const order = pageRows.find(item => item.orderNo === draggingNo);
-                                      return order ? (
-                                          <DragGhost order={order} style={{ top: ghostTop, left: ghostLeft }} />
-                                      ) : null;
-                                  })()
-                                : null}
-                        </DndContext>
-                    )}
-                </div>
+                                <DataTable
+                                    tableId="orders"
+                                    defaultWidths={[44, 154, 260, 397, 150, 100, 100, 120, 140, 90, 150, 125, 100]}
+                                    recordCount={filtered.length}
+                                    identityColumn={1}
+                                    pinnedStart={[0, 1, 2, 3, 4]}
+                                    scrollRef={tableScrollRef}
+                                >
+                                    <thead>
+                                        <tr className="text-13 text-muted">
+                                            {/* 拖拽手柄列：sr-only 文本供 DataTable 提取稳定列标识 */}
+                                            <th aria-label="拖拽调整顺序" className="drag-col">
+                                                <span className="sr-only">拖拽调整顺序</span>
+                                            </th>
+                                            <SortTh
+                                                label="销售订单号"
+                                                active={sort?.key === "orderNo"}
+                                                dir={sort?.dir ?? "asc"}
+                                                onSort={() => applySort("orderNo")}
+                                                className="cell-pad-wide"
+                                                width="14%"
+                                            />
+                                            <th style={{ width: "14%" }}>客户 / 备注</th>
+                                            <th style={{ width: "24%" }}>成品 / BOM</th>
+                                            <th style={{ width: "12%" }}>BOM 备注</th>
+                                            <SortTh
+                                                label="订单数量"
+                                                active={sort?.key === "qty"}
+                                                dir={sort?.dir ?? "asc"}
+                                                onSort={() => applySort("qty")}
+                                                width="8%"
+                                            />
+                                            <th style={{ width: "8%" }}>库存数量</th>
+                                            <SortTh
+                                                label="交货日期"
+                                                active={sort?.key === "deliverDate"}
+                                                dir={sort?.dir ?? "asc"}
+                                                onSort={() => applySort("deliverDate")}
+                                                width="12%"
+                                            />
+                                            <SortTh
+                                                label="交付情况"
+                                                active={sort?.key === "outbound"}
+                                                dir={sort?.dir ?? "asc"}
+                                                onSort={() => applySort("outbound")}
+                                                width="12%"
+                                            />
+                                            <th style={{ width: "7%" }}>创建人</th>
+                                            <SortTh
+                                                label="创建时间"
+                                                active={sort?.key === "createdAt"}
+                                                dir={sort?.dir ?? "asc"}
+                                                onSort={() => applySort("createdAt")}
+                                                width="10%"
+                                            />
+                                            <th style={{ width: "8%" }}>状态</th>
+                                            <th className="min-w-28 cell-pad-wide text-center" style={{ width: "8%" }}>
+                                                操作
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {pageRows.length === 0 && (
+                                            <EmptyRow colSpan={13} description="没有找到匹配的订单" />
+                                        )}
+                                        {pageRows.map(order => {
+                                            const bom = derived.bomIndex.get(order.bomCode);
+                                            const status =
+                                                derived.byOrderNo.get(order.orderNo)?.status ??
+                                                orderStatusOfMax(order, 0);
+                                            const remaining = remainingOf(order);
+                                            // 库存列三档字色：0 即缺货；盖不住本单剩余待交为不足；其余充裕
+                                            const stock = stockOf(snap, order.bomCode);
+                                            const stockTone =
+                                                stock === 0 ? "danger" : stock < remaining ? "warning" : "success";
+                                            // 档案已删除的客户名不可点（快照里已无对应档案）
+                                            const customer = snap.customers.find(
+                                                item => item.code === order.customerCode,
+                                            );
+                                            return (
+                                                <tr
+                                                    key={order.orderNo}
+                                                    ref={el => {
+                                                        if (el) rowRefs.current.set(order.orderNo, el);
+                                                        else rowRefs.current.delete(order.orderNo);
+                                                    }}
+                                                    className={`${draggingNo === order.orderNo ? "row-drag-source" : ""} ${
+                                                        dropLineAbove === order.orderNo ? "row-drop-above" : ""
+                                                    }${dropLineBelow === order.orderNo ? "row-drop-below" : ""}`}
+                                                >
+                                                    <td className="drag-col">
+                                                        <RowDragHandle
+                                                            orderNo={order.orderNo}
+                                                            sortLabel={
+                                                                sort
+                                                                    ? ORDER_SORT_COLUMNS.find(
+                                                                          col => col.key === sort.key,
+                                                                      )?.label
+                                                                    : undefined
+                                                            }
+                                                            onArrowKey={onHandleKeyDown}
+                                                        />
+                                                    </td>
+                                                    <td className="cell-pad-wide">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setDetail(order)}
+                                                            className="tnum text-14 font-semibold text-td-strong underline-offset-2 hover:text-primary-strong hover:underline"
+                                                        >
+                                                            {order.orderNo}
+                                                        </button>
+                                                    </td>
+                                                    <td>
+                                                        <CustomerCell
+                                                            name={order.customer}
+                                                            remark={order.remark}
+                                                            onClick={
+                                                                customer
+                                                                    ? () => setCustomerDetailCode(customer.code)
+                                                                    : undefined
+                                                            }
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <BomCell
+                                                            categories={snap.bomCategories}
+                                                            bom={bom}
+                                                            bomCode={order.bomCode}
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <RemarkCell remark={bom?.remark} variant="warning" />
+                                                    </td>
+                                                    <td>
+                                                        <QtyCell value={order.qty} />
+                                                    </td>
+                                                    <td>
+                                                        <QtyCell value={stock} tone={stockTone} />
+                                                    </td>
+                                                    <td>
+                                                        <DateCell
+                                                            date={order.deliverDate}
+                                                            overdue={order.deliverDate < todayIso() && remaining > 0}
+                                                        />
+                                                    </td>
+                                                    <DeliveryCell order={order} />
+                                                    <td className="text-14 text-td">{order.createdBy}</td>
+                                                    <td className="tnum text-14 text-td">
+                                                        {formatDateTime(order.createdAt)}
+                                                    </td>
+                                                    <td>
+                                                        <StatusBadge status={status.key} label={status.label} />
+                                                    </td>
+                                                    <td className="min-w-28 cell-pad-wide text-center whitespace-nowrap">
+                                                        <TableLink onClick={() => setDetail(order)}>查看详情</TableLink>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </DataTable>
+                                {draggingNo
+                                    ? (() => {
+                                          const order = pageRows.find(item => item.orderNo === draggingNo);
+                                          return order ? (
+                                              <DragGhost order={order} style={{ top: ghostTop, left: ghostLeft }} />
+                                          ) : null;
+                                      })()
+                                    : null}
+                            </DndContext>
+                        )}
+                    </div>
 
-                <div className="border-t border-line">
-                    <Pagination
-                        page={page}
-                        pageSize={pageSize}
-                        total={filtered.length}
-                        unit="条订单"
-                        onPageChange={setPage}
-                        onPageSizeChange={size => {
-                            setPageSize(size);
-                            setPage(1);
-                        }}
+                    <div className="border-t border-line">
+                        <Pagination
+                            page={page}
+                            pageSize={pageSize}
+                            total={filtered.length}
+                            unit="条订单"
+                            onPageChange={setPage}
+                            onPageSizeChange={onPageSizeChange}
+                        />
+                    </div>
+                </section>
+
+                {canCreate && newOpen && <NewOrderModal open onClose={() => setNewOpen(false)} />}
+                {editing && (
+                    <EditOrderModal
+                        key={editing.orderNo}
+                        order={editing}
+                        hasShipmentLedger={snap.outboundLedger.some(row => row.orderNo === editing.orderNo)}
+                        onClose={() => setEditing(null)}
                     />
-                </div>
-            </section>
-
-            {canCreate && newOpen && <NewOrderModal open onClose={() => setNewOpen(false)} />}
-            {editing && (
-                <EditOrderModal
-                    key={editing.orderNo}
-                    order={editing}
-                    hasShipmentLedger={snap.outboundLedger.some(row => row.orderNo === editing.orderNo)}
-                    onClose={() => setEditing(null)}
+                )}
+                <OrderDetailModal
+                    order={detail ? (orders.find(order => order.orderNo === detail.orderNo) ?? null) : null}
+                    derived={derived}
+                    onClose={() => setDetail(null)}
+                    onEdit={
+                        canEdit && detail?.lifecycleStatus === "active"
+                            ? () => setEditing(orders.find(order => order.orderNo === detail.orderNo) ?? detail)
+                            : undefined
+                    }
+                    onShip={
+                        canShip
+                            ? () => {
+                                  setShip(detail!.orderNo);
+                              }
+                            : undefined
+                    }
                 />
-            )}
-            <OrderDetailModal
-                order={detail ? (orders.find(order => order.orderNo === detail.orderNo) ?? null) : null}
-                snap={snap}
-                derived={derived}
-                onClose={() => setDetail(null)}
-                onEdit={
-                    canEdit && detail?.lifecycleStatus === "active"
-                        ? () => setEditing(orders.find(order => order.orderNo === detail.orderNo) ?? detail)
-                        : undefined
-                }
-                onShip={
-                    canShip
-                        ? () => {
-                              setShip(detail!.orderNo);
-                          }
-                        : undefined
-                }
-            />
-            <CustomerDetailModal
-                customer={
-                    customerDetailCode ? (snap.customers.find(item => item.code === customerDetailCode) ?? null) : null
-                }
-                snap={snap}
-                onClose={() => setCustomerDetailCode(null)}
-            />
-            {ship !== null && <OutboundModal open initialOrderNo={ship} onClose={() => setShip(null)} />}
-        </div>
+                <CustomerDetailModal
+                    customer={
+                        customerDetailCode
+                            ? (snap.customers.find(item => item.code === customerDetailCode) ?? null)
+                            : null
+                    }
+                    onClose={() => setCustomerDetailCode(null)}
+                />
+                {ship !== null && <OutboundModal open initialOrderNo={ship} onClose={() => setShip(null)} />}
+            </div>
+        </SnapProvider>
     );
 }
 

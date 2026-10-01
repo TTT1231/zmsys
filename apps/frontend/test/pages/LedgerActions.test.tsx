@@ -31,8 +31,8 @@ vi.mock("@/lib/date", async importOriginal => {
 });
 vi.mock("@/components/ui/toastContexts", () => ({ useToast: () => vi.fn() }));
 vi.mock("@/data/queries", () => ({
-    useWbSnapshot: () => ({
-        data: {
+    useWbView: () => ({
+        snap: {
             ...detailSnapshot,
             inboundLedger: [{ ...detailInbound, status: state.inboundStatus }],
             outboundLedger: [{ ...detailOutbound, state: state.outboundState }],

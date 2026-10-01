@@ -5,3 +5,8 @@ import { twMerge } from "tailwind-merge";
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
+
+/** 随机字节 → 小写 hex（幂等键等本地随机标识共用；补零保证逐字节两位） */
+export function bytesToHex(bytes: Uint8Array): string {
+    return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+}

@@ -1,13 +1,15 @@
 import { DataTable } from "@/components/ui/DataTable";
+import { ListToolbar } from "@/components/ui/ListToolbar";
+import { ToolbarSelect } from "@/components/ui/ToolbarSelect";
 import { SortTh } from "@/components/ui/SortTh";
 import { nextSortState, type SortState } from "@/lib/tableSort";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyRow } from "@/components/ui/EmptyRow";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { useMemo, useRef, useState, useEffect } from "react";
-import { Icon } from "@/lib/icons";
+import { useMemo, useState } from "react";
 import { num } from "@/lib/format";
+import { useTableControls } from "@/lib/useTableControls";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { Button, TableLink } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
@@ -107,7 +109,7 @@ function StockLedgerModal({
             subtitle={bom.name}
             width={960}
             footer={
-                <Button variant="secondary" onClick={onClose}>
+                <Button size="sm" variant="secondary" onClick={onClose}>
                     关闭
                 </Button>
             }
@@ -229,13 +231,12 @@ export function StockPage() {
     const isFetching = bomsQuery.isFetching || stocksQuery.isFetching;
     // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
     const overlay = useDelayedFlag(isFetching && !isLoading);
-    const [keyword, setKeyword] = useState("");
     const [category, setCategory] = useState("全部品类");
     /* 已用完 = 余量为 0，未用完 = 余量不为 0 */
     const [statusFilter, setStatusFilter] = useState("全部状态");
-    const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(10);
     const [sort, setSort] = useState<SortState<StockSortKey> | null>(null);
+    const { keyword, setKeyword, onKeywordChange, page, setPage, pageSize, onPageSizeChange, tableScrollRef } =
+        useTableControls({ resetKey: sort });
     const [detail, setDetail] = useState<Bom | null>(null);
 
     const boms = bomsQuery.data;
@@ -273,12 +274,6 @@ export function StockPage() {
     }, [filtered, sort]);
     const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize);
 
-    // 排序或翻页后行序变化，滚动区回到顶部
-    const tableScrollRef = useRef<HTMLDivElement>(null);
-    useEffect(() => {
-        if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
-    }, [page, sort]);
-
     const clearFilters = () => {
         setKeyword("");
         setCategory("全部品类");
@@ -293,62 +288,41 @@ export function StockPage() {
 
             <section className="relative overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
                 {overlay && <LoadingOverlay />}
-                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4 lg:gap-2.5">
-                    <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-surface px-3 lg:w-70">
-                        <Icon name="search" size={15} className="text-subtle" />
-                        <input
-                            value={keyword}
-                            onChange={event => {
-                                setKeyword(event.target.value);
-                                setPage(1);
-                            }}
-                            placeholder="BOM 编码 / 品类 / 备注"
-                            className="w-full bg-transparent text-14 text-ink outline-none placeholder:text-subtle"
-                        />
-                    </label>
-                    <select
+                <ListToolbar
+                    keyword={keyword}
+                    onKeywordChange={onKeywordChange}
+                    placeholder="BOM 编码 / 品类 / 备注"
+                    onClear={clearFilters}
+                    filtersActive={filtersActive}
+                    trailing={
+                        <TableHeaderActions className="ml-auto">
+                            <ToolbarMore>
+                                <Button variant="secondary" icon="refresh" onClick={refresh}>
+                                    刷新
+                                </Button>
+                            </ToolbarMore>
+                        </TableHeaderActions>
+                    }
+                >
+                    <ToolbarSelect
                         value={category}
-                        onChange={event => {
-                            setCategory(event.target.value);
+                        onChange={value => {
+                            setCategory(value);
                             setPage(1);
                         }}
-                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
-                        aria-label="按品类筛选"
-                    >
-                        <option>全部品类</option>
-                        {categories.map(item => (
-                            <option key={item}>{item}</option>
-                        ))}
-                    </select>
-                    <select
+                        label="按品类筛选"
+                        options={["全部品类", ...categories]}
+                    />
+                    <ToolbarSelect
                         value={statusFilter}
-                        onChange={event => {
-                            setStatusFilter(event.target.value);
+                        onChange={value => {
+                            setStatusFilter(value);
                             setPage(1);
                         }}
-                        aria-label="按库存状态筛选"
-                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
-                    >
-                        {["全部状态", "已用完", "未用完"].map(option => (
-                            <option key={option}>{option}</option>
-                        ))}
-                    </select>
-                    <button
-                        type="button"
-                        onClick={clearFilters}
-                        disabled={!filtersActive}
-                        className="min-h-10 px-1 text-14 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
-                    >
-                        清空条件
-                    </button>
-                    <TableHeaderActions className="ml-auto">
-                        <ToolbarMore>
-                            <Button variant="secondary" icon="refresh" onClick={refresh}>
-                                刷新
-                            </Button>
-                        </ToolbarMore>
-                    </TableHeaderActions>
-                </div>
+                        label="按库存状态筛选"
+                        options={["全部状态", "已用完", "未用完"]}
+                    />
+                </ListToolbar>
 
                 <div className="mobile-records">
                     <ListState loading={isLoading} empty={!pageRows.length}>
@@ -462,10 +436,7 @@ export function StockPage() {
                         total={filtered.length}
                         unit="条 BOM"
                         onPageChange={setPage}
-                        onPageSizeChange={size => {
-                            setPageSize(size);
-                            setPage(1);
-                        }}
+                        onPageSizeChange={onPageSizeChange}
                     />
                 </div>
             </section>

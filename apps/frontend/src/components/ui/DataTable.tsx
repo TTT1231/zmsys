@@ -14,6 +14,7 @@ import {
 } from "react";
 import { useApp } from "@/context/useApp";
 import { Icon } from "@/lib/icons";
+import { Button } from "./Badge";
 import { EmptyRow } from "./EmptyRow";
 import { Modal } from "./Modal";
 import { SortTh } from "./SortTh";
@@ -514,20 +515,12 @@ function TableView({
                 width={520}
                 footer={
                     <>
-                        <button
-                            type="button"
-                            onClick={() => setPreferences(emptyPreferences())}
-                            className="min-h-10 rounded-btn border border-line-strong px-4 text-14"
-                        >
+                        <Button size="sm" variant="secondary" onClick={() => setPreferences(emptyPreferences())}>
                             恢复推荐设置
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setSettings(false)}
-                            className="min-h-10 rounded-btn bg-primary px-4 text-14 text-white"
-                        >
+                        </Button>
+                        <Button size="sm" onClick={() => setSettings(false)}>
                             完成
-                        </button>
+                        </Button>
                     </>
                 }
             >

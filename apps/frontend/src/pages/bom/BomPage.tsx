@@ -2,6 +2,8 @@ import { BomCell } from "@/components/bom/BomCell";
 import { DangerNote } from "@/components/business/DangerNote";
 import { RemarkCell } from "@/components/ui/RemarkCell";
 import { DataTable } from "@/components/ui/DataTable";
+import { ListToolbar } from "@/components/ui/ListToolbar";
+import { ToolbarSelect } from "@/components/ui/ToolbarSelect";
 import { SortTh } from "@/components/ui/SortTh";
 import { nextSortState, type SortState } from "@/lib/tableSort";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
@@ -9,12 +11,12 @@ import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyRow } from "@/components/ui/EmptyRow";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BomSpecs } from "@/components/bom/BomSpecs";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useMemo, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { num } from "@/lib/format";
 import { formatDateTime } from "@/lib/date";
 import { copyText } from "@/lib/clipboard";
+import { useTableControls } from "@/lib/useTableControls";
 import { useApp } from "@/context/useApp";
 import { isApiError } from "@/http";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
@@ -79,15 +81,11 @@ export function BomDetailModal({
             footer={
                 <>
                     {onDelete && (
-                        <button
-                            type="button"
-                            onClick={onDelete}
-                            className="mr-auto min-h-10 rounded-btn border border-danger/30 bg-danger-soft px-4 text-14 font-medium text-danger"
-                        >
+                        <Button size="sm" variant="danger-soft" className="mr-auto" onClick={onDelete}>
                             删除 BOM
-                        </button>
+                        </Button>
                     )}
-                    <Button variant="secondary" onClick={onClose}>
+                    <Button size="sm" variant="secondary" onClick={onClose}>
                         关闭
                     </Button>
                 </>
@@ -155,10 +153,10 @@ function DeleteBomModal({ bom, onClose }: { bom: Bom | null; onClose: () => void
             width={440}
             footer={
                 <>
-                    <Button variant="secondary" type="button" onClick={onClose}>
+                    <Button size="sm" variant="secondary" type="button" onClick={onClose}>
                         取消
                     </Button>
-                    <Button variant="danger" type="button" disabled={deleteBom.isPending} onClick={submit}>
+                    <Button size="sm" variant="danger" type="button" disabled={deleteBom.isPending} onClick={submit}>
                         {deleteBom.isPending ? "正在删除…" : "确认删除"}
                     </Button>
                 </>
@@ -501,21 +499,12 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                 layout="workspace"
                 footer={
                     <>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
-                        >
+                        <Button size="sm" variant="secondary" onClick={onClose}>
                             取消
-                        </button>
-                        <button
-                            type="button"
-                            disabled={createBom.isPending}
-                            onClick={submit}
-                            className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
-                        >
+                        </Button>
+                        <Button size="sm" disabled={createBom.isPending} onClick={submit}>
                             {createBom.isPending ? "正在保存…" : "保存 BOM"}
-                        </button>
+                        </Button>
                     </>
                 }
             >
@@ -715,15 +704,11 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                 width={440}
                 footer={
                     <>
-                        <button
-                            type="button"
-                            onClick={() => setPendingChange(null)}
-                            className="min-h-10 rounded-btn border border-line-strong px-4 text-14"
-                        >
+                        <Button size="sm" variant="secondary" onClick={() => setPendingChange(null)}>
                             保留当前配置
-                        </button>
-                        <button
-                            type="button"
+                        </Button>
+                        <Button
+                            size="sm"
                             onClick={() => {
                                 if (pendingChange) {
                                     if (pendingChange.kind === "category") pickCategory(pendingChange.value);
@@ -731,10 +716,9 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                     setPendingChange(null);
                                 }
                             }}
-                            className="min-h-10 rounded-btn bg-primary px-4 text-14 text-white"
                         >
                             确认切换
-                        </button>
+                        </Button>
                     </>
                 }
             >
@@ -752,10 +736,11 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                 width={480}
                 footer={
                     <>
-                        <Button variant="secondary" onClick={() => setDuplicateCode(null)}>
+                        <Button size="sm" variant="secondary" onClick={() => setDuplicateCode(null)}>
                             关闭
                         </Button>
                         <Button
+                            size="sm"
                             variant="primary"
                             onClick={async () => {
                                 if (duplicateCode && (await copyText(duplicateCode))) {
@@ -792,8 +777,6 @@ export function BomPage() {
     const stocksQuery = useBomStocks();
     const usageQuery = useBomUsage();
     const { refresh } = useBomRefresh();
-    const [searchParams, setSearchParams] = useSearchParams();
-    const [keyword, setKeyword] = useState("");
     const [category, setCategory] = useState("全部品类");
     const [statusFilter, setStatusFilter] = useState("全部状态");
     /* 未使用/正在使用都依赖使用关系数据，未加载完成前不参与筛选防误报 */
@@ -811,11 +794,20 @@ export function BomPage() {
         (usageFilterActive && usageQuery.isFetching);
     // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
     const overlay = useDelayedFlag(isFetching && !isLoading);
-    const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(10);
     const [sort, setSort] = useState<SortState<BomSortKey> | null>(null);
-    // 深链 ?new=bom 首帧即开弹窗（初始 state 直读）；effect 只负责清参数，不在副作用里开弹窗
-    const [newOpen, setNewOpen] = useState(() => searchParams.get("new") === "bom");
+    // 深链 ?new=bom 首帧开弹窗 + 翻页状态收口在 useTableControls
+    const {
+        keyword,
+        setKeyword,
+        onKeywordChange,
+        page,
+        setPage,
+        pageSize,
+        onPageSizeChange,
+        tableScrollRef,
+        newOpen,
+        setNewOpen,
+    } = useTableControls({ deepLinkNew: "bom", resetKey: sort });
     const [detail, setDetail] = useState<Bom | null>(null);
     const [deleting, setDeleting] = useState<Bom | null>(null);
 
@@ -886,15 +878,6 @@ export function BomPage() {
     }, [filtered, sort]);
     const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize);
     const canCreate = can("bom:create");
-    // 排序或翻页后行序变化，滚动区回到顶部
-    const tableScrollRef = useRef<HTMLDivElement>(null);
-    useEffect(() => {
-        if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
-    }, [page, sort]);
-
-    useEffect(() => {
-        if (searchParams.get("new") === "bom") setSearchParams({}, { replace: true });
-    }, [searchParams, setSearchParams]);
 
     // 清空条件只作用于筛选行（搜索/品类/使用状态）；快捷入口与分页由用户自行操作
     const clearFilters = () => {
@@ -911,67 +894,46 @@ export function BomPage() {
 
             <section className="relative overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
                 {overlay && <LoadingOverlay />}
-                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4 lg:gap-2.5">
-                    <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-surface px-3 lg:w-70">
-                        <Icon name="search" size={15} className="text-subtle" />
-                        <input
-                            value={keyword}
-                            onChange={event => {
-                                setKeyword(event.target.value);
-                                setPage(1);
-                            }}
-                            placeholder="BOM / 品类 / 型号 / 物料"
-                            className="w-full bg-transparent text-14 text-ink outline-none placeholder:text-subtle"
-                        />
-                    </label>
-                    <select
+                <ListToolbar
+                    keyword={keyword}
+                    onKeywordChange={onKeywordChange}
+                    placeholder="BOM / 品类 / 型号 / 物料"
+                    onClear={clearFilters}
+                    filtersActive={filtersActive}
+                    trailing={
+                        <TableHeaderActions className="ml-auto">
+                            <ToolbarMore>
+                                <Button variant="secondary" icon="refresh" onClick={refresh}>
+                                    刷新
+                                </Button>
+                            </ToolbarMore>
+                            {canCreate && (
+                                <Button icon="plus" onClick={() => setNewOpen(true)}>
+                                    新建 BOM
+                                </Button>
+                            )}
+                        </TableHeaderActions>
+                    }
+                >
+                    <ToolbarSelect
                         value={category}
-                        onChange={event => {
-                            setCategory(event.target.value);
+                        onChange={value => {
+                            setCategory(value);
                             setPage(1);
                         }}
-                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
-                        aria-label="按品类筛选"
-                    >
-                        <option>全部品类</option>
-                        {categories.map(item => (
-                            <option key={item}>{item}</option>
-                        ))}
-                    </select>
-                    <select
+                        label="按品类筛选"
+                        options={["全部品类", ...categories]}
+                    />
+                    <ToolbarSelect
                         value={statusFilter}
-                        onChange={event => {
-                            setStatusFilter(event.target.value);
+                        onChange={value => {
+                            setStatusFilter(value);
                             setPage(1);
                         }}
-                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
-                        aria-label="按使用状态筛选"
-                    >
-                        {["全部状态", "正在使用", "未使用"].map(option => (
-                            <option key={option}>{option}</option>
-                        ))}
-                    </select>
-                    <button
-                        type="button"
-                        onClick={clearFilters}
-                        disabled={!filtersActive}
-                        className="min-h-10 px-1 text-14 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
-                    >
-                        清空条件
-                    </button>
-                    <TableHeaderActions className="ml-auto">
-                        <ToolbarMore>
-                            <Button variant="secondary" icon="refresh" onClick={refresh}>
-                                刷新
-                            </Button>
-                        </ToolbarMore>
-                        {canCreate && (
-                            <Button icon="plus" onClick={() => setNewOpen(true)}>
-                                新建 BOM
-                            </Button>
-                        )}
-                    </TableHeaderActions>
-                </div>
+                        label="按使用状态筛选"
+                        options={["全部状态", "正在使用", "未使用"]}
+                    />
+                </ListToolbar>
 
                 <div className="mobile-records">
                     {usageUnavailable ? (
@@ -1111,10 +1073,7 @@ export function BomPage() {
                         total={filtered.length}
                         unit="条 BOM"
                         onPageChange={setPage}
-                        onPageSizeChange={size => {
-                            setPageSize(size);
-                            setPage(1);
-                        }}
+                        onPageSizeChange={onPageSizeChange}
                     />
                 </div>
             </section>

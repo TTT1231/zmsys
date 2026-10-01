@@ -59,6 +59,32 @@ function includeInternalData(selected: Set<string>, groups: BackupGroupDef[]): S
     return next;
 }
 
+/* 格式选择弹窗的两个 radio：配置化生成，避免压缩/未压缩两侧 JSX 镜像 */
+const FORMAT_OPTIONS: Array<{
+    value: boolean;
+    icon: string;
+    title: string;
+    ext: string;
+    description: string;
+    badge?: string;
+}> = [
+    {
+        value: true,
+        icon: "archive",
+        title: "压缩版",
+        ext: ".sql.gz",
+        description: "文件更小，适合长期保存和传输。",
+        badge: "推荐",
+    },
+    {
+        value: false,
+        icon: "file",
+        title: "未压缩版",
+        ext: ".sql",
+        description: "纯文本，适合直接查看或手动编辑。",
+    },
+];
+
 /** 数据库备份（仅超管）：清单面板勾选范围（联动补依赖）→ 弹窗选格式 → 流式下载 .sql / .sql.gz */
 export function BackupPage() {
     const { can } = useApp();
@@ -265,10 +291,10 @@ export function BackupPage() {
                 width={480}
                 footer={
                     <>
-                        <Button variant="secondary" onClick={() => setFormatOpen(false)}>
+                        <Button size="sm" variant="secondary" onClick={() => setFormatOpen(false)}>
                             取消
                         </Button>
-                        <Button className="min-w-40" disabled={busy} onClick={startBackup}>
+                        <Button size="sm" className="min-w-40" disabled={busy} onClick={startBackup}>
                             <Icon name="download" size={16} />
                             开始备份
                         </Button>
@@ -278,75 +304,52 @@ export function BackupPage() {
                 <div role="radiogroup" aria-label="文件格式">
                     <p className="mb-2.5 text-14 font-semibold text-ink">文件格式</p>
                     <div className="flex flex-col gap-2.5">
-                        <label
-                            className={`flex min-h-22 cursor-pointer items-center justify-between gap-3 rounded-card border p-3.5 transition-colors focus-within:ring-2 focus-within:ring-primary-border ${gzip ? "border-primary bg-primary-soft/40" : "border-line bg-surface hover:border-primary-border hover:bg-soft"}`}
-                        >
-                            <input
-                                type="radio"
-                                name="backup-format"
-                                className="sr-only"
-                                checked={gzip}
-                                onChange={() => setGzip(true)}
-                            />
-                            <span className="min-w-0">
-                                <span className="flex flex-wrap items-center gap-1.5 text-14 font-semibold text-ink">
-                                    <Icon
-                                        name="archive"
-                                        size={16}
-                                        className={gzip ? "text-primary-strong" : "text-muted"}
+                        {FORMAT_OPTIONS.map(option => {
+                            const checked = gzip === option.value;
+                            return (
+                                <label
+                                    key={option.title}
+                                    className={`flex min-h-22 cursor-pointer items-center justify-between gap-3 rounded-card border p-3.5 transition-colors focus-within:ring-2 focus-within:ring-primary-border ${checked ? "border-primary bg-primary-soft/40" : "border-line bg-surface hover:border-primary-border hover:bg-soft"}`}
+                                >
+                                    <input
+                                        type="radio"
+                                        name="backup-format"
+                                        className="sr-only"
+                                        checked={checked}
+                                        onChange={() => setGzip(option.value)}
                                     />
-                                    压缩版
-                                    <span className="rounded-md bg-primary-soft px-1.5 py-0.25 text-11 font-semibold text-primary-strong">
-                                        推荐
+                                    <span className="min-w-0">
+                                        <span className="flex flex-wrap items-center gap-1.5 text-14 font-semibold text-ink">
+                                            <Icon
+                                                name={option.icon}
+                                                size={16}
+                                                className={checked ? "text-primary-strong" : "text-muted"}
+                                            />
+                                            {option.title}
+                                            {option.badge && (
+                                                <span className="rounded-md bg-primary-soft px-1.5 py-0.25 text-11 font-semibold text-primary-strong">
+                                                    {option.badge}
+                                                </span>
+                                            )}
+                                            <span className="font-mono text-12 font-normal text-muted">
+                                                {option.ext}
+                                            </span>
+                                        </span>
+                                        <span className="mt-1 block text-12 leading-5 text-muted">
+                                            {option.description}
+                                        </span>
                                     </span>
-                                    <span className="font-mono text-12 font-normal text-muted">.sql.gz</span>
-                                </span>
-                                <span className="mt-1 block text-12 leading-5 text-muted">
-                                    文件更小，适合长期保存和传输。
-                                </span>
-                            </span>
-                            <span
-                                aria-hidden="true"
-                                className={`relative block h-4.5 w-4.5 shrink-0 rounded-full border-[1.5px] transition-colors ${gzip ? "border-primary" : "border-line-strong"}`}
-                            >
-                                <span
-                                    className={`absolute inset-0.75 rounded-full bg-primary transition-transform duration-150 ${gzip ? "scale-100" : "scale-0"}`}
-                                />
-                            </span>
-                        </label>
-                        <label
-                            className={`flex min-h-22 cursor-pointer items-center justify-between gap-3 rounded-card border p-3.5 transition-colors focus-within:ring-2 focus-within:ring-primary-border ${gzip ? "border-line bg-surface hover:border-primary-border hover:bg-soft" : "border-primary bg-primary-soft/40"}`}
-                        >
-                            <input
-                                type="radio"
-                                name="backup-format"
-                                className="sr-only"
-                                checked={!gzip}
-                                onChange={() => setGzip(false)}
-                            />
-                            <span className="min-w-0">
-                                <span className="flex flex-wrap items-center gap-1.5 text-14 font-semibold text-ink">
-                                    <Icon
-                                        name="file"
-                                        size={16}
-                                        className={!gzip ? "text-primary-strong" : "text-muted"}
-                                    />
-                                    未压缩版
-                                    <span className="font-mono text-12 font-normal text-muted">.sql</span>
-                                </span>
-                                <span className="mt-1 block text-12 leading-5 text-muted">
-                                    纯文本，适合直接查看或手动编辑。
-                                </span>
-                            </span>
-                            <span
-                                aria-hidden="true"
-                                className={`relative block h-4.5 w-4.5 shrink-0 rounded-full border-[1.5px] transition-colors ${gzip ? "border-line-strong" : "border-primary"}`}
-                            >
-                                <span
-                                    className={`absolute inset-0.75 rounded-full bg-primary transition-transform duration-150 ${gzip ? "scale-0" : "scale-100"}`}
-                                />
-                            </span>
-                        </label>
+                                    <span
+                                        aria-hidden="true"
+                                        className={`relative block h-4.5 w-4.5 shrink-0 rounded-full border-[1.5px] transition-colors ${checked ? "border-primary" : "border-line-strong"}`}
+                                    >
+                                        <span
+                                            className={`absolute inset-0.75 rounded-full bg-primary transition-transform duration-150 ${checked ? "scale-100" : "scale-0"}`}
+                                        />
+                                    </span>
+                                </label>
+                            );
+                        })}
                     </div>
                 </div>
                 <p className="mt-4 flex items-start gap-2 text-12 leading-5 text-muted">

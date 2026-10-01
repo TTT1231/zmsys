@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import type { Order, Snapshot } from "@/api";
+import type { Order } from "@/api";
+import { useSnap } from "@/context/useSnap";
 import { BomCell } from "@/components/bom/BomCell";
 import { bomByCode, maxShipOf, orderStatusOfMax, remainingOf, stockOf, type DerivedOrders } from "@/data/views";
 import { num } from "@/lib/format";
@@ -71,20 +72,19 @@ export function CardField({ label, value, strong }: { label: string; value: Reac
 
 export function OrderTaskCard({
     order,
-    snap,
     derived,
     onDetail,
     onShip,
     onEdit,
 }: {
     order: Order;
-    snap: Snapshot;
     /** 页面级一次分配结果（P2）：传入时卡片复用预计算可发量/索引，不再逐卡全量派生 */
     derived?: DerivedOrders;
     onDetail: () => void;
     onShip?: () => void;
     onEdit?: () => void;
 }) {
+    const snap = useSnap();
     const bom = derived ? derived.bomIndex.get(order.bomCode) : bomByCode(snap, order.bomCode);
     const remaining = remainingOf(order);
     const archived = order.lifecycleStatus === "archived";

@@ -1,3 +1,4 @@
+import { Button } from "./Badge";
 import { Modal } from "./Modal";
 
 /* 通用说明弹窗（侧边栏「变更记录」等说明型入口使用） */
@@ -16,20 +17,12 @@ export function NoteDialog({
             width={460}
             footer={
                 <>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
-                    >
+                    <Button size="sm" variant="secondary" onClick={onClose}>
                         返回工作台
-                    </button>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover"
-                    >
+                    </Button>
+                    <Button size="sm" onClick={onClose}>
                         知道了
-                    </button>
+                    </Button>
                 </>
             }
         >

@@ -5,14 +5,15 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SystemLogsPage } from "@/pages/system-logs/SystemLogsPage";
+import { EMPTY_SNAPSHOT } from "@/data/views";
 import type { SystemLogPage } from "@/api";
 
 const useSystemLogs = vi.fn();
-const useWbSnapshot = vi.fn();
+const useWbView = vi.fn();
 
 vi.mock("@/data/queries", () => ({
     useSystemLogs: (...args: unknown[]) => useSystemLogs(...(args as [])),
-    useWbSnapshot: (...args: unknown[]) => useWbSnapshot(...(args as [])),
+    useWbView: (...args: unknown[]) => useWbView(...(args as [])),
 }));
 
 const pageOf = (items: SystemLogPage["items"], nextCursor: SystemLogPage["nextCursor"] = null): SystemLogPage => ({
@@ -72,8 +73,8 @@ beforeEach(() => {
         fetchNextPage: vi.fn(),
     });
     // 默认空快照：编号按「目标已删除」降级为纯文本
-    useWbSnapshot.mockReset();
-    useWbSnapshot.mockReturnValue({ data: null, isLoading: false });
+    useWbView.mockReset();
+    useWbView.mockReturnValue({ snap: EMPTY_SNAPSHOT, isLoading: false, refreshing: false });
 });
 afterEach(cleanup);
 
@@ -308,8 +309,8 @@ it("关键词防抖：输入停顿 300ms 后才并入查询", async () => {
 });
 
 it("编号可点击弹详情：快照有行时渲染为按钮，点击弹出订单详情；无行时保持纯文本", () => {
-    useWbSnapshot.mockReturnValue({
-        data: {
+    useWbView.mockReturnValue({
+        snap: {
             version: 1,
             orders: [
                 {

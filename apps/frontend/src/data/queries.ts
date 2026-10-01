@@ -1,5 +1,14 @@
-import { useInfiniteQuery, useIsFetching, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+    useInfiniteQuery,
+    useIsFetching,
+    useMutation,
+    useQuery,
+    useQueryClient,
+    type QueryClient,
+} from "@tanstack/react-query";
 import { useToast } from "@/components/ui/toastContexts";
+import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
+import { EMPTY_SNAPSHOT } from "./views";
 import type { GrantMap, RoleId } from "./permissions";
 import type { Snapshot, SystemLogCursor, SystemLogQuery, UpdateCustomerInput, UpdateUserInput } from "@/api";
 import { useApp } from "@/context/useApp";
@@ -113,8 +122,14 @@ export function useBomUsage() {
 }
 
 /* 过渡实现：并发拉取当前完整计算窗口；库存按有效入库 + 库存调整 − 有效出库推导。
- * 真实后端启用分页前必须先提供工作台聚合端点，不能用分页局部数据计算全局库存。 */
-async function fetchWbSnapshot(includeCustomers: boolean, includeUsers: boolean): Promise<Snapshot> {
+ * 真实后端启用分页前必须先提供工作台聚合端点，不能用分页局部数据计算全局库存。
+ * BOM/品类复用 bomKeys 独立缓存（5 分钟内直接命中、过期才随快照重取），避免与
+ * BomPage/StockPage 等订阅方对同一端点各拉一遍；写操作失效任一键后两边口径一致。 */
+async function fetchWbSnapshot(
+    queryClient: QueryClient,
+    includeCustomers: boolean,
+    includeUsers: boolean,
+): Promise<Snapshot> {
     const [
         orders,
         boms,
@@ -127,8 +142,12 @@ async function fetchWbSnapshot(includeCustomers: boolean, includeUsers: boolean)
         customerOwnerOptions,
     ] = await Promise.all([
         fetchOrders(),
-        fetchBoms(),
-        fetchBomCategories(),
+        queryClient.ensureQueryData({ queryKey: bomKeys.list, queryFn: fetchBoms, staleTime: BOM_STALE_MS }),
+        queryClient.ensureQueryData({
+            queryKey: bomKeys.categories,
+            queryFn: fetchBomCategories,
+            staleTime: BOM_STALE_MS,
+        }),
         includeCustomers ? fetchCustomers() : Promise.resolve([]),
         fetchInboundLedger(),
         fetchOutboundLedger(),
@@ -169,10 +188,21 @@ export function useWbSnapshot() {
     const { can } = useApp();
     const includeCustomers = can("customers:view");
     const includeUsers = can("permissions:view");
+    const queryClient = useQueryClient();
     return useQuery({
         queryKey: [...wbKeys.all, { includeCustomers, includeUsers }],
-        queryFn: () => fetchWbSnapshot(includeCustomers, includeUsers),
+        queryFn: () => fetchWbSnapshot(queryClient, includeCustomers, includeUsers),
     });
+}
+
+/** 列表页根视图：聚合快照 + 防闪烁刷新标志一次取齐，替代各页手写的
+ *  「data ?? EMPTY_SNAPSHOT + useDelayedFlag(isFetching && !isLoading)」样板。
+ *  子组件经 SnapProvider/useSnap 共享同一份 snap，不再逐层传 props */
+export function useWbView() {
+    const query = useWbSnapshot();
+    // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
+    const refreshing = useDelayedFlag(query.isFetching && !query.isLoading);
+    return { snap: query.data ?? EMPTY_SNAPSHOT, isLoading: query.isLoading, refreshing };
 }
 
 /** 刷新数据：失效全部业务查询（聚合快照、BOM 域独立缓存、订单列表等），

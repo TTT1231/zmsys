@@ -4,6 +4,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { OrderDetailModal } from "@/pages/orders/OrdersPage";
+import { SnapProvider } from "@/context/snap";
 import { detailOrder, detailOutbound, detailSnapshot } from "../../fixtures/recordDetails";
 afterEach(cleanup);
 
@@ -16,12 +17,9 @@ it("部分发货后归档显示结案提示，且不能继续发货", () => {
         archiveReason: "行情不好客户弃单",
     };
     render(
-        <OrderDetailModal
-            order={archivedOrder}
-            snap={{ ...detailSnapshot, orders: [archivedOrder] }}
-            onClose={vi.fn()}
-            onShip={vi.fn()}
-        />,
+        <SnapProvider snap={{ ...detailSnapshot, orders: [archivedOrder] }}>
+            <OrderDetailModal order={archivedOrder} onClose={vi.fn()} onShip={vi.fn()} />
+        </SnapProvider>,
     );
     expect(screen.getByText("订单已归档，仅供查询，不可修改。")).toBeInTheDocument();
     expect(screen.getByText("行情不好客户弃单")).toBeInTheDocument();
@@ -32,12 +30,9 @@ it("部分发货后归档显示结案提示，且不能继续发货", () => {
 });
 it("有效订单保留发货入口，历史作废出库明确标注", () => {
     render(
-        <OrderDetailModal
-            order={detailOrder}
-            snap={{ ...detailSnapshot, outboundLedger: [{ ...detailOutbound, state: "voided" }] }}
-            onClose={vi.fn()}
-            onShip={vi.fn()}
-        />,
+        <SnapProvider snap={{ ...detailSnapshot, outboundLedger: [{ ...detailOutbound, state: "voided" }] }}>
+            <OrderDetailModal order={detailOrder} onClose={vi.fn()} onShip={vi.fn()} />
+        </SnapProvider>,
     );
     expect(screen.getByRole("button", { name: "登记发货" })).toBeInTheDocument();
     expect(screen.getByText("已作废")).toBeInTheDocument();

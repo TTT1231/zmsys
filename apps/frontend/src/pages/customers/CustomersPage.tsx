@@ -1,14 +1,17 @@
 import { regionText, cleanAddressPart } from "@/lib/address";
 import { DataTable } from "@/components/ui/DataTable";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
+import { ListToolbar } from "@/components/ui/ListToolbar";
+import { ToolbarSelect } from "@/components/ui/ToolbarSelect";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyRow } from "@/components/ui/EmptyRow";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { num } from "@/lib/format";
 import { focusFirstInvalid } from "@/lib/formFocus";
 import { useApp } from "@/context/useApp";
+import { useTableControls } from "@/lib/useTableControls";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { Pagination } from "@/components/ui/Pagination";
 import { Badge, Button, StatusBadge, TableLink } from "@/components/ui/Badge";
@@ -20,13 +23,14 @@ import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { nextSortState, type SortState } from "@/lib/tableSort";
 import { SelectField, TextField } from "@/components/ui/Field";
 import { RegionCascader, type RegionValue } from "@/components/ui/RegionCascader";
-import { useCreateCustomer, useUpdateCustomer, useWbRefresh, useWbSnapshot } from "@/data/queries";
+import { useCreateCustomer, useUpdateCustomer, useWbRefresh, useWbView } from "@/data/queries";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
-import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { PageLoading } from "@/components/ui/PageLoading";
-import { EMPTY_SNAPSHOT, deriveOrders, orderStatusOfMax, remainingOf } from "@/data/views";
+import { SnapProvider } from "@/context/snap";
+import { useSnap } from "@/context/useSnap";
+import { deriveOrders, orderStatusOfMax, remainingOf } from "@/data/views";
 import { useToast } from "@/components/ui/toastContexts";
-import type { Customer, Snapshot } from "@/api";
+import type { Customer } from "@/api";
 
 /* 头像底色四循环：全走语义 token（warning/success/primary/accent 轮换），
    暗色下 soft/strong 自动切换到提亮档，不再出现浅色块浮在深底上 */
@@ -46,15 +50,8 @@ const CUSTOMER_SORT_COLUMNS: Array<{ key: CustomerSortKey; label: string }> = [
 ];
 
 /* 新建 / 编辑客户共用表单弹窗（编辑时传 customer 初值；电话留空表示不修改） */
-function CustomerFormModal({
-    customer,
-    snap,
-    onClose,
-}: {
-    customer: Customer | null;
-    snap: Snapshot;
-    onClose: () => void;
-}) {
+function CustomerFormModal({ customer, onClose }: { customer: Customer | null; onClose: () => void }) {
+    const snap = useSnap();
     const createCustomer = useCreateCustomer();
     const updateCustomer = useUpdateCustomer();
     const toast = useToast();
@@ -131,21 +128,12 @@ function CustomerFormModal({
             width={640}
             footer={
                 <>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
-                    >
+                    <Button size="sm" variant="secondary" onClick={onClose}>
                         取消
-                    </button>
-                    <button
-                        type="button"
-                        disabled={pending}
-                        onClick={submit}
-                        className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover disabled:opacity-60"
-                    >
+                    </Button>
+                    <Button size="sm" disabled={pending} onClick={submit}>
                         {pending ? "正在提交…" : "保存档案"}
-                    </button>
+                    </Button>
                 </>
             }
         >
@@ -209,15 +197,14 @@ function CustomerFormModal({
 
 export function CustomerDetailModal({
     customer,
-    snap,
     onClose,
     onEdit,
 }: {
     customer: Customer | null;
-    snap: Snapshot;
     onClose: () => void;
     onEdit?: (customer: Customer) => void;
 }) {
+    const snap = useSnap();
     // 叠加在客户详情之上的订单详情；存 orderNo 渲染时回捞，刷新后数据保持同步
     const [orderNo, setOrderNo] = useState<string | null>(null);
     // 最近订单默认 3 笔，“查看全部”就地展开完整时间线，不跳出当前弹窗
@@ -253,21 +240,13 @@ export function CustomerDetailModal({
                 footer={
                     <>
                         {onEdit && (
-                            <button
-                                type="button"
-                                onClick={() => onEdit(customer)}
-                                className="min-h-10 rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:border-primary-border"
-                            >
+                            <Button size="sm" variant="secondary" onClick={() => onEdit(customer)}>
                                 编辑档案
-                            </button>
+                            </Button>
                         )}
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="min-h-10 rounded-btn bg-primary px-4 text-14 font-medium text-white hover:bg-primary-hover"
-                        >
+                        <Button size="sm" onClick={onClose}>
                             关闭
-                        </button>
+                        </Button>
                     </>
                 }
             >
@@ -375,30 +354,24 @@ export function CustomerDetailModal({
                     </div>
                 </div>
             </Modal>
-            {orderDetail && (
-                <OrderDetailModal order={orderDetail} snap={snap} derived={derived} onClose={() => setOrderNo(null)} />
-            )}
+            {orderDetail && <OrderDetailModal order={orderDetail} derived={derived} onClose={() => setOrderNo(null)} />}
         </>
     );
 }
 
 export function CustomersPage() {
     const { can } = useApp();
-    const { data, isLoading, isFetching } = useWbSnapshot();
+    const { snap, isLoading, refreshing: overlay } = useWbView();
     const { refresh } = useWbRefresh();
-    // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
-    const overlay = useDelayedFlag(isFetching && !isLoading);
     const [searchParams, setSearchParams] = useSearchParams();
     const [statusFilter, setStatusFilter] = useState("全部状态");
-    const [keyword, setKeyword] = useState("");
-    const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(10);
     // 列排序默认升序：默认按最近下单
     const [sort, setSort] = useState<SortState<CustomerSortKey>>({ key: "lastOrderDate", dir: "asc" });
+    const { keyword, setKeyword, onKeywordChange, page, setPage, pageSize, onPageSizeChange, tableScrollRef } =
+        useTableControls({ resetKey: sort });
     const [formTarget, setFormTarget] = useState<Customer | "new" | null>(null);
     const [detail, setDetail] = useState<Customer | null>(null);
 
-    const snap = data ?? EMPTY_SNAPSHOT;
     const customers = snap.customers;
     const orders = snap.orders;
 
@@ -453,11 +426,6 @@ export function CustomersPage() {
     const pageRows = sortedRows.slice((page - 1) * pageSize, page * pageSize);
 
     const applySort = (key: CustomerSortKey) => setSort(current => nextSortState(current, key));
-    // 排序或翻页后行序变化，滚动区回到顶部，避免误以为排错行
-    const tableScrollRef = useRef<HTMLDivElement>(null);
-    useEffect(() => {
-        if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
-    }, [page, sort]);
 
     useEffect(() => {
         if (searchParams.get("new") === "customer") {
@@ -478,226 +446,210 @@ export function CustomersPage() {
     const canEdit = can("customers:edit");
 
     return (
-        <div className="flex flex-col gap-5">
-            <h1 className="sr-only">客户档案</h1>
+        <SnapProvider snap={snap}>
+            <div className="flex flex-col gap-5">
+                <h1 className="sr-only">客户档案</h1>
 
-            <section className="relative overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
-                {overlay && <LoadingOverlay />}
-                <div className="list-toolbar flex flex-wrap items-center border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4 lg:gap-2.5">
-                    <label className="flex h-10 items-center gap-2 rounded-btn border border-line-strong bg-surface px-3 lg:w-70">
-                        <Icon name="search" size={15} className="text-subtle" />
-                        <input
-                            value={keyword}
-                            onChange={event => {
-                                setKeyword(event.target.value);
+                <section className="relative overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
+                    {overlay && <LoadingOverlay />}
+                    <ListToolbar
+                        keyword={keyword}
+                        onKeywordChange={onKeywordChange}
+                        placeholder="公司名 / BOM"
+                        onClear={clearFilters}
+                        filtersActive={filtersActive}
+                        trailing={
+                            <TableHeaderActions className="ml-auto">
+                                <ToolbarMore>
+                                    <Button variant="secondary" icon="refresh" onClick={refresh}>
+                                        刷新
+                                    </Button>
+                                </ToolbarMore>
+                                {canCreate && (
+                                    <Button icon="plus" onClick={() => setFormTarget("new")}>
+                                        新建客户
+                                    </Button>
+                                )}
+                            </TableHeaderActions>
+                        }
+                    >
+                        <ToolbarSelect
+                            value={statusFilter}
+                            onChange={value => {
+                                setStatusFilter(value);
                                 setPage(1);
                             }}
-                            placeholder="公司名 / BOM"
-                            className="w-full bg-transparent text-14 text-ink outline-none placeholder:text-subtle"
+                            label="按合作状态筛选"
+                            options={["全部状态", "合作中", "待跟进"]}
                         />
-                    </label>
-                    <select
-                        value={statusFilter}
-                        onChange={event => {
-                            setStatusFilter(event.target.value);
-                            setPage(1);
-                        }}
-                        aria-label="按合作状态筛选"
-                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
-                    >
-                        {["全部状态", "合作中", "待跟进"].map(option => (
-                            <option key={option}>{option}</option>
-                        ))}
-                    </select>
-                    <MobileSortSelect
-                        columns={CUSTOMER_SORT_COLUMNS}
-                        value={sort}
-                        onChange={next => {
-                            if (next) setSort(next);
-                        }}
-                    />
-                    <button
-                        type="button"
-                        onClick={clearFilters}
-                        disabled={!filtersActive}
-                        className="min-h-10 px-1 text-14 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
-                    >
-                        清空条件
-                    </button>
+                        <MobileSortSelect
+                            columns={CUSTOMER_SORT_COLUMNS}
+                            value={sort}
+                            onChange={next => {
+                                if (next) setSort(next);
+                            }}
+                        />
+                    </ListToolbar>
 
-                    <TableHeaderActions className="ml-auto">
-                        <ToolbarMore>
-                            <Button variant="secondary" icon="refresh" onClick={refresh}>
-                                刷新
-                            </Button>
-                        </ToolbarMore>
-                        {canCreate && (
-                            <Button icon="plus" onClick={() => setFormTarget("new")}>
-                                新建客户
-                            </Button>
-                        )}
-                    </TableHeaderActions>
-                </div>
-
-                <div className="mobile-records">
-                    <ListState loading={isLoading} empty={!pageRows.length}>
-                        {pageRows.map(({ customer, orderCount, pendingQty }) => (
-                            <RecordCard
-                                key={customer.code}
-                                title={customer.name}
-                                subtitle={`${customer.code} · ${regionText(customer) || "未填写"}`}
-                                badge={
-                                    <Badge tone={customer.cooperation === "合作中" ? "done" : "pending"}>
-                                        {customer.cooperation}
-                                    </Badge>
-                                }
-                                actions={
-                                    <>
-                                        <Button onClick={() => setDetail(customer)}>查看档案</Button>
-                                    </>
-                                }
+                    <div className="mobile-records">
+                        <ListState loading={isLoading} empty={!pageRows.length}>
+                            {pageRows.map(({ customer, orderCount, pendingQty }) => (
+                                <RecordCard
+                                    key={customer.code}
+                                    title={customer.name}
+                                    subtitle={`${customer.code} · ${regionText(customer) || "未填写"}`}
+                                    badge={
+                                        <Badge tone={customer.cooperation === "合作中" ? "done" : "pending"}>
+                                            {customer.cooperation}
+                                        </Badge>
+                                    }
+                                    actions={
+                                        <>
+                                            <Button onClick={() => setDetail(customer)}>查看档案</Button>
+                                        </>
+                                    }
+                                >
+                                    <p>
+                                        {customer.contact} · {customer.phone}
+                                    </p>
+                                    <div className="mt-2 flex flex-col gap-1.5">
+                                        <CardField label="累计订单" value={`${orderCount} 单`} />
+                                        <CardField label="待交" value={`${num(pendingQty)} 个`} strong />
+                                    </div>
+                                </RecordCard>
+                            ))}
+                        </ListState>
+                    </div>
+                    <div className="hidden lg:block">
+                        {isLoading ? (
+                            <PageLoading className="py-16" />
+                        ) : (
+                            <DataTable
+                                tableId="customers"
+                                defaultWidths={[240, 124, 150, 170, 120, 130, 138, 110, 120]}
+                                recordCount={rows.length}
+                                identityColumn={0}
+                                scrollRef={tableScrollRef}
                             >
-                                <p>
-                                    {customer.contact} · {customer.phone}
-                                </p>
-                                <div className="mt-2 flex flex-col gap-1.5">
-                                    <CardField label="累计订单" value={`${orderCount} 单`} />
-                                    <CardField label="待交" value={`${num(pendingQty)} 个`} strong />
-                                </div>
-                            </RecordCard>
-                        ))}
-                    </ListState>
-                </div>
-                <div className="hidden lg:block">
-                    {isLoading ? (
-                        <PageLoading className="py-16" />
-                    ) : (
-                        <DataTable
-                            tableId="customers"
-                            defaultWidths={[240, 124, 150, 170, 120, 130, 138, 110, 120]}
-                            recordCount={rows.length}
-                            identityColumn={0}
-                            scrollRef={tableScrollRef}
-                        >
-                            <thead>
-                                <tr className="text-left text-13 text-muted">
-                                    <th className="cell-pad-wide">客户信息</th>
-                                    <th>客户联系人</th>
-                                    <th>电话</th>
-                                    <th>所在地</th>
-                                    <SortTh
-                                        label="累计订单"
-                                        active={sort.key === "orderCount"}
-                                        dir={sort.dir}
-                                        onSort={() => applySort("orderCount")}
-                                    />
-                                    <SortTh
-                                        label="待交数量"
-                                        active={sort.key === "pendingQty"}
-                                        dir={sort.dir}
-                                        onSort={() => applySort("pendingQty")}
-                                    />
-                                    <SortTh
-                                        label="最近下单"
-                                        active={sort.key === "lastOrderDate"}
-                                        dir={sort.dir}
-                                        onSort={() => applySort("lastOrderDate")}
-                                    />
-                                    <th>合作状态</th>
-                                    <th className="cell-pad-wide text-center">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {pageRows.length === 0 && <EmptyRow colSpan={9} description="没有找到匹配的客户" />}
-                                {pageRows.map((row, index) => (
-                                    <tr key={row.customer.code}>
-                                        <td className="cell-pad-wide">
-                                            <div className="flex items-center gap-2.5">
-                                                <span
-                                                    className={`customer-avatar flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-14 font-semibold ${AVATAR_TONES[index % AVATAR_TONES.length]}`}
-                                                >
-                                                    {row.customer.name.slice(0, 1)}
-                                                </span>
-                                                <CustomerCell
-                                                    name={row.customer.name}
-                                                    note={row.customer.code}
-                                                    onClick={() => setDetail(row.customer)}
-                                                />
-                                            </div>
-                                        </td>
-                                        <td className="text-14 text-td">{row.customer.contact}</td>
-                                        <td className="tnum text-14 text-td">{row.customer.phone}</td>
-                                        <td>
-                                            <span className="flex items-center gap-1.5 text-14 text-td">
-                                                {regionText(row.customer) ? (
-                                                    <>
-                                                        <Icon name="location" size={14} className="text-subtle" />
-                                                        {regionText(row.customer)}
-                                                    </>
-                                                ) : (
-                                                    <span className="text-subtle">未填写</span>
-                                                )}
-                                            </span>
-                                        </td>
-                                        <td className="tnum text-14 text-td">{row.orderCount}</td>
-                                        <td className="tnum text-14">
-                                            <span
-                                                className={row.pendingQty > 0 ? "font-medium text-ink" : "text-subtle"}
-                                            >
-                                                {num(row.pendingQty)}
-                                            </span>
-                                        </td>
-                                        <td className="tnum text-14 text-td">{row.lastOrderDate}</td>
-                                        <td>
-                                            <Badge tone={row.customer.cooperation === "合作中" ? "done" : "pending"}>
-                                                {row.customer.cooperation}
-                                            </Badge>
-                                        </td>
-                                        <td className="cell-pad-wide text-center">
-                                            <TableLink onClick={() => setDetail(row.customer)}>查看档案</TableLink>
-                                        </td>
+                                <thead>
+                                    <tr className="text-left text-13 text-muted">
+                                        <th className="cell-pad-wide">客户信息</th>
+                                        <th>客户联系人</th>
+                                        <th>电话</th>
+                                        <th>所在地</th>
+                                        <SortTh
+                                            label="累计订单"
+                                            active={sort.key === "orderCount"}
+                                            dir={sort.dir}
+                                            onSort={() => applySort("orderCount")}
+                                        />
+                                        <SortTh
+                                            label="待交数量"
+                                            active={sort.key === "pendingQty"}
+                                            dir={sort.dir}
+                                            onSort={() => applySort("pendingQty")}
+                                        />
+                                        <SortTh
+                                            label="最近下单"
+                                            active={sort.key === "lastOrderDate"}
+                                            dir={sort.dir}
+                                            onSort={() => applySort("lastOrderDate")}
+                                        />
+                                        <th>合作状态</th>
+                                        <th className="cell-pad-wide text-center">操作</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </DataTable>
-                    )}
-                </div>
+                                </thead>
+                                <tbody>
+                                    {pageRows.length === 0 && <EmptyRow colSpan={9} description="没有找到匹配的客户" />}
+                                    {pageRows.map((row, index) => (
+                                        <tr key={row.customer.code}>
+                                            <td className="cell-pad-wide">
+                                                <div className="flex items-center gap-2.5">
+                                                    <span
+                                                        className={`customer-avatar flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-14 font-semibold ${AVATAR_TONES[index % AVATAR_TONES.length]}`}
+                                                    >
+                                                        {row.customer.name.slice(0, 1)}
+                                                    </span>
+                                                    <CustomerCell
+                                                        name={row.customer.name}
+                                                        note={row.customer.code}
+                                                        onClick={() => setDetail(row.customer)}
+                                                    />
+                                                </div>
+                                            </td>
+                                            <td className="text-14 text-td">{row.customer.contact}</td>
+                                            <td className="tnum text-14 text-td">{row.customer.phone}</td>
+                                            <td>
+                                                <span className="flex items-center gap-1.5 text-14 text-td">
+                                                    {regionText(row.customer) ? (
+                                                        <>
+                                                            <Icon name="location" size={14} className="text-subtle" />
+                                                            {regionText(row.customer)}
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-subtle">未填写</span>
+                                                    )}
+                                                </span>
+                                            </td>
+                                            <td className="tnum text-14 text-td">{row.orderCount}</td>
+                                            <td className="tnum text-14">
+                                                <span
+                                                    className={
+                                                        row.pendingQty > 0 ? "font-medium text-ink" : "text-subtle"
+                                                    }
+                                                >
+                                                    {num(row.pendingQty)}
+                                                </span>
+                                            </td>
+                                            <td className="tnum text-14 text-td">{row.lastOrderDate}</td>
+                                            <td>
+                                                <Badge
+                                                    tone={row.customer.cooperation === "合作中" ? "done" : "pending"}
+                                                >
+                                                    {row.customer.cooperation}
+                                                </Badge>
+                                            </td>
+                                            <td className="cell-pad-wide text-center">
+                                                <TableLink onClick={() => setDetail(row.customer)}>查看档案</TableLink>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </DataTable>
+                        )}
+                    </div>
 
-                <div className="border-t border-line">
-                    <Pagination
-                        page={page}
-                        pageSize={pageSize}
-                        total={rows.length}
-                        unit="家客户"
-                        onPageChange={setPage}
-                        onPageSizeChange={size => {
-                            setPageSize(size);
-                            setPage(1);
-                        }}
+                    <div className="border-t border-line">
+                        <Pagination
+                            page={page}
+                            pageSize={pageSize}
+                            total={rows.length}
+                            unit="家客户"
+                            onPageChange={setPage}
+                            onPageSizeChange={onPageSizeChange}
+                        />
+                    </div>
+                </section>
+
+                {formTarget !== null && (formTarget === "new" ? canCreate : canEdit) && (
+                    <CustomerFormModal
+                        customer={formTarget === "new" ? null : formTarget}
+                        onClose={() => setFormTarget(null)}
                     />
-                </div>
-            </section>
-
-            {formTarget !== null && (formTarget === "new" ? canCreate : canEdit) && (
-                <CustomerFormModal
-                    customer={formTarget === "new" ? null : formTarget}
-                    snap={snap}
-                    onClose={() => setFormTarget(null)}
+                )}
+                <CustomerDetailModal
+                    customer={detail}
+                    onClose={() => setDetail(null)}
+                    onEdit={
+                        canEdit
+                            ? customer => {
+                                  setDetail(null);
+                                  setFormTarget(customer);
+                              }
+                            : undefined
+                    }
                 />
-            )}
-            <CustomerDetailModal
-                customer={detail}
-                snap={snap}
-                onClose={() => setDetail(null)}
-                onEdit={
-                    canEdit
-                        ? customer => {
-                              setDetail(null);
-                              setFormTarget(customer);
-                          }
-                        : undefined
-                }
-            />
-        </div>
+            </div>
+        </SnapProvider>
     );
 }

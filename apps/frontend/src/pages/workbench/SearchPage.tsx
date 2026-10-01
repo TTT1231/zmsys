@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import { useWbSnapshot } from "@/data/queries";
+import { useWbView } from "@/data/queries";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
-import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
+import { SnapProvider } from "@/context/snap";
 import { useApp } from "@/context/useApp";
 import { Button } from "@/components/ui/Badge";
 import { ListState, OrderTaskCard, RecordCard } from "@/components/ui/MobileList";
@@ -12,13 +12,11 @@ import { OrderDetailModal } from "@/pages/orders/OrdersPage";
 import { CustomerDetailModal } from "@/pages/customers/CustomersPage";
 import { BomDetailModal } from "@/pages/bom/BomPage";
 import { OutboundModal } from "@/pages/outbound/OutboundPage";
-import { EMPTY_SNAPSHOT, deriveOrders } from "@/data/views";
+import { deriveOrders } from "@/data/views";
 
 export function SearchPage() {
-    const { data, isLoading, isFetching } = useWbSnapshot();
     // 顶栏全局刷新时此处同步出现保留式遮罩(200ms 内完成不闪现)
-    const overlay = useDelayedFlag(isFetching && !isLoading);
-    const snap = data ?? EMPTY_SNAPSHOT;
+    const { snap, isLoading, refreshing: overlay } = useWbView();
     const { can, grant } = useApp();
     const [params, setParams] = useSearchParams();
     const query = params.get("q") ?? "";
@@ -72,7 +70,7 @@ export function SearchPage() {
             : effectiveCategory === "customers"
               ? customers.length
               : boms.length;
-    const order = data?.orders.find(item => selected?.kind === "orders" && item.orderNo === selected.id) ?? null;
+    const order = snap.orders.find(item => selected?.kind === "orders" && item.orderNo === selected.id) ?? null;
     return (
         <div className="relative flex flex-col gap-4">
             {overlay && <LoadingOverlay />}
@@ -136,7 +134,6 @@ export function SearchPage() {
                                         <OrderTaskCard
                                             key={item.orderNo}
                                             order={item}
-                                            snap={snap}
                                             derived={derived}
                                             onDetail={() => setSelected({ kind: "orders", id: item.orderNo })}
                                             onShip={can("outbound:ship") ? () => setShip(item.orderNo) : undefined}
@@ -183,33 +180,34 @@ export function SearchPage() {
                     )}
                 </>
             )}
-            <OrderDetailModal
-                order={order}
-                snap={snap}
-                derived={derived}
-                onClose={() => setSelected(null)}
-                onShip={
-                    can("outbound:ship") && order
-                        ? () => {
-                              setShip(order.orderNo);
-                              setSelected(null);
-                          }
-                        : undefined
-                }
-            />
-            <CustomerDetailModal
-                customer={
-                    data?.customers.find(item => selected?.kind === "customers" && item.code === selected.id) ?? null
-                }
-                snap={snap}
-                onClose={() => setSelected(null)}
-            />
-            <BomDetailModal
-                categories={snap.bomCategories}
-                bom={data?.boms.find(item => selected?.kind === "boms" && item.code === selected.id) ?? null}
-                onClose={() => setSelected(null)}
-            />
-            {ship !== null && <OutboundModal open initialOrderNo={ship} onClose={() => setShip(null)} />}
+            {/* 快照经 context 共享，详情弹窗不再逐个传 snap */}
+            <SnapProvider snap={snap}>
+                <OrderDetailModal
+                    order={order}
+                    derived={derived}
+                    onClose={() => setSelected(null)}
+                    onShip={
+                        can("outbound:ship") && order
+                            ? () => {
+                                  setShip(order.orderNo);
+                                  setSelected(null);
+                              }
+                            : undefined
+                    }
+                />
+                <CustomerDetailModal
+                    customer={
+                        snap.customers.find(item => selected?.kind === "customers" && item.code === selected.id) ?? null
+                    }
+                    onClose={() => setSelected(null)}
+                />
+                <BomDetailModal
+                    categories={snap.bomCategories}
+                    bom={snap.boms.find(item => selected?.kind === "boms" && item.code === selected.id) ?? null}
+                    onClose={() => setSelected(null)}
+                />
+                {ship !== null && <OutboundModal open initialOrderNo={ship} onClose={() => setShip(null)} />}
+            </SnapProvider>
         </div>
     );
 }

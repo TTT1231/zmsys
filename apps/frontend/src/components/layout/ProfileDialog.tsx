@@ -73,7 +73,7 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
             label="账号"
             width={420}
             footer={
-                <Button variant="secondary" onClick={onClose}>
+                <Button size="sm" variant="secondary" onClick={onClose}>
                     关闭
                 </Button>
             }

@@ -16,9 +16,8 @@ import {
     useSaveGrants,
     useSetUserActive,
     useUpdateUser,
-    useWbSnapshot,
+    useWbView,
 } from "@/data/queries";
-import { EMPTY_SNAPSHOT } from "@/data/views";
 import type { Customer, CustomerOwnerOption, WbUser } from "@/api";
 import {
     ACTION_CATALOG,
@@ -55,8 +54,7 @@ const ownedCustomerCount = (customers: Customer[], account: string) =>
 
 export function PermissionsPage() {
     const { can } = useApp();
-    const { data, isLoading } = useWbSnapshot();
-    const snap = data ?? EMPTY_SNAPSHOT;
+    const { snap, isLoading } = useWbView();
     const { data: grantLogData } = useGrantLog();
     const [tab, setTab] = useState<PermTab>("accounts");
 
@@ -275,13 +273,15 @@ function ResetPasswordModal({ user, onClose }: { user: WbUser; onClose: () => vo
             width={440}
             footer={
                 done ? (
-                    <Button onClick={onClose}>我已知晓</Button>
+                    <Button size="sm" onClick={onClose}>
+                        我已知晓
+                    </Button>
                 ) : (
                     <>
-                        <Button variant="secondary" onClick={onClose}>
+                        <Button size="sm" variant="secondary" onClick={onClose}>
                             取消
                         </Button>
-                        <Button onClick={confirm} disabled={resetPwd.isPending}>
+                        <Button size="sm" onClick={confirm} disabled={resetPwd.isPending}>
                             {resetPwd.isPending ? "重置中…" : "确认重置"}
                         </Button>
                     </>
@@ -462,10 +462,10 @@ function DeactivateTransferModal({
             width={440}
             footer={
                 <>
-                    <Button variant="secondary" onClick={onClose}>
+                    <Button size="sm" variant="secondary" onClick={onClose}>
                         取消
                     </Button>
-                    <Button onClick={confirm} disabled={setActive.isPending}>
+                    <Button size="sm" onClick={confirm} disabled={setActive.isPending}>
                         确认停用并移交
                     </Button>
                 </>
@@ -569,10 +569,10 @@ function UserDialog({
             width={440}
             footer={
                 <>
-                    <Button variant="secondary" onClick={onClose}>
+                    <Button size="sm" variant="secondary" onClick={onClose}>
                         取消
                     </Button>
-                    <Button onClick={submit} disabled={pending}>
+                    <Button size="sm" onClick={submit} disabled={pending}>
                         保存
                     </Button>
                 </>

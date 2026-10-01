@@ -4,12 +4,17 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { CardField, OrderTaskCard } from "@/components/ui/MobileList";
+import { SnapProvider } from "@/context/snap";
 import { deriveOrders } from "@/data/views";
 import { detailOrder, detailSnapshot } from "../../fixtures/recordDetails";
 afterEach(cleanup);
 it.each([0, 200])("已发 %i 个后归档均显示已归档，保留实际已发数量", outbound => {
     const order = { ...detailOrder, outbound, lifecycleStatus: "archived" as const, deliverDate: "2020-01-01" };
-    render(<OrderTaskCard order={order} snap={{ ...detailSnapshot, orders: [order] }} onDetail={vi.fn()} />);
+    render(
+        <SnapProvider snap={{ ...detailSnapshot, orders: [order] }}>
+            <OrderTaskCard order={order} onDetail={vi.fn()} />
+        </SnapProvider>,
+    );
     expect(screen.getByText("已归档")).toBeInTheDocument();
     expect(screen.queryByText("已全部交付")).not.toBeInTheDocument();
     expect(screen.queryByText(/逾期/)).not.toBeInTheDocument();
@@ -19,11 +24,9 @@ it.each([0, 200])("已发 %i 个后归档均显示已归档，保留实际已发
 it("正常完成订单仍显示全部交付，完整规格入口可操作", () => {
     const onDetail = vi.fn();
     render(
-        <OrderTaskCard
-            order={{ ...detailOrder, outbound: detailOrder.qty }}
-            snap={detailSnapshot}
-            onDetail={onDetail}
-        />,
+        <SnapProvider snap={detailSnapshot}>
+            <OrderTaskCard order={{ ...detailOrder, outbound: detailOrder.qty }} onDetail={onDetail} />
+        </SnapProvider>,
     );
     expect(screen.getByText("已全部交付")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "查看详情" }));
@@ -42,11 +45,19 @@ it("传入页面级 derived（P2 一次分配）与逐卡全量派生渲染一�
     const order = { ...detailOrder, deliverDate: "2999-01-01" };
     const snap = { ...detailSnapshot, orders: [order] };
     const derived = deriveOrders(snap);
-    const { unmount } = render(<OrderTaskCard order={order} snap={snap} derived={derived} onDetail={vi.fn()} />);
+    const { unmount } = render(
+        <SnapProvider snap={snap}>
+            <OrderTaskCard order={order} derived={derived} onDetail={vi.fn()} />
+        </SnapProvider>,
+    );
     expect(screen.getByText("本次可发 100 个")).toBeInTheDocument();
     expect(screen.getByText("部分发货")).toBeInTheDocument();
     unmount();
-    render(<OrderTaskCard order={order} snap={snap} onDetail={vi.fn()} />);
+    render(
+        <SnapProvider snap={snap}>
+            <OrderTaskCard order={order} onDetail={vi.fn()} />
+        </SnapProvider>,
+    );
     expect(screen.getByText("本次可发 100 个")).toBeInTheDocument();
     expect(screen.getByText("部分发货")).toBeInTheDocument();
 });

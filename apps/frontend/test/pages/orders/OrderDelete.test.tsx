@@ -15,7 +15,7 @@ vi.mock("@/context/useApp", () => ({
 }));
 vi.mock("@/components/ui/toastContexts", () => ({ useToast: () => vi.fn() }));
 vi.mock("@/data/queries", () => ({
-    useWbSnapshot: () => ({ data: snapshot }),
+    useWbView: () => ({ snap: snapshot, isLoading: false, refreshing: false }),
     useWbRefresh: () => ({ refresh: vi.fn() }),
     useCreateOrder: () => ({ mutate: vi.fn(), isPending: false }),
     useUpdateOrder: () => ({ mutate: vi.fn(), isPending: false }),

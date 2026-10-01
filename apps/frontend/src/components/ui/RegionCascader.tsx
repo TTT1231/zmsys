@@ -1,11 +1,11 @@
 /* 省/市/县区/乡镇 四级行政区划级联选择（数据源 china-division）
- * - 值为中文名（与库表一致）；乡镇数据约 4MB，按需动态加载（Vite 分包，选中市/县区后才拉取）
+ * - 值为中文名（与库表一致）；乡镇约 4MB、区县约 228KB，均按需动态加载（Vite 分包，
+ *   选中省后才拉区县、选中市/县区后才拉乡镇），不进首屏包
  * - 直筒子市（东莞等）无区级：过滤与市同名的占位条目后区级为空，市后直接选乡镇 */
 import { useEffect, useMemo, useState } from "react";
 import { SelectField } from "./Field";
 import provincesJson from "china-division/dist/provinces.json";
 import citiesJson from "china-division/dist/cities.json";
-import areasJson from "china-division/dist/areas.json";
 
 export interface RegionValue {
     province: string;
@@ -24,7 +24,12 @@ interface Division {
 
 const provinces = provincesJson as Division[];
 const cities = citiesJson as Division[];
-const areas = areasJson as Division[];
+
+let areasPromise: Promise<Division[]> | null = null;
+const loadAreas = () => {
+    areasPromise ??= import("china-division/dist/areas.json").then(module => module.default as Division[]);
+    return areasPromise;
+};
 
 let streetsPromise: Promise<Division[]> | null = null;
 const loadStreets = () => {
@@ -44,13 +49,26 @@ export function RegionCascader({
     const province = provinces.find(item => item.name === value.province);
     const cityList = useMemo(() => cities.filter(item => item.provinceCode === province?.code), [province?.code]);
     const city = cityList.find(item => item.name === value.city);
+    // 区县数据在选中省后异步加载，就绪前区级下拉禁用并提示加载中
+    const [areas, setAreas] = useState<Division[] | null>(null);
+    useEffect(() => {
+        if (!province) return;
+        let cancelled = false;
+        loadAreas().then(all => {
+            if (!cancelled) setAreas(all);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [province]);
     // 直筒子市（东莞等）的区级占位条目与市同名，过滤后区级为空、直接选乡镇
     const districtList = useMemo(
-        () => areas.filter(item => item.cityCode === city?.code && item.name !== city?.name),
-        [city?.code, city?.name],
+        () => (areas ?? []).filter(item => item.cityCode === city?.code && item.name !== city?.name),
+        [areas, city?.code, city?.name],
     );
     const district = districtList.find(item => item.name === value.district);
-    const noDistrictCity = !!city && districtList.length === 0;
+    const areasReady = areas !== null;
+    const noDistrictCity = areasReady && !!city && districtList.length === 0;
 
     // 乡镇列表：常规城市按县区挂载；直筒子市直接挂在市下
     const streetScope = district?.code ?? (noDistrictCity ? city?.code : undefined);
@@ -106,11 +124,19 @@ export function RegionCascader({
             </SelectField>
             <SelectField
                 label="县 / 区"
-                disabled={!city || districtList.length === 0}
+                disabled={!city || !areasReady || districtList.length === 0}
                 value={value.district}
                 onChange={event => pick({ district: event.target.value }, ["town"])}
             >
-                <option value="">{city && districtList.length === 0 ? "无区级（市直管乡镇）" : "请选择县区"}</option>
+                <option value="">
+                    {!city
+                        ? "请选择县区"
+                        : !areasReady
+                          ? "区县数据加载中…"
+                          : districtList.length === 0
+                            ? "无区级（市直管乡镇）"
+                            : "请选择县区"}
+                </option>
                 {districtList.map(item => (
                     <option key={item.code}>{item.name}</option>
                 ))}

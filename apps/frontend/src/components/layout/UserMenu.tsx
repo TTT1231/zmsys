@@ -85,10 +85,10 @@ export function UserMenu() {
                 width={420}
                 footer={
                     <>
-                        <Button variant="secondary" onClick={() => setConfirmOpen(false)}>
+                        <Button size="sm" variant="secondary" onClick={() => setConfirmOpen(false)}>
                             取消
                         </Button>
-                        <Button onClick={() => void doLogout()} disabled={loggingOut}>
+                        <Button size="sm" onClick={() => void doLogout()} disabled={loggingOut}>
                             {loggingOut ? "正在退出…" : "退出登录"}
                         </Button>
                     </>

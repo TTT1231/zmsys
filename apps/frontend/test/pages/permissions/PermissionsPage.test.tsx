@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { PermissionsPage } from "@/pages/permissions/PermissionsPage";
 import { DEFAULT_GRANTS, MENU_CATALOG } from "@/data/permissions";
+import { EMPTY_SNAPSHOT } from "@/data/views";
 import type { GrantMap, RoleGrant } from "@/data/permissions";
 
 const mutate = vi.fn();
@@ -16,7 +17,7 @@ vi.mock("@/context/useApp", () => ({
 }));
 vi.mock("@/components/ui/toastContexts", () => ({ useToast: () => vi.fn() }));
 vi.mock("@/data/queries", () => ({
-    useWbSnapshot: () => ({ data: undefined, isLoading: false }),
+    useWbView: () => ({ snap: EMPTY_SNAPSHOT, isLoading: false, refreshing: false }),
     useGrantLog: () => ({ data: [] }),
     useCreateUser: () => ({ mutate: vi.fn() }),
     useUpdateUser: () => ({ mutate: vi.fn() }),
