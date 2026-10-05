@@ -8,11 +8,9 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { readFileSync } from "node:fs";
-import { Test } from "@nestjs/testing";
-import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
+import { Test, type TestingModule } from "@nestjs/testing";
 import { DiscoveryModule, DiscoveryService } from "@nestjs/core";
 import { AppModule } from "../src/app.module";
-import { configureApp } from "../src/main";
 
 const CONTRACT_PATH = process.env.CONTRACT_PATH ?? join(__dirname, "..", "..", "..", "docs", "openapi.yaml");
 
@@ -30,17 +28,16 @@ const contractExists = existsSync(CONTRACT_PATH);
 
 describe("OpenAPI 契约覆盖（method + route 漂移）", () => {
     describe.skipIf(!contractExists)(`契约文件 ${contractExists ? CONTRACT_PATH : "（缺失，跳过）"}`, () => {
-        let app: NestFastifyApplication;
+        let moduleFixture: TestingModule;
 
         beforeAll(async () => {
-            const moduleFixture = await Test.createTestingModule({ imports: [AppModule, DiscoveryModule] }).compile();
-            app = moduleFixture.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
-            configureApp(app);
-            await app.init();
+            // 只 compile 取静态路由元数据，不做 app.init()：init 会触发 SystemService
+            // 启动门禁等生命周期钩子连库，单测环境（CI 无 MySQL）会挂起到超时
+            moduleFixture = await Test.createTestingModule({ imports: [AppModule, DiscoveryModule] }).compile();
         });
 
         afterAll(async () => {
-            await app.close();
+            await moduleFixture?.close();
         });
 
         it("后端注册路由 ⊆ 契约 paths（白名单除外）", async () => {
@@ -56,7 +53,7 @@ describe("OpenAPI 契约覆盖（method + route 漂移）", () => {
                 }
             }
 
-            const discovery = app.get(DiscoveryService);
+            const discovery = moduleFixture.get(DiscoveryService);
             const backendRoutes = new Set<string>();
             for (const wrapper of await discovery.getControllers()) {
                 const metatype = wrapper.metatype;
