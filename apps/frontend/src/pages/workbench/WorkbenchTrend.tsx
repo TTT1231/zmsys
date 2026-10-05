@@ -1,38 +1,27 @@
-/* 出入库趋势图：独立周期和品类筛选，提供数据表作为图表的可访问替代。 */
+/* 出入库趋势图：统计周期跟随页面全局筛选，品类筛选与数据表仍由本卡自带。 */
 import { useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 import { EChart } from "@/components/charts/EChart";
 import { usePreferences } from "@/context/usePreferences";
-import { workbenchTrend, type WorkbenchData } from "@/data/workbench";
+import { workbenchTrend, type WorkbenchData, type WorkbenchRange } from "@/data/workbench";
 import { chartPalette, withAlpha } from "@/lib/chartTheme";
-import { addDays, monthStartOf } from "@/lib/date";
-import { num } from "@/lib/format";
+import { plainNum } from "@/lib/format";
 
 export const workbenchSelectClass =
     "min-h-10 rounded-input border border-line bg-surface px-3 text-13 text-td outline-none focus:border-primary focus:ring-2 focus:ring-primary/15";
 
-export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
+export function WorkbenchTrend({ data, range }: { data: WorkbenchData; range: WorkbenchRange }) {
     const { preferences } = usePreferences();
     const [category, setCategory] = useState("");
-    const [period, setPeriod] = useState("30");
     const [showTable, setShowTable] = useState(false);
-    const [customStart, setCustomStart] = useState(addDays(data.asOf, -29));
-    const [customEnd, setCustomEnd] = useState(data.asOf);
-    const start =
-        period === "year"
-            ? `${data.asOf.slice(0, 4)}-01-01`
-            : period === "month"
-              ? monthStartOf(data.asOf)
-              : period === "custom"
-                ? customStart
-                : addDays(data.asOf, -29);
-    const end = period === "custom" ? customEnd : data.asOf;
-    const valid = !!start && !!end && start <= end && end <= data.asOf && start >= addDays(data.asOf, -1095);
-    const monthly = valid && (new Date(end).getTime() - new Date(start).getTime()) / 86400000 > 90;
+    const { start, end } = range;
+    // 长区间自动按月汇总，避免逐日补零把横轴铺满（全局「累计」可能跨多年）
+    const monthly = (new Date(end).getTime() - new Date(start).getTime()) / 86400000 > 90;
     const rows = useMemo(
-        () => (valid ? workbenchTrend(data, { start, end }, category, monthly) : []),
-        [data, start, end, category, monthly, valid],
+        () => workbenchTrend(data, { start, end }, category, monthly),
+        [data, start, end, category, monthly],
     );
+    const multiYear = useMemo(() => new Set(rows.map(row => row.date.slice(0, 4))).size > 1, [rows]);
     const inbound = rows.reduce((sum, row) => sum + row.inbound, 0);
     const outbound = rows.reduce((sum, row) => sum + row.outbound, 0);
     const option: EChartsOption = useMemo(() => {
@@ -40,7 +29,7 @@ export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
         return {
             color: [palette.primary, "#0d9488"],
             textStyle: { fontFamily: "Inter, Microsoft YaHei, sans-serif" },
-            tooltip: { trigger: "axis", confine: true, valueFormatter: value => `${num(Number(value))} 个` },
+            tooltip: { trigger: "axis", confine: true, valueFormatter: value => `${plainNum(Number(value))} 个` },
             legend: { bottom: 0, itemWidth: 18, itemHeight: 8, textStyle: { color: palette.muted, fontSize: 12 } },
             grid: { left: 8, right: 16, top: 30, bottom: 42, outerBoundsMode: "same", outerBoundsContain: "axisLabel" },
             xAxis: {
@@ -54,7 +43,9 @@ export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
                     fontSize: 11,
                     formatter: (value: string) =>
                         monthly
-                            ? `${Number(value.slice(5))}月`
+                            ? multiYear
+                                ? `${value.slice(2, 4)}/${Number(value.slice(5))}月`
+                                : `${Number(value.slice(5))}月`
                             : `${Number(value.slice(5, 7))}/${Number(value.slice(8))}`,
                 },
             },
@@ -71,7 +62,7 @@ export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
             },
             series: [
                 {
-                    name: "检验入库",
+                    name: "入库",
                     type: "line",
                     data: rows.map(row => row.inbound),
                     showSymbol: false,
@@ -92,7 +83,7 @@ export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
                     },
                 },
                 {
-                    name: "成品出库",
+                    name: "出库",
                     type: "line",
                     data: rows.map(row => row.outbound),
                     showSymbol: false,
@@ -101,7 +92,7 @@ export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
                 },
             ],
         };
-    }, [rows, monthly, data.unit, preferences]);
+    }, [rows, monthly, multiYear, data.unit, preferences]);
 
     return (
         <section
@@ -109,87 +100,44 @@ export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
             aria-labelledby="trend-title"
         >
             <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <h2 id="trend-title" className="text-16 font-semibold text-ink">
-                        成品出入库趋势
-                    </h2>
-                    <p className="mt-1 text-13 text-muted">跟踪入库与出库的变化节奏</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    <select
-                        aria-label="趋势品类"
-                        className={workbenchSelectClass}
-                        value={category}
-                        onChange={event => setCategory(event.target.value)}
-                    >
-                        <option value="">全部品类</option>
-                        {[...new Set(data.products.map(product => product.category))].map(name => (
-                            <option key={name}>{name}</option>
-                        ))}
-                    </select>
-                    <select
-                        aria-label="趋势时间"
-                        className={workbenchSelectClass}
-                        value={period}
-                        onChange={event => setPeriod(event.target.value)}
-                    >
-                        <option value="30">最近 30 天</option>
-                        <option value="month">本月</option>
-                        <option value="year">今年</option>
-                        <option value="custom">自定义</option>
-                    </select>
-                </div>
+                <h2 id="trend-title" className="text-16 font-semibold text-ink">
+                    成品出入库趋势
+                </h2>
+                <select
+                    aria-label="趋势品类"
+                    className={workbenchSelectClass}
+                    value={category}
+                    onChange={event => setCategory(event.target.value)}
+                >
+                    <option value="">全部品类</option>
+                    {[...new Set(data.products.map(product => product.category))].map(name => (
+                        <option key={name}>{name}</option>
+                    ))}
+                </select>
             </div>
-            {period === "custom" && (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <input
-                        aria-label="趋势开始日期"
-                        type="date"
-                        className={workbenchSelectClass}
-                        value={customStart}
-                        max={customEnd}
-                        min={addDays(data.asOf, -1095)}
-                        onChange={event => setCustomStart(event.target.value)}
-                    />
-                    <span className="text-muted">至</span>
-                    <input
-                        aria-label="趋势结束日期"
-                        type="date"
-                        className={workbenchSelectClass}
-                        value={customEnd}
-                        min={customStart}
-                        max={data.asOf}
-                        onChange={event => setCustomEnd(event.target.value)}
-                    />
-                </div>
-            )}
             <div className="mt-5 flex items-center gap-7 border-b border-line pb-4">
                 <div>
                     <div className="flex items-center gap-2 text-13 text-muted">
                         <span className="h-2 w-2 rounded-full bg-primary" />
-                        期间入库
+                        入库
                     </div>
                     <p className="mt-1 text-22 font-semibold tabular-nums text-ink">
-                        {num(inbound)}
+                        {plainNum(inbound)}
                         <span className="ml-1.5 text-13 font-normal text-muted">{data.unit}</span>
                     </p>
                 </div>
                 <div>
                     <div className="flex items-center gap-2 text-13 text-muted">
                         <span className="h-2 w-2 rounded-full bg-teal-600" />
-                        期间出库
+                        出库
                     </div>
                     <p className="mt-1 text-22 font-semibold tabular-nums text-ink">
-                        {num(outbound)}
+                        {plainNum(outbound)}
                         <span className="ml-1.5 text-13 font-normal text-muted">{data.unit}</span>
                     </p>
                 </div>
             </div>
-            {!valid ? (
-                <p role="alert" className="py-20 text-center text-14 text-danger">
-                    请选择有效的日期范围，最长支持近三年。
-                </p>
-            ) : showTable ? (
+            {showTable ? (
                 <div className="mt-4 h-65 overflow-auto rounded-input border border-line">
                     <table className="data-table w-full text-right text-13">
                         <caption className="sr-only">成品出入库趋势数据</caption>
@@ -204,8 +152,8 @@ export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
                             {rows.map(row => (
                                 <tr key={row.date}>
                                     <td className="text-left">{row.date}</td>
-                                    <td className="tnum">{num(row.inbound)}</td>
-                                    <td className="tnum">{num(row.outbound)}</td>
+                                    <td className="tnum">{plainNum(row.inbound)}</td>
+                                    <td className="tnum">{plainNum(row.outbound)}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -216,14 +164,14 @@ export function WorkbenchTrend({ data }: { data: WorkbenchData }) {
             ) : (
                 <div
                     role="img"
-                    aria-label={`${category || "全部品类"}，${start}至${end}，入库${num(inbound)}个，出库${num(outbound)}个。可切换数据表查看各期数值。`}
+                    aria-label={`${category || "全部品类"}，${start}至${end}，入库${plainNum(inbound)}个，出库${plainNum(outbound)}个。可切换数据表查看各期数值。`}
                 >
                     <EChart option={option} height={276} />
                 </div>
             )}
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-12 text-muted">
                 <span>
-                    {start} — {end} · 按{monthly ? "月" : "日"}汇总
+                    {start} — {end}
                 </span>
                 <button
                     className="min-h-9 text-13 font-medium text-primary-strong hover:underline"

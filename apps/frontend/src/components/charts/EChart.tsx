@@ -1,9 +1,18 @@
 import { useEffect, useRef } from "react";
 import * as echarts from "echarts/core";
-import { LineChart, BarChart } from "echarts/charts";
-import { GridComponent, LegendComponent, TooltipComponent } from "echarts/components";
+import { LineChart, BarChart, PieChart } from "echarts/charts";
+import { GridComponent, LegendComponent, TooltipComponent, GraphicComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
-echarts.use([LineChart, BarChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
+echarts.use([
+    LineChart,
+    BarChart,
+    PieChart,
+    GridComponent,
+    LegendComponent,
+    TooltipComponent,
+    GraphicComponent,
+    CanvasRenderer,
+]);
 import type { EChartsOption } from "echarts";
 
 interface EChartProps {

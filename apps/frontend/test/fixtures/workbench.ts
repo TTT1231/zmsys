@@ -73,6 +73,8 @@ export function createWorkbenchDemo(asOf: string): WorkbenchData {
             due: addDays(date, recent ? 14 : 10),
             qty,
             shipped: recent ? Math.floor((qty * [0.2, 0.45, 0.7, 1][index % 4]) / 100) * 100 : qty,
+            // 两个月前的老单已归档：真实历史需求仍计入统计，雷达图据此出各品类收发
+            ...(age > 60 ? { archived: true } : {}),
         };
     });
     // 每笔实际发货在此前一天有对应检验入库；额外入库构成当前结存。

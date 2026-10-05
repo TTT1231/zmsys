@@ -1,6 +1,7 @@
 /* 覆盖归档订单口径、BOM 库存隔离、交期分配、客户排名和趋势补零。 */
 import { describe, expect, it } from "vitest";
 import {
+    archivedCategoryStats,
     customerRanking,
     summarizeWorkbench,
     workbenchRisks,
@@ -100,5 +101,24 @@ describe("工作台统计", () => {
             { date: "2026-09-12", inbound: 0, outbound: 80 },
         ]);
         expect(workbenchTrend(snapshot, range, "", true)).toEqual([{ date: "2026-09", inbound: 400, outbound: 180 }]);
+    });
+    it("归档品类统计：需求/出库按归档订单合并品类，只认归档口径；range 按下单日期过滤", () => {
+        const snapshot = data([
+            order({ no: "arch-1", qty: 100, shipped: 60, archived: true }),
+            order({ no: "arch-2", qty: 50, shipped: 50, archived: true, bomCode: "B2" }),
+            order({
+                no: "arch-old",
+                qty: 30,
+                shipped: 30,
+                archived: true,
+                date: "2025-12-31",
+            }),
+            order({ no: "live", qty: 70, shipped: 10 }),
+        ]);
+        snapshot.products.push({ code: "B3", category: "琴键开关", model: "M3", spec: "四脚", unit: "个", stock: 0 });
+        expect(archivedCategoryStats(snapshot)).toEqual([{ name: "旋转XK2", orders: 3, qty: 180, shipped: 140 }]);
+        expect(archivedCategoryStats(snapshot, { start: "2026-01-01", end: "2026-09-12" })).toEqual([
+            { name: "旋转XK2", orders: 2, qty: 150, shipped: 110 },
+        ]);
     });
 });
