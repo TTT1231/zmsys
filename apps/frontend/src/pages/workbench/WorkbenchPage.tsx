@@ -8,7 +8,7 @@ import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { Icon } from "@/lib/icons";
-import { num } from "@/lib/format";
+import { plainNum } from "@/lib/format";
 import { addDays, monthStartOf } from "@/lib/date";
 import {
     customerRanking,
@@ -21,7 +21,7 @@ import {
 } from "@/data/workbench";
 import { useWorkbenchData } from "./useWorkbenchData";
 import { WorkbenchTrend, workbenchSelectClass } from "./WorkbenchTrend";
-import { CustomerRankingChart, ProductProgressChart } from "./WorkbenchCharts";
+import { ArchivedOrdersPie, CustomerRankingChart, ProductProgressChart } from "./WorkbenchCharts";
 
 type Detail =
     | { kind: "products"; category?: string }
@@ -36,6 +36,24 @@ type Detail =
 const percent = (done: number, total: number) => (total ? Math.round((done / total) * 100) : 0);
 /* 明细弹窗表：data-table 基线（见 index.css @layer components）给出 th/td 内距、行线与悬停 */
 const tableClass = "data-table w-full min-w-150 text-left text-14 tnum";
+
+/* 型号明细首列信息密度（对齐主列表的紧凑/标准/宽松）：紧凑只留品类/型号，
+ * 标准补 BOM 编码，宽松再挂规格全文；编码与规格始终可经悬浮 title 读到。 */
+type DetailDensity = "compact" | "standard" | "roomy";
+const DETAIL_DENSITY_KEY = "zmsys.workbench.detail-density";
+const DETAIL_DENSITIES: readonly [DetailDensity, string][] = [
+    ["compact", "紧凑"],
+    ["standard", "标准"],
+    ["roomy", "宽松"],
+];
+const loadDetailDensity = (): DetailDensity => {
+    try {
+        const saved = localStorage.getItem(DETAIL_DENSITY_KEY);
+        return saved === "compact" || saved === "roomy" ? saved : "standard";
+    } catch {
+        return "standard";
+    }
+};
 
 function Metric({
     title,
@@ -67,7 +85,7 @@ function Metric({
             </div>
             <p className="mt-3 flex items-baseline gap-2">
                 <span className="text-22 leading-tight font-semibold tracking-tight tabular-nums text-ink sm:text-30">
-                    {num(value)}
+                    {plainNum(value)}
                 </span>
                 <span className="text-14 text-muted">{unit}</span>
             </p>
@@ -83,10 +101,18 @@ function OwnerWorkbench() {
     const [customEnd, setCustomEnd] = useState(data.asOf);
     const [metric, setMetric] = useState<RankingMetric>("qty");
     const [detail, setDetail] = useState<Detail | null>(null);
+    const [density, setDensity] = useState<DetailDensity>(loadDetailDensity);
     useEffect(() => {
         // 内容钻取会移除刚点击的按钮，保持焦点在弹窗内。
         if (detail) document.querySelector<HTMLElement>('[role="dialog"]')?.focus();
     }, [detail]);
+    useEffect(() => {
+        try {
+            localStorage.setItem(DETAIL_DENSITY_KEY, density);
+        } catch {
+            /* 存储受限时仅本次会话生效 */
+        }
+    }, [density]);
     const start =
         period === "all"
             ? "0000-01-01"
@@ -101,6 +127,16 @@ function OwnerWorkbench() {
         () => summarizeWorkbench(data, validRange ? { start, end } : { start: "9999-01-01", end: "0000-01-01" }),
         [data, start, end, validRange],
     );
+    // 全局周期同样驱动趋势与归档饼图；「累计」以数据中最早业务日期为起点（趋势图不逐日补零到哨兵值）
+    const earliest = useMemo(() => {
+        const dates = [...data.orders.map(order => order.date), ...data.movements.map(row => row.date)]
+            .filter(Boolean)
+            .sort();
+        return dates[0] ?? addDays(data.asOf, -29);
+    }, [data]);
+    const scopeRange = validRange
+        ? { start: period === "all" ? earliest : start, end }
+        : { start: "9999-01-01", end: "0000-01-01" };
     const risks = useMemo(() => workbenchRisks(data), [data]);
     const ranking = useMemo(() => customerRanking(summary.orders, metric), [summary.orders, metric]);
     // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
@@ -123,6 +159,12 @@ function OwnerWorkbench() {
             back: { kind: "customers" },
         });
     };
+    const productRows =
+        detail?.kind === "products"
+            ? summary.categories
+                  .filter(category => !detail.category || category.name === detail.category)
+                  .flatMap(category => category.children)
+            : [];
     const detailTitle = !detail
         ? "明细"
         : detail.kind === "products"
@@ -142,36 +184,29 @@ function OwnerWorkbench() {
                 eyebrow="BUSINESS OVERVIEW"
                 title="经营总览"
                 actions={
-                    <span className="flex items-center gap-1.5 text-14 text-muted">
-                        <Icon name="calendar" size={15} />
-                        截至 {data.asOf}
-                    </span>
+                    <div
+                        className="inline-flex rounded-btn border border-line bg-surface p-1"
+                        role="group"
+                        aria-label="订单统计周期"
+                    >
+                        {[
+                            ["all", "累计"],
+                            ["year", "今年"],
+                            ["month", "本月"],
+                            ["custom", "自定义"],
+                        ].map(([value, label]) => (
+                            <button
+                                key={value}
+                                aria-pressed={period === value}
+                                onClick={() => setPeriod(value)}
+                                className={`min-h-9 rounded-md px-4 text-14 font-medium transition ${period === value ? "bg-primary-soft text-primary-strong" : "text-muted hover:bg-soft hover:text-ink"}`}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
                 }
             />
-            <div className="flex flex-wrap items-center gap-3">
-                <span className="text-14 font-medium text-td">订单统计周期</span>
-                <div
-                    className="inline-flex rounded-btn border border-line bg-surface p-1"
-                    role="group"
-                    aria-label="订单统计周期"
-                >
-                    {[
-                        ["all", "累计"],
-                        ["year", "今年"],
-                        ["month", "本月"],
-                        ["custom", "自定义"],
-                    ].map(([value, label]) => (
-                        <button
-                            key={value}
-                            aria-pressed={period === value}
-                            onClick={() => setPeriod(value)}
-                            className={`min-h-9 rounded-md px-4 text-14 font-medium transition ${period === value ? "bg-primary-soft text-primary-strong" : "text-muted hover:bg-soft hover:text-ink"}`}
-                        >
-                            {label}
-                        </button>
-                    ))}
-                </div>
-            </div>
             {period === "custom" && (
                 <div className="flex flex-wrap items-center gap-2">
                     <input
@@ -201,7 +236,7 @@ function OwnerWorkbench() {
             )}
             <div className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2 xl:grid-cols-4">
                 <Metric title="订单需求总量" value={summary.qty} unit={data.unit} icon="order" featured>
-                    <span className="font-medium text-primary-strong">{num(summary.activeCount)} 笔有效订单</span>
+                    <span className="font-medium text-primary-strong">{plainNum(summary.activeCount)} 笔有效订单</span>
                     <span className="mx-2 text-line-strong">/</span>含已完成与未完成
                 </Metric>
                 <Metric title="已发数量" value={summary.shipped} unit={data.unit} icon="check">
@@ -210,11 +245,11 @@ function OwnerWorkbench() {
                     {summary.completed} 笔已完成
                 </Metric>
                 <Metric title="未发数量" value={summary.remaining} unit={data.unit} icon="cube">
-                    {periodLabel}订单尚待交付的产品数量
+                    {periodLabel}未发数量
                 </Metric>
                 <Metric title="逾期未完成订单" value={overdue.length} unit="笔" icon="alert">
                     <span className={overdue.length ? "font-medium text-danger" : "text-success"}>
-                        {num(overdue.reduce((sum, order) => sum + order.remaining, 0))} {data.unit}待交付
+                        {plainNum(overdue.reduce((sum, order) => sum + order.remaining, 0))} {data.unit}待交付
                     </span>
                     <span className="ml-2">截至今日</span>
                 </Metric>
@@ -249,18 +284,22 @@ function OwnerWorkbench() {
                     笔<Icon name="chevron-right" size={14} />
                 </button>
             </section>
-            <ProductProgressChart
-                categories={summary.categories}
-                periodLabel={periodLabel}
-                onDetails={category => setDetail({ kind: "products", category })}
-            />
+            <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-3">
+                <div className="min-w-0 xl:col-span-2">
+                    <ProductProgressChart
+                        categories={summary.categories}
+                        onDetails={category => setDetail({ kind: "products", category })}
+                    />
+                </div>
+                <ArchivedOrdersPie data={data} range={scopeRange} periodLabel={periodLabel} />
+            </div>
             <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-2">
-                <WorkbenchTrend data={data} />
+                <WorkbenchTrend data={data} range={scopeRange} />
                 <CustomerRankingChart
                     customers={ranking}
                     metric={metric}
+                    unit={data.unit}
                     onMetric={setMetric}
-                    periodLabel={periodLabel}
                     onCustomer={showCustomer}
                     onDetails={() => setDetail({ kind: "customers" })}
                 />
@@ -290,6 +329,21 @@ function OwnerWorkbench() {
             >
                 {detail?.kind === "products" && (
                     <>
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-13 text-muted">共 {plainNum(productRows.length)} 个型号</span>
+                            <div role="group" aria-label="明细信息密度" className="flex rounded-input bg-soft p-1">
+                                {DETAIL_DENSITIES.map(([value, label]) => (
+                                    <button
+                                        key={value}
+                                        aria-pressed={density === value}
+                                        onClick={() => setDensity(value)}
+                                        className={`min-h-8 rounded-md px-3 text-13 font-medium ${density === value ? "bg-surface text-primary-strong shadow-xs" : "text-muted hover:text-ink"}`}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                         <div className="overflow-x-auto">
                             <table className={tableClass}>
                                 <caption className="sr-only">型号与BOM规格交付明细</caption>
@@ -304,55 +358,56 @@ function OwnerWorkbench() {
                                             "当前库存",
                                             "当前缺口",
                                         ].map(label => (
-                                            <th scope="col" key={label}>
+                                            <th scope="col" key={label} className="whitespace-nowrap">
                                                 {label}
                                             </th>
                                         ))}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {summary.categories
-                                        .filter(category => !detail.category || category.name === detail.category)
-                                        .flatMap(category =>
-                                            category.children.map(product => (
-                                                <tr key={product.code}>
-                                                    <td>
-                                                        <button
-                                                            className="min-h-9 text-left font-medium text-primary-strong hover:underline"
-                                                            onClick={() =>
-                                                                setDetail({
-                                                                    kind: "orders",
-                                                                    back: {
-                                                                        kind: "products",
-                                                                        category: detail.category,
-                                                                    },
-                                                                    title: `${product.model} · 订单明细`,
-                                                                    orders: summary.orders.filter(
-                                                                        order => order.bomCode === product.code,
-                                                                    ),
-                                                                })
-                                                            }
-                                                        >
-                                                            {product.category} / {product.model}
-                                                        </button>
-                                                        <p className="text-13 text-muted">{product.code}</p>
-                                                        <p className="mt-1 text-13 text-muted">{product.spec}</p>
-                                                    </td>
-                                                    <td>{num(product.qty)}</td>
-                                                    <td>{num(product.shipped)}</td>
-                                                    <td>{num(product.remaining)}</td>
-                                                    <td>
-                                                        {product.qty
-                                                            ? `${percent(product.shipped, product.qty)}%`
-                                                            : "—"}
-                                                    </td>
-                                                    <td>{num(product.stock)}</td>
-                                                    <td className={product.gap ? "text-warning" : "text-success"}>
-                                                        {product.gap ? num(product.gap) : "充足"}
-                                                    </td>
-                                                </tr>
-                                            )),
-                                        )}
+                                    {productRows.map(product => (
+                                        <tr key={product.code}>
+                                            <td>
+                                                <button
+                                                    title={`${product.code}${product.spec ? ` · ${product.spec}` : ""}`}
+                                                    className="min-h-9 text-left font-medium text-primary-strong hover:underline"
+                                                    onClick={() =>
+                                                        setDetail({
+                                                            kind: "orders",
+                                                            back: {
+                                                                kind: "products",
+                                                                category: detail.category,
+                                                            },
+                                                            title: `${product.model || product.code} · 订单明细`,
+                                                            orders: summary.orders.filter(
+                                                                order => order.bomCode === product.code,
+                                                            ),
+                                                        })
+                                                    }
+                                                >
+                                                    {product.category} / {product.model}
+                                                </button>
+                                                {density !== "compact" && (
+                                                    <p className="text-13 text-muted">{product.code}</p>
+                                                )}
+                                                {density === "roomy" && (
+                                                    <p className="mt-1 text-13 text-muted">{product.spec}</p>
+                                                )}
+                                            </td>
+                                            <td className="whitespace-nowrap">{plainNum(product.qty)}</td>
+                                            <td className="whitespace-nowrap">{plainNum(product.shipped)}</td>
+                                            <td className="whitespace-nowrap">{plainNum(product.remaining)}</td>
+                                            <td className="whitespace-nowrap">
+                                                {product.qty ? `${percent(product.shipped, product.qty)}%` : "—"}
+                                            </td>
+                                            <td className="whitespace-nowrap">{plainNum(product.stock)}</td>
+                                            <td
+                                                className={`whitespace-nowrap ${product.gap ? "text-warning" : "text-success"}`}
+                                            >
+                                                {product.gap ? plainNum(product.gap) : "充足"}
+                                            </td>
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
@@ -368,7 +423,7 @@ function OwnerWorkbench() {
                             <thead>
                                 <tr>
                                     {["排名", "客户", "下单笔数", "订购数量", "已发", "未发"].map(label => (
-                                        <th scope="col" key={label}>
+                                        <th scope="col" key={label} className="whitespace-nowrap">
                                             {label}
                                         </th>
                                     ))}
@@ -386,10 +441,10 @@ function OwnerWorkbench() {
                                                 {customer.name}
                                             </button>
                                         </td>
-                                        <td>{num(customer.count)}</td>
-                                        <td>{num(customer.qty)}</td>
-                                        <td>{num(customer.shipped)}</td>
-                                        <td>{num(customer.remaining)}</td>
+                                        <td className="whitespace-nowrap">{plainNum(customer.count)}</td>
+                                        <td className="whitespace-nowrap">{plainNum(customer.qty)}</td>
+                                        <td className="whitespace-nowrap">{plainNum(customer.shipped)}</td>
+                                        <td className="whitespace-nowrap">{plainNum(customer.remaining)}</td>
                                     </tr>
                                 ))}
                                 {!ranking.length && (
@@ -406,7 +461,7 @@ function OwnerWorkbench() {
                             <thead>
                                 <tr>
                                     {["订单 / 客户", "产品 / 交期", "需求数量", "已发", "未发"].map(label => (
-                                        <th scope="col" key={label}>
+                                        <th scope="col" key={label} className="whitespace-nowrap">
                                             {label}
                                         </th>
                                     ))}
@@ -424,9 +479,9 @@ function OwnerWorkbench() {
                                             {productName(order.bomCode)}
                                             <p className="mt-1 text-13 text-muted">{order.due}</p>
                                         </td>
-                                        <td>{num(demandQty(order))}</td>
-                                        <td>{num(order.shipped)}</td>
-                                        <td>{num(openQty(order))}</td>
+                                        <td className="whitespace-nowrap">{plainNum(demandQty(order))}</td>
+                                        <td className="whitespace-nowrap">{plainNum(order.shipped)}</td>
+                                        <td className="whitespace-nowrap">{plainNum(openQty(order))}</td>
                                     </tr>
                                 ))}
                                 {!detail.orders.length && (
@@ -444,7 +499,7 @@ function OwnerWorkbench() {
                                 <thead>
                                     <tr className="text-13 text-muted">
                                         {["订单 / 客户", "产品", "交期", "未发数量", "备货缺口"].map(label => (
-                                            <th scope="col" key={label}>
+                                            <th scope="col" key={label} className="whitespace-nowrap">
                                                 {label}
                                             </th>
                                         ))}
@@ -465,8 +520,10 @@ function OwnerWorkbench() {
                                                 >
                                                     {order.due}
                                                 </td>
-                                                <td>{num(order.remaining)}</td>
-                                                <td className="text-warning">{num(order.gap)}</td>
+                                                <td className="whitespace-nowrap">{plainNum(order.remaining)}</td>
+                                                <td className="whitespace-nowrap text-warning">
+                                                    {plainNum(order.gap)}
+                                                </td>
                                             </tr>
                                         ))}
                                     {!risks.some(order => order.kind === detail.risk) && (

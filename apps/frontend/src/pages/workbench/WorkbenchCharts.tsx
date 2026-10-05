@@ -1,12 +1,19 @@
-/* 品类进度与客户排行使用 ECharts，点击图形或明细入口可继续查看具体数字。 */
+/* 品类进度、归档雷达与客户排行使用 ECharts，点击图形或明细入口可继续查看具体数字。 */
 import { useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 import { EChart } from "@/components/charts/EChart";
 import { usePreferences } from "@/context/usePreferences";
-import { num } from "@/lib/format";
+import { plainNum } from "@/lib/format";
 import { chartPalette, type ChartPalette } from "@/lib/chartTheme";
 import { Icon } from "@/lib/icons";
-import type { customerRanking, summarizeWorkbench, RankingMetric } from "@/data/workbench";
+import {
+    archivedCategoryStats,
+    type customerRanking,
+    type summarizeWorkbench,
+    type RankingMetric,
+    type WorkbenchData,
+    type WorkbenchRange,
+} from "@/data/workbench";
 
 type Category = ReturnType<typeof summarizeWorkbench>["categories"][number];
 type Customer = ReturnType<typeof customerRanking>[number];
@@ -21,11 +28,9 @@ const gridLineOf = (palette: ChartPalette) => ({ lineStyle: { color: palette.sof
 
 export function ProductProgressChart({
     categories,
-    periodLabel,
     onDetails,
 }: {
     categories: Category[];
-    periodLabel: string;
     onDetails: (category?: string) => void;
 }) {
     const [view, setView] = useState("delivery");
@@ -45,7 +50,7 @@ export function ProductProgressChart({
                 trigger: "axis",
                 axisPointer: { type: "shadow" },
                 confine: true,
-                valueFormatter: value => `${num(Number(value))} 个`,
+                valueFormatter: value => `${plainNum(Number(value))} 个`,
             },
             legend: {
                 top: 0,
@@ -90,7 +95,7 @@ export function ProductProgressChart({
                                           formatter: (params: { dataIndex: number }) => {
                                               const row = categories[params.dataIndex];
                                               return row.qty
-                                                  ? `${num(row.qty)} · ${Math.round((row.shipped / row.qty) * 100)}%`
+                                                  ? `${plainNum(row.qty)} · ${Math.round((row.shipped / row.qty) * 100)}%`
                                                   : "暂无订单";
                                           },
                                       },
@@ -145,7 +150,7 @@ export function ProductProgressChart({
                               formatter: params => {
                                   const row = categories[params.dataIndex];
                                   return row.qty
-                                      ? `${num(row.qty)}  ·  ${Math.round((row.shipped / row.qty) * 100)}%`
+                                      ? `${plainNum(row.qty)}  ·  ${Math.round((row.shipped / row.qty) * 100)}%`
                                       : "暂无订单";
                               },
                           },
@@ -171,7 +176,7 @@ export function ProductProgressChart({
                               position: "right",
                               fontSize: 11,
                               color: palette.warning,
-                              formatter: params => (Number(params.value) ? num(Number(params.value)) : "充足"),
+                              formatter: params => (Number(params.value) ? plainNum(Number(params.value)) : "充足"),
                           },
                           data: categories.map(row => row.gap),
                       },
@@ -183,17 +188,10 @@ export function ProductProgressChart({
             className="min-w-0 rounded-panel border border-line bg-surface p-5 shadow-card sm:p-6"
             aria-labelledby="product-chart-title"
         >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <h2 id="product-chart-title" className="text-16 font-semibold text-ink">
-                        产品交付进度
-                    </h2>
-                    <p className="mt-1 text-13 text-muted">
-                        {delivery
-                            ? `${periodLabel}订单 · 条形总长为需求总量，右侧为总量与交付率`
-                            : "截至今日 · 各 BOM 分别计算缺口，汇总到品类"}
-                    </p>
-                </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 id="product-chart-title" className="text-16 font-semibold text-ink">
+                    累计总订单
+                </h2>
                 <div role="group" aria-label="产品图表视图" className="flex rounded-input bg-soft p-1">
                     {[
                         ["delivery", "交付进度"],
@@ -215,8 +213,8 @@ export function ProductProgressChart({
                 role="img"
                 aria-label={
                     delivery
-                        ? `各品类已发与未发数量。总需求${num(total)}个，已发${num(shipped)}个。可通过下方品类按钮查看明细。`
-                        : `当前库存与备货缺口对比，备货缺口共${num(gap)}个。`
+                        ? `各品类已发与未发数量。总需求${plainNum(total)}个，已发${plainNum(shipped)}个。可通过下方品类按钮查看明细。`
+                        : `当前库存与备货缺口对比，备货缺口共${plainNum(gap)}个。`
                 }
             >
                 <EChart
@@ -229,7 +227,7 @@ export function ProductProgressChart({
             </div>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
                 <div className="flex flex-wrap items-center gap-1 text-12 text-muted">
-                    <span className="mr-1">查看型号</span>
+                    <span className="mr-1">型号</span>
                     {categories.map(row => (
                         <button
                             key={row.name}
@@ -252,18 +250,123 @@ export function ProductProgressChart({
     );
 }
 
+/** 归档订单汇总饼图：扇区为各品类归档订单累计出库，悬浮看需求与交付占比；
+ *  统计周期与页面全局筛选同口径（按归档订单的下单日期过滤）。 */
+export function ArchivedOrdersPie({
+    data,
+    range,
+    periodLabel,
+}: {
+    data: WorkbenchData;
+    range: WorkbenchRange;
+    periodLabel: string;
+}) {
+    const { preferences } = usePreferences();
+    const rows = useMemo(() => archivedCategoryStats(data, range), [data, range]);
+    const slices = rows.filter(row => row.shipped > 0);
+    const orders = rows.reduce((sum, row) => sum + row.orders, 0);
+    const shipped = rows.reduce((sum, row) => sum + row.shipped, 0);
+    const option: EChartsOption = useMemo(() => {
+        const palette = chartPalette();
+        return {
+            color: [palette.primary, "#0d9488", palette.primaryMid, "#f59e0b", palette.primaryBorder, "#6366f1"],
+            textStyle: { fontFamily: "Inter, Microsoft YaHei, sans-serif" },
+            tooltip: {
+                trigger: "item",
+                confine: true,
+                formatter: params => {
+                    const row = slices[(params as { dataIndex: number }).dataIndex];
+                    if (!row) return "";
+                    const done = row.qty ? Math.round((row.shipped / row.qty) * 100) : 0;
+                    return [
+                        `<b>${row.name}</b>`,
+                        `出库 ${plainNum(row.shipped)} · 占全部出库 ${Math.round(Number((params as { percent: number }).percent))}%`,
+                        `需求 ${plainNum(row.qty)} · 交付 ${done}%`,
+                    ].join("<br/>");
+                },
+            },
+            legend: {
+                bottom: 0,
+                left: "center",
+                icon: "roundRect",
+                itemWidth: 12,
+                itemHeight: 4,
+                textStyle: { color: palette.muted, fontSize: 11 },
+            },
+            // 单位固定在图表区右上角（用户指定位置，见截图标注），图例移到环形图下方
+            graphic: [
+                {
+                    type: "text",
+                    right: 4,
+                    top: 0,
+                    style: { text: `单位：${data.unit}`, fill: palette.muted, fontSize: 12 },
+                },
+            ],
+            series: [
+                {
+                    name: "出库",
+                    type: "pie",
+                    radius: ["40%", "70%"],
+                    center: ["50%", "46%"],
+                    padAngle: 5,
+                    itemStyle: { borderRadius: 10 },
+                    label: { show: false, position: "center" },
+                    labelLine: { show: false },
+                    emphasis: {
+                        label: {
+                            show: true,
+                            fontSize: 20,
+                            fontWeight: "bold",
+                            color: palette.tdStrong,
+                            formatter: "{b}",
+                        },
+                    },
+                    data: slices.map(row => ({ name: row.name, value: row.shipped })),
+                },
+            ],
+        };
+    }, [slices, data.unit, preferences]);
+    return (
+        <section
+            className="flex min-w-0 flex-col rounded-panel border border-line bg-surface p-5 shadow-card sm:p-6"
+            aria-labelledby="archive-pie-title"
+        >
+            <div>
+                <h2 id="archive-pie-title" className="text-16 font-semibold text-ink">
+                    归档订单汇总
+                </h2>
+                <p className="mt-1 text-13 text-muted">归档订单{periodLabel}的出库</p>
+            </div>
+            <div
+                className="mt-5"
+                role="img"
+                aria-label={`归档订单汇总，共${plainNum(orders)}笔归档订单，累计出库${plainNum(shipped)}${data.unit}。${rows.map(row => `${row.name}出库${plainNum(row.shipped)}、需求${plainNum(row.qty)}`).join("，")}。`}
+            >
+                {!rows.length ? (
+                    <p className="py-24 text-center text-14 text-muted">暂无归档订单</p>
+                ) : !slices.length ? (
+                    <p className="py-24 text-center text-14 text-muted">归档订单暂无出库</p>
+                ) : (
+                    <EChart option={option} height={330} />
+                )}
+            </div>
+            <div className="mt-auto border-t border-line pt-3 text-12 text-muted">共 {plainNum(orders)} 笔归档订单</div>
+        </section>
+    );
+}
+
 export function CustomerRankingChart({
     customers,
     metric,
+    unit,
     onMetric,
-    periodLabel,
     onCustomer,
     onDetails,
 }: {
     customers: Customer[];
     metric: RankingMetric;
+    unit: string;
     onMetric: (metric: RankingMetric) => void;
-    periodLabel: string;
     onCustomer: (code: string) => void;
     onDetails: () => void;
 }) {
@@ -277,7 +380,7 @@ export function CustomerRankingChart({
                 trigger: "axis",
                 axisPointer: { type: "shadow" },
                 confine: true,
-                valueFormatter: value => `${num(Number(value))} ${metric === "qty" ? "个" : "笔"}`,
+                valueFormatter: value => `${plainNum(Number(value))} ${metric === "qty" ? unit : "笔"}`,
             },
             xAxis: {
                 type: "value",
@@ -320,52 +423,52 @@ export function CustomerRankingChart({
                         position: "right",
                         color: palette.tdStrong,
                         fontSize: 11,
-                        formatter: params => num(Number(params.value)),
+                        formatter: params => plainNum(Number(params.value)),
                     },
                     data: customers.map(row => row[metric]),
                 },
             ],
         };
-    }, [customers, metric, preferences]);
+    }, [customers, metric, unit, preferences]);
     return (
         <section
             className="flex min-w-0 flex-col rounded-panel border border-line bg-surface p-5 shadow-card sm:p-6"
             aria-labelledby="ranking-title"
         >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <h2 id="ranking-title" className="text-16 font-semibold text-ink">
-                        客户订单排行{" "}
-                        <span className="ml-1 rounded bg-primary-soft px-1.5 py-0.5 text-11 text-primary-strong">
-                            TOP 20
-                        </span>
-                    </h2>
-                    <p className="mt-1 text-13 text-muted">{periodLabel}订购规模 · 点击条形查看客户订单</p>
-                </div>
-                <div role="group" aria-label="客户排名方式" className="flex rounded-input bg-soft p-1">
-                    {(
-                        [
-                            ["qty", "订购数量"],
-                            ["count", "下单笔数"],
-                        ] as const
-                    ).map(([value, label]) => (
-                        <button
-                            key={value}
-                            aria-pressed={metric === value}
-                            onClick={() => onMetric(value)}
-                            className={`min-h-9 rounded-md px-2.5 text-13 font-medium ${metric === value ? "bg-surface text-primary-strong shadow-xs" : "text-muted hover:text-ink"}`}
-                        >
-                            {label}
-                        </button>
-                    ))}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 id="ranking-title" className="text-16 font-semibold text-ink">
+                    客户订单排行{" "}
+                    <span className="ml-1 rounded bg-primary-soft px-1.5 py-0.5 text-11 text-primary-strong">
+                        TOP 20
+                    </span>
+                </h2>
+                <div className="flex items-center gap-3">
+                    <span className="text-12 text-muted">单位：{metric === "qty" ? unit : "笔"}</span>
+                    <div role="group" aria-label="客户排名方式" className="flex rounded-input bg-soft p-1">
+                        {(
+                            [
+                                ["qty", "订购数量"],
+                                ["count", "下单笔数"],
+                            ] as const
+                        ).map(([value, label]) => (
+                            <button
+                                key={value}
+                                aria-pressed={metric === value}
+                                onClick={() => onMetric(value)}
+                                className={`min-h-9 rounded-md px-2.5 text-13 font-medium ${metric === value ? "bg-surface text-primary-strong shadow-xs" : "text-muted hover:text-ink"}`}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
-            <div className="mt-5 h-89 overflow-auto" tabIndex={0} aria-label="客户前20名排行，向下滚动查看更多">
+            <div className="mt-5 h-89 overflow-auto" tabIndex={0} aria-label="客户前20名排行">
                 {customers.length ? (
                     <div
                         className="min-w-76"
                         role="img"
-                        aria-label={`按${metric === "qty" ? "订购数量" : "下单笔数"}排名，第一名${customers[0].name}，${num(customers[0][metric])}${metric === "qty" ? "个" : "笔"}。明细入口提供完整可读表格。`}
+                        aria-label={`按${metric === "qty" ? "订购数量" : "下单笔数"}排名，第一名${customers[0].name}，${plainNum(customers[0][metric])}${metric === "qty" ? unit : "笔"}。明细入口提供完整可读表格。`}
                     >
                         <EChart
                             option={option}
@@ -381,9 +484,7 @@ export function CustomerRankingChart({
                 )}
             </div>
             <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-12 text-muted">
-                <span>
-                    前 {customers.length} 名 · {metric === "qty" ? "单位：个" : "单位：笔"} · 向下滚动查看更多
-                </span>
+                <span>前 {customers.length} 名</span>
                 <button
                     onClick={onDetails}
                     className="flex min-h-9 items-center gap-1 text-13 font-medium text-primary-strong hover:underline"

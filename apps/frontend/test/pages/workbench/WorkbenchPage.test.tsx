@@ -20,11 +20,14 @@ vi.mock("@/components/charts/EChart", () => ({ EChart: () => <div data-testid="e
 afterEach(() => {
     cleanup();
     auth.role = "super";
+    localStorage.clear();
 });
 
-it("超级管理员看到三块图表和两类风险，其他角色不暴露客户排行", () => {
+it("超级管理员看到四块图表和两类风险，其他角色不暴露客户排行", () => {
     const { unmount } = render(<WorkbenchPage />);
-    expect(screen.getAllByTestId("echart")).toHaveLength(3);
+    expect(screen.getAllByTestId("echart")).toHaveLength(4);
+    expect(screen.getByRole("heading", { name: "累计总订单" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "归档订单汇总" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /已逾期未发完/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /未来 7 天到期且缺货/ })).toBeInTheDocument();
     unmount();
@@ -66,4 +69,18 @@ it("风险弹窗能打开和关闭", async () => {
     expect(screen.getByRole("dialog", { name: "未来 7 天到期且缺货的订单" })).toBeInTheDocument();
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+
+it("型号明细信息密度：标准只留编码，紧凑收起，宽松补规格全文", async () => {
+    const user = userEvent.setup();
+    render(<WorkbenchPage />);
+    await user.click(screen.getByRole("button", { name: "新微动" }));
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByText("ZMKW0001")).toBeInTheDocument();
+    expect(dialog.queryByText("底座：二脚底座（无挡脚） · 支架：6.3支架：铜镀银")).not.toBeInTheDocument();
+    await user.click(dialog.getByRole("button", { name: "紧凑" }));
+    expect(dialog.queryByText("ZMKW0001")).not.toBeInTheDocument();
+    await user.click(dialog.getByRole("button", { name: "宽松" }));
+    expect(dialog.getByText("底座：二脚底座（无挡脚） · 支架：6.3支架：铜镀银")).toBeInTheDocument();
+    expect(dialog.getByText("ZMKW0001")).toBeInTheDocument();
 });

@@ -5,7 +5,7 @@ import { cleanup, render as rtlRender, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { PreferencesProvider } from "@/context/PreferencesContext";
-import { ProductProgressChart, CustomerRankingChart } from "@/pages/workbench/WorkbenchCharts";
+import { ArchivedOrdersPie, ProductProgressChart, CustomerRankingChart } from "@/pages/workbench/WorkbenchCharts";
 import { summarizeWorkbench, customerRanking } from "@/data/workbench";
 import { createWorkbenchDemo } from "../../fixtures/workbench";
 
@@ -25,10 +25,10 @@ it("产品图在交付与库存之间切换，图表点击映射到正确品类"
     render(
         <ProductProgressChart
             categories={summarizeWorkbench(data, { start: "2026-01-01", end: data.asOf }).categories}
-            periodLabel="累计"
             onDetails={onDetails}
         />,
     );
+    expect(screen.getByRole("heading", { name: "累计总订单" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "库存与缺口" }));
     expect(screen.getByRole("button", { name: "库存与缺口" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("img")).toHaveAttribute("aria-label", expect.stringContaining("备货缺口"));
@@ -44,8 +44,8 @@ it("客户图支持切换笔数，并将条形点击映射到客户编码", asyn
         <CustomerRankingChart
             customers={customers}
             metric="qty"
+            unit="个"
             onMetric={onMetric}
-            periodLabel="累计"
             onCustomer={onCustomer}
             onDetails={() => {}}
         />,
@@ -54,4 +54,12 @@ it("客户图支持切换笔数，并将条形点击映射到客户编码", asyn
     expect(onMetric).toHaveBeenCalledWith("count");
     await user.click(screen.getByRole("button", { name: "测试点击第一条形" }));
     expect(onCustomer).toHaveBeenCalledWith(customers[0].code);
+});
+it("归档饼图按品类输出出库与需求的可访问摘要", () => {
+    render(<ArchivedOrdersPie data={data} range={{ start: "0000-01-01", end: data.asOf }} periodLabel="累计" />);
+    expect(screen.getByRole("heading", { name: "归档订单汇总" })).toBeInTheDocument();
+    const label = screen.getByRole("img").getAttribute("aria-label");
+    expect(label).toContain("归档订单汇总");
+    expect(label).toContain("旋转XK2");
+    expect(label).toContain("新微动");
 });

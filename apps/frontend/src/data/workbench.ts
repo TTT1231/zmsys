@@ -162,3 +162,21 @@ export function workbenchTrend(data: WorkbenchData, range: WorkbenchRange, categ
         });
     return [...buckets.values()];
 }
+
+/** 归档订单品类统计（汇总饼图）：只取归档订单自身口径的需求与出库（归档不等于做完）；
+ *  传入 range 时按下单日期过滤，与页面全局统计周期保持同口径。 */
+export function archivedCategoryStats(data: WorkbenchData, range?: WorkbenchRange) {
+    const categoryOf = new Map(data.products.map(product => [product.code, product.category]));
+    const rows = new Map<string, { name: string; orders: number; qty: number; shipped: number }>();
+    for (const order of data.orders) {
+        if (!order.archived) continue;
+        if (range && !withinRange(order.date, range)) continue;
+        const name = categoryOf.get(order.bomCode) ?? "其他";
+        const row = rows.get(name) ?? { name, orders: 0, qty: 0, shipped: 0 };
+        row.orders += 1;
+        row.qty += order.qty;
+        row.shipped += order.shipped;
+        rows.set(name, row);
+    }
+    return [...rows.values()].sort((a, b) => b.shipped - a.shipped || a.name.localeCompare(b.name));
+}
