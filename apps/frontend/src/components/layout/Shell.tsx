@@ -276,7 +276,7 @@ export function Topbar({
                 vben 的 sticky 头部同样如此（hidden 态只动画 transform，maximize 时高度直接归零）。
                 sticky 会把负 margin clamp 回 top 约束，margin 过渡方案对 sticky 头部无效 */}
             <header
-                className={`sticky top-0 z-30 flex items-center justify-between gap-4 overflow-hidden border-line bg-surface/88 px-4 backdrop-blur-[18px] saturate-150 sm:px-6 ${maximized ? "h-0 border-b-0" : "h-16 border-b"}`}
+                className={`sticky top-0 z-30 flex shrink-0 items-center justify-between gap-4 overflow-hidden border-line bg-surface/88 px-4 backdrop-blur-[18px] saturate-150 sm:px-6 ${maximized ? "h-0 border-b-0" : "h-16 border-b"}`}
             >
                 <div className={`flex min-w-0 flex-1 items-center gap-3 ${maximized ? "pointer-events-none" : ""}`}>
                     {variant === "full" && showBrand && <BrandMark withText />}
