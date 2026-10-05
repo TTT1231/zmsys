@@ -7,6 +7,7 @@ import { ListState, OrderTaskCard } from "@/components/ui/MobileList";
 import { EmptyRow } from "@/components/ui/EmptyRow";
 import { DeliveryCell } from "@/components/business/DeliveryCell";
 import { BomCell } from "@/components/bom/BomCell";
+import { CustomerDetailModal } from "@/pages/customers/CustomersPage";
 import { OrderDetailModal } from "@/pages/orders/OrdersPage";
 import { useMemo, useState } from "react";
 import { formatDateTime } from "@/lib/date";
@@ -50,6 +51,8 @@ export function ArchivedOrdersPage() {
     const { keyword, setKeyword, onKeywordChange, page, setPage, pageSize, onPageSizeChange, tableScrollRef } =
         useTableControls({ resetKey: sort });
     const [detail, setDetail] = useState<Order | null>(null);
+    // “客户”列点客户名打开客户档案详情；存编码渲染时回捞，与销售订单页一致
+    const [customerDetailCode, setCustomerDetailCode] = useState<string | null>(null);
 
     /* 只展示归档单；排序默认按归档时间倒序（近期的在前） */
     const archived = useMemo(() => snap.orders.filter(order => order.lifecycleStatus === "archived"), [snap.orders]);
@@ -235,6 +238,8 @@ export function ArchivedOrdersPage() {
                                         const bom = derived.bomIndex.get(order.bomCode);
                                         const status =
                                             derived.byOrderNo.get(order.orderNo)?.status ?? orderStatusOfMax(order, 0);
+                                        // 档案已删除的客户名不可点（快照里已无对应档案），与销售订单页一致
+                                        const customer = snap.customers.find(item => item.code === order.customerCode);
                                         return (
                                             <tr key={order.orderNo}>
                                                 <td className="cell-pad-wide">
@@ -247,7 +252,14 @@ export function ArchivedOrdersPage() {
                                                     </button>
                                                 </td>
                                                 <td>
-                                                    <CustomerCell name={order.customer} note={order.customerCode} />
+                                                    <CustomerCell
+                                                        name={order.customer}
+                                                        onClick={
+                                                            customer
+                                                                ? () => setCustomerDetailCode(customer.code)
+                                                                : undefined
+                                                        }
+                                                    />
                                                 </td>
                                                 <td>
                                                     <BomCell
@@ -309,6 +321,14 @@ export function ArchivedOrdersPage() {
                     order={detail ? (archived.find(order => order.orderNo === detail.orderNo) ?? null) : null}
                     derived={derived}
                     onClose={() => setDetail(null)}
+                />
+                <CustomerDetailModal
+                    customer={
+                        customerDetailCode
+                            ? (snap.customers.find(item => item.code === customerDetailCode) ?? null)
+                            : null
+                    }
+                    onClose={() => setCustomerDetailCode(null)}
                 />
             </div>
         </SnapProvider>
