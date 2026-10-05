@@ -195,6 +195,9 @@ describe("旋转XK3 / 安全开关目录", () => {
             plug.groups.find(node => node.name === groupName)!.items.map(item => item.name);
         expect(itemsOf("PC塑料外壳")).toHaveLength(5);
         expect(itemsOf("小静片")).toEqual(["不电镀", "镀锡"]);
+        // 动片两类合计 5 项：动片 4 项 + 带圈动片 1 项
+        expect(itemsOf("动片")).toEqual(["不电镀", "镀锡", "长动片（不摇头）", "短动片（摇头）"]);
+        expect(itemsOf("带圈动片")).toEqual(["不电镀"]);
         expect(itemsOf("卡线片")).toEqual(["底0.15 盖0.2", "底盖0.15", "底盖0.2"]);
         // 弹簧多选：0.45长/短弹簧可同时勾选
         expect(plug.groups.find(node => node.name === "弹簧")).toMatchObject({ kind: "group", multi: true });
@@ -220,6 +223,8 @@ describe("旋转XK3 / 安全开关目录", () => {
         expect(itemsOf("PA66塑料杆子")).toEqual(["圆轴", "扁轴4.8"]);
         expect(itemsOf("静片")).toEqual(["小静片", "半圆静片"]);
         expect(wire.groups.find(node => node.name === "静片")).toMatchObject({ multi: true });
+        // 动片：带圈动片 + 长动片（不摇头）/ 短动片（摇头）共 3 项
+        expect(itemsOf("动片")).toEqual(["带圈动片", "长动片（不摇头）", "短动片（摇头）"]);
         expect(itemsOf("钢球")).toEqual(["3.0mm电镀钢球"]);
     });
 
