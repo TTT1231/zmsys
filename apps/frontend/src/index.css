@@ -1204,6 +1204,14 @@ button:active:not(:disabled) {
         height: 100dvh;
         overflow: hidden;
     }
+    /* 骨架 B（通栏顶栏）缺口：Topbar 下面的内容行只有 min-w-0，纵 flex 子项的
+       自动最小高度 = min-content（整表自然高度），会把 100dvh 根撑爆，收缩压力
+       全部转嫁给可收缩的 sticky 顶栏（h-16 被压到 1px：标题/logo 消失、分页被
+       推出视口、root overflow:hidden 裁剪且无处可滚）。高度下传链必须先穿过这行；
+       骨架 A 无此层（content-col 在横向 flex 里由 stretch 定高）不受影响 */
+    #root:has(.managed-table) > div > div.flex.min-w-0.flex-1 {
+        min-height: 0;
+    }
     #mainContent:has(.managed-table) {
         display: flex;
         flex: 1;
@@ -1237,6 +1245,11 @@ button:active:not(:disabled) {
    动画层 → 页面根 → 列表卡片 → 表格容器 → 表格 → 表体 逐层下传，
    筛选工具条/分页固定，仅表体滚动。表格外面通常还包着桌面/移动切换层
    （hidden lg:block），所以中间含 .managed-table 的 div 也要撑高 */
+/* 骨架 B 最大化同款缺口（h-dvh 纵 flex 根的内容行，同上说明）：
+   min-height:0 放行纵轴收缩，高度才能继续下传到表体滚动容器 */
+[data-maximized] > div.flex.min-w-0.flex-1 {
+    min-height: 0;
+}
 [data-maximized] #mainContent > div {
     display: flex;
     flex: 1;
