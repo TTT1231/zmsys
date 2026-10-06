@@ -80,10 +80,10 @@ export function QtyCell({
     );
 }
 
-/* 日期单元格（可带已逾期徽章） */
+/* 日期单元格（可带已逾期徽章）：日期与徽章上下两行，比挤一行更直观清爽 */
 export function DateCell({ date, overdue }: { date: string; overdue?: boolean }) {
     return (
-        <span className="tnum inline-flex flex-wrap items-center gap-1.5 text-14 text-td">
+        <span className="tnum inline-flex flex-col items-start gap-1 text-14 text-td">
             <span className="whitespace-nowrap">{date}</span>
             {overdue && <Badge tone="danger">已逾期</Badge>}
         </span>
