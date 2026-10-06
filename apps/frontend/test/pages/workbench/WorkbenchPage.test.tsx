@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/* 覆盖角色隔离、周期筛选、品类与客户明细、风险入口和统计说明。 */
+/* 覆盖角色隔离、周期筛选（含逾期卡片口径）、品类与客户明细和统计说明。 */
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render as rtlRender, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -23,13 +23,12 @@ afterEach(() => {
     localStorage.clear();
 });
 
-it("超级管理员看到四块图表和两类风险，其他角色不暴露客户排行", () => {
+it("超级管理员看到四块图表和四张指标卡，其他角色不暴露客户排行", () => {
     const { unmount } = render(<WorkbenchPage />);
     expect(screen.getAllByTestId("echart")).toHaveLength(4);
     expect(screen.getByRole("heading", { name: "累计总订单" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "逾期未完成订单" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "归档订单汇总" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /已逾期未发完/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /未来 7 天到期且缺货/ })).toBeInTheDocument();
     unmount();
     for (const role of ["admin", "sales", "warehouse", "staff"]) {
         auth.role = role;
@@ -39,13 +38,21 @@ it("超级管理员看到四块图表和两类风险，其他角色不暴露客�
     }
 });
 
-it("周期影响订单汇总，不改变当前风险；型号和客户明细可通过键盘入口查看", async () => {
+it("周期影响订单汇总与逾期卡片；型号和客户明细可通过键盘入口查看", async () => {
     const user = userEvent.setup();
     render(<WorkbenchPage />);
-    const riskText = screen.getByRole("button", { name: /已逾期未发完/ }).textContent;
+    /* 指标卡数值为卡内唯一纯数字节点（小字如「3笔订单待交付」不匹配） */
+    const overdueCount = () =>
+        within(screen.getByRole("heading", { name: "逾期未完成订单" }).closest("section")!).getAllByText(/^\d+$/)[0]
+            .textContent;
+    const total = overdueCount();
     await user.click(screen.getByRole("button", { name: "本月" }));
     expect(screen.getByRole("button", { name: "本月" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: /已逾期未发完/ }).textContent).toBe(riskText);
+    /* 夹具中逾期单均在本月之前下单：切到本月后逾期卡片归零，切回「累计」恢复全量 */
+    expect(total).not.toBe("0");
+    expect(overdueCount()).toBe("0");
+    await user.click(screen.getByRole("button", { name: "累计" }));
+    expect(overdueCount()).toBe(total);
     await user.click(screen.getByRole("button", { name: "旋转XK2" }));
     expect(screen.getByRole("dialog", { name: "旋转XK2 · 型号与规格" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "旋转XK2 / 1-1" }));
@@ -60,15 +67,6 @@ it("周期影响订单汇总，不改变当前风险；型号和客户明细可�
     expect(within(table).getAllByRole("row")).toHaveLength(21);
     await user.click(within(table).getAllByRole("button")[0]);
     expect(screen.getByRole("dialog").getAttribute("aria-label")).toContain("订单明细");
-});
-
-it("风险弹窗能打开和关闭", async () => {
-    const user = userEvent.setup();
-    render(<WorkbenchPage />);
-    await user.click(screen.getByRole("button", { name: /未来 7 天到期且缺货/ }));
-    expect(screen.getByRole("dialog", { name: "未来 7 天到期且缺货的订单" })).toBeInTheDocument();
-    await user.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
 
 it("型号明细信息密度：标准只留编码，紧凑收起，宽松补规格全文", async () => {

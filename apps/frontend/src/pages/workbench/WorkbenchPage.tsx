@@ -16,6 +16,7 @@ import {
     openQty,
     summarizeWorkbench,
     workbenchRisks,
+    withinRange,
     type RankingMetric,
     type WorkbenchOrder,
 } from "@/data/workbench";
@@ -142,7 +143,8 @@ function OwnerWorkbench() {
     // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
     const overlay = useDelayedFlag(isFetching && !isLoading);
     if (isLoading) return <PageLoading className="min-h-96" />;
-    const overdue = risks.filter(order => order.kind === "overdue");
+    /* 逾期卡片与同排卡片同口径：跟全局周期按下单日期过滤，「累计」仍为全量 */
+    const overdue = risks.filter(order => order.kind === "overdue" && withinRange(order.date, scopeRange));
     const pendingOrderCount = summary.orders.filter(order => openQty(order) > 0).length;
     const periodLabel =
         period === "all" ? "累计" : period === "year" ? "今年" : period === "month" ? "本月" : "所选期间";
