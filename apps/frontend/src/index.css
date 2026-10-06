@@ -904,7 +904,7 @@ button:active:not(:disabled) {
     padding-bottom: 6px;
     white-space: nowrap;
 }
-/* 日期 + 逾期徽章这类 inline-flex 在窄列不允许折行，否则行高又翻上去。 */
+/* inline-flex 格（日期+逾期徽章上下排等）在窄列不许横向折行，避免排布被挤乱。 */
 .managed-table[data-density="compact"] .data-table td .inline-flex {
     flex-wrap: nowrap;
 }
@@ -944,17 +944,9 @@ button:active:not(:disabled) {
 .managed-table[data-density="compact"] .customer-cell-sub {
     margin-top: 0;
 }
-/* 交付情况四层压一行：待交数字 + 细进度条并排，进度百分比可从条形读出。 */
-.managed-table[data-density="compact"] .delivery-cell {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.managed-table[data-density="compact"] .delivery-track {
-    flex: 1 1 auto;
-    min-width: 0;
-    margin-top: 0;
-}
+/* 交付格紧凑档保持「待交数字 / 细进度条」上下两行，与宽松档同构。
+   不在 td 上挂 flex：td 脱离 table-cell 后浏览器会包匿名单元格，
+   行分隔线与 hover 底色只画到内容高度——分隔线错位、悬停底色缺口即由此来。 */
 .managed-table[data-density="compact"] .ledger-track {
     height: 3px;
 }
