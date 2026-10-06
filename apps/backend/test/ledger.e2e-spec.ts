@@ -23,7 +23,7 @@ const today = (): string => new Date().toISOString().slice(0, 10);
 const BOM_CODE = "ZME2E0002";
 const BOM_ITEMS = [
     { groupKey: "base", groupName: "底座", name: "二脚底座（无挡脚）", position: 1 },
-    { groupKey: "button", groupName: "按钮", name: "7.6mm（常用装跌倒）", position: 2 },
+    { groupKey: "button", groupName: "按钮", name: "7.6mm", position: 2 },
 ];
 
 /** 恢复链专用 BOM（判重集合独立）：末段用例要在其上走完入库→作废→删除→清理→

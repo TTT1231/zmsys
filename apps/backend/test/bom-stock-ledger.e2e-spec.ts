@@ -24,7 +24,7 @@ const today = (): string => new Date().toISOString().slice(0, 10);
 const BOM_CODE = "ZME2E0003";
 const BOM_ITEMS = [
     { groupKey: "base", groupName: "底座", name: "三脚底座（有挡脚）", position: 1 },
-    { groupKey: "button", groupName: "按钮", name: "7.6mm（常用装跌倒）", position: 2 },
+    { groupKey: "button", groupName: "按钮", name: "7.6mm", position: 2 },
 ];
 
 describe("BOM 库存流水 (e2e)", () => {
