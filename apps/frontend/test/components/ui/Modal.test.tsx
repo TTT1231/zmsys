@@ -6,7 +6,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Modal } from "@/components/ui/Modal";
 
-afterEach(cleanup);
+afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    document.body.style.overflow = "";
+    document.body.style.paddingRight = "";
+});
 
 const renderModal = (over: Partial<Parameters<typeof Modal>[0]> = {}) =>
     render(
@@ -43,6 +48,24 @@ describe("Modal", () => {
             </Modal>,
         );
         expect(document.body.style.overflow).toBe("");
+    });
+
+    it("补偿页面滚动条宽度，并恢复原有内联样式", () => {
+        vi.spyOn(document.documentElement, "clientWidth", "get").mockReturnValue(window.innerWidth - 8);
+        document.body.style.paddingRight = "12px";
+        document.body.style.overflow = "auto";
+        const { unmount } = renderModal();
+        expect(document.body.style.paddingRight).toBe("20px");
+        expect(document.body.style.overflow).toBe("hidden");
+        unmount();
+        expect(document.body.style.paddingRight).toBe("12px");
+        expect(document.body.style.overflow).toBe("auto");
+    });
+
+    it("页面没有滚动条时不增加留白", () => {
+        vi.spyOn(document.documentElement, "clientWidth", "get").mockReturnValue(window.innerWidth);
+        renderModal();
+        expect(document.body.style.paddingRight).toBe("");
     });
 
     it("closes on Escape, close button and backdrop mousedown", () => {
@@ -129,12 +152,16 @@ describe("Modal 叠加", () => {
     });
 
     it("滚动锁在叠加期间保持，栈清空才解锁", () => {
+        vi.spyOn(document.documentElement, "clientWidth", "get").mockReturnValue(window.innerWidth - 8);
         const { outer, inner } = renderStacked();
         expect(document.body.style.overflow).toBe("hidden");
+        expect(document.body.style.paddingRight).toBe("8px");
         inner.unmount();
         expect(document.body.style.overflow).toBe("hidden");
+        expect(document.body.style.paddingRight).toBe("8px");
         outer.unmount();
         expect(document.body.style.overflow).toBe("");
+        expect(document.body.style.paddingRight).toBe("");
     });
 
     it("Tab 焦点只在栈顶弹窗内循环，不落回外层", () => {

@@ -785,33 +785,48 @@ button:active:not(:disabled) {
         font-size: calc(16px * var(--app-font-scale, 1));
         /* 浅色下的原生控件 / 滚动条配色（html.dark 内对应声明 dark） */
         color-scheme: light;
-        /* 滚动条槽位常驻：弹窗锁 body 滚动时内容宽度不变，表格不因列宽重排而抖动 */
-        scrollbar-gutter: stable;
+        /* 只在溢出时占位；弹窗锁滚动时由 Modal 补偿实际滚动条宽度。 */
+        scrollbar-gutter: auto;
+        background-color: var(--color-canvas);
     }
 
     /* 自定义滚动条：桌面端细圆角贴合主题（浅色内容区 + 深色侧栏分别适配），
      移动端保留原生手感（overlay 滚动条本身即系统风格） */
     @media (min-width: 1024px) {
-        * {
-            scrollbar-width: thin;
-            scrollbar-color: var(--color-line-strong) transparent;
+        /* Chrome/Edge 的非 auto 标准属性会覆盖伪元素样式（包括隐藏箭头）。
+           支持伪元素的浏览器统一走下面的样式，其余浏览器使用标准属性兜底。 */
+        @supports not selector(::-webkit-scrollbar) {
+            * {
+                scrollbar-width: thin;
+                scrollbar-color: var(--color-line-strong) transparent;
+            }
         }
 
         ::-webkit-scrollbar {
-            width: 10px;
-            height: 10px;
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-button {
+            display: none;
+            width: 0;
+            height: 0;
         }
         ::-webkit-scrollbar-track {
             background: transparent;
         }
         ::-webkit-scrollbar-thumb {
-            border: 3px solid transparent;
+            min-width: 32px;
+            min-height: 32px;
+            border: 2px solid transparent;
             border-radius: 999px;
             background-color: var(--color-line-strong);
             background-clip: padding-box;
         }
         ::-webkit-scrollbar-thumb:hover {
             background-color: var(--color-muted);
+        }
+        ::-webkit-scrollbar-thumb:active {
+            background-color: var(--color-td-strong);
         }
         ::-webkit-scrollbar-corner {
             background: transparent;
@@ -1180,9 +1195,6 @@ button:active:not(:disabled) {
 .managed-table [data-pinned="start"] button {
     white-space: nowrap;
     overflow-wrap: normal;
-}
-.managed-table-body {
-    scrollbar-width: thin;
 }
 /* 列表页桌面态（页面含 .managed-table）：与最大化同一套高度下传链（见下方
    [data-maximized] 块），让 .managed-table-body 成为纵向滚动容器——thead 的

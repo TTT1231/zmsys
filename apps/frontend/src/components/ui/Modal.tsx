@@ -5,6 +5,7 @@ import { Icon } from "@/lib/icons";
 /* 弹窗叠加：栈记录打开顺序，只有栈顶响应 ESC/Tab 并在关闭时解锁滚动、恢复焦点；
    非栈顶层挂 inert（阻焦点/指针并移出无障碍树），栈变化时同步各层 */
 const modalStack: symbol[] = [];
+let bodyScrollStyle: Pick<CSSStyleDeclaration, "overflow" | "paddingRight"> | null = null;
 const stackOverlays = new Map<symbol, HTMLElement>();
 const syncStackTop = () => {
     const top = modalStack.at(-1);
@@ -56,7 +57,17 @@ export function Modal({
         modalStack.push(token);
         if (overlayRef.current) stackOverlays.set(token, overlayRef.current);
         // 栈从空变非空才锁滚动，叠加时关掉内层不提前解锁外层的锁定
-        if (modalStack.length === 1) document.body.style.overflow = "hidden";
+        if (modalStack.length === 1) {
+            const body = document.body;
+            bodyScrollStyle = { overflow: body.style.overflow, paddingRight: body.style.paddingRight };
+            const scrollbarWidth = Math.max(0, window.innerWidth - document.documentElement.clientWidth);
+            // 仅补偿实际存在的页面滚动条；表格内滚动和 overlay 滚动条不产生额外留白。
+            if (scrollbarWidth > 0) {
+                const paddingRight = Number.parseFloat(getComputedStyle(body).paddingRight) || 0;
+                body.style.paddingRight = `${paddingRight + scrollbarWidth}px`;
+            }
+            body.style.overflow = "hidden";
+        }
         syncStackTop();
         const getFocusables = () =>
             Array.from(
@@ -103,7 +114,10 @@ export function Modal({
             modalStack.splice(modalStack.indexOf(token), 1);
             stackOverlays.delete(token);
             syncStackTop();
-            if (modalStack.length === 0) document.body.style.overflow = "";
+            if (modalStack.length === 0 && bodyScrollStyle) {
+                Object.assign(document.body.style, bodyScrollStyle);
+                bodyScrollStyle = null;
+            }
             // 仅栈顶正常关闭时恢复焦点；外层先于内层卸载时不与内层抢焦点
             if (wasTop) restoreRef.current?.focus?.();
         };

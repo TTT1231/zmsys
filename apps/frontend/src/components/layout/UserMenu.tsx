@@ -39,7 +39,7 @@ export function UserMenu() {
 
     return (
         <>
-            {/* modal=false:不锁 body 滚动(html 已 scrollbar-gutter:stable,modal 锁定会造成布局横移) */}
+            {/* 用户下拉不锁页面滚动，避免菜单打开时改变页面宽度。 */}
             <DropdownMenu modal={false}>
                 <DropdownMenuTrigger
                     className="flex shrink-0 items-center gap-2.5 rounded-btn px-1.5 py-1 transition hover:bg-soft"
