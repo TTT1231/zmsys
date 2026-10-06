@@ -26,13 +26,21 @@ const BOM_ITEMS = [
     { groupKey: "button", groupName: "按钮", name: "8.5mm", position: 2 },
 ];
 
-const orderInput = (customerCode: string) => ({
+/** 整单编辑（换 BOM）的第二 BOM：二脚底座 + 8.1mm 按钮，编码与物料组合同样避开其它套件（ledger 占 ZME2E0002、bom-stock-ledger 占 ZME2E0003、workbench 占 ZME2E0004） */
+const BOM2_CODE = "ZME2E0005";
+const BOM2_ITEMS = [
+    { groupKey: "base", groupName: "底座", name: "二脚底座（无挡脚）", position: 1 },
+    { groupKey: "button", groupName: "按钮", name: "8.1mm", position: 2 },
+];
+
+const orderInput = (customerCode: string, overrides: { bomCode?: string; deliverDate?: string } = {}) => ({
     customerCode,
     bomCode: BOM_CODE,
     qty: 100,
     deliverDate: "2026-09-30",
     orderDate: today(),
     remark: `e2e 订单 ${RUN}`,
+    ...overrides,
 });
 
 describe("销售订单 (e2e)", () => {
@@ -41,6 +49,7 @@ describe("销售订单 (e2e)", () => {
     let snowflake: SnowflakeGenerator;
     let superToken: string;
     let salesToken: string;
+    let salesAccount: string;
     let customerCode: string;
     let orderNo: string;
 
@@ -136,6 +145,62 @@ describe("销售订单 (e2e)", () => {
         });
     };
 
+    /** 固定测试 BOM：存在则复用（重跑不撞唯一键）；明细按建档冻结快照造数 */
+    const ensureTestBom = async (
+        bomCode: string,
+        items: Array<{ groupKey: string; groupName: string; name: string; position: number }>,
+    ) => {
+        const existing = await prisma.bomTable.findUnique({ where: { bomCode } });
+        if (existing) {
+            return;
+        }
+        const category = await prisma.bomCategory.findUnique({ where: { categoryKey: "new-micro-switch" } });
+        const superUser = await prisma.sysUser.findUnique({ where: { account: "guojun" } });
+        const now = new Date();
+        const bomId = snowflake.next();
+        const materialIds = (
+            await Promise.all(
+                items.map(item =>
+                    prisma.materialItem.findFirst({
+                        where: {
+                            group: { name: item.groupName, category: { categoryKey: "new-micro-switch" } },
+                            name: item.name,
+                        },
+                        select: { id: true },
+                    }),
+                ),
+            )
+        ).map(row => row!.id);
+        await prisma.bomTable.create({
+            data: {
+                id: bomId,
+                bomCode,
+                categoryId: category!.id,
+                specHash: materialSetHash(
+                    category!.id,
+                    materialIds.map(id => ({ id: id.toString(), quantity: 1 })),
+                    "",
+                ),
+                requestKey: `e2e-bom-${bomCode}`,
+                createdBy: superUser!.id,
+                updatedBy: superUser!.id,
+                createdAt: now,
+            },
+        });
+        await prisma.bomItem.createMany({
+            data: items.map((item, index) => ({
+                id: snowflake.next(),
+                bomId,
+                materialId: materialIds[index]!,
+                groupKey: item.groupKey,
+                groupName: item.groupName,
+                name: item.name,
+                position: item.position,
+                createdAt: now,
+            })),
+        });
+    };
+
     beforeAll(async () => {
         const moduleFixture = await Test.createTestingModule({ imports: [AppModule] }).compile();
         app = moduleFixture.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
@@ -145,59 +210,12 @@ describe("销售订单 (e2e)", () => {
         snowflake = app.get(SnowflakeGenerator);
         superToken = await login("guojun");
 
-        const salesAccount = accountOf("sales01");
+        salesAccount = accountOf("sales01");
         await createUser(salesAccount, "sales");
         salesToken = await login(salesAccount);
 
-        // 固定测试 BOM：存在则复用（重跑不撞唯一键）；明细按建档冻结快照造数
-        const existing = await prisma.bomTable.findUnique({ where: { bomCode: BOM_CODE } });
-        if (!existing) {
-            const category = await prisma.bomCategory.findUnique({ where: { categoryKey: "new-micro-switch" } });
-            const superUser = await prisma.sysUser.findUnique({ where: { account: "guojun" } });
-            const now = new Date();
-            const bomId = snowflake.next();
-            const materialIds = (
-                await Promise.all(
-                    BOM_ITEMS.map(item =>
-                        prisma.materialItem.findFirst({
-                            where: {
-                                group: { name: item.groupName, category: { categoryKey: "new-micro-switch" } },
-                                name: item.name,
-                            },
-                            select: { id: true },
-                        }),
-                    ),
-                )
-            ).map(row => row!.id);
-            await prisma.bomTable.create({
-                data: {
-                    id: bomId,
-                    bomCode: BOM_CODE,
-                    categoryId: category!.id,
-                    specHash: materialSetHash(
-                        category!.id,
-                        materialIds.map(id => ({ id: id.toString(), quantity: 1 })),
-                        "",
-                    ),
-                    requestKey: `e2e-bom-${BOM_CODE}`,
-                    createdBy: superUser!.id,
-                    updatedBy: superUser!.id,
-                    createdAt: now,
-                },
-            });
-            await prisma.bomItem.createMany({
-                data: BOM_ITEMS.map((item, index) => ({
-                    id: snowflake.next(),
-                    bomId,
-                    materialId: materialIds[index]!,
-                    groupKey: item.groupKey,
-                    groupName: item.groupName,
-                    name: item.name,
-                    position: item.position,
-                    createdAt: now,
-                })),
-            });
-        }
+        await ensureTestBom(BOM_CODE, BOM_ITEMS);
+        await ensureTestBom(BOM2_CODE, BOM2_ITEMS);
 
         // 测试客户（订单与客户合作状态联动的前置）
         const customerRes = await app.inject({
@@ -377,6 +395,149 @@ describe("销售订单 (e2e)", () => {
         const afterVoid = await app.inject({ method: "GET", url: "/api/orders", headers: authHeaders(superToken) });
         const voided = afterVoid.json().data.find((item: { orderNo: string }) => item.orderNo === orderNo);
         expect(voided.outbound).toBe(0);
+    });
+
+    it("整单编辑：一件未发可换客户与 BOM（档案与快照重冻、审计带前后客户）；有出库迹象即锁定", async () => {
+        // 第二客户（整单换客户的目标档案）
+        const cust2Res = await app.inject({
+            method: "POST",
+            url: "/api/customers",
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-cust2` },
+            payload: {
+                name: `整单编辑客户_${RUN}`,
+                contact: "周经理",
+                phone: "13800003333",
+                province: "广东省",
+                city: "佛山市",
+                district: "",
+                town: "",
+                address: `顺德 ${RUN.slice(-3)} 号`,
+                ownerAccount: salesAccount,
+                payTerms: "",
+            },
+        });
+        expect(cust2Res.statusCode).toBe(200);
+        const cust2Code = cust2Res.json().data.code as string;
+        const cust2 = await prisma.customTable.findUnique({ where: { customerCode: cust2Code } });
+        const bom2 = await prisma.bomTable.findUnique({ where: { bomCode: BOM2_CODE } });
+
+        // 一件未发：整单改客户+BOM+数量+交期+备注，外键与名称/规格快照按新目标重冻。
+        // 交期晚于 system-logs 套件的订单（2027-07-15）：共享 BOM 的可发量按交期升序
+        // 分配，本单切换 BOM 前的暂驻需求排在其后，不挤占其 beforeAll 发货
+        const created = await createOrder(
+            superToken,
+            orderInput(customerCode, { deliverDate: "2027-12-31" }),
+            `e2e-ord-${RUN}-full`,
+        );
+        expect(created.statusCode).toBe(200);
+        const target = created.json().data as { orderNo: string; version: number };
+        const updated = await app.inject({
+            method: "PUT",
+            url: `/api/orders/${target.orderNo}`,
+            headers: authHeaders(superToken),
+            payload: {
+                expectedVersion: target.version,
+                customerCode: cust2Code,
+                bomCode: BOM2_CODE,
+                qty: 80,
+                deliverDate: "2026-10-20",
+                remark: "整单重订",
+            },
+        });
+        expect(updated.statusCode).toBe(200);
+        expect(updated.json().data).toMatchObject({
+            version: target.version + 1,
+            customer: `整单编辑客户_${RUN}`,
+            customerCode: cust2Code,
+            bomCode: BOM2_CODE,
+            qty: 80,
+            deliverDate: "2026-10-20",
+            remark: "整单重订",
+        });
+        const stored = await prisma.salesOrderTable.findUnique({ where: { orderNo: target.orderNo } });
+        expect(stored).toMatchObject({
+            customerId: cust2!.id,
+            bomId: bom2!.id,
+            customerNameSnapshot: `整单编辑客户_${RUN}`,
+            bomNameSnapshot: "新微动",
+        });
+        // BOM 明细按第二 BOM 建档重冻（二脚底座 + 8.1mm 按钮）
+        expect(stored!.bomSpecSnapshot).toMatchObject({
+            spec: "底座：二脚底座（无挡脚） · 按钮：8.1mm",
+        });
+        // 变更日志带前后客户（改名后的当前名随订单建档冻结）
+        const logs = await prisma.salesOrderChangeLog.findMany({ where: { order: { orderNo: target.orderNo } } });
+        const updateLog = logs.find(log => log.eventType === "UPDATE");
+        expect(updateLog?.beforeJson).toMatchObject({ customerCode, customer: `改名后的客户_${RUN}` });
+        expect(updateLog?.afterJson).toMatchObject({ customerCode: cust2Code, bomName: "新微动" });
+        const list = await app.inject({ method: "GET", url: "/api/orders", headers: authHeaders(superToken) });
+        const mine = list.json().data.find((item: { orderNo: string }) => item.orderNo === target.orderNo);
+        expect(mine).toMatchObject({ customerCode: cust2Code, bomCode: BOM2_CODE });
+
+        // 未知客户 404（守卫后解析）；未知 BOM 404（锁前预检，与新建同序）
+        const badCustomer = await app.inject({
+            method: "PUT",
+            url: `/api/orders/${target.orderNo}`,
+            headers: authHeaders(superToken),
+            payload: { expectedVersion: target.version + 1, customerCode: "CUS-999999" },
+        });
+        expect(badCustomer.statusCode).toBe(404);
+        expect(badCustomer.json().message).toBe("客户不存在");
+        const badBom = await app.inject({
+            method: "PUT",
+            url: `/api/orders/${target.orderNo}`,
+            headers: authHeaders(superToken),
+            payload: { expectedVersion: target.version + 1, bomCode: "ZMXXXX999" },
+        });
+        expect(badBom.statusCode).toBe(404);
+        expect(badBom.json().message).toBe("BOM 不存在");
+
+        // 存在未作废出库单：客户/BOM 锁定（与数量交期同口径，仅备注可改）。
+        // 用第二 BOM 建单，剩余需求不再挤占共享 BOM（ZME2E0001）上其它套件的发货
+        const shipped = await createOrder(
+            superToken,
+            orderInput(customerCode, { bomCode: BOM2_CODE }),
+            `e2e-ord-${RUN}-full-ship`,
+        );
+        const shippedOrder = shipped.json().data as { orderNo: string; version: number };
+        await seedRegisteredShipment(
+            (await prisma.salesOrderTable.findUnique({ where: { orderNo: shippedOrder.orderNo } }))!.id,
+            `CKE2EB${RUN}`,
+            20,
+        );
+        const denied = await app.inject({
+            method: "PUT",
+            url: `/api/orders/${shippedOrder.orderNo}`,
+            headers: authHeaders(superToken),
+            payload: { expectedVersion: shippedOrder.version, customerCode: cust2Code },
+        });
+        expect(denied.statusCode).toBe(409);
+        expect(denied.json().message).toBe("订单已有出库记录，客户与 BOM 不可修改，仅可修改备注");
+
+        // 已作废未删除的出库单（净额归零）同样阻止换 BOM：与删除同口径（主单当前正是此态）
+        const voidedEdit = await app.inject({
+            method: "PUT",
+            url: `/api/orders/${orderNo}`,
+            headers: authHeaders(superToken),
+            payload: { expectedVersion: 2, bomCode: BOM2_CODE },
+        });
+        expect(voidedEdit.statusCode).toBe(409);
+        expect(voidedEdit.json().message).toBe("请先作废并删除关联出库单，再修改客户与 BOM");
+
+        // 同值客户/BOM 上送视为未变更：存在可见出库单也不触发身份守卫（仅备注生效）
+        const sameValue = await app.inject({
+            method: "PUT",
+            url: `/api/orders/${orderNo}`,
+            headers: authHeaders(superToken),
+            payload: { expectedVersion: 2, customerCode, bomCode: BOM_CODE, remark: "同值不改档" },
+        });
+        expect(sameValue.statusCode).toBe(200);
+        expect(sameValue.json().data).toMatchObject({
+            customerCode,
+            bomCode: BOM_CODE,
+            remark: "同值不改档",
+            version: 3,
+        });
     });
 
     it("取消：非超管 403（受保护权限已随迁移删除，路由不再存在）", async () => {

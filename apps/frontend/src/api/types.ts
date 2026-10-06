@@ -333,8 +333,11 @@ export interface CreateOrderInput {
     remark: string;
 }
 
+/** 客户与 BOM 仅在订单净出库为 0 且无未删除出库单时可改（后端守卫） */
 export interface UpdateOrderInput {
     expectedVersion: number;
+    customerCode?: string;
+    bomCode?: string;
     qty?: number;
     deliverDate?: string;
     remark?: string;

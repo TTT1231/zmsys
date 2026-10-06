@@ -98,21 +98,26 @@ export class OutboundService {
                 if (!located) {
                     throw new NotFoundException("订单不存在");
                 }
-                // 锁序（db-scheme.md §2）：BOM → 订单；订单 BOM 引用不可变，定位读与锁定间无竞争
+                // 锁序（db-scheme.md §2）：BOM → 订单。订单编辑可换 BOM（未发货单），
+                // 定位读与锁定间引用可能漂移：锁内重读后比对，漂移即 409 刷新重试
                 await lockRowsById(tx, "bom_table", [located.bomId]);
                 await lockRowByKey(tx, "sales_order_table", dto.orderNo);
                 const order = await tx.salesOrderTable.findUnique({ where: { orderNo: dto.orderNo } });
                 if (!order) {
                     throw new NotFoundException("订单不存在");
                 }
+                if (order.bomId !== located.bomId) {
+                    throw new ConflictException("订单已被其他人修改，请刷新后重试");
+                }
                 if (order.lifecycleStatus === "ARCHIVED") {
                     throw new ConflictException("订单已归档，不能登记发货");
                 }
 
-                // 可发量在 BOM+订单锁内重算，不信任任何前端传入的库存/已发数据
+                // 可发量在 BOM+订单锁内重算，不信任任何前端传入的库存/已发数据；
+                // bomId 取锁内行（与流水归属同源，杜绝定位读漂移导致的错账）
                 await computeShippableQty(tx, {
-                    bomId: located.bomId,
-                    targetOrderId: located.id,
+                    bomId: order.bomId,
+                    targetOrderId: order.id,
                     requestedQty: dto.qty,
                 });
 
@@ -427,6 +432,9 @@ export class OutboundService {
     /**
      * 按契约锁序锁定单头（db-scheme.md §2）：BOM → 订单 → 出库单头。
      * 先无锁读定位 orderId/bomId，再按固定顺序锁定，锁定读返回最新已提交行。
+     * 出库单存在即冻结订单身份：orders.updateOrder 的整单编辑守卫（净出库 0 且
+     * 无未删出库单，visibleShipmentCountOf）保证有出库单的订单不可换 BOM——
+     * 此处定位读的 bomId 不会漂移，无需 createOutbound 式的锁后比对。
      */
     private async lockShipmentForWrite(tx: Tx, shipmentNo: string): Promise<ShipmentRow> {
         const located = await tx.outboundShipment.findUnique({
