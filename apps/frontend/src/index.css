@@ -178,6 +178,10 @@
     --color-voided-row: color-mix(in srgb, var(--color-danger) 6%, var(--color-surface));
     --color-voided-row-hover: color-mix(in srgb, var(--color-danger) 11%, var(--color-surface));
     --color-soft: #f8fafc;
+    /* 交付进度：中性底轨显出 0% 和剩余段；浅色实色加深，避免浅绿色主色与底轨混在一起。
+       引用语义令牌，主题预设切换时自动重算，组件不固定蓝色或浅色灰。 */
+    --color-progress-track: color-mix(in srgb, var(--color-muted), var(--color-surface));
+    --color-progress-fill: color-mix(in srgb, var(--color-primary), var(--color-primary-strong));
     --color-panel: #fcfcfd;
     --color-scrim: rgba(15, 23, 42, 0.48);
 
@@ -400,6 +404,8 @@ html.dark {
     --color-voided-row: color-mix(in srgb, var(--color-danger) 14%, var(--color-surface));
     --color-voided-row-hover: color-mix(in srgb, var(--color-danger) 19%, var(--color-surface));
     --color-soft: #272729;
+    /* 暗色强调色已按各预设提亮，保证进度与中性底轨清楚分开。 */
+    --color-progress-fill: var(--color-primary-strong);
     --color-panel: #222428;
     --color-scrim: rgba(0, 0, 0, 0.55);
 
@@ -974,11 +980,9 @@ button:active:not(:disabled) {
     margin-top: 0;
 }
 /* 交付格紧凑档保持「待交数字 / 细进度条」上下两行，与宽松档同构。
+   底轨统一沿用组件的 5px，不因紧凑档变细到难以辨认。
    不在 td 上挂 flex：td 脱离 table-cell 后浏览器会包匿名单元格，
    行分隔线与 hover 底色只画到内容高度——分隔线错位、悬停底色缺口即由此来。 */
-.managed-table[data-density="compact"] .ledger-track {
-    height: 3px;
-}
 /* 徽章降一档（25px→22px），状态列不再把行高托到 36px 以上。 */
 .managed-table[data-density="compact"] .table-badge {
     padding: 1px 6px;
