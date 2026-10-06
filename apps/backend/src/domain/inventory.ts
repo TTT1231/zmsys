@@ -45,6 +45,12 @@ export async function outboundNetOf(tx: Tx, orderId: bigint): Promise<number> {
     return rows[0] ? Number(rows[0].outbound_qty) : 0;
 }
 
+/** 可见出库单头数（含已作废未删除；全局软删注入过滤已删行）：订单删除与整单身份
+ *  （换客户/BOM）编辑共用的"无任何发货事实"口径之第二条件（第一条件为净额 0） */
+export async function visibleShipmentCountOf(tx: Tx, orderId: bigint): Promise<number> {
+    return tx.outboundShipment.count({ where: { orderId } });
+}
+
 interface ActiveOrderRow {
     id: bigint;
     /** INT UNSIGNED 经原生查询可能映射为 BigInt（driver 决定），统一显式转换 */

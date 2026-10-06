@@ -10,7 +10,14 @@ import { useToast } from "@/components/ui/toastContexts";
 import { useDelayedFlag } from "@/components/ui/useDelayedFlag";
 import { EMPTY_SNAPSHOT } from "./views";
 import type { GrantMap, RoleId } from "./permissions";
-import type { Snapshot, SystemLogCursor, SystemLogQuery, UpdateCustomerInput, UpdateUserInput } from "@/api";
+import type {
+    Snapshot,
+    SystemLogCursor,
+    SystemLogQuery,
+    UpdateCustomerInput,
+    UpdateOrderInput,
+    UpdateUserInput,
+} from "@/api";
 import { useApp } from "@/context/useApp";
 import {
     archiveOrder as archiveOrderReq,
@@ -244,12 +251,10 @@ export const useDeleteOrder = () =>
 
 /* 页面沿用旧签名 {orderNo, ...变更}，此处拆参适配契约 PUT /orders/:orderNo */
 export const useUpdateOrder = () =>
-    useWbMutation(
-        (input: { orderNo: string; expectedVersion: number; qty?: number; deliverDate?: string; remark?: string }) => {
-            const { orderNo, ...body } = input;
-            return updateOrderReq(orderNo, body);
-        },
-    );
+    useWbMutation((input: { orderNo: string } & UpdateOrderInput) => {
+        const { orderNo, ...body } = input;
+        return updateOrderReq(orderNo, body);
+    });
 
 export const useCreateCustomer = () => useWbMutation(createCustomer);
 export const useUpdateCustomer = () =>

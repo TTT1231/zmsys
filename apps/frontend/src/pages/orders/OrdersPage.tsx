@@ -69,7 +69,7 @@ import { focusFirstInvalid } from "@/lib/formFocus";
 import { useToast } from "@/components/ui/toastContexts";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
-import type { Order } from "@/api";
+import type { Bom, Customer, Order } from "@/api";
 
 const STATUS_OPTIONS = ["全部状态", "待备货", "可发货", "部分可发货", "部分发货", "已完成"];
 
@@ -83,63 +83,219 @@ const ORDER_SORT_COLUMNS: Array<{ key: OrderSortKey; label: string }> = [
     { key: "createdAt", label: "创建时间" },
 ];
 
+/* 订单表单体（新建与编辑未发货单共用，纯展示）：三段式 客户与交付 → BOM 编码 → 备注。
+ * 编辑复用时 orderDate 锁定（计入订单号不可改）以禁用态展示；报错清除等状态逻辑留在各弹窗 */
+type OrderFormValues = {
+    customerCode: string;
+    qty: string;
+    orderDate: string;
+    deliverDate: string;
+    bomCode: string;
+    remark: string;
+};
+
+function OrderFormBody({
+    customerOptions,
+    matchedBom,
+    errors,
+    orderDateLocked = false,
+    values,
+    onCustomerChange,
+    onQtyChange,
+    onOrderDateChange,
+    onDeliverDateChange,
+    onBomCodeChange,
+    onRemarkChange,
+}: {
+    customerOptions: Array<{ value: string; label: string }>;
+    matchedBom: Bom | undefined;
+    errors: Record<string, string>;
+    orderDateLocked?: boolean;
+    values: OrderFormValues;
+    onCustomerChange: (code: string) => void;
+    onQtyChange: (value: string) => void;
+    onOrderDateChange: (value: string) => void;
+    onDeliverDateChange: (value: string) => void;
+    onBomCodeChange: (value: string) => void;
+    onRemarkChange: (value: string) => void;
+}) {
+    return (
+        <div className="flex flex-col gap-5">
+            <fieldset className="rounded-panel border border-line p-4">
+                <legend className="px-1.5 text-13 font-semibold text-primary-strong">① 客户与交付</legend>
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <SearchSelect
+                        label="客户"
+                        required
+                        error={errors.customerCode}
+                        value={values.customerCode}
+                        onChange={onCustomerChange}
+                        options={customerOptions}
+                    />
+                    <TextField
+                        label="订单数量（个）"
+                        required
+                        inputMode="numeric"
+                        placeholder="如 2400"
+                        error={errors.qty}
+                        value={values.qty}
+                        onChange={event => onQtyChange(event.target.value.replace(/\D/g, ""))}
+                    />
+                    <DateField
+                        label="下单日期"
+                        error={errors.orderDate}
+                        required
+                        disabled={orderDateLocked}
+                        value={values.orderDate}
+                        onChange={event => onOrderDateChange(event.target.value)}
+                    />
+                    <DateField
+                        label="交货日期"
+                        required
+                        error={errors.deliverDate}
+                        value={values.deliverDate}
+                        onChange={event => onDeliverDateChange(event.target.value)}
+                    />
+                    {orderDateLocked && (
+                        <p className="text-13 text-subtle sm:col-span-2">下单日期计入订单号，创建后不可修改。</p>
+                    )}
+                </div>
+            </fieldset>
+
+            <fieldset className="rounded-panel border border-line p-4">
+                <legend className="px-1.5 text-13 font-semibold text-primary-strong">② BOM 编码</legend>
+                <div className="flex flex-col gap-3">
+                    <TextField
+                        label="BOM 编码"
+                        required
+                        placeholder="如 KW042"
+                        error={errors.bom}
+                        value={values.bomCode}
+                        onChange={event => onBomCodeChange(event.target.value)}
+                    />
+                    {/* 输入即反馈：命中回显成品档案即完成选择；失配仅中性提示，提交时才拦截报错 */}
+                    {values.bomCode.trim() && !matchedBom && (
+                        <p className="text-13 text-muted" aria-live="polite">
+                            未找到编码「{values.bomCode.trim()}」对应的 BOM，请到「物料与BOM」核对
+                        </p>
+                    )}
+                    {matchedBom && (
+                        <div
+                            className="rounded-btn border border-primary-border bg-primary-soft/70 px-3.5 py-3"
+                            aria-live="polite"
+                        >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="tnum text-14 font-semibold text-primary-strong">
+                                    {matchedBom.code}
+                                </span>
+                                <span className="rounded-full bg-surface px-2 py-1 text-12 font-medium text-success">
+                                    已匹配
+                                </span>
+                            </div>
+                            <p className="mt-1 text-13 text-td">{matchedBom.name}</p>
+                            <p className="mt-1 wrap-break-word text-12 text-muted">{matchedBom.spec}</p>
+                        </div>
+                    )}
+                </div>
+            </fieldset>
+
+            <fieldset className="rounded-panel border border-line p-4">
+                <legend className="px-1.5 text-13 font-semibold text-primary-strong">③ 订单备注</legend>
+                <TextArea
+                    label="备注"
+                    placeholder="选填"
+                    value={values.remark}
+                    onChange={event => onRemarkChange(event.target.value)}
+                />
+            </fieldset>
+        </div>
+    );
+}
+
+/* 客户下拉选项：快照客户 +（编辑回显防御）订单当前客户不在快照时补占位，保证回显不空 */
+const orderCustomerOptions = (customers: Customer[], order?: Order) => {
+    const options = customers.map(customer => ({
+        value: customer.code,
+        label: `${customer.name}（${customer.code}）`,
+    }));
+    if (order && order.customerCode && !customers.some(customer => customer.code === order.customerCode)) {
+        options.push({ value: order.customerCode, label: `${order.customer}（${order.customerCode}）` });
+    }
+    return options;
+};
+
+/* BOM 编码命中（容错首尾空格与大小写）：编码在物料与BOM建档时已生成，按编码回捞档案 */
+const matchBomByCode = (boms: Bom[], code: string): Bom | undefined => {
+    const normalized = code.trim().toLowerCase();
+    return normalized ? boms.find(bom => bom.code.toLowerCase() === normalized) : undefined;
+};
+
+/* 订单表单共校验（客户/数量/交期/BOM）：新建要求下单日期必填；编辑的 orderDate
+ * 锁定不可改。requireBomMatch=false 用于 BOM 未改动的编辑保存——快照缓存滞后
+ * 未命中原编码时按原编码同值上送（后端视为未变更），不被匹配校验拦住 */
+const orderFormErrors = (
+    values: OrderFormValues,
+    matchedBom: Bom | undefined,
+    flags: { requireOrderDate?: boolean; requireBomMatch?: boolean } = {},
+): Record<string, string> => {
+    const errors: Record<string, string> = {};
+    if (flags.requireOrderDate && !values.orderDate) {
+        errors.orderDate = "请选择下单日期";
+    }
+    if (!values.customerCode) errors.customerCode = "请选择客户";
+    if (!values.qty || Number(values.qty) <= 0) errors.qty = "请填写订单数量";
+    if (!values.deliverDate) errors.deliverDate = "请选择交货日期";
+    if (!values.bomCode.trim()) errors.bom = "请输入 BOM 编码";
+    else if (flags.requireBomMatch !== false && !matchedBom) errors.bom = "未找到该 BOM 编码，请核对";
+    return errors;
+};
+
 /* 新建销售订单弹窗（三步表单：客户与交付 → BOM 编码 → 备注） */
 export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     const snap = useSnap();
     const createOrder = useCreateOrder();
     const toast = useToast();
-    const customers = snap.customers;
     const boms = snap.boms;
 
-    const [customerCode, setCustomerCode] = useState("");
-    const [qty, setQty] = useState("");
-    const [orderDate, setOrderDate] = useState(todayIso);
-    const [deliverDate, setDeliverDate] = useState("");
-    const [bomCode, setBomCode] = useState("");
-    const [remark, setRemark] = useState("");
+    const [values, setValues] = useState<OrderFormValues>({
+        customerCode: "",
+        qty: "",
+        orderDate: todayIso(),
+        deliverDate: "",
+        bomCode: "",
+        remark: "",
+    });
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     /* 用户改动某字段即清除该字段的报错，避免补填后验证词残留 */
     const clearError = (key: string) => setErrors(current => ({ ...current, [key]: "" }));
-
-    const customerOptions = useMemo(
-        () =>
-            customers.map(customer => ({
-                value: customer.code,
-                label: `${customer.name}（${customer.code}）`,
-            })),
-        [customers],
-    );
-    /* 输入即解析：编码在物料与BOM建档时已生成，这里按编码回捞档案（容错首尾空格与大小写） */
-    const matchedBom = useMemo(() => {
-        const code = bomCode.trim().toLowerCase();
-        return code ? boms.find(bom => bom.code.toLowerCase() === code) : undefined;
-    }, [boms, bomCode]);
-
-    const inputBomCode = (nextCode: string) => {
-        setBomCode(nextCode);
-        clearError("bom");
+    /* 报错键沿用既有约定（BOM 字段的键为 "bom"），不与表单值键名一一对应 */
+    const patch = (part: Partial<OrderFormValues>, errorKey?: string) => {
+        setValues(current => ({ ...current, ...part }));
+        if (errorKey) {
+            clearError(errorKey);
+        }
     };
 
+    const customerOptions = useMemo(() => orderCustomerOptions(snap.customers), [snap.customers]);
+    /* 输入即解析：编码在物料与BOM建档时已生成，这里按编码回捞档案（容错首尾空格与大小写） */
+    const matchedBom = useMemo(() => matchBomByCode(boms, values.bomCode), [boms, values.bomCode]);
+
     const reset = () => {
-        setCustomerCode("");
-        setQty("");
-        setOrderDate(todayIso());
-        setDeliverDate("");
-        setBomCode("");
-        setRemark("");
+        setValues({
+            customerCode: "",
+            qty: "",
+            orderDate: todayIso(),
+            deliverDate: "",
+            bomCode: "",
+            remark: "",
+        });
         setErrors({});
     };
 
     const submit = () => {
         if (createOrder.isPending) return;
-        const nextErrors: Record<string, string> = {};
-        if (!orderDate) nextErrors.orderDate = "请选择下单日期";
-        if (!customerCode) nextErrors.customerCode = "请选择客户";
-        if (!qty || Number(qty) <= 0) nextErrors.qty = "请填写订单数量";
-        if (!deliverDate) nextErrors.deliverDate = "请选择交货日期";
-        if (!bomCode.trim()) nextErrors.bom = "请输入 BOM 编码";
-        else if (!matchedBom) nextErrors.bom = "未找到该 BOM 编码，请核对";
+        const nextErrors = orderFormErrors(values, matchedBom, { requireOrderDate: true });
         setErrors(nextErrors);
         if (Object.keys(nextErrors).length > 0) {
             focusFirstInvalid();
@@ -148,12 +304,12 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
 
         createOrder.mutate(
             {
-                customerCode,
+                customerCode: values.customerCode,
                 bomCode: matchedBom!.code,
-                qty: Number(qty),
-                deliverDate,
-                orderDate,
-                remark,
+                qty: Number(values.qty),
+                deliverDate: values.deliverDate,
+                orderDate: values.orderDate,
+                remark: values.remark,
             },
             {
                 onSuccess: () => {
@@ -183,110 +339,27 @@ export function NewOrderModal({ open, onClose }: { open: boolean; onClose: () =>
                 </>
             }
         >
-            <div className="flex flex-col gap-5">
-                <fieldset className="rounded-panel border border-line p-4">
-                    <legend className="px-1.5 text-13 font-semibold text-primary-strong">① 客户与交付</legend>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <SearchSelect
-                            label="客户"
-                            required
-                            error={errors.customerCode}
-                            value={customerCode}
-                            onChange={code => {
-                                setCustomerCode(code);
-                                clearError("customerCode");
-                            }}
-                            options={customerOptions}
-                        />
-                        <TextField
-                            label="订单数量（个）"
-                            required
-                            inputMode="numeric"
-                            placeholder="如 2400"
-                            error={errors.qty}
-                            value={qty}
-                            onChange={event => {
-                                setQty(event.target.value.replace(/\D/g, ""));
-                                clearError("qty");
-                            }}
-                        />
-                        <DateField
-                            label="下单日期"
-                            error={errors.orderDate}
-                            required
-                            value={orderDate}
-                            onChange={event => {
-                                setOrderDate(event.target.value);
-                                clearError("orderDate");
-                            }}
-                        />
-                        <DateField
-                            label="交货日期"
-                            required
-                            error={errors.deliverDate}
-                            value={deliverDate}
-                            onChange={event => {
-                                setDeliverDate(event.target.value);
-                                clearError("deliverDate");
-                            }}
-                        />
-                    </div>
-                </fieldset>
-
-                <fieldset className="rounded-panel border border-line p-4">
-                    <legend className="px-1.5 text-13 font-semibold text-primary-strong">② BOM 编码</legend>
-                    <div className="flex flex-col gap-3">
-                        <TextField
-                            label="BOM 编码"
-                            required
-                            placeholder="如 KW042"
-                            error={errors.bom}
-                            value={bomCode}
-                            onChange={event => inputBomCode(event.target.value)}
-                        />
-                        {/* 输入即反馈：命中回显成品档案即完成选择；失配仅中性提示，提交时才拦截报错 */}
-                        {bomCode.trim() && !matchedBom && (
-                            <p className="text-13 text-muted" aria-live="polite">
-                                未找到编码「{bomCode.trim()}」对应的 BOM，请到「物料与BOM」核对
-                            </p>
-                        )}
-                        {matchedBom && (
-                            <div
-                                className="rounded-btn border border-primary-border bg-primary-soft/70 px-3.5 py-3"
-                                aria-live="polite"
-                            >
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <span className="tnum text-14 font-semibold text-primary-strong">
-                                        {matchedBom.code}
-                                    </span>
-                                    <span className="rounded-full bg-surface px-2 py-1 text-12 font-medium text-success">
-                                        已匹配
-                                    </span>
-                                </div>
-                                <p className="mt-1 text-13 text-td">{matchedBom.name}</p>
-                                <p className="mt-1 wrap-break-word text-12 text-muted">{matchedBom.spec}</p>
-                            </div>
-                        )}
-                    </div>
-                </fieldset>
-
-                <fieldset className="rounded-panel border border-line p-4">
-                    <legend className="px-1.5 text-13 font-semibold text-primary-strong">③ 订单备注</legend>
-                    <TextArea
-                        label="备注"
-                        placeholder="选填"
-                        value={remark}
-                        onChange={event => setRemark(event.target.value)}
-                    />
-                </fieldset>
-            </div>
+            <OrderFormBody
+                customerOptions={customerOptions}
+                matchedBom={matchedBom}
+                errors={errors}
+                values={values}
+                onCustomerChange={code => patch({ customerCode: code }, "customerCode")}
+                onQtyChange={value => patch({ qty: value }, "qty")}
+                onOrderDateChange={value => patch({ orderDate: value }, "orderDate")}
+                onDeliverDateChange={value => patch({ deliverDate: value }, "deliverDate")}
+                onBomCodeChange={value => patch({ bomCode: value }, "bom")}
+                onRemarkChange={value => patch({ remark: value })}
+            />
         </Modal>
     );
 }
 
-/* 编辑销售订单弹窗：已发货（累计出库>0）订单数量与交期锁定、仅可改备注。
- * 业务上没有"取消订单"动作：一件未发不要了直接删除（超级管理员）；发过货
- * 不要了直接归档结案（超级管理员）——欠量随归档关闭 */
+/* 编辑销售订单弹窗：一件未发（无有效出库且无未删出库单，与删除同口径）的订单
+ * 可整单修改——复用新建表单改客户/BOM/数量/交期/备注，仅下单日期锁定（计入订单号）；
+ * 发过货（累计出库>0）订单数量与交期锁定、仅可改备注。业务上没有"取消订单"动作：
+ * 一件未发不要了直接删除（超级管理员）；发过货不要了直接归档结案（超级管理员）
+ * ——欠量随归档关闭 */
 function EditOrderModal({
     order,
     hasShipmentLedger,
@@ -297,33 +370,65 @@ function EditOrderModal({
     onClose: () => void;
 }) {
     const { can } = useApp();
+    const snap = useSnap();
     const updateOrder = useUpdateOrder();
     const deleteOrder = useDeleteOrder();
     const archiveOrder = useArchiveOrder();
     const toast = useToast();
-    const [qty, setQty] = useState(String(order.qty));
-    const [deliverDate, setDeliverDate] = useState(order.deliverDate);
-    const [remark, setRemark] = useState(order.remark);
+    const [values, setValues] = useState<OrderFormValues>({
+        customerCode: order.customerCode,
+        qty: String(order.qty),
+        orderDate: order.orderDate,
+        deliverDate: order.deliverDate,
+        bomCode: order.bomCode,
+        remark: order.remark,
+    });
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [confirmArchive, setConfirmArchive] = useState(false);
     const [archiveRemark, setArchiveRemark] = useState("");
     /* 已发货订单锁数量与交期（与后端口径一致），仅备注可改 */
     const locked = order.outbound > 0;
-    const remarkDirty = remark !== order.remark;
+    /* 整单可改：一件未发且无未删除出库单（含已作废），与删除同口径——这种订单
+     * 没有任何发货事实，改客户/BOM 与重新建单等价，可放心修 */
+    const fullEdit = order.outbound === 0 && !hasShipmentLedger;
     /* 可见出库单（含已作废但未删除）仍需先处理；已软删除的出库单不再阻止订单删除。 */
-    const canDelete = can("orders:delete") && order.outbound === 0 && !hasShipmentLedger;
+    const canDelete = can("orders:delete") && fullEdit;
     /* 归档（仅超级管理员）：发过货的订单（已完成/部分发货）不要了直接归档结案；
      * 一件未发不归档，直接删除 */
     const canArchive = can("orders:archive") && order.outbound > 0;
+    const customerOptions = useMemo(() => orderCustomerOptions(snap.customers, order), [snap.customers, order]);
+    const matchedBom = useMemo(() => matchBomByCode(snap.boms, values.bomCode), [snap.boms, values.bomCode]);
+    const patch = (part: Partial<OrderFormValues>, errorKey?: string) => {
+        setValues(current => ({ ...current, ...part }));
+        if (errorKey) {
+            setErrors(current => ({ ...current, [errorKey]: "" }));
+        }
+    };
+    /* BOM 是否被改动：以命中码比对（大小写差异不误判）；未命中按原文比对——
+     * BOM 列表缓存滞后未命中原编码时不算改动，保存按原编码同值上送 */
+    const bomDirty = (matchedBom?.code ?? values.bomCode.trim()) !== order.bomCode;
+    /* 任何模式都要求至少一处改动才提供保存（避免无意义的版本推进与空变更日志） */
+    const dirty =
+        values.customerCode !== order.customerCode ||
+        bomDirty ||
+        Number(values.qty) !== order.qty ||
+        values.deliverDate !== order.deliverDate ||
+        values.remark !== order.remark;
 
     const submit = () => {
-        const nextErrors: Record<string, string> = {};
-        if (!locked) {
-            if (!qty || Number(qty) <= 0) nextErrors.qty = "请填写订单数量";
-            if (Number(qty) < order.outbound) nextErrors.qty = `新数量不能低于累计已发 ${order.outbound} 个`;
-            if (!deliverDate) nextErrors.deliverDate = "请选择交货日期";
-        }
+        if (updateOrder.isPending) return;
+        const nextErrors: Record<string, string> = fullEdit
+            ? // 整单模式：与新建同套校验；BOM 未改动时免匹配（缓存滞后不拦保存）
+              orderFormErrors(values, matchedBom, { requireBomMatch: bomDirty })
+            : locked
+              ? {}
+              : {
+                    ...orderFormErrors(values, matchedBom, { requireBomMatch: false }),
+                    ...(Number(values.qty) < order.outbound
+                        ? { qty: `新数量不能低于累计已发 ${order.outbound} 个` }
+                        : {}),
+                };
         setErrors(nextErrors);
         if (Object.keys(nextErrors).length > 0) {
             focusFirstInvalid();
@@ -333,9 +438,19 @@ function EditOrderModal({
             {
                 orderNo: order.orderNo,
                 expectedVersion: order.version,
-                // 已发货订单数量/交期不可改，不上送以免触发后端锁定校验
-                ...(locked ? {} : { qty: Number(qty), deliverDate }),
-                remark,
+                // 已发货订单数量/交期不可改，不上送以免触发后端锁定校验；
+                // 整单模式客户/BOM/数量/交期随备注同送（同值后端视为未变更）
+                ...(fullEdit
+                    ? {
+                          customerCode: values.customerCode,
+                          bomCode: matchedBom?.code ?? order.bomCode,
+                          qty: Number(values.qty),
+                          deliverDate: values.deliverDate,
+                      }
+                    : locked
+                      ? {}
+                      : { qty: Number(values.qty), deliverDate: values.deliverDate }),
+                remark: values.remark,
             },
             {
                 onSuccess: () => {
@@ -380,7 +495,7 @@ function EditOrderModal({
             onClose={onClose}
             title="编辑销售订单"
             subtitle={`${order.orderNo} · ${order.customer}`}
-            width={520}
+            width={fullEdit ? 640 : 520}
             footer={
                 <>
                     <div className="mr-auto flex flex-wrap items-center gap-1">
@@ -406,44 +521,61 @@ function EditOrderModal({
                     <Button size="sm" variant="secondary" onClick={onClose}>
                         取消
                     </Button>
-                    <Button size="sm" disabled={updateOrder.isPending || (locked && !remarkDirty)} onClick={submit}>
+                    <Button size="sm" disabled={updateOrder.isPending || !dirty} onClick={submit}>
                         {updateOrder.isPending ? "正在提交…" : "保存修改"}
                     </Button>
                 </>
             }
         >
-            <div className="grid gap-3 sm:grid-cols-2">
-                <TextField
-                    label="订单数量（个）"
-                    required
-                    inputMode="numeric"
-                    value={qty}
-                    error={errors.qty}
-                    disabled={locked}
-                    onChange={event => setQty(event.target.value.replace(/\D/g, ""))}
+            {fullEdit ? (
+                <OrderFormBody
+                    customerOptions={customerOptions}
+                    matchedBom={matchedBom}
+                    errors={errors}
+                    orderDateLocked
+                    values={values}
+                    onCustomerChange={code => patch({ customerCode: code }, "customerCode")}
+                    onQtyChange={value => patch({ qty: value }, "qty")}
+                    /* 下单日期锁定展示（计入订单号），不会触发变更回调 */
+                    onOrderDateChange={() => {}}
+                    onDeliverDateChange={value => patch({ deliverDate: value }, "deliverDate")}
+                    onBomCodeChange={value => patch({ bomCode: value }, "bom")}
+                    onRemarkChange={value => patch({ remark: value })}
                 />
-                <DateField
-                    label="交货日期"
-                    required
-                    error={errors.deliverDate}
-                    value={deliverDate}
-                    disabled={locked}
-                    onChange={event => setDeliverDate(event.target.value)}
-                />
-                <div className="sm:col-span-2">
-                    <TextArea label="订单备注" value={remark} onChange={event => setRemark(event.target.value)} />
+            ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <TextField
+                        label="订单数量（个）"
+                        required
+                        inputMode="numeric"
+                        value={values.qty}
+                        error={errors.qty}
+                        disabled={locked}
+                        onChange={event => patch({ qty: event.target.value.replace(/\D/g, "") }, "qty")}
+                    />
+                    <DateField
+                        label="交货日期"
+                        required
+                        error={errors.deliverDate}
+                        value={values.deliverDate}
+                        disabled={locked}
+                        onChange={event => patch({ deliverDate: event.target.value }, "deliverDate")}
+                    />
+                    <div className="sm:col-span-2">
+                        <TextArea
+                            label="订单备注"
+                            value={values.remark}
+                            onChange={event => patch({ remark: event.target.value })}
+                        />
+                    </div>
+                    {locked && (
+                        <p className="text-13 text-subtle sm:col-span-2">
+                            该订单累计已发 {order.outbound} 个，数量与交货日期不可修改，仅可修改备注。
+                        </p>
+                    )}
                 </div>
-                {locked && (
-                    <p className="text-13 text-subtle sm:col-span-2">
-                        该订单累计已发 {order.outbound} 个，数量与交货日期不可修改，仅可修改备注。
-                    </p>
-                )}
-                {canDelete && (
-                    <p className="text-13 text-subtle sm:col-span-2">
-                        该订单一件未发，可由超级管理员删除；删除前需二次确认。
-                    </p>
-                )}
-            </div>
+            )}
+            {canDelete && <p className="text-13 text-subtle">该订单一件未发，可由超级管理员删除；删除前需二次确认。</p>}
             {confirmDelete && (
                 <Modal
                     open

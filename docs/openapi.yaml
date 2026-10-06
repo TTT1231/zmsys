@@ -150,7 +150,7 @@ paths:
             tags: [orders]
             operationId: updateOrder
             summary: 修改销售订单
-            description: 权限 `orders:edit`。未发货订单可改数量/交货日期/备注，新数量不得小于该订单有效出库净额；已发货（有效出库净额 > 0）订单数量与交货日期锁定，仅可修改备注；已归档订单不可修改。删除走专用端点 POST /orders/{orderNo}/delete，归档走 POST /orders/{orderNo}/archive。
+            description: 权限 `orders:edit`。未发货订单可改数量/交货日期/备注，新数量不得小于该订单有效出库净额；已发货（有效出库净额 > 0）订单数量与交货日期锁定，仅可修改备注；已归档订单不可修改。客户与 BOM 仅在净出库为 0 且无任何未删除出库单（含已作废，与删除同口径）时可改：换 BOM 按新档案重冻名称/型号/规格快照，换客户刷新名称快照；同值上送视为未变更（不触发守卫、不重冻快照）。下单日期计入订单号不可改。删除走专用端点 POST /orders/{orderNo}/delete，归档走 POST /orders/{orderNo}/archive。
             parameters:
                 - $ref: "#/components/parameters/OrderNo"
             requestBody:
@@ -1340,6 +1340,8 @@ components:
             minProperties: 2
             properties:
                 expectedVersion: { type: integer, minimum: 1 }
+                customerCode: { type: string, pattern: "^CUS-[0-9]{4,}$", description: 仅净出库为 0 且无未删除出库单时可改；null 视为未提供 }
+                bomCode: { type: string, minLength: 1, maxLength: 32, description: 仅净出库为 0 且无未删除出库单时可改，服务端重冻快照；null 视为未提供 }
                 qty: { type: integer, minimum: 1 }
                 deliverDate: { type: string, format: date }
                 remark: { type: string, maxLength: 2000 }

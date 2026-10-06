@@ -36,18 +36,21 @@ interface FieldSpec<K extends string> {
     format?: (value: unknown) => string | null;
 }
 
-/** 订单快照字段目录（orderSnapshot 同构）：label 中文映射；rowVersion 等技术字段不在目录
- *  （customer 关联字段不在 changeLog 的 before/after 内，编辑卡片不展示客户） */
+/** 订单快照字段目录（orderSnapshot 同构）：label 中文映射；rowVersion 等技术字段不在目录。
+ * customer（名称快照）随"编辑换客户"入 before/after——编辑卡片可展示客户变更
+ * （存量历史行缺键时 asText 判 null 自动跳过，不渲染该行） */
 const ORDER_FIELDS: ReadonlyArray<FieldSpec<keyof OrderSnapshotCore>> = [
     { key: "qty", label: "订单数量", format: qtyText },
     { key: "orderDate", label: "下单日期" },
     { key: "deliverDate", label: "交货日期" },
     { key: "remark", label: "备注" },
+    { key: "customer", label: "客户" },
     {
         key: "lifecycleStatus",
         label: "订单状态",
         format: value => (value === "ACTIVE" ? "进行中" : value === "ARCHIVED" ? "已归档" : asText(value)),
     },
+    { key: "bomCode", label: "BOM 编码" },
     { key: "bomName", label: "成品名称" },
     { key: "bomModel", label: "型号" },
 ];

@@ -9,12 +9,12 @@ import { formatDateColumn, toDateColumn } from "../common/datetime";
 import { bomItemsSnapshotOf } from "../common/bom-display";
 import type { ExpectedVersionDto } from "../common/dto/expected-version.dto";
 import { assertVersionMatches, lockRowForWrite, lockRowsById } from "../domain/concurrency";
-import { outboundNetOf, outboundQtyByOrderMap } from "../domain/inventory";
+import { outboundNetOf, outboundQtyByOrderMap, visibleShipmentCountOf } from "../domain/inventory";
 import { recordOpLog } from "../domain/op-log";
 import type { OrderSnapshotCore } from "../domain/snapshots";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
 import type { AuthUser } from "../common/types/auth-user";
-import type { BomTable, SalesOrderTable } from "../generated/prisma/client";
+import type { BomTable, CustomTable, SalesOrderTable } from "../generated/prisma/client";
 import type { Order } from "./types";
 import type { CreateOrderDto } from "./dto/create-order.dto";
 import type { UpdateOrderDto } from "./dto/update-order.dto";
@@ -122,9 +122,7 @@ export class OrdersService {
                 }
                 // BOM 快照冻结（db-scheme.md §6.1）：明细取建档冻结行（position 排序），
                 // modelCode/spec 由其派生；下单后目录变更不影响本订单与打印
-                const bomSnapshot = bomItemsSnapshotOf(
-                    await tx.bomItem.findMany({ where: { bomId: bom.id }, orderBy: { position: "asc" } }),
-                );
+                const bomSnapshot = await this.freezeBomSnapshot(tx, bom.id);
 
                 const now = new Date();
                 const id = this.snowflake.next();
@@ -158,7 +156,11 @@ export class OrdersService {
                         afterVersion: created.rowVersion,
                         createdAt: now,
                         requestKey: this.idempotency.requestKey(BigInt(actor.id), CREATE_OPERATION_KEY, key),
-                        afterJson: this.orderSnapshot(created),
+                        afterJson: this.orderSnapshot({
+                            ...created,
+                            customer: { customerCode: customer.customerCode },
+                            bom: { bomCode: bom.bomCode },
+                        }),
                     },
                 });
                 await recordOpLog(tx, this.snowflake, actor, {
@@ -199,21 +201,45 @@ export class OrdersService {
 
     /**
      * 修改销售订单：乐观锁 + 已归档不可改；发过货（有效出库净额 > 0）
-     * 的订单数量与交货日期锁定，仅可改备注（db-scheme.md §6.1）。锁序：BOM → 订单。
+     * 的订单数量与交货日期锁定，仅可改备注（db-scheme.md §6.1）。
+     * 客户与 BOM 仅在净出库为 0 且无未删除出库单（与删除同口径）时可改，
+     * 改 BOM 重冻建档快照、改客户刷新名称快照；同值上送视为未变更，
+     * 不触发守卫也不重冻。锁序：BOM → 订单（换 BOM 时新旧 BOM id 升序同锁）。
      */
     async updateOrder(orderNo: string, dto: UpdateOrderDto, actor: AuthUser): Promise<Order> {
-        if (dto.qty === undefined && dto.deliverDate === undefined && dto.remark === undefined) {
-            throw new BadRequestException("至少修改数量、交货日期或备注之一");
+        if (
+            dto.customerCode === undefined &&
+            dto.bomCode === undefined &&
+            dto.qty === undefined &&
+            dto.deliverDate === undefined &&
+            dto.remark === undefined
+        ) {
+            throw new BadRequestException("至少修改客户、BOM、数量、交货日期或备注之一");
         }
         return this.txRunner.run(async (tx: Tx) => {
             const now = new Date();
-            const current = await this.lockOrderForWrite(tx, orderNo);
+            // 换 BOM 的新行已在锁序内锁定并按 id 重读（含品类）；漂移校验收口在锁内
+            const { row: current, nextBom } = await this.lockOrderForWrite(tx, orderNo, dto.bomCode);
             assertVersionMatches(current.rowVersion, dto.expectedVersion, "订单已被其他人修改，请刷新后重试");
             if (current.lifecycleStatus === "ARCHIVED") {
                 throw new ConflictException("订单已归档，不可修改");
             }
 
+            // 是否真实变更一律以锁定行当前关联码比对：同值 = 无变更，不触发下述守卫
+            const bomChanged = dto.bomCode !== undefined && dto.bomCode !== current.bom.bomCode;
+            const customerChanged =
+                dto.customerCode !== undefined && dto.customerCode !== current.customer.customerCode;
+
             const outbound = await outboundNetOf(tx, current.id);
+            if (bomChanged || customerChanged) {
+                if (outbound > 0) {
+                    throw new ConflictException("订单已有出库记录，客户与 BOM 不可修改，仅可修改备注");
+                }
+                // 可见出库单（含已作废未删除）同理阻止：口径与删除一致（visibleShipmentCountOf）
+                if ((await visibleShipmentCountOf(tx, current.id)) > 0) {
+                    throw new ConflictException("请先作废并删除关联出库单，再修改客户与 BOM");
+                }
+            }
             if (outbound > 0 && (dto.qty !== undefined || dto.deliverDate !== undefined)) {
                 throw new ConflictException("订单已有出库记录，数量与交货日期不可修改，仅可修改备注");
             }
@@ -221,9 +247,31 @@ export class OrdersService {
                 throw new ConflictException(`新数量不得小于该订单有效出库净额（当前已发 ${outbound}）`);
             }
 
+            // 快照按新 BOM 建档重冻（与 createOrder 同口径）；客户解析在守卫后（同值不重冻）
+            const nextBomSnapshot = bomChanged ? await this.freezeBomSnapshot(tx, nextBom!.id) : undefined;
+            let nextCustomer: CustomTable | undefined;
+            if (customerChanged) {
+                const customer = await tx.customTable.findUnique({ where: { customerCode: dto.customerCode! } });
+                if (!customer) {
+                    throw new NotFoundException("客户不存在");
+                }
+                nextCustomer = customer;
+            }
+
             const updated = await tx.salesOrderTable.update({
                 where: { id: current.id },
                 data: {
+                    ...(bomChanged
+                        ? {
+                              bomId: nextBom!.id,
+                              bomNameSnapshot: nextBom!.category.name,
+                              bomModelSnapshot: nextBomSnapshot!.modelCode,
+                              bomSpecSnapshot: nextBomSnapshot as unknown as Prisma.InputJsonValue,
+                          }
+                        : {}),
+                    ...(customerChanged
+                        ? { customerId: nextCustomer!.id, customerNameSnapshot: nextCustomer!.name }
+                        : {}),
                     ...(dto.qty !== undefined ? { qty: dto.qty } : {}),
                     ...(dto.deliverDate !== undefined ? { deliverDate: toDateColumn(dto.deliverDate) } : {}),
                     ...(dto.remark !== undefined ? { remark: dto.remark } : {}),
@@ -279,7 +327,7 @@ export class OrdersService {
             },
             async (tx: Tx, { idempotencyKey: key }) => {
                 const now = new Date();
-                const current = await this.lockOrderForWrite(tx, orderNo);
+                const { row: current } = await this.lockOrderForWrite(tx, orderNo);
                 assertVersionMatches(current.rowVersion, dto.expectedVersion, "订单已被其他人修改，请刷新后重试");
                 if (current.lifecycleStatus === "ARCHIVED") {
                     throw new ConflictException("订单已归档");
@@ -371,7 +419,7 @@ export class OrdersService {
             },
             async (tx: Tx) => {
                 const now = new Date();
-                const current = await this.lockOrderForWrite(tx, orderNo);
+                const { row: current } = await this.lockOrderForWrite(tx, orderNo);
                 assertVersionMatches(current.rowVersion, dto.expectedVersion, "订单已被其他人修改，请刷新后重试");
                 if (current.lifecycleStatus === "ARCHIVED") {
                     throw new ConflictException("订单已归档，不可删除");
@@ -380,10 +428,7 @@ export class OrdersService {
                 if (outbound > 0) {
                     throw new ConflictException("订单已有发货记录，不可删除");
                 }
-                const shipmentRefs = await tx.outboundShipment.count({
-                    where: { orderId: current.id },
-                });
-                if (shipmentRefs > 0) {
+                if ((await visibleShipmentCountOf(tx, current.id)) > 0) {
                     throw new ConflictException("请先作废并删除关联出库单，再删除订单");
                 }
 
@@ -438,12 +483,23 @@ export class OrdersService {
         );
     }
 
+    /** BOM 快照冻结：明细取建档冻结行（position 排序），modelCode/spec 由其派生——
+     *  新建与编辑换 BOM 重冻共用同一配方，避免两处快照形态漂移 */
+    private async freezeBomSnapshot(tx: Tx, bomId: bigint) {
+        return bomItemsSnapshotOf(await tx.bomItem.findMany({ where: { bomId }, orderBy: { position: "asc" } }));
+    }
+
     /**
-     * 按契约锁序锁定订单行（db-scheme.md §2：先 BOM 后订单）。订单的 BOM 引用不可变
-     * （编辑不接受换 BOM），先无锁读定位 bomId 再锁 BOM、锁订单，两次读之间 BOM 引用
-     * 漂移不构成竞争；READ COMMITTED 下锁定读返回最新已提交行。
+     * 按契约锁序锁定订单行（db-scheme.md §2）：id 升序锁修改前后的 BOM，再锁订单行。
+     * 先无锁读定位 bomId 并预检新 BOM（换 BOM 需要新旧两个），锁定读返回最新已提交行；
+     * 新 BOM 在锁定后按 id 重读（含品类，供快照重冻）。定位与锁定之间订单的 BOM 引用
+     * 漂移说明锁集不完整，统一在此拦截——编辑/归档/删除共享该锁集一致性校验。
      */
-    private async lockOrderForWrite(tx: Tx, orderNo: string): Promise<OrderRow> {
+    private async lockOrderForWrite(
+        tx: Tx,
+        orderNo: string,
+        nextBomCode?: string,
+    ): Promise<{ row: OrderRow; nextBom?: BomTable & { category: { name: string } } }> {
         const located = await tx.salesOrderTable.findUnique({
             where: { orderNo },
             select: { id: true, bomId: true },
@@ -451,8 +507,27 @@ export class OrdersService {
         if (!located) {
             throw new NotFoundException("订单不存在");
         }
-        await lockRowsById(tx, "bom_table", [located.bomId]);
-        return lockRowForWrite(
+        const peeked = nextBomCode
+            ? await tx.bomTable.findUnique({ where: { bomCode: nextBomCode }, select: { id: true } })
+            : undefined;
+        if (nextBomCode && !peeked) {
+            throw new NotFoundException("BOM 不存在");
+        }
+        // id 升序去重由 lockRowsById 统一完成（新旧同锁防死锁）
+        await lockRowsById(tx, "bom_table", [located.bomId, ...(peeked ? [peeked.id] : [])]);
+        let nextBom: (BomTable & { category: { name: string } }) | undefined;
+        if (peeked) {
+            const resolved = await tx.bomTable.findUnique({
+                where: { id: peeked.id },
+                include: { category: { select: { name: true } } },
+            });
+            if (!resolved) {
+                // 预检与锁定之间被软删（全局软删注入对已删行不可见）
+                throw new NotFoundException("BOM 不存在");
+            }
+            nextBom = resolved;
+        }
+        const row = await lockRowForWrite(
             tx,
             "sales_order_table",
             orderNo,
@@ -468,12 +543,21 @@ export class OrdersService {
                 }),
             "订单不存在",
         );
+        if (row.bomId !== located.bomId) {
+            throw new ConflictException("订单已被其他人修改，请刷新后重试");
+        }
+        return { row, nextBom };
     }
 
     /** 变更日志快照：行内业务字段（before/after 同构，便于审计比对）。
-        含归档时间与原因及 BOM 冻结快照：订单删除后 changeLog 与 BOM 行均可能
-        不复存在，删除事件的 op_log 是唯一留存，须能独立还原终态语境与建档时的成品形态 */
-    private orderSnapshot(order: SalesOrderTable): OrderSnapshotCore {
+        含归档时间与原因、客户名称与编码及 BOM 冻结快照：客户在编辑换客户时重冻，
+        BOM 在编辑换 BOM 时重冻；订单删除后 changeLog 与 BOM 行均可能不复存在，
+        删除事件的 op_log 是唯一留存，须能独立还原终态语境与建档时的成品形态。
+        customerCode 取自关联（无关联的调用点显式补传，如 createOrder 的 create 返回行）；
+        bomCode 同理——同品类换 BOM 时 bomName/bomModel 可能不变，审计行靠编码可见 */
+    private orderSnapshot(
+        order: SalesOrderTable & { customer?: { customerCode: string }; bom?: { bomCode: string } },
+    ): OrderSnapshotCore {
         return {
             orderNo: order.orderNo,
             qty: order.qty,
@@ -483,6 +567,9 @@ export class OrdersService {
             lifecycleStatus: order.lifecycleStatus,
             archivedAt: order.archivedAt ? order.archivedAt.toISOString() : null,
             archiveReason: order.archiveReason,
+            customer: order.customerNameSnapshot,
+            customerCode: order.customer?.customerCode ?? "",
+            bomCode: order.bom?.bomCode ?? "",
             bomName: order.bomNameSnapshot,
             bomModel: order.bomModelSnapshot,
             bomSpec: order.bomSpecSnapshot,
