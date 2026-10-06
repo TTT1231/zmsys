@@ -374,7 +374,6 @@ function EditOrderModal({
     const snap = useSnap();
     const updateOrder = useUpdateOrder();
     const deleteOrder = useDeleteOrder();
-    const archiveOrder = useArchiveOrder();
     const toast = useToast();
     const [values, setValues] = useState<OrderFormValues>({
         customerCode: order.customerCode,
@@ -387,7 +386,6 @@ function EditOrderModal({
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [confirmArchive, setConfirmArchive] = useState(false);
-    const [archiveRemark, setArchiveRemark] = useState("");
     /* 已发货订单锁数量与交期（与后端口径一致），仅备注可改 */
     const locked = order.outbound > 0;
     /* 整单可改：一件未发且无未删除出库单（含已作废），与删除同口径——这种订单
@@ -476,20 +474,6 @@ function EditOrderModal({
         );
     };
 
-    const submitArchive = () => {
-        if (archiveOrder.isPending) return;
-        archiveOrder.mutate(
-            { orderNo: order.orderNo, expectedVersion: order.version, reason: archiveRemark.trim() },
-            {
-                onSuccess: () => {
-                    toast.success(`订单 ${order.orderNo} 已归档，可在「归档订单」查看`);
-                    setConfirmArchive(false);
-                    onClose();
-                },
-            },
-        );
-    };
-
     return (
         <Modal
             open={!!order}
@@ -501,13 +485,9 @@ function EditOrderModal({
                 <>
                     <div className="mr-auto flex flex-wrap items-center gap-1">
                         {canArchive && (
-                            <button
-                                type="button"
-                                onClick={() => setConfirmArchive(true)}
-                                className="min-h-10 rounded-btn px-2 text-14 font-medium text-muted transition hover:bg-soft hover:text-td-strong"
-                            >
+                            <Button size="sm" icon="archive" onClick={() => setConfirmArchive(true)}>
                                 归档订单
-                            </button>
+                            </Button>
                         )}
                         {canDelete && (
                             <button
@@ -608,48 +588,83 @@ function EditOrderModal({
                 </Modal>
             )}
             {confirmArchive && (
-                <Modal
-                    open
-                    onClose={() => setConfirmArchive(false)}
-                    label="归档结案"
-                    title="归档销售订单"
-                    subtitle={`${order.orderNo} · ${order.customer}`}
-                    width={480}
-                    footer={
-                        <>
-                            <Button size="sm" variant="secondary" onClick={() => setConfirmArchive(false)}>
-                                取消
-                            </Button>
-                            <Button size="sm" disabled={archiveOrder.isPending} onClick={submitArchive}>
-                                {archiveOrder.isPending ? "正在归档…" : "确认归档"}
-                            </Button>
-                        </>
-                    }
-                >
-                    <div className="flex flex-col gap-3">
-                        <div className="flex items-start gap-3 rounded-panel border border-line bg-soft p-4">
-                            <Icon name="archive" size={20} className="mt-0.5 shrink-0 text-muted" />
-                            <div className="text-14 leading-6 text-td">
-                                即将归档订单 <span className="tnum font-semibold text-ink">{order.orderNo}</span>（
-                                {order.customer} · 订单 {num(order.qty)} 个 · 已发 {num(order.outbound)} 个）。
-                                <p className="mt-1 text-subtle">
-                                    归档即结案：订单将从销售订单列表移入「归档订单」，归档期间不可修改或删除。
-                                    {order.outbound > 0 && order.outbound < order.qty && " 剩余欠量不再安排交付。"}
-                                </p>
-                                <p className="mt-1 font-medium text-td-strong">
-                                    归档后仅归档操作人本人可回退（入口在归档订单的订单详情）。
-                                </p>
-                            </div>
-                        </div>
-                        <TextArea
-                            label="归档备注（选填）"
-                            placeholder="如：行情不好客户弃单"
-                            value={archiveRemark}
-                            onChange={event => setArchiveRemark(event.target.value.slice(0, 500))}
-                        />
-                    </div>
-                </Modal>
+                <ArchiveOrderConfirmModal
+                    order={order}
+                    onCancel={() => setConfirmArchive(false)}
+                    onArchived={onClose}
+                />
             )}
+        </Modal>
+    );
+}
+
+/* 归档确认弹窗：编辑弹窗入口的二次确认（结案提示 + 归档备注），
+   文案与提交口径集中一份维护，后续新增入口直接复用 */
+function ArchiveOrderConfirmModal({
+    order,
+    onCancel,
+    onArchived,
+}: {
+    order: Order;
+    onCancel: () => void;
+    onArchived: () => void;
+}) {
+    const archiveOrder = useArchiveOrder();
+    const toast = useToast();
+    const [remark, setRemark] = useState("");
+    const submit = () => {
+        if (archiveOrder.isPending) return;
+        archiveOrder.mutate(
+            { orderNo: order.orderNo, expectedVersion: order.version, reason: remark.trim() },
+            {
+                onSuccess: () => {
+                    toast.success(`订单 ${order.orderNo} 已归档，可在「归档订单」查看`);
+                    onArchived();
+                },
+            },
+        );
+    };
+    return (
+        <Modal
+            open
+            onClose={onCancel}
+            label="归档结案"
+            title="归档销售订单"
+            subtitle={`${order.orderNo} · ${order.customer}`}
+            width={480}
+            footer={
+                <>
+                    <Button size="sm" variant="secondary" onClick={onCancel}>
+                        取消
+                    </Button>
+                    <Button size="sm" disabled={archiveOrder.isPending} onClick={submit}>
+                        {archiveOrder.isPending ? "正在归档…" : "确认归档"}
+                    </Button>
+                </>
+            }
+        >
+            <div className="flex flex-col gap-3">
+                <div className="flex items-start gap-3 rounded-panel border border-line bg-soft p-4">
+                    <Icon name="archive" size={20} className="mt-0.5 shrink-0 text-muted" />
+                    <div className="text-14 leading-6 text-td">
+                        即将归档订单 <span className="tnum font-semibold text-ink">{order.orderNo}</span>（
+                        {order.customer} · 订单 {num(order.qty)} 个 · 已发 {num(order.outbound)} 个）。
+                        <p className="mt-1 text-subtle">
+                            归档即结案：订单将从销售订单列表移入「归档订单」，归档期间不可修改或删除。
+                            {order.outbound > 0 && order.outbound < order.qty && " 剩余欠量不再安排交付。"}
+                        </p>
+                        <p className="mt-1 font-medium text-td-strong">
+                            归档后仅归档操作人本人可回退（入口在归档订单的订单详情）。
+                        </p>
+                    </div>
+                </div>
+                <TextArea
+                    label="归档备注（选填）"
+                    placeholder="如：行情不好客户弃单"
+                    value={remark}
+                    onChange={event => setRemark(event.target.value.slice(0, 500))}
+                />
+            </div>
         </Modal>
     );
 }
