@@ -27,7 +27,9 @@ type OrderRow = SalesOrderTable & {
     archiver: { name: string } | null;
 };
 
-const mkBom = (overrides: Partial<BomTable> = {}): BomTable & { category: { name: string } } =>
+const mkBom = (
+    overrides: Partial<BomTable & { category: { name: string } }> = {},
+): BomTable & { category: { name: string } } =>
     ({
         id: 10n,
         bomCode: "ZMKW0001",
@@ -161,9 +163,10 @@ const createStore = (store: Store) => {
             ),
         },
         bomTable: {
+            // 按编码（预检）或按 id（锁后重读，lockOrderForWrite）双查询面
             findUnique: vi.fn(
-                async ({ where }: { where: { bomCode: string } }) =>
-                    store.boms.find(b => b.bomCode === where.bomCode) ?? null,
+                async ({ where }: { where: { bomCode?: string; id?: bigint } }) =>
+                    store.boms.find(b => (where.bomCode ? b.bomCode === where.bomCode : b.id === where.id)) ?? null,
             ),
         },
         bomItem: {
@@ -193,7 +196,8 @@ const createStore = (store: Store) => {
                     applied.rowVersion = store.orders[index].rowVersion + BigInt(patch.increment);
                 }
                 store.orders[index] = applied;
-                return applied;
+                // 真实 Prisma 会按 include 返回最新关联；此处等价重挂（换客户/BOM 后编码随之）
+                return withRelations(applied);
             }),
             delete: vi.fn(async ({ where }: { where: { id: bigint } }) => {
                 const index = store.orders.findIndex(o => o.id === where.id);
@@ -403,7 +407,7 @@ describe("OrdersService.updateOrder", () => {
             new NotFoundException("订单不存在"),
         );
         await expect(ctx.service.updateOrder("ZM260912001", { expectedVersion: 1 }, actor)).rejects.toThrow(
-            new BadRequestException("至少修改数量、交货日期或备注之一"),
+            new BadRequestException("至少修改客户、BOM、数量、交货日期或备注之一"),
         );
         await expect(ctx.service.updateOrder("ZM260912001", { expectedVersion: 3, qty: 10 }, actor)).rejects.toThrow(
             ConflictException,
@@ -442,6 +446,141 @@ describe("OrdersService.updateOrder", () => {
         const updated = await ctx.service.updateOrder("ZM260912001", { expectedVersion: 1, remark: "仅改备注" }, actor);
         expect(updated).toMatchObject({ version: 2, qty: 100, deliverDate: "2026-09-30", remark: "仅改备注" });
         expect(store.changeLogs.at(-1)).toMatchObject({ eventType: "UPDATE" });
+    });
+
+    /** 换客户/换 BOM 的种子：第二 BOM（含自己的建档明细）与第二客户 */
+    const seedSecondIdentity = () => {
+        store.boms.push(mkBom({ id: 11n, bomCode: "ZMKW0002", category: { name: "防水微动" } }));
+        store.bomItems.push({
+            bomId: 11n,
+            materialId: 3102n,
+            groupKey: "base",
+            groupName: "底座",
+            name: "三脚底座（带挡脚）",
+            position: 1,
+        });
+        store.customers.push(mkCustomer({ id: 901n, customerCode: "CUS-0901", name: "广州精密仪器" }));
+    };
+
+    it("未发货订单可换客户与 BOM：外键与名称/规格快照重冻、版本 +1、UPDATE 日志带前后客户", async () => {
+        seedSecondIdentity();
+        const updated = await ctx.service.updateOrder(
+            "ZM260912001",
+            {
+                expectedVersion: 1,
+                customerCode: "CUS-0901",
+                bomCode: "ZMKW0002",
+                qty: 80,
+                deliverDate: "2026-10-20",
+                remark: "换客户与 BOM",
+            },
+            actor,
+        );
+        expect(updated).toMatchObject({
+            version: 2,
+            customer: "广州精密仪器",
+            customerCode: "CUS-0901",
+            bomCode: "ZMKW0002",
+            qty: 80,
+            deliverDate: "2026-10-20",
+            remark: "换客户与 BOM",
+        });
+        const stored = store.orders[0]!;
+        expect(stored.customerId).toBe(901n);
+        expect(stored.bomId).toBe(11n);
+        expect(stored.customerNameSnapshot).toBe("广州精密仪器");
+        expect(stored.bomNameSnapshot).toBe("防水微动");
+        // BOM 明细按新建档重冻（与 createOrder 同口径）
+        expect(stored.bomSpecSnapshot).toMatchObject({
+            modelCode: "",
+            spec: "底座：三脚底座（带挡脚）",
+            items: [{ materialId: "3102", groupName: "底座", name: "三脚底座（带挡脚）", position: 1 }],
+        });
+        const log = store.changeLogs.at(-1) as {
+            beforeJson: Record<string, unknown>;
+            afterJson: Record<string, unknown>;
+        };
+        expect(log).toMatchObject({ eventType: "UPDATE", beforeVersion: 1n, afterVersion: 2n });
+        expect(log.beforeJson).toMatchObject({
+            customer: "深圳市智造电子",
+            customerCode: "CUS-0900",
+            bomName: "新微动",
+        });
+        expect(log.afterJson).toMatchObject({
+            customer: "广州精密仪器",
+            customerCode: "CUS-0901",
+            bomName: "防水微动",
+        });
+    });
+
+    it("同值客户/BOM 上送视为未变更：存在已作废出库单也不触发身份守卫", async () => {
+        store.shipments.push({ orderId: 500n, state: "VOIDED", deletedAt: null } as OutboundShipment);
+        const updated = await ctx.service.updateOrder(
+            "ZM260912001",
+            { expectedVersion: 1, customerCode: "CUS-0900", bomCode: "ZMKW0001", remark: "仅改备注" },
+            actor,
+        );
+        expect(updated).toMatchObject({
+            version: 2,
+            customerCode: "CUS-0900",
+            bomCode: "ZMKW0001",
+            remark: "仅改备注",
+        });
+        expect(store.orders[0]!.customerId).toBe(900n);
+        expect(store.orders[0]!.bomId).toBe(10n);
+    });
+
+    it("已发货订单客户与 BOM 锁定：携带变更 409，仅改备注放行", async () => {
+        seedSecondIdentity();
+        store.outboundNet.set(500n, 80);
+        await expect(
+            ctx.service.updateOrder(
+                "ZM260912001",
+                { expectedVersion: 1, customerCode: "CUS-0901", remark: "x" },
+                actor,
+            ),
+        ).rejects.toThrow(new ConflictException("订单已有出库记录，客户与 BOM 不可修改，仅可修改备注"));
+        await expect(
+            ctx.service.updateOrder("ZM260912001", { expectedVersion: 1, bomCode: "ZMKW0002" }, actor),
+        ).rejects.toThrow(new ConflictException("订单已有出库记录，客户与 BOM 不可修改，仅可修改备注"));
+        const updated = await ctx.service.updateOrder("ZM260912001", { expectedVersion: 1, remark: "仅改备注" }, actor);
+        expect(updated).toMatchObject({ version: 2, customerCode: "CUS-0900" });
+    });
+
+    it("存在未删除出库单（净额已归零）时换 BOM 409：与删除同口径", async () => {
+        seedSecondIdentity();
+        store.shipments.push({ orderId: 500n, state: "VOIDED", deletedAt: null } as OutboundShipment);
+        await expect(
+            ctx.service.updateOrder("ZM260912001", { expectedVersion: 1, bomCode: "ZMKW0002" }, actor),
+        ).rejects.toThrow(new ConflictException("请先作废并删除关联出库单，再修改客户与 BOM"));
+        // 出库单软删除后不再阻止
+        store.shipments[0]!.deletedAt = new Date();
+        const updated = await ctx.service.updateOrder(
+            "ZM260912001",
+            { expectedVersion: 1, bomCode: "ZMKW0002" },
+            actor,
+        );
+        expect(updated).toMatchObject({ version: 2, bomCode: "ZMKW0002" });
+    });
+
+    it("换 BOM 预检与换客户解析：未知编码 404（BOM 预检在守卫前，与新建同序）", async () => {
+        await expect(
+            ctx.service.updateOrder("ZM260912001", { expectedVersion: 1, bomCode: "ZMXXXX999" }, actor),
+        ).rejects.toThrow(new NotFoundException("BOM 不存在"));
+        await expect(
+            ctx.service.updateOrder("ZM260912001", { expectedVersion: 1, customerCode: "CUS-9999" }, actor),
+        ).rejects.toThrow(new NotFoundException("客户不存在"));
+        expect(store.orders[0]!.rowVersion).toBe(1n);
+    });
+
+    it("定位读与锁定间 BOM 引用漂移：409 刷新重试（锁集完整性兜底）", async () => {
+        ctx.tx.salesOrderTable.findUnique.mockImplementationOnce(
+            async () => ({ id: 500n, bomId: 999n }) as unknown as OrderRow,
+        );
+        await expect(
+            ctx.service.updateOrder("ZM260912001", { expectedVersion: 1, remark: "x" }, actor),
+        ).rejects.toThrow(new ConflictException("订单已被其他人修改，请刷新后重试"));
+        expect(ctx.tx.salesOrderTable.update).not.toHaveBeenCalled();
     });
 });
 

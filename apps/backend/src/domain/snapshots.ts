@@ -21,9 +21,14 @@ export type OrderSnapshotCore = {
     lifecycleStatus: string;
     archivedAt: string | null;
     archiveReason: string | null;
+    /** 客户名称/编码：建档冻结，编辑换客户时随行刷新（存量行可能缺键，读侧宽松判型） */
+    customer: string;
+    customerCode: string;
+    /** BOM 编码（关联码）：换 BOM 编辑的审计可见性——同品类换 BOM 时 bomName 不变，靠编码成行 */
+    bomCode: string;
     bomName: string;
     bomModel: string;
-    /** 订单建档冻结的 BOM 快照（items/modelCode/spec） */
+    /** 订单建档冻结的 BOM 快照（items/modelCode/spec）；编辑换 BOM 时重冻 */
     bomSpec: Prisma.JsonValue;
     rowVersion: number;
 };

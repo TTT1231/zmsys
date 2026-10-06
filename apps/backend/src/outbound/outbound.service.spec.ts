@@ -238,6 +238,7 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>) => {
         service: new OutboundService(prisma, snowflake, idempotency, sequence),
         idempotency,
         store,
+        tx,
     };
 };
 
@@ -268,6 +269,21 @@ describe("OutboundService.createOutbound", () => {
         await expect(service.createOutbound(shipInput, actor, ID_KEY)).rejects.toThrow(
             new ConflictException("库存可发量不足，请刷新后重试"),
         );
+    });
+
+    it("定位读与锁定间订单换 BOM 漂移：409 刷新重试，不按旧 bomId 记账", async () => {
+        // 订单编辑允许未发货单换 BOM：发货定位读与锁定之间引用可能漂移，
+        // 锁内比对不一致即拒绝（可发量与流水归属必须同源取锁内行）
+        store.stock.set(10n, 300);
+        const local = mkService(store);
+        local.tx.salesOrderTable.findUnique.mockImplementationOnce(
+            async () => ({ id: 500n, bomId: 999n }) as unknown as OrderRow,
+        );
+        await expect(local.service.createOutbound(shipInput, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException("订单已被其他人修改，请刷新后重试"),
+        );
+        expect(store.ledgers).toHaveLength(0);
+        expect(store.shipments).toHaveLength(0);
     });
 
     it("成功登记：单头/正向事件/状态日志/op_log 同事务，映射契约形态", async () => {

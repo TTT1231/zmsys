@@ -26,6 +26,16 @@ const BOM_ITEMS = [
     { groupKey: "button", groupName: "按钮", name: "7.6mm（常用装跌倒）", position: 2 },
 ];
 
+/** 恢复链专用 BOM（判重集合独立）：末段用例要在其上走完入库→作废→删除→清理→
+ *  删 BOM 全链，不能借用其它 BOM——并行套件会在任意 BOM 上留订单/库存残留
+ *  （引用计数不过滤订单状态），随机借用会时好时坏；集合须避开全部套件的
+ *  uk_bom_identity（含 boms.e2e 经 API 建档的单物料/支架组合） */
+const CHAIN_BOM_CODE = "ZME2E0006";
+const CHAIN_BOM_ITEMS = [
+    { groupKey: "base", groupName: "底座", name: "三脚底座（有挡脚）", position: 1 },
+    { groupKey: "button", groupName: "按钮", name: "8.0mm", position: 2 },
+];
+
 const inboundInput = (bomCode: string, qty: number) => ({
     bomCode,
     qty,
@@ -97,6 +107,62 @@ describe("成品出入库 (e2e)", () => {
         return mine?.outbound;
     };
 
+    /** 固定测试 BOM：存在则复用（重跑不撞唯一键）；明细按建档冻结快照造数 */
+    const ensureBom = async (
+        bomCode: string,
+        items: Array<{ groupKey: string; groupName: string; name: string; position: number }>,
+    ) => {
+        const existing = await prisma.bomTable.findUnique({ where: { bomCode } });
+        if (existing) {
+            return;
+        }
+        const category = await prisma.bomCategory.findUnique({ where: { categoryKey: "new-micro-switch" } });
+        const superUser = await prisma.sysUser.findUnique({ where: { account: "guojun" } });
+        const now = new Date();
+        const bomId = snowflake.next();
+        const materialIds = (
+            await Promise.all(
+                items.map(item =>
+                    prisma.materialItem.findFirst({
+                        where: {
+                            group: { name: item.groupName, category: { categoryKey: "new-micro-switch" } },
+                            name: item.name,
+                        },
+                        select: { id: true },
+                    }),
+                ),
+            )
+        ).map(row => row!.id);
+        await prisma.bomTable.create({
+            data: {
+                id: bomId,
+                bomCode,
+                categoryId: category!.id,
+                specHash: materialSetHash(
+                    category!.id,
+                    materialIds.map(id => ({ id: id.toString(), quantity: 1 })),
+                    "",
+                ),
+                requestKey: `e2e-bom-${bomCode}`,
+                createdBy: superUser!.id,
+                updatedBy: superUser!.id,
+                createdAt: now,
+            },
+        });
+        await prisma.bomItem.createMany({
+            data: items.map((item, index) => ({
+                id: snowflake.next(),
+                bomId,
+                materialId: materialIds[index]!,
+                groupKey: item.groupKey,
+                groupName: item.groupName,
+                name: item.name,
+                position: item.position,
+                createdAt: now,
+            })),
+        });
+    };
+
     beforeAll(async () => {
         const moduleFixture = await Test.createTestingModule({ imports: [AppModule] }).compile();
         app = moduleFixture.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
@@ -110,55 +176,8 @@ describe("成品出入库 (e2e)", () => {
         warehouseToken = await login(accountOf("wh01"));
         await createUser(accountOf("sales01"), "sales");
 
-        // 固定测试 BOM：存在则复用（重跑不撞唯一键）；明细按建档冻结快照造数
-        const existing = await prisma.bomTable.findUnique({ where: { bomCode: BOM_CODE } });
-        if (!existing) {
-            const category = await prisma.bomCategory.findUnique({ where: { categoryKey: "new-micro-switch" } });
-            const superUser = await prisma.sysUser.findUnique({ where: { account: "guojun" } });
-            const now = new Date();
-            const bomId = snowflake.next();
-            const materialIds = (
-                await Promise.all(
-                    BOM_ITEMS.map(item =>
-                        prisma.materialItem.findFirst({
-                            where: {
-                                group: { name: item.groupName, category: { categoryKey: "new-micro-switch" } },
-                                name: item.name,
-                            },
-                            select: { id: true },
-                        }),
-                    ),
-                )
-            ).map(row => row!.id);
-            await prisma.bomTable.create({
-                data: {
-                    id: bomId,
-                    bomCode: BOM_CODE,
-                    categoryId: category!.id,
-                    specHash: materialSetHash(
-                        category!.id,
-                        materialIds.map(id => ({ id: id.toString(), quantity: 1 })),
-                        "",
-                    ),
-                    requestKey: `e2e-bom-${BOM_CODE}`,
-                    createdBy: superUser!.id,
-                    updatedBy: superUser!.id,
-                    createdAt: now,
-                },
-            });
-            await prisma.bomItem.createMany({
-                data: BOM_ITEMS.map((item, index) => ({
-                    id: snowflake.next(),
-                    bomId,
-                    materialId: materialIds[index]!,
-                    groupKey: item.groupKey,
-                    groupName: item.groupName,
-                    name: item.name,
-                    position: item.position,
-                    createdAt: now,
-                })),
-            });
-        }
+        await ensureBom(BOM_CODE, BOM_ITEMS);
+        await ensureBom(CHAIN_BOM_CODE, CHAIN_BOM_ITEMS);
 
         // 测试客户与 600 件订单（核心场景前置）
         const customerRes = await post(
@@ -805,8 +824,9 @@ describe("成品出入库 (e2e)", () => {
             (await prisma.salesOrderTable.findUnique({ where: { orderNo: deloOrderNo } }))?.deletedAt,
         ).not.toBeNull();
 
-        // 软删除行存在时 deleteBom 仍被流水校验挡住（与 FK RESTRICT 口径一致）
-        const chainBom = await prisma.bomTable.findFirst({ where: { bomCode: { not: BOM_CODE } } });
+        // 软删除行存在时 deleteBom 仍被流水校验挡住（与 FK RESTRICT 口径一致）；
+        // 链条 BOM 用专用夹具，不随机借用（见 CHAIN_BOM_CODE 注释）
+        const chainBom = await prisma.bomTable.findUnique({ where: { bomCode: CHAIN_BOM_CODE } });
         const chainIn = await post(
             "/api/inbound",
             warehouseToken,

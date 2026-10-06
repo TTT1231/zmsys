@@ -270,6 +270,60 @@ describe("changesOfOrderEdit / changesOfInboundEdit", () => {
         ]);
     });
 
+    it("订单编辑换客户/BOM：客户与 BOM 编码/成品名称/型号入 diff（同品类换 BOM 靠编码可见）；存量行缺键不渲染", () => {
+        expect(
+            changesOfOrderEdit(
+                {
+                    orderNo: "ZM260927001",
+                    qty: 500,
+                    orderDate: "2026-09-27",
+                    deliverDate: "2026-10-08",
+                    remark: "",
+                    lifecycleStatus: "ACTIVE",
+                    customer: "华辰电器",
+                    customerCode: "CUS-0012",
+                    bomCode: "ZMKW0001",
+                    bomName: "新微动",
+                    bomModel: "",
+                    rowVersion: 1,
+                },
+                {
+                    orderNo: "ZM260927001",
+                    qty: 500,
+                    orderDate: "2026-09-27",
+                    deliverDate: "2026-10-08",
+                    remark: "",
+                    lifecycleStatus: "ACTIVE",
+                    customer: "锦泰科技",
+                    customerCode: "CUS-0031",
+                    bomCode: "ZMKW0002",
+                    bomName: "防水微动",
+                    bomModel: "FS-1A",
+                    rowVersion: 2,
+                },
+            ),
+        ).toEqual([
+            { key: "customer", label: "客户", before: "华辰电器", after: "锦泰科技" },
+            { key: "bomCode", label: "BOM 编码", before: "ZMKW0001", after: "ZMKW0002" },
+            { key: "bomName", label: "成品名称", before: "新微动", after: "防水微动" },
+            { key: "bomModel", label: "型号", before: null, after: "FS-1A" },
+        ]);
+        // 同品类同名换 BOM：名称/型号不变，编码行是唯一可见变更
+        expect(
+            changesOfOrderEdit(
+                { qty: 5, remark: "", lifecycleStatus: "ACTIVE", bomCode: "ZMKW0001", bomName: "新微动", bomModel: "" },
+                { qty: 5, remark: "", lifecycleStatus: "ACTIVE", bomCode: "ZMKW0009", bomName: "新微动", bomModel: "" },
+            ),
+        ).toEqual([{ key: "bomCode", label: "BOM 编码", before: "ZMKW0001", after: "ZMKW0009" }]);
+        // 存量历史行 before/after 均无客户键：判 null 相等不渲染，不抛错
+        expect(
+            changesOfOrderEdit(
+                { qty: 5, remark: "", lifecycleStatus: "ACTIVE" },
+                { qty: 6, remark: "", lifecycleStatus: "ACTIVE" },
+            ),
+        ).toEqual([{ key: "qty", label: "订单数量", before: "5 个", after: "6 个" }]);
+    });
+
     it("入库修正：数量与备注 diff", () => {
         expect(
             changesOfInboundEdit(
