@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@/lib/icons";
+import { Button } from "./Button";
 
 /* 弹窗叠加：栈记录打开顺序，只有栈顶响应 ESC/Tab 并在关闭时解锁滚动、恢复焦点；
    非栈顶层挂 inert（阻焦点/指针并移出无障碍树），栈变化时同步各层 */
@@ -163,14 +164,9 @@ export function Modal({
                         </div>
                         {subtitle && <p className="mt-0.5 text-13 text-muted">{subtitle}</p>}
                     </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        aria-label="关闭"
-                        className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted transition hover:bg-primary-soft hover:text-primary"
-                    >
+                    <Button iconOnly onClick={onClose} aria-label="关闭" className="rounded-lg">
                         <Icon name="close" size={18} />
-                    </button>
+                    </Button>
                 </div>
                 <div
                     className={`modal-body min-h-0 flex-1 px-6 py-4 ${layout === "workspace" ? "overflow-y-auto lg:flex lg:flex-col lg:overflow-hidden" : "overflow-y-auto"}`}

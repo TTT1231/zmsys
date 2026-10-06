@@ -7,6 +7,7 @@ import { FONT_BASE, usePreferences } from "@/context/usePreferences";
 import { buildNavSections, findActiveGroup, type NavSection } from "@/data/permissions";
 import { useWbRefresh } from "@/data/queries";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/Button";
 import { HeaderMenu } from "./HeaderMenu";
 import { MenuPanel } from "./MenuPanel";
 import { MenuRail } from "./MenuRail";
@@ -267,8 +268,8 @@ export function Topbar({
     const [prefsOpen, setPrefsOpen] = useState(false);
     const sections = useNavSections();
 
-    const iconBtn =
-        "flex h-11 w-11 shrink-0 max-lg:min-h-[44px] max-lg:min-w-[44px] items-center justify-center rounded-btn text-muted transition hover:bg-soft hover:text-ink active:scale-90";
+    /* 顶栏图标按钮的 iconOnly 覆写：触屏档 44px 命中区保底 + 按压缩放反馈（本体样式在 Button iconOnly） */
+    const iconBtn = "max-lg:min-h-[44px] max-lg:min-w-[44px] active:scale-90";
 
     return (
         <>
@@ -281,28 +282,28 @@ export function Topbar({
                 <div className={`flex min-w-0 flex-1 items-center gap-3 ${maximized ? "pointer-events-none" : ""}`}>
                     {variant === "full" && showBrand && <BrandMark withText />}
 
-                    <button
-                        type="button"
+                    <Button
+                        iconOnly
                         aria-label="打开主导航"
                         aria-controls="mainNavigation"
                         onClick={onOpenDrawer}
                         tabIndex={maximized ? -1 : 0}
-                        className="flex h-11 w-11 shrink-0 max-lg:min-h-[44px] max-lg:min-w-[44px] items-center justify-center rounded-btn border border-line text-ink lg:hidden"
+                        className="max-lg:min-h-[44px] max-lg:min-w-[44px] border border-line text-ink hover:bg-soft hover:text-ink lg:hidden"
                     >
                         <Icon name="menu" size={19} />
-                    </button>
+                    </Button>
                     {showCollapse && (
-                        <button
-                            type="button"
+                        <Button
+                            iconOnly
                             aria-label={collapsed ? "展开侧边栏" : "折叠侧边栏"}
                             aria-controls="mainNavigation"
                             aria-expanded={!collapsed}
                             onClick={onToggleCollapse}
                             tabIndex={maximized ? -1 : 0}
-                            className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-btn text-muted transition hover:bg-soft hover:text-ink active:scale-90 lg:flex"
+                            className="hidden active:scale-90 lg:flex"
                         >
                             <Icon name="menu" size={19} />
-                        </button>
+                        </Button>
                     )}
                     <strong
                         key={`mobile-${routeKey}`}
@@ -343,58 +344,58 @@ export function Topbar({
                     <TooltipProvider delayDuration={250}>
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <button
-                                    type="button"
+                                <Button
+                                    iconOnly
                                     aria-label="偏好设置"
                                     onClick={() => setPrefsOpen(true)}
                                     tabIndex={maximized ? -1 : 0}
                                     className={iconBtn}
                                 >
                                     <Icon name="settings" size={20} />
-                                </button>
+                                </Button>
                             </TooltipTrigger>
                             <TooltipContent>偏好设置</TooltipContent>
                         </Tooltip>
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <button
-                                    type="button"
+                                <Button
+                                    iconOnly
                                     aria-label="主题"
                                     onClick={toggleTheme}
                                     tabIndex={maximized ? -1 : 0}
                                     className={iconBtn}
                                 >
                                     <Icon name={isDark ? "sun" : "moon"} size={20} />
-                                </button>
+                                </Button>
                             </TooltipTrigger>
                             <TooltipContent>主题</TooltipContent>
                         </Tooltip>
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <button
-                                    type="button"
+                                <Button
+                                    iconOnly
                                     aria-label="刷新"
                                     onClick={refresh}
                                     tabIndex={maximized ? -1 : 0}
                                     className={iconBtn}
                                 >
                                     <Icon name="refresh" size={20} className={refreshing ? "animate-spin" : ""} />
-                                </button>
+                                </Button>
                             </TooltipTrigger>
                             <TooltipContent>刷新</TooltipContent>
                         </Tooltip>
                         {supported && (
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <button
-                                        type="button"
+                                    <Button
+                                        iconOnly
                                         aria-label="全屏"
                                         onClick={toggle}
                                         tabIndex={maximized ? -1 : 0}
                                         className={`${iconBtn} hidden sm:flex`}
                                     >
                                         <Icon name={isFullscreen ? "minimize" : "maximize"} size={20} />
-                                    </button>
+                                    </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>全屏</TooltipContent>
                             </Tooltip>

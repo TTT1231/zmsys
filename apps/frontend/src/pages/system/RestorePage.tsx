@@ -542,11 +542,11 @@ export function RestorePage() {
                                 <code className="min-w-0 flex-1 break-all rounded-input bg-soft px-3 py-2 text-12 text-td">
                                     {pending.requestKey}
                                 </code>
-                                <button
-                                    type="button"
+                                <Button
+                                    iconOnly
                                     aria-label="复制任务编号"
                                     title="复制任务编号"
-                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-input border border-line text-muted hover:text-primary-strong focus-visible:outline-2 focus-visible:outline-primary"
+                                    className="size-9 rounded-input border border-line"
                                     onClick={() =>
                                         void copyText(pending.requestKey).then(ok =>
                                             ok
@@ -556,7 +556,7 @@ export function RestorePage() {
                                     }
                                 >
                                     <Icon name="copy" size={16} />
-                                </button>
+                                </Button>
                             </div>
                         </div>
                     </div>

@@ -58,14 +58,9 @@ export function DateRangeFilter({
             <div className="absolute top-12 right-0 z-50 grid w-75 grid-cols-1 gap-2 rounded-xl border border-line bg-surface p-3 shadow-modal max-lg:fixed max-lg:inset-x-0 max-lg:top-auto max-lg:bottom-0 max-lg:left-0 max-lg:w-auto max-lg:gap-3 max-lg:rounded-b-none max-lg:rounded-t-[22px] max-lg:border-x-0 max-lg:border-b-0 max-lg:p-4 max-lg:pb-[max(16px,env(safe-area-inset-bottom))]">
                 <div className="flex items-center justify-between lg:hidden">
                     <span className="text-14 font-semibold text-ink">按交货日期筛选</span>
-                    <button
-                        type="button"
-                        aria-label="关闭"
-                        onClick={close}
-                        className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition hover:bg-soft hover:text-ink"
-                    >
+                    <Button iconOnly aria-label="关闭" onClick={close} className="size-9 rounded-full">
                         <Icon name="close" size={16} />
-                    </button>
+                    </Button>
                 </div>
                 {quickRanges && quickRanges.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">

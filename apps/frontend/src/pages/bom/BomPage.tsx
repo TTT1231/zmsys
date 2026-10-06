@@ -66,15 +66,9 @@ export function BomDetailModal({
             label="BOM 详情"
             title={bom.code}
             titleExtra={
-                <button
-                    type="button"
-                    onClick={copyCode}
-                    aria-label="复制 BOM 编号"
-                    title="复制 BOM 编号"
-                    className="flex min-h-7 min-w-7 items-center justify-center rounded-md text-muted transition hover:bg-primary-soft hover:text-primary"
-                >
+                <Button iconOnly onClick={copyCode} aria-label="复制 BOM 编号" title="复制 BOM 编号" className="size-9">
                     <Icon name="copy" size={14} />
-                </button>
+                </Button>
             }
             width={560}
             layout="detail"
@@ -655,14 +649,14 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                                                                         ×{quantities[row.id] ?? 1}
                                                                     </span>
                                                                 )}
-                                                                <button
-                                                                    type="button"
+                                                                <Button
+                                                                    iconOnly
                                                                     aria-label={`移除 ${row.name}`}
                                                                     onClick={() => removeSelected(row.id)}
-                                                                    className="grid size-6 shrink-0 place-items-center rounded-md text-16 font-medium text-subtle transition hover:bg-danger/10 hover:text-danger"
+                                                                    className="size-6 text-16 font-medium text-subtle hover:bg-danger/10 hover:text-danger"
                                                                 >
                                                                     ×
-                                                                </button>
+                                                                </Button>
                                                             </li>
                                                         ))}
                                                     </ul>

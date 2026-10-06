@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useContentMaximize } from "@/context/useContentMaximize";
 import { Icon } from "@/lib/icons";
+import { Button } from "./Button";
 
 interface TableHeaderActionsProps {
     children?: ReactNode;
@@ -14,15 +15,15 @@ export function TableHeaderActions({ children, className = "" }: TableHeaderActi
     return (
         <div className={`table-header-actions flex shrink-0 items-center gap-2 ${className}`}>
             {children}
-            <button
-                type="button"
+            <Button
+                iconOnly
                 aria-label={maximized ? "退出表格最大化" : "最大化表格"}
                 aria-pressed={maximized}
                 onClick={toggle}
-                className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-btn border border-line bg-surface text-muted transition hover:bg-soft hover:text-ink active:scale-90 lg:flex"
+                className="hidden border border-line bg-surface active:scale-90 lg:flex"
             >
                 <Icon name={maximized ? "minimize" : "maximize"} size={17} />
-            </button>
+            </Button>
         </div>
     );
 }

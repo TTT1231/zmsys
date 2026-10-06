@@ -299,16 +299,17 @@ function ResetPasswordModal({ user, onClose }: { user: WbUser; onClose: () => vo
                         <span className="tnum text-24 font-bold tracking-[0.18em] text-primary-strong">
                             {INITIAL_PASSWORD}
                         </span>
-                        <button
-                            type="button"
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            className="min-h-8 gap-1.5 px-2.5 text-13"
                             onClick={copyPassword}
                             aria-label="复制初始密码"
                             title="复制初始密码"
-                            className="flex min-h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-13 text-muted transition hover:border-primary-border hover:text-primary"
                         >
                             <Icon name="copy" size={13} />
                             复制
-                        </button>
+                        </Button>
                     </div>
                     <p className="text-13 text-subtle">请告知本人使用新密码登录，其当前登录已失效</p>
                 </div>

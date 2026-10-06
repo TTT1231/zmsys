@@ -5,7 +5,8 @@ import { Icon } from "@/lib/icons";
 /* 全站唯一按钮出口（antd Button 式）：形态全走变体枚举，尺寸/内边距/hover/禁用只有这一份定义。
    primary / secondary / danger / danger-soft：实底或描边的动作按钮（弹窗 footer、工具栏、表单提交）；
    ghost：透明底文字操作（弹窗 footer 的次要/危险入口），tone 区分危险语气；
-   link：行内文字链接（表格/详情的查看、跳转入口），不带盒子尺寸，字号字色可由 className 覆写。 */
+   link：行内文字链接（表格/详情的查看、跳转入口），不带盒子尺寸，字号字色可由 className 覆写；
+   iconOnly：纯图标按钮（44px 方形命中区 + 幽灵 hover），紧凑场景用 className 覆写尺寸。 */
 
 /* 项目字号是数字类名（text-14 即 14px），裸 tailwind-merge 分不清它与 text-danger 这类颜色 token
    （会判成同组互相顶掉）；这里把 text-{数字} 归入 font-size 组再合并，作用域仅限本组件 */
@@ -19,6 +20,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
     tone?: "default" | "danger";
     size?: "md" | "sm";
     icon?: string;
+    /** 纯图标按钮：无可见文字，必须传 aria-label；focus 环走全局 :focus-visible */
+    iconOnly?: boolean;
 }
 
 /* sm = 40px（Modal footer / 筛选面板的原型档），默认 md = 44px */
@@ -27,14 +30,16 @@ export function Button({
     tone = "default",
     size = "md",
     icon,
+    iconOnly = false,
     children,
     className,
     ...rest
 }: ButtonProps) {
-    const box =
-        variant === "link"
-            ? "text-14 font-medium underline-offset-2 transition"
-            : `inline-flex ${size === "sm" ? "min-h-10" : "min-h-11"} items-center justify-center gap-1.5 rounded-btn px-4 text-14 font-medium transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60`;
+    const box = iconOnly
+        ? "inline-flex size-11 shrink-0 items-center justify-center rounded-btn text-muted transition hover:bg-soft hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+        : variant === "link"
+          ? "text-14 font-medium underline-offset-2 transition"
+          : `inline-flex ${size === "sm" ? "min-h-10" : "min-h-11"} items-center justify-center gap-1.5 rounded-btn px-4 text-14 font-medium transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60`;
     const styles =
         variant === "primary"
             ? "bg-primary text-white hover:bg-primary-hover"
