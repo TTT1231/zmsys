@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/lib/icons";
+import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 import { Switch } from "@/components/ui/Switch";
@@ -153,15 +154,10 @@ export function PreferencesDrawer({ open, onClose }: { open: boolean; onClose: (
             layout="detail"
             width={384}
             footer={
-                <button
-                    type="button"
-                    disabled={!modified}
-                    onClick={reset}
-                    className="inline-flex min-h-10 w-full cursor-pointer items-center justify-center gap-1.5 rounded-btn border border-line text-14 text-muted transition hover:border-primary-border hover:text-primary-strong disabled:pointer-events-none disabled:opacity-40"
-                >
+                <Button variant="secondary" size="sm" className="w-full" disabled={!modified} onClick={reset}>
                     <Icon name="reset" size={14} />
                     恢复默认
-                </button>
+                </Button>
             }
         >
             <SegmentedTabs tabs={PREF_TABS} value={activeTab} onChange={setActiveTab} className="mb-1" />

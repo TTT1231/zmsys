@@ -1,5 +1,6 @@
 import { num } from "@/lib/format";
-import { Badge, TableLink } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 
 /* 表格单元格：客户/单号双行；note 是低频编码（如客户编码），紧凑档随 customer-cell-note 隐藏；
    remark 是订单备注行（虚线分隔的正文小字），紧凑档随 remark-sub-note 隐藏（全文走 title/详情） */
@@ -17,13 +18,9 @@ export function CustomerCell({
     onClick?: () => void;
 }) {
     const nameNode = onClick ? (
-        <button
-            type="button"
-            onClick={onClick}
-            className="font-medium text-ink underline-offset-2 hover:text-primary hover:underline"
-        >
+        <Button variant="link" onClick={onClick} className="text-ink hover:text-primary">
             {name}
-        </button>
+        </Button>
     ) : (
         <span className="font-medium text-ink">{name}</span>
     );
@@ -89,5 +86,3 @@ export function DateCell({ date, overdue }: { date: string; overdue?: boolean })
         </span>
     );
 }
-
-export { TableLink };

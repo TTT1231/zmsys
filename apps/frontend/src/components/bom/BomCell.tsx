@@ -3,6 +3,7 @@ import type { Bom, BomCategory } from "@/api";
 import { bomSummary } from "@/data/bomSummary";
 import { BomSpecs } from "./BomSpecs";
 import { useMemo, useState } from "react";
+import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 
 /** 列表显示关键规格，完整物料用显式展开入口核对。 */
@@ -28,14 +29,14 @@ export function BomCell({
             {showIdentity && (
                 <div className="flex min-w-0 items-center gap-2">
                     {bom ? (
-                        <button
-                            type="button"
+                        <Button
+                            variant="link"
                             onClick={() => setOpen(true)}
                             aria-label={`查看 ${bomCode} 的规格与物料`}
-                            className="shrink-0 tnum text-14 font-semibold whitespace-nowrap text-primary-strong underline-offset-2 hover:underline"
+                            className="shrink-0 tnum font-semibold whitespace-nowrap"
                         >
                             {bomCode}
-                        </button>
+                        </Button>
                     ) : (
                         <span className="tnum text-14 font-medium whitespace-nowrap text-td">{bomCode}</span>
                     )}
@@ -55,13 +56,13 @@ export function BomCell({
                 {summary}
             </p>
             {!!bom?.items?.length && (
-                <button
-                    type="button"
+                <Button
+                    variant="link"
                     onClick={() => setOpen(true)}
-                    className="bom-material-trigger mt-1 w-fit text-13 text-primary-strong underline-offset-2 hover:underline"
+                    className="bom-material-trigger mt-1 w-fit text-13"
                 >
                     查看物料（{bom.items.length}）
-                </button>
+                </Button>
             )}
             {bom && (
                 <Modal

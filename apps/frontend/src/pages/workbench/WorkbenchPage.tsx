@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useApp } from "@/context/useApp";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
 import { EmptyRow } from "@/components/ui/EmptyRow";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
@@ -282,13 +283,14 @@ function OwnerWorkbench() {
                 title={detailTitle}
                 footer={
                     detail?.kind === "orders" ? (
-                        <button
-                            className="flex min-h-10 items-center gap-1.5 text-14 font-medium text-primary-strong hover:underline"
+                        <Button
+                            variant="link"
+                            className="flex min-h-10 items-center gap-1.5"
                             onClick={() => setDetail(detail.back)}
                         >
                             <Icon name="chevron-left" size={16} />
                             {detail.back.kind === "products" ? "返回产品明细" : "返回客户排行"}
-                        </button>
+                        </Button>
                     ) : undefined
                 }
                 subtitle={
@@ -339,9 +341,10 @@ function OwnerWorkbench() {
                                     {productRows.map(product => (
                                         <tr key={product.code}>
                                             <td>
-                                                <button
+                                                <Button
+                                                    variant="link"
                                                     title={`${product.code}${product.spec ? ` · ${product.spec}` : ""}`}
-                                                    className="min-h-9 text-left font-medium text-primary-strong hover:underline"
+                                                    className="min-h-9 text-left"
                                                     onClick={() =>
                                                         setDetail({
                                                             kind: "orders",
@@ -357,7 +360,7 @@ function OwnerWorkbench() {
                                                     }
                                                 >
                                                     {product.category} / {product.model}
-                                                </button>
+                                                </Button>
                                                 {density !== "compact" && (
                                                     <p className="text-13 text-muted">{product.code}</p>
                                                 )}
@@ -405,12 +408,13 @@ function OwnerWorkbench() {
                                     <tr key={customer.code}>
                                         <td>{index + 1}</td>
                                         <td>
-                                            <button
+                                            <Button
+                                                variant="link"
+                                                className="min-h-9 text-left"
                                                 onClick={() => showCustomer(customer.code)}
-                                                className="min-h-9 text-left text-primary-strong hover:underline"
                                             >
                                                 {customer.name}
-                                            </button>
+                                            </Button>
                                         </td>
                                         <td className="whitespace-nowrap">{plainNum(customer.count)}</td>
                                         <td className="whitespace-nowrap">{plainNum(customer.qty)}</td>

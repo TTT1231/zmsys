@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 import { EChart } from "@/components/charts/EChart";
+import { Button } from "@/components/ui/Button";
 import { usePreferences } from "@/context/usePreferences";
 import { plainNum } from "@/lib/format";
 import { chartPalette, type ChartPalette } from "@/lib/chartTheme";
@@ -229,22 +230,21 @@ export function ProductProgressChart({
                 <div className="flex flex-wrap items-center gap-1 text-12 text-muted">
                     <span className="mr-1">型号</span>
                     {categories.map(row => (
-                        <button
+                        <Button
                             key={row.name}
+                            variant="ghost"
+                            size="sm"
+                            className="min-h-9 rounded-md px-2 text-12 font-normal hover:bg-primary-soft hover:text-primary"
                             onClick={() => onDetails(row.name)}
-                            className="min-h-9 rounded-md px-2 hover:bg-primary-soft hover:text-primary"
                         >
                             {row.name}
-                        </button>
+                        </Button>
                     ))}
                 </div>
-                <button
-                    onClick={() => onDetails()}
-                    className="flex min-h-9 items-center gap-1 text-13 font-medium text-primary-strong hover:underline"
-                >
+                <Button variant="link" onClick={() => onDetails()} className="flex min-h-9 items-center gap-1 text-13">
                     全部明细
                     <Icon name="chevron-right" size={14} />
-                </button>
+                </Button>
             </div>
         </section>
     );
@@ -482,13 +482,10 @@ export function CustomerRankingChart({
             </div>
             <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-12 text-muted">
                 <span>前 {customers.length} 名</span>
-                <button
-                    onClick={onDetails}
-                    className="flex min-h-9 items-center gap-1 text-13 font-medium text-primary-strong hover:underline"
-                >
+                <Button variant="link" onClick={onDetails} className="flex min-h-9 items-center gap-1 text-13">
                     排行明细
                     <Icon name="chevron-right" size={14} />
-                </button>
+                </Button>
             </div>
         </section>
     );

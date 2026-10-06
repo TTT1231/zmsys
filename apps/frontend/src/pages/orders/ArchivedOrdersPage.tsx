@@ -15,8 +15,8 @@ import { num } from "@/lib/format";
 import { useTableControls } from "@/lib/useTableControls";
 import { useWbRefresh, useWbView } from "@/data/queries";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
-import { StatusBadge, TableLink } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { StatusBadge } from "@/components/ui/Badge";
+import { Button, TableLink } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { CustomerCell, DateCell, QtyCell } from "@/components/ui/cells";
 import { SortTh } from "@/components/ui/SortTh";
@@ -245,13 +245,13 @@ export function ArchivedOrdersPage() {
                                         return (
                                             <tr key={order.orderNo}>
                                                 <td className="cell-pad-wide">
-                                                    <button
-                                                        type="button"
+                                                    <Button
+                                                        variant="link"
                                                         onClick={() => setDetail(order)}
-                                                        className="tnum text-14 font-semibold text-td-strong underline-offset-2 hover:text-primary-strong hover:underline"
+                                                        className="tnum font-semibold text-td-strong hover:text-primary-strong"
                                                     >
                                                         {order.orderNo}
-                                                    </button>
+                                                    </Button>
                                                 </td>
                                                 <td>
                                                     <CustomerCell

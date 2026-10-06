@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 import { EChart } from "@/components/charts/EChart";
+import { Button } from "@/components/ui/Button";
 import { usePreferences } from "@/context/usePreferences";
 import { workbenchTrend, type WorkbenchData, type WorkbenchRange } from "@/data/workbench";
 import { chartPalette, withAlpha } from "@/lib/chartTheme";
@@ -173,12 +174,9 @@ export function WorkbenchTrend({ data, range }: { data: WorkbenchData; range: Wo
                 <span>
                     {start} — {end}
                 </span>
-                <button
-                    className="min-h-9 text-13 font-medium text-primary-strong hover:underline"
-                    onClick={() => setShowTable(value => !value)}
-                >
+                <Button variant="link" className="min-h-9 text-13" onClick={() => setShowTable(value => !value)}>
                     {showTable ? "查看趋势图" : "查看数据表"}
-                </button>
+                </Button>
             </div>
         </section>
     );

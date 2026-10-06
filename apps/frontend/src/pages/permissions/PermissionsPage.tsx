@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from "react";
 import { Navigate } from "react-router";
 import { ListState, RecordCard } from "@/components/ui/MobileList";
-import { Badge, TableLink } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { Button, TableLink } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { SelectField, TextArea, TextField } from "@/components/ui/Field";
@@ -854,15 +854,10 @@ function RolesTab({ users }: { users: WbUser[] }) {
                         <span className={`text-13 ${draft ? "text-warning" : "text-muted"}`}>{status}</span>
                     </div>
                     <div className="flex gap-2">
-                        <Button
-                            variant="secondary"
-                            className="min-h-8.5 px-3 text-13"
-                            disabled={locked}
-                            onClick={reset}
-                        >
+                        <Button variant="secondary" disabled={locked} onClick={reset}>
                             恢复默认
                         </Button>
-                        <Button className="min-h-8.5 px-3 text-13" disabled={locked || !draft} onClick={save}>
+                        <Button disabled={locked || !draft} onClick={save}>
                             保存授权
                         </Button>
                     </div>

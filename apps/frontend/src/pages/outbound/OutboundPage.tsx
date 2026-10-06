@@ -20,8 +20,8 @@ import { useTableControls } from "@/lib/useTableControls";
 import { SnapProvider } from "@/context/snap";
 import { useSnap } from "@/context/useSnap";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
-import { Badge, ProgressTrack, StatusBadge, TableLink } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Badge, ProgressTrack, StatusBadge } from "@/components/ui/Badge";
+import { Button, TableLink } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { SearchSelect } from "@/components/ui/SearchSelect";
@@ -341,16 +341,16 @@ export function OutboundModal({
                     <legend className="px-1.5 text-13 font-semibold text-primary-strong">③ 发货明细</legend>
                     <div className="grid gap-3 sm:grid-cols-2">
                         {selectedOrder && maxShip > 0 && (
-                            <button
-                                type="button"
-                                className="text-left text-14 text-primary-strong sm:col-span-2"
+                            <Button
+                                variant="link"
+                                className="text-left sm:col-span-2"
                                 onClick={() => {
                                     setQty(String(maxShip));
                                     clearError("qty");
                                 }}
                             >
                                 填入全部可发数量（{num(maxShip)} 个）
-                            </button>
+                            </Button>
                         )}
                         <TextField
                             label="发货数量（个）"

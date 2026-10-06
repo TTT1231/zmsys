@@ -29,8 +29,8 @@ import { useTableControls } from "@/lib/useTableControls";
 import { SnapProvider } from "@/context/snap";
 import { useSnap } from "@/context/useSnap";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
-import { Badge, StatusBadge, TableLink } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Badge, StatusBadge } from "@/components/ui/Badge";
+import { Button, TableLink } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { CustomerCell, DateCell, QtyCell } from "@/components/ui/cells";
@@ -491,13 +491,9 @@ function EditOrderModal({
                             </Button>
                         )}
                         {canDelete && (
-                            <button
-                                type="button"
-                                onClick={() => setConfirmDelete(true)}
-                                className="min-h-10 rounded-btn px-2 text-14 font-medium text-danger transition hover:bg-danger-soft"
-                            >
+                            <Button variant="ghost" tone="danger" size="sm" onClick={() => setConfirmDelete(true)}>
                                 删除订单
-                            </button>
+                            </Button>
                         )}
                     </div>
                     <Button size="sm" variant="secondary" onClick={onClose}>
@@ -1389,13 +1385,13 @@ export function OrdersPage() {
                                                         />
                                                     </td>
                                                     <td className="cell-pad-wide">
-                                                        <button
-                                                            type="button"
+                                                        <Button
+                                                            variant="link"
                                                             onClick={() => setDetail(order)}
-                                                            className="tnum text-14 font-semibold text-td-strong underline-offset-2 hover:text-primary-strong hover:underline"
+                                                            className="tnum font-semibold text-td-strong hover:text-primary-strong"
                                                         >
                                                             {order.orderNo}
-                                                        </button>
+                                                        </Button>
                                                     </td>
                                                     <td>
                                                         <CustomerCell

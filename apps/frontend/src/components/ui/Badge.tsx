@@ -45,19 +45,6 @@ export function Badge({ tone = "progress", children }: { tone?: BadgeTone; child
     );
 }
 
-/* 表格内文字链接按钮（逐步迁移到 Button variant="link"，见 Button.tsx） */
-export function TableLink({ children, onClick }: { children: ReactNode; onClick?: () => void }) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            className="text-14 font-medium text-primary-strong underline-offset-2 transition hover:underline"
-        >
-            {children}
-        </button>
-    );
-}
-
 /* 交付进度条：5px 中性底轨保留完整长度，0% 也可见；实色随主题/明暗切换，完成走 success 绿。 */
 export function ProgressTrack({ value, done }: { value: number; done?: boolean }) {
     const percent = Math.min(100, Math.round(value * 100));

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Icon } from "@/lib/icons";
+import { Button } from "./Button";
 
 /** 列表页工具栏容器：搜索框（最左，窄屏独占整行、宽屏 280px）+ 中段筛选控件
  *  （品类/状态/排序/日期等经 children 注入）+ 清空条件 + 右侧动作区（trailing）。
@@ -34,14 +35,14 @@ export function ListToolbar({
                 />
             </label>
             {children}
-            <button
-                type="button"
+            <Button
+                variant="link"
                 onClick={onClear}
                 disabled={!filtersActive}
-                className="min-h-10 px-1 text-14 font-medium text-muted transition hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
+                className="min-h-10 px-1 text-muted hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
             >
                 清空条件
-            </button>
+            </Button>
             {trailing}
         </div>
     );

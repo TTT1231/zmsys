@@ -20,8 +20,7 @@ import { useTableControls } from "@/lib/useTableControls";
 import { useApp } from "@/context/useApp";
 import { isApiError } from "@/http";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
-import { TableLink } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button, TableLink } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { SelectField } from "@/components/ui/Field";
@@ -1035,13 +1034,13 @@ export function BomPage() {
                                             {(page - 1) * pageSize + index + 1}
                                         </td>
                                         <td>
-                                            <button
-                                                type="button"
+                                            <Button
+                                                variant="link"
                                                 onClick={() => setDetail(bom)}
-                                                className="tnum text-14 font-semibold text-primary-strong underline-offset-2 hover:underline"
+                                                className="tnum font-semibold"
                                             >
                                                 {bom.code}
-                                            </button>
+                                            </Button>
                                         </td>
                                         <td className="text-14 text-td">{bom.name}</td>
                                         <td>

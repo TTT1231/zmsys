@@ -14,8 +14,8 @@ import { useApp } from "@/context/useApp";
 import { useTableControls } from "@/lib/useTableControls";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { Pagination } from "@/components/ui/Pagination";
-import { Badge, StatusBadge, TableLink } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Badge, StatusBadge } from "@/components/ui/Badge";
+import { Button, TableLink } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { CustomerCell } from "@/components/ui/cells";
 import { OrderDetailModal } from "@/pages/orders/OrdersPage";
@@ -342,15 +342,15 @@ export function CustomerDetailModal({
                             })}
                         </ol>
                         {orders.length > 3 && (
-                            <button
-                                type="button"
+                            <Button
+                                variant="link"
                                 onClick={() => setExpanded(value => !value)}
                                 aria-expanded={expanded}
-                                className="mt-3 inline-flex min-h-9 items-center gap-1 text-13 font-medium text-primary-strong transition hover:underline"
+                                className="mt-3 inline-flex min-h-9 items-center gap-1 text-13"
                             >
                                 {expanded ? "收起" : `查看全部 ${orders.length} 笔订单`}
                                 <Icon name={expanded ? "chevron-up" : "chevron-down"} size={14} />
-                            </button>
+                            </Button>
                         )}
                     </div>
                 </div>

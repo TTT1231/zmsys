@@ -689,14 +689,15 @@ export function RestorePage() {
                                                 {formatFileSize(file.size)}
                                             </span>
                                         </span>
-                                        <button
-                                            type="button"
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="shrink-0"
                                             aria-label="更换备份文件"
                                             onClick={() => fileInputRef.current?.click()}
-                                            className="shrink-0 rounded-md px-2.5 py-2 text-14 font-medium text-primary-strong transition-colors hover:bg-primary-soft"
                                         >
                                             更换
-                                        </button>
+                                        </Button>
                                     </div>
                                 )}
                                 {file !== null && previewMutation.isPending && (

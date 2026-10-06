@@ -378,13 +378,9 @@ export function SystemLogsPage() {
                             </option>
                         ))}
                     </select>
-                    <button
-                        type="button"
-                        onClick={reset}
-                        className="min-h-10 px-1 text-14 font-medium text-primary-strong transition hover:text-primary"
-                    >
+                    <Button variant="link" onClick={reset} className="min-h-10 px-1 hover:text-primary">
                         重置
-                    </button>
+                    </Button>
                 </div>
 
                 {range === "custom" && (
@@ -585,13 +581,13 @@ function EventCard({
                 {/* 编号可点击弹详情：库存调整无专属详情视图；目标已删除（快照无行）时降级为纯文本。
                     编号后的名称快照不再展示——与首条变更（客户/成品名称等）重复，上下文由变更行承载 */}
                 {entry.action !== "adjust" && hasLiveEntity(entry.domain, entry.targetCode, index) ? (
-                    <button
-                        type="button"
+                    <Button
+                        variant="link"
                         onClick={() => onOpenDetail({ kind: entry.domain, code: entry.targetCode })}
-                        className="tnum cursor-pointer text-12 font-bold text-primary-strong transition hover:underline"
+                        className="tnum text-12 font-bold"
                     >
                         {entry.targetCode}
-                    </button>
+                    </Button>
                 ) : (
                     <span className="tnum text-12 font-bold text-primary-strong">{entry.targetCode}</span>
                 )}
@@ -623,11 +619,11 @@ function EventCard({
             </div>
             {hasDetail && (
                 <div className="mt-1.5 border-t border-line pl-11.5">
-                    <button
-                        type="button"
+                    <Button
+                        variant="link"
                         aria-expanded={expanded}
                         onClick={() => setExpanded(value => !value)}
-                        className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 text-12 font-semibold text-primary-strong"
+                        className="inline-flex min-h-9 items-center gap-1.5 text-12 font-semibold"
                     >
                         查看变更详情
                         <Icon
@@ -635,7 +631,7 @@ function EventCard({
                             size={14}
                             className={`transition-transform ${expanded ? "rotate-180" : ""}`}
                         />
-                    </button>
+                    </Button>
                     {expanded && (
                         <div className="pb-2">
                             {(entry.changes?.length ?? 0) > 0 && (
@@ -704,13 +700,9 @@ function FirstChangeAfter({
         return <span className={chipClass}>{change.after ?? "—"}</span>;
     }
     return (
-        <button
-            type="button"
-            onClick={() => onOpenDetail({ kind: linkDomain, code: linkCode })}
-            className={`cursor-pointer transition hover:underline ${chipClass}`}
-        >
+        <Button variant="link" onClick={() => onOpenDetail({ kind: linkDomain, code: linkCode })} className={chipClass}>
             {change.after}
-        </button>
+        </Button>
     );
 }
 
@@ -730,12 +722,12 @@ function LinkedChangeValue({
         return <>{change.after ?? "—"}</>;
     }
     return (
-        <button
-            type="button"
+        <Button
+            variant="link"
+            className="text-inherit"
             onClick={() => onOpenDetail({ kind: linkDomain, code: linkCode })}
-            className="cursor-pointer transition hover:underline"
         >
             {change.after}
-        </button>
+        </Button>
     );
 }
