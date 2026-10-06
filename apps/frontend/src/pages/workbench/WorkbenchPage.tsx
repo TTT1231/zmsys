@@ -143,7 +143,7 @@ function OwnerWorkbench() {
     const overlay = useDelayedFlag(isFetching && !isLoading);
     if (isLoading) return <PageLoading className="min-h-96" />;
     const overdue = risks.filter(order => order.kind === "overdue");
-    const upcoming = risks.filter(order => order.kind === "upcoming");
+    const pendingOrderCount = summary.orders.filter(order => openQty(order) > 0).length;
     const periodLabel =
         period === "all" ? "累计" : period === "year" ? "今年" : period === "month" ? "本月" : "所选期间";
     const productName = (code: string) => {
@@ -248,42 +248,11 @@ function OwnerWorkbench() {
                     {periodLabel}未发数量
                 </Metric>
                 <Metric title="逾期未完成订单" value={overdue.length} unit="笔" icon="alert">
-                    <span className={overdue.length ? "font-medium text-danger" : "text-success"}>
-                        {plainNum(overdue.reduce((sum, order) => sum + order.remaining, 0))} {data.unit}待交付
+                    <span className={pendingOrderCount ? "font-medium text-danger" : "text-success"}>
+                        {plainNum(pendingOrderCount)}笔订单待交付
                     </span>
-                    <span className="ml-2">截至今日</span>
                 </Metric>
             </div>
-            <section
-                className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-card border border-warning/40 bg-warning-soft px-5 py-3"
-                aria-label="交付风险提醒"
-            >
-                <div className="flex items-center gap-2 text-warning">
-                    <Icon name="alert" size={18} />
-                    <h2 className="text-14 font-semibold">交付风险</h2>
-                </div>
-                <button
-                    onClick={() => setDetail({ kind: "risk", risk: "overdue" })}
-                    className="flex min-h-10 items-center gap-2 text-14 text-td hover:text-danger"
-                >
-                    已逾期未发完
-                    <span className="rounded-md bg-surface px-2 py-0.5 font-semibold tabular-nums text-danger">
-                        {overdue.length}
-                    </span>
-                    笔<Icon name="chevron-right" size={14} />
-                </button>
-                <span className="hidden h-5 w-px bg-warning/30 sm:block" />
-                <button
-                    onClick={() => setDetail({ kind: "risk", risk: "upcoming" })}
-                    className="flex min-h-10 items-center gap-2 text-14 text-td hover:text-warning"
-                >
-                    未来 7 天到期且缺货
-                    <span className="rounded-md bg-surface px-2 py-0.5 font-semibold tabular-nums text-warning">
-                        {upcoming.length}
-                    </span>
-                    笔<Icon name="chevron-right" size={14} />
-                </button>
-            </section>
             <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-3">
                 <div className="min-w-0 xl:col-span-2">
                     <ProductProgressChart

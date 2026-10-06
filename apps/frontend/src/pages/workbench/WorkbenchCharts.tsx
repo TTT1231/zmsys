@@ -293,15 +293,6 @@ export function ArchivedOrdersPie({
                 itemHeight: 4,
                 textStyle: { color: palette.muted, fontSize: 11 },
             },
-            // 单位固定在图表区右上角（用户指定位置，见截图标注），图例移到环形图下方
-            graphic: [
-                {
-                    type: "text",
-                    right: 4,
-                    top: 0,
-                    style: { text: `单位：${data.unit}`, fill: palette.muted, fontSize: 12 },
-                },
-            ],
             series: [
                 {
                     name: "出库",
@@ -325,17 +316,23 @@ export function ArchivedOrdersPie({
                 },
             ],
         };
-    }, [slices, data.unit, preferences]);
+    }, [slices, preferences]);
     return (
         <section
             className="flex min-w-0 flex-col rounded-panel border border-line bg-surface p-5 shadow-card sm:p-6"
             aria-labelledby="archive-pie-title"
         >
-            <div>
-                <h2 id="archive-pie-title" className="text-16 font-semibold text-ink">
-                    归档订单汇总
-                </h2>
-                <p className="mt-1 text-13 text-muted">归档订单{periodLabel}的出库</p>
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <h2 id="archive-pie-title" className="text-16 font-semibold text-ink">
+                        归档订单汇总
+                    </h2>
+                    <p className="mt-1 text-13 text-muted">归档订单{periodLabel}的出库</p>
+                </div>
+                <p className="shrink-0 whitespace-nowrap pt-0.5 text-12 tabular-nums text-muted">
+                    总出库：{plainNum(shipped)}
+                    {data.unit}
+                </p>
             </div>
             <div
                 className="mt-5"
