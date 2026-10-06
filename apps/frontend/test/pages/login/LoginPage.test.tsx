@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/* 登录页：字段/滑块校验、记住账号回填、忘记密码指引与登录反馈 */
+/* 登录页：字段/滑块校验、记住账号密码回填、忘记密码指引与登录反馈 */
 import "@testing-library/jest-dom/vitest";
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -141,16 +141,18 @@ describe("LoginPage", () => {
         expect(toastSpy.error).not.toHaveBeenCalled();
     });
 
-    it("persists the account when checked, prefills it next visit and clears when unchecked", async () => {
+    it("persists account and password when checked, prefills both next visit and clears when unchecked", async () => {
         const user = userEvent.setup();
         renderLoginPage();
         await fillCredentials(user);
-        await user.click(screen.getByRole("checkbox", { name: "记住账号" }));
+        await user.click(screen.getByRole("checkbox", { name: "记住账号密码" }));
         passCaptcha();
 
         await user.click(screen.getByRole("button", { name: "登录" }));
         await waitFor(() => expect(loginSpy).toHaveBeenCalled());
-        expect(localStorage.getItem(REMEMBER_KEY)).toBe("sys_admin");
+        /* 落盘在登录成功后，值为 base64(JSON)，不是明文 */
+        await waitFor(() => expect(localStorage.getItem(REMEMBER_KEY)).toBeTruthy());
+        expect(localStorage.getItem(REMEMBER_KEY)).not.toContain("123456");
 
         cleanup();
         loginSpy.mockClear();
@@ -158,17 +160,28 @@ describe("LoginPage", () => {
 
         renderLoginPage();
         expect(screen.getByLabelText("账号")).toHaveValue("sys_admin");
-        expect(screen.getByRole("checkbox", { name: "记住账号" })).toBeChecked();
+        expect(screen.getByLabelText("密码")).toHaveValue("123456");
+        expect(screen.getByRole("checkbox", { name: "记住账号密码" })).toBeChecked();
 
         await user.clear(screen.getByLabelText("账号"));
         await user.type(screen.getByLabelText("账号"), "ops_user");
+        await user.clear(screen.getByLabelText("密码"));
         await user.type(screen.getByLabelText("密码"), "123456");
-        await user.click(screen.getByRole("checkbox", { name: "记住账号" }));
+        await user.click(screen.getByRole("checkbox", { name: "记住账号密码" }));
         passCaptcha();
 
         await user.click(screen.getByRole("button", { name: "登录" }));
         await waitFor(() => expect(loginSpy).toHaveBeenCalledWith("ops_user", "123456"));
-        expect(localStorage.getItem(REMEMBER_KEY)).toBe("");
+        await waitFor(() => expect(localStorage.getItem(REMEMBER_KEY)).toBe(""));
+    });
+
+    it("prefills only the account when the stored value is a legacy plaintext username", () => {
+        localStorage.setItem(REMEMBER_KEY, "legacy_user");
+        renderLoginPage();
+
+        expect(screen.getByLabelText("账号")).toHaveValue("legacy_user");
+        expect(screen.getByLabelText("密码")).toHaveValue("");
+        expect(screen.getByRole("checkbox", { name: "记住账号密码" })).toBeChecked();
     });
 
     it("guides to the administrator from the forget-password view and returns to login", async () => {

@@ -17,8 +17,27 @@ function loginErrorMessage(error: unknown) {
     return error.message || "登录失败，请重试";
 }
 
-/* vben 同款键名：记住的账号按 hostname 隔离，避免多环境互相污染 */
+/* vben 同款键名：记住的凭据按 hostname 隔离，避免多环境互相污染 */
 export const REMEMBER_KEY = `REMEMBER_ME_USERNAME_${location.hostname}`;
+
+type RememberedCredentials = { account: string; password: string };
+
+/* base64 只做混淆（防明文直读/肩窥），不是加密；凭据仅存本机 localStorage，服务端无感知 */
+function encodeRemembered(value: RememberedCredentials) {
+    return btoa(encodeURIComponent(JSON.stringify(value)));
+}
+
+/* 兼容旧格式：此键原来只存明文账号，解析失败时按仅回填账号处理，密码留空 */
+function decodeRemembered(raw: string | null): RememberedCredentials {
+    if (!raw) return { account: "", password: "" };
+    try {
+        const parsed = JSON.parse(decodeURIComponent(atob(raw))) as RememberedCredentials;
+        if (typeof parsed?.account === "string" && typeof parsed?.password === "string") return parsed;
+    } catch {
+        /* 旧值不是 base64(JSON)，落到仅账号兜底 */
+    }
+    return { account: raw, password: "" };
+}
 
 /* vben 式输入框：无标签、左侧行内图标、聚焦时边框 + 1px 内描边（inset-ring） */
 function fieldClass(invalid: string | boolean, extra = "") {
@@ -37,10 +56,11 @@ export function LoginPage() {
     const notify = useNotification();
     /* 登录 / 忘记密码两个视图（vben 式同面板切换）；表单状态全挂父级，切视图不丢已输入内容 */
     const [view, setView] = useState<"forget" | "login">("login");
-    const rememberedAccount = localStorage.getItem(REMEMBER_KEY) ?? "";
-    const [account, setAccount] = useState(rememberedAccount);
-    const [password, setPassword] = useState("");
-    const [remember, setRemember] = useState(Boolean(rememberedAccount));
+    const remembered = decodeRemembered(localStorage.getItem(REMEMBER_KEY));
+    const [account, setAccount] = useState(remembered.account);
+    /* 勾选「记住账号密码」时连密码一起回填，下次登录免输 */
+    const [password, setPassword] = useState(remembered.password);
+    const [remember, setRemember] = useState(Boolean(remembered.account));
     const [captchaPassed, setCaptchaPassed] = useState(false);
     const [busy, setBusy] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
@@ -67,11 +87,11 @@ export function LoginPage() {
             else if (!password) passwordInputRef.current?.focus();
             return;
         }
-        /* vben 同款：校验通过即落盘（勾选存账号、取消存空串），下次进入自动回填 */
-        localStorage.setItem(REMEMBER_KEY, remember ? account.trim() : "");
         setBusy(true);
         try {
             const user = await login(account.trim(), password);
+            /* 登录成功才落盘：勾选存账号+密码（base64 混淆），取消存空串，下次进入自动回填 */
+            localStorage.setItem(REMEMBER_KEY, remember ? encodeRemembered({ account: account.trim(), password }) : "");
             notify({ title: "登录成功", message: user?.name ? `欢迎回来，${user.name}` : "欢迎回来" });
             navigate("/workbench", { replace: true });
         } catch (err) {
@@ -253,7 +273,7 @@ export function LoginPage() {
                                         >
                                             <Icon name="check" size={12} />
                                         </span>
-                                        记住账号
+                                        记住账号密码
                                     </label>
                                     <button
                                         type="button"
