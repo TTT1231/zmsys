@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { ROLE_META, useApp } from "@/context/useApp";
 import { Icon } from "@/lib/icons";
-import { Button } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/toastContexts";
 import {

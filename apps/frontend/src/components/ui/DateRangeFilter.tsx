@@ -3,7 +3,7 @@
 import { Icon } from "@/lib/icons";
 import { shortDate } from "@/lib/date";
 import { Field } from "./Field";
-import { Button } from "./Badge";
+import { Button } from "./Button";
 
 export interface QuickRange {
     label: string;

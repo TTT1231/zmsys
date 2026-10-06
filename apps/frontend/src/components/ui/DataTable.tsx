@@ -14,7 +14,7 @@ import {
 } from "react";
 import { useApp } from "@/context/useApp";
 import { Icon } from "@/lib/icons";
-import { Button } from "./Badge";
+import { Button } from "./Button";
 import { EmptyRow } from "./EmptyRow";
 import { Modal } from "./Modal";
 import { SortTh } from "./SortTh";

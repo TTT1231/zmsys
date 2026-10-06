@@ -3,7 +3,7 @@ import { ROLE_META, useApp } from "@/context/useApp";
 import { changePassword } from "@/api";
 import { formatDateTime } from "@/lib/date";
 import { isApiError } from "@/http";
-import { Button } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { TextField } from "@/components/ui/Field";
 import { useToast } from "@/components/ui/toastContexts";

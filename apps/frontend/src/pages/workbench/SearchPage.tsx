@@ -4,7 +4,7 @@ import { useWbView } from "@/data/queries";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { SnapProvider } from "@/context/snap";
 import { useApp } from "@/context/useApp";
-import { Button } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { ListState, OrderTaskCard, RecordCard } from "@/components/ui/MobileList";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { Icon } from "@/lib/icons";

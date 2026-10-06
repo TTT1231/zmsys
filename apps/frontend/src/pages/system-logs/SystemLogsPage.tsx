@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Button } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { useSystemLogs, useWbView } from "@/data/queries";
 import { SnapProvider } from "@/context/snap";

@@ -1,7 +1,7 @@
 import type { FormEvent, ReactNode } from "react";
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
-import { Button } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { TextArea } from "@/components/ui/Field";
 
 /** 台账作废弹窗（入库/出库共用）：原因必填（至少 2 个字），顶部危险说明经 children 注入；

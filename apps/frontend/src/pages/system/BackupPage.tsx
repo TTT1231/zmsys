@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Icon } from "@/lib/icons";
-import { Button } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { runBackup, fetchBackupCatalog } from "@/api";

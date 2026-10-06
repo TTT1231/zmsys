@@ -1,4 +1,4 @@
-import { Button } from "./Badge";
+import { Button } from "./Button";
 import { Modal } from "./Modal";
 
 /* 通用说明弹窗（侧边栏「变更记录」等说明型入口使用） */

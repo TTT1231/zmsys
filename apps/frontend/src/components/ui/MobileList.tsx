@@ -5,7 +5,8 @@ import { BomCell } from "@/components/bom/BomCell";
 import { bomByCode, maxShipOf, orderStatusOfMax, remainingOf, stockOf, type DerivedOrders } from "@/data/views";
 import { num } from "@/lib/format";
 import { formatDateTime, todayIso } from "@/lib/date";
-import { Badge, Button, StatusBadge } from "./Badge";
+import { Badge, StatusBadge } from "./Badge";
+import { Button } from "./Button";
 import { EmptyState } from "./EmptyState";
 import { Loader } from "./Loader";
 

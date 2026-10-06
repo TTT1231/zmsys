@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Icon } from "@/lib/icons";
-import { Button } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { fetchRestoreJobByKey, previewRestore, runRestore } from "@/api";
 import { useToast } from "@/components/ui/toastContexts";
 import { useApp } from "@/context/useApp";

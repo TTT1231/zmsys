@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from "react";
 import { Navigate } from "react-router";
 import { ListState, RecordCard } from "@/components/ui/MobileList";
-import { Badge, Button, TableLink } from "@/components/ui/Badge";
+import { Badge, TableLink } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { SelectField, TextArea, TextField } from "@/components/ui/Field";
