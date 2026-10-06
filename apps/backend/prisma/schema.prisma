@@ -46,8 +46,9 @@ enum ApiIdempotencyState {
   SUCCEEDED
 }
 
-/// sales_order_table.lifecycle_status：活动订单与已归档订单（归档为最终终态；
-/// 一件未发不要了直接删除，发过货不要了归档结案——没有取消生命周期）
+/// sales_order_table.lifecycle_status：活动订单与已归档订单（归档后仅归档操作人
+/// 本人可回退回 ACTIVE，其余入口不可逆；一件未发不要了直接删除，发过货不要了
+/// 归档结案——没有取消生命周期）
 enum SalesOrderLifecycleStatus {
   ACTIVE
   ARCHIVED
@@ -58,6 +59,7 @@ enum SalesOrderChangeEventType {
   CREATE
   UPDATE
   ARCHIVE
+  UNARCHIVE
 }
 
 /// inbound_ledger.status：有效台账与当天作废
@@ -109,7 +111,7 @@ enum MaterialGroupKind {
 }
 
 /// op_log.action：业务里程碑动作（审计清单：订单创建/删除、客户创建/更新、BOM 创建/删除、
-/// 出入库创建/作废/删除、发货、归档、数据库备份/恢复）；普通索引（update_customer 同目标可多条，防重由幂等层承担）
+/// 出入库创建/作废/删除、发货、归档/回退归档、数据库备份/恢复）；普通索引（update_customer 同目标可多条，防重由幂等层承担）
 enum OpLogAction {
   ship
   create_customer
@@ -117,6 +119,7 @@ enum OpLogAction {
   delete_bom
   delete_order
   archive_order
+  unarchive_order
   create_inbound
   void_inbound
   delete_inbound
@@ -454,7 +457,7 @@ model CustomerOwnerHistory {
   @@map("customer_owner_history")
 }
 
-/// 销售订单：下单即冻结客户/BOM 快照；归档为生命周期终态，不物理删除
+/// 销售订单：下单即冻结客户/BOM 快照；归档后仅归档操作人本人可回退，不物理删除
 model SalesOrderTable {
   id                  BigInt                     @id
   orderNo             String                     @unique(map: "uk_sales_order_no") @map("order_no") @db.VarChar(24)
@@ -493,7 +496,7 @@ model SalesOrderTable {
   @@map("sales_order_table")
 }
 
-/// 订单变更日志：CREATE/ARCHIVE 必带 request_key（幂等键回写业务行）
+/// 订单变更日志：CREATE/ARCHIVE/UNARCHIVE 必带 request_key（幂等键回写业务行）
 model SalesOrderChangeLog {
   id             BigInt                    @id
   orderId        BigInt                    @map("order_id")

@@ -1,4 +1,10 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+    BadRequestException,
+    ConflictException,
+    ForbiddenException,
+    Injectable,
+    NotFoundException,
+} from "@nestjs/common";
 import { Prisma } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { TransactionRunner } from "../prisma/transaction.runner";
@@ -19,18 +25,21 @@ import type { Order } from "./types";
 import type { CreateOrderDto } from "./dto/create-order.dto";
 import type { UpdateOrderDto } from "./dto/update-order.dto";
 import type { ArchiveOrderDto } from "./dto/archive-order.dto";
+import type { UnarchiveOrderDto } from "./dto/unarchive-order.dto";
 
 /** api_idempotency 的 operation_key；归档/删除按订单号独立域，与前端 mock 同粒度 */
 const CREATE_OPERATION_KEY = "orders:create";
 const archiveOperationKeyOf = (orderNo: string): string => `orders:archive:${orderNo}`;
+const unarchiveOperationKeyOf = (orderNo: string): string => `orders:unarchive:${orderNo}`;
 const deleteOperationKeyOf = (orderNo: string): string => `orders:delete:${orderNo}`;
 
-/** 订单行 + 响应映射必需的关联（archiver 仅归档后有值；creator 供审计展示） */
+/** 订单行 + 响应映射必需的关联（archiver 仅归档后有值，account 供回退入口判等；
+ * creator 供审计展示） */
 type OrderRow = SalesOrderTable & {
     customer: { customerCode: string };
     bom: { bomCode: string };
     creator: { name: string };
-    archiver: { name: string } | null;
+    archiver: { name: string; account: string } | null;
 };
 
 /**
@@ -55,7 +64,7 @@ type OrderProjection = Pick<
     customer: { customerCode: string };
     bom: { bomCode: string };
     creator: { name: string };
-    archiver: { name: string } | null;
+    archiver: { name: string; account: string } | null;
 };
 
 @Injectable()
@@ -93,7 +102,7 @@ export class OrdersService {
                     customer: { select: { customerCode: true } },
                     bom: { select: { bomCode: true } },
                     creator: { select: { name: true } },
-                    archiver: { select: { name: true } },
+                    archiver: { select: { name: true, account: true } },
                 },
             }),
             outboundQtyByOrderMap(this.prisma),
@@ -282,7 +291,7 @@ export class OrdersService {
                     customer: { select: { customerCode: true } },
                     bom: { select: { bomCode: true } },
                     creator: { select: { name: true } },
-                    archiver: { select: { name: true } },
+                    archiver: { select: { name: true, account: true } },
                 },
             });
             await tx.salesOrderChangeLog.create({
@@ -305,11 +314,11 @@ export class OrdersService {
 
     /**
      * 归档订单（契约 orders:archive，幂等，仅超级管理员，db-scheme.md §6.1）：
-     * 收尾已完成/部分发货的订单，使其退出活跃视图仅供查询。终态不可恢复；
-     * 一件未发的订单不可归档——手误订单走删除。存在未作废出库单时直接放行
-     * （已发数量保留），归档后其出库单不可作废/删除。归档人/时间/备注（选填）
-     * 随行落库供审计，change_log 记 ARCHIVE 事件（操作人与时间），op_log 另记
-     * 里程碑快照。
+     * 收尾已完成/部分发货的订单，使其退出活跃视图仅供查询。归档后仅归档操作人
+     * 本人可回退（unarchiveOrder）；一件未发的订单不可归档——手误订单走删除。
+     * 存在未作废出库单时直接放行（已发数量保留），归档后其出库单不可作废/删除。
+     * 归档人/时间/备注（选填）随行落库供审计，change_log 记 ARCHIVE 事件
+     * （操作人与时间），op_log 另记里程碑快照。
      */
     async archiveOrder(
         orderNo: string,
@@ -352,7 +361,7 @@ export class OrdersService {
                         customer: { select: { customerCode: true } },
                         bom: { select: { bomCode: true } },
                         creator: { select: { name: true } },
-                        archiver: { select: { name: true } },
+                        archiver: { select: { name: true, account: true } },
                     },
                 });
                 await tx.salesOrderChangeLog.create({
@@ -392,6 +401,101 @@ export class OrdersService {
                 return {
                     httpStatus: 200,
                     responseBody: order,
+                    resource: { type: "order", code: orderNo },
+                };
+            },
+        );
+    }
+
+    /**
+     * 回退归档（契约 orders:unarchive，幂等，仅超级管理员且仅归档操作人本人，
+     * db-scheme.md §6.1）：误归档的订单退回 ACTIVE，返回销售订单页恢复编辑/发货。
+     * 归档人判等在服务层强校验（archived_by 与操作人判等，超管同样受限——
+     * PermissionsGuard 对 super 短路，此处是唯一闸口）。归档三要素由
+     * ck_sales_order_archive 约束随回退一并清空，归档语境由 ARCHIVE/UNARCHIVE
+     * 变更日志快照保留；回退备注（选填）随行落库。回退后出库单恢复可作废/删除，
+     * 可发量分配重新纳入该订单；再次归档时新归档人接替回退权。
+     */
+    async unarchiveOrder(
+        orderNo: string,
+        dto: UnarchiveOrderDto,
+        actor: AuthUser,
+        idempotencyKey: string | undefined,
+    ): Promise<Order> {
+        const operationKey = unarchiveOperationKeyOf(orderNo);
+        return this.idempotency.runGuarded(
+            {
+                actorId: BigInt(actor.id),
+                operationKey,
+                idempotencyKey,
+                digest: { method: "POST", pathParams: { orderNo }, body: dto },
+            },
+            async (tx: Tx, { idempotencyKey: key }) => {
+                const now = new Date();
+                const { row: current } = await this.lockOrderForWrite(tx, orderNo);
+                assertVersionMatches(current.rowVersion, dto.expectedVersion, "订单已被其他人修改，请刷新后重试");
+                if (current.lifecycleStatus !== "ARCHIVED") {
+                    throw new ConflictException("订单未归档，无需回退");
+                }
+                if (current.archivedBy === null || current.archivedBy !== BigInt(actor.id)) {
+                    throw new ForbiddenException("只有归档人本人可以回退归档");
+                }
+
+                const outbound = await outboundNetOf(tx, current.id);
+                const updated = await tx.salesOrderTable.update({
+                    where: { id: current.id },
+                    data: {
+                        lifecycleStatus: "ACTIVE",
+                        // 归档三要素随回退清空（ck_sales_order_archive 强制），语境留档日志快照
+                        archivedAt: null,
+                        archivedBy: null,
+                        archiveReason: null,
+                        updatedBy: BigInt(actor.id),
+                        rowVersion: { increment: 1 },
+                    },
+                    include: {
+                        customer: { select: { customerCode: true } },
+                        bom: { select: { bomCode: true } },
+                        creator: { select: { name: true } },
+                        archiver: { select: { name: true, account: true } },
+                    },
+                });
+                await tx.salesOrderChangeLog.create({
+                    data: {
+                        id: this.snowflake.next(),
+                        orderId: current.id,
+                        operatorId: BigInt(actor.id),
+                        eventType: "UNARCHIVE",
+                        beforeVersion: current.rowVersion,
+                        afterVersion: updated.rowVersion,
+                        createdAt: now,
+                        reason: dto.reason?.length ? dto.reason : "",
+                        requestKey: this.idempotency.requestKey(BigInt(actor.id), operationKey, key),
+                        beforeJson: this.orderSnapshot(current),
+                        afterJson: this.orderSnapshot(updated),
+                    },
+                });
+                await recordOpLog(tx, this.snowflake, actor, {
+                    action: "unarchive_order",
+                    targetType: "order",
+                    targetId: current.id,
+                    targetCode: current.orderNo,
+                    detail: {
+                        ...this.orderSnapshot(updated),
+                        customer: updated.customerNameSnapshot,
+                        customerCode: updated.customer.customerCode,
+                        bomCode: updated.bom.bomCode,
+                        unarchivedBy: actor.name,
+                        // 回退原因入快照：系统日志页 reason 展示依赖 detail（行级无 reason 列）
+                        reason: dto.reason?.length ? dto.reason : null,
+                    },
+                    now,
+                });
+
+                // 回退不改变出库净额，直接复用锁定后已算出的口径
+                return {
+                    httpStatus: 200,
+                    responseBody: this.toOrder(updated, outbound),
                     resource: { type: "order", code: orderNo },
                 };
             },
@@ -538,7 +642,7 @@ export class OrdersService {
                         customer: { select: { customerCode: true } },
                         bom: { select: { bomCode: true } },
                         creator: { select: { name: true } },
-                        archiver: { select: { name: true } },
+                        archiver: { select: { name: true, account: true } },
                     },
                 }),
             "订单不存在",
@@ -578,7 +682,8 @@ export class OrdersService {
     }
 
     /** 契约 Order 映射：version 序列化为 number；日期列 yyyy-MM-dd；createdAt 为 ISO 时刻
-        （前端 formatDateTime 展示）；归档字段仅终态且有值时返回 */
+        （前端 formatDateTime 展示）；归档字段仅终态且有值时返回；archivedByAccount
+        供前端回退入口判等（账号唯一且不可改，禁止用姓名反查） */
     private toOrder(row: OrderProjection, outbound: number): Order {
         const archived = row.lifecycleStatus === "ARCHIVED";
         return {
@@ -599,6 +704,7 @@ export class OrdersService {
                 ? {
                       archivedAt: (row.archivedAt ?? new Date(0)).toISOString(),
                       archivedBy: row.archiver?.name ?? "",
+                      archivedByAccount: row.archiver?.account ?? "",
                       archiveReason: row.archiveReason ?? "",
                   }
                 : {}),

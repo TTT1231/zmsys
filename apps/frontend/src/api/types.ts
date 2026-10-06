@@ -27,6 +27,7 @@ export interface Order {
     createdAt: string; // 创建时刻 ISO
     archivedAt?: string; // 仅归档终态返回
     archivedBy?: string;
+    archivedByAccount?: string; // 归档操作人账号：归档回退入口判等用（账号唯一且不可改）
     archiveReason?: string;
 }
 
@@ -173,7 +174,16 @@ export interface StockAdjustmentRow {
 
 export type SystemLogDomain = "customer" | "order" | "bom" | "inbound" | "outbound";
 
-export type SystemLogAction = "create" | "edit" | "transfer" | "archive" | "delete" | "void" | "ship" | "adjust";
+export type SystemLogAction =
+    | "create"
+    | "edit"
+    | "transfer"
+    | "archive"
+    | "unarchive"
+    | "delete"
+    | "void"
+    | "ship"
+    | "adjust";
 
 /** 单条字段变更（服务端产出中文 label 与展示值；before=null 表示新建记录。
  *  key 为语义源字段名（bomCode/orderNo 等），前端据此渲染可点击编号链接） */
@@ -345,6 +355,12 @@ export interface UpdateOrderInput {
 
 /** 归档订单仅限超级管理员；备注选填（留空不上送） */
 export interface ArchiveOrderInput {
+    expectedVersion: number;
+    reason?: string;
+}
+
+/** 回退归档仅限归档操作人本人（超级管理员）；备注选填（留空不上送） */
+export interface UnarchiveOrderInput {
     expectedVersion: number;
     reason?: string;
 }

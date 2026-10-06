@@ -27,12 +27,14 @@ describe("can / menuVisible", () => {
     });
 
     it("reserves order deletion and archiving for the super admin only", () => {
-        expect(grantOf("super").actions.orders).toEqual(["view", "create", "edit", "archive", "delete"]);
+        expect(grantOf("super").actions.orders).toEqual(["view", "create", "edit", "archive", "unarchive", "delete"]);
         expect(can(grantOf("super"), "orders:delete")).toBe(true);
         expect(can(grantOf("super"), "orders:archive")).toBe(true);
+        expect(can(grantOf("super"), "orders:unarchive")).toBe(true);
         for (const role of ["admin", "warehouse", "sales", "staff"] as const) {
             expect(can(grantOf(role), "orders:delete")).toBe(false);
             expect(can(grantOf(role), "orders:archive")).toBe(false);
+            expect(can(grantOf(role), "orders:unarchive")).toBe(false);
         }
     });
 

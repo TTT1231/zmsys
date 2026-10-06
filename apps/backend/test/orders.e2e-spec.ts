@@ -12,6 +12,7 @@ import { configureApp } from "../src/main";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { SnowflakeGenerator } from "../src/common/snowflake";
 import { materialSetHash } from "../src/common/bom-spec";
+import bcrypt from "bcryptjs";
 
 const RUN = Date.now().toString(36);
 const accountOf = (name: string): string => `qa_${name}_${RUN}`;
@@ -661,6 +662,166 @@ describe("销售订单 (e2e)", () => {
         const list = await app.inject({ method: "GET", url: "/api/orders", headers: authHeaders(superToken) });
         const mine = list.json().data.find((item: { orderNo: string }) => item.orderNo === target.orderNo);
         expect(mine.lifecycleStatus).toBe("archived");
+    });
+
+    it("归档回退：非超管 403；非归档超管 403；未归档 409；归档人回退成功恢复编辑并可再归档，写审计、重放幂等", async () => {
+        const created = await createOrder(superToken, orderInput(customerCode), `e2e-ord-${RUN}-unarc1`);
+        expect(created.statusCode).toBe(200);
+        const target = created.json().data as { orderNo: string; version: number };
+
+        await seedRegisteredShipment(
+            (await prisma.salesOrderTable.findUnique({ where: { orderNo: target.orderNo } }))!.id,
+            `CKE2EU${RUN}`,
+            30,
+        );
+        const archived = await app.inject({
+            method: "POST",
+            url: `/api/orders/${target.orderNo}/archive`,
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-unarc-arc` },
+            payload: { expectedVersion: target.version },
+        });
+        expect(archived.statusCode).toBe(200);
+
+        // orders:unarchive 受保护：普通角色（sales）403
+        const denied = await app.inject({
+            method: "POST",
+            url: `/api/orders/${target.orderNo}/unarchive`,
+            headers: { ...authHeaders(salesToken), "idempotency-key": `e2e-ord-${RUN}-unarc-sales` },
+            payload: { expectedVersion: target.version + 1 },
+        });
+        expect(denied.statusCode).toBe(403);
+        expect(denied.json().message).toContain("超级管理员");
+
+        // 归档人判等在服务层：另一位超管（非归档人）同样 403（API 禁建 super，直插种子行）
+        const secondAccount = accountOf("super2");
+        await prisma.sysUser.create({
+            data: {
+                id: snowflake.next(),
+                account: secondAccount,
+                name: "联调超管B",
+                roleCode: "super",
+                passwordHash: bcrypt.hashSync("123456", 10),
+                createdAt: new Date(),
+            },
+        });
+        const secondToken = await login(secondAccount);
+        const wrongArchiver = await app.inject({
+            method: "POST",
+            url: `/api/orders/${target.orderNo}/unarchive`,
+            headers: { ...authHeaders(secondToken), "idempotency-key": `e2e-ord-${RUN}-unarc-other` },
+            payload: { expectedVersion: target.version + 1 },
+        });
+        expect(wrongArchiver.statusCode).toBe(403);
+        expect(wrongArchiver.json().message).toContain("归档人本人");
+
+        // 未归档的订单 409（无需回退）
+        const fresh = await createOrder(superToken, orderInput(customerCode), `e2e-ord-${RUN}-unarc2`);
+        expect(fresh.statusCode).toBe(200);
+        const freshTarget = fresh.json().data as { orderNo: string; version: number };
+        const notArchived = await app.inject({
+            method: "POST",
+            url: `/api/orders/${freshTarget.orderNo}/unarchive`,
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-unarc-fresh` },
+            payload: { expectedVersion: freshTarget.version },
+        });
+        expect(notArchived.statusCode).toBe(409);
+        expect(notArchived.json().message).toContain("未归档");
+
+        // 版本冲突 409
+        const stale = await app.inject({
+            method: "POST",
+            url: `/api/orders/${target.orderNo}/unarchive`,
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-unarc-stale` },
+            payload: { expectedVersion: 1 },
+        });
+        expect(stale.statusCode).toBe(409);
+        expect(stale.json().message).toContain("已被其他人修改");
+
+        // 归档人本人回退成功：三要素清空、版本 +1、出库口径保留
+        const key = `e2e-ord-${RUN}-unarc-ok`;
+        const unarchived = await app.inject({
+            method: "POST",
+            url: `/api/orders/${target.orderNo}/unarchive`,
+            headers: { ...authHeaders(superToken), "idempotency-key": key },
+            payload: { expectedVersion: target.version + 1, reason: "归档错了，恢复跟进" },
+        });
+        expect(unarchived.statusCode).toBe(200);
+        expect(unarchived.json().data).toMatchObject({
+            lifecycleStatus: "active",
+            version: target.version + 2,
+            outbound: 30,
+        });
+        expect(unarchived.json().data.archivedAt).toBeUndefined();
+        expect(unarchived.json().data.archivedBy).toBeUndefined();
+
+        const stored = await prisma.salesOrderTable.findUnique({ where: { orderNo: target.orderNo } });
+        expect(stored).toMatchObject({
+            lifecycleStatus: "ACTIVE",
+            archivedBy: null,
+            archivedAt: null,
+            archiveReason: null,
+        });
+
+        // 重放幂等：同键返回首次响应
+        const replay = await app.inject({
+            method: "POST",
+            url: `/api/orders/${target.orderNo}/unarchive`,
+            headers: { ...authHeaders(superToken), "idempotency-key": key },
+            payload: { expectedVersion: target.version + 1, reason: "归档错了，恢复跟进" },
+        });
+        expect(replay.statusCode).toBe(200);
+        expect(replay.json().data).toEqual(unarchived.json().data);
+
+        // 审计链：UNARCHIVE 变更日志（操作人+版本+request_key）与 op_log 里程碑
+        const superUser = await prisma.sysUser.findUnique({ where: { account: "guojun" } });
+        const logs = await prisma.salesOrderChangeLog.findMany({ where: { order: { orderNo: target.orderNo } } });
+        const unarchiveLog = logs.find(log => log.eventType === "UNARCHIVE");
+        expect(unarchiveLog).toMatchObject({
+            reason: "归档错了，恢复跟进",
+            operatorId: superUser!.id,
+            beforeVersion: BigInt(target.version + 1),
+            afterVersion: BigInt(target.version + 2),
+        });
+        expect(unarchiveLog?.requestKey).toBeTruthy();
+        const opLog = await prisma.opLog.findFirst({
+            where: { action: "unarchive_order", targetCode: target.orderNo },
+        });
+        expect(opLog?.detailJson).toMatchObject({ orderNo: target.orderNo, customerCode });
+
+        // 回退即复活：编辑（备注）放行，随后可再次归档
+        const edit = await app.inject({
+            method: "PUT",
+            url: `/api/orders/${target.orderNo}`,
+            headers: authHeaders(superToken),
+            payload: { expectedVersion: target.version + 2, remark: "回退后恢复跟进" },
+        });
+        expect(edit.statusCode).toBe(200);
+        expect(edit.json().data).toMatchObject({ lifecycleStatus: "active", version: target.version + 3 });
+
+        const rearchive = await app.inject({
+            method: "POST",
+            url: `/api/orders/${target.orderNo}/archive`,
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-unarc-rearc` },
+            payload: { expectedVersion: target.version + 3 },
+        });
+        expect(rearchive.statusCode).toBe(200);
+        expect(rearchive.json().data).toMatchObject({ lifecycleStatus: "archived" });
+
+        // 清理：本用例造数不挤占同 BOM（ZME2E0001）后续套件的可发量——直插出库流水
+        // 物理清理复原库存 -30，未发货的 unarc2 走业务删除复原活跃需求 +100
+        // （归档单不参与分配，unarc1 留库无碍；日志行 keyword 隔离不污染断言）
+        const seededShipment = await prisma.outboundShipment.findUnique({
+            where: { shipmentNo: `CKE2EU${RUN}` },
+        });
+        await prisma.outboundLedger.deleteMany({ where: { shipmentId: seededShipment!.id } });
+        await prisma.outboundShipment.delete({ where: { id: seededShipment!.id } });
+        const cleanup = await app.inject({
+            method: "POST",
+            url: `/api/orders/${freshTarget.orderNo}/delete`,
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-ord-${RUN}-unarc-clean` },
+            payload: { expectedVersion: freshTarget.version },
+        });
+        expect(cleanup.statusCode).toBe(200);
     });
 
     it("删除净发货为零的订单：非超管 403、版本不匹配 409、列表隐藏并写 op_log、重放幂等", async () => {

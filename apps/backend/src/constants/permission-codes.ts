@@ -26,6 +26,7 @@ export const PERMISSIONS = {
     ORDERS_EDIT: "orders:edit",
     ORDERS_DELETE: "orders:delete", // 受保护
     ORDERS_ARCHIVE: "orders:archive", // 受保护
+    ORDERS_UNARCHIVE: "orders:unarchive", // 受保护：归档回退（仅归档操作人本人可用）
 
     // ---- 客户 ----
     CUSTOMERS_VIEW: "customers:view",

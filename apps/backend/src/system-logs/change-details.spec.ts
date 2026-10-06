@@ -112,6 +112,16 @@ describe("changesOfOpLog", () => {
         ]);
     });
 
+    it("unarchive_order：客户随行，状态由已归档推断为进行中", () => {
+        expect(
+            changesOfOpLog("unarchive_order", { customer: "华辰电器", qty: 300, lifecycleStatus: "ACTIVE" }),
+        ).toEqual([
+            { key: "customer", label: "客户", before: null, after: "华辰电器" },
+            { key: "lifecycleStatus", label: "订单状态", before: "已归档", after: "进行中" },
+            { key: "qty", label: "订单数量", before: null, after: "300 个" },
+        ]);
+    });
+
     it("update_customer：8 字段 diff、地区四段合并、电话只记是否变更", () => {
         const changes = changesOfOpLog("update_customer", {
             before: {

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from "@nestjs/common";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OrdersService } from "./orders.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -683,6 +683,114 @@ describe("OrdersService.archiveOrder", () => {
             vi.fn(async () => ({ replay: { httpStatus: 200, body: replayBody }, placeholderId: null })),
         );
         const result = await local.service.archiveOrder("ZM260912001", { expectedVersion: 1 }, actor, ID_KEY);
+        expect(result).toEqual(replayBody);
+        expect(local.tx.salesOrderTable.update).not.toHaveBeenCalled();
+    });
+});
+
+describe("OrdersService.unarchiveOrder", () => {
+    let store: Store;
+    let ctx: ReturnType<typeof mkService>;
+
+    /** 已归档订单（归档人为 actor）：rowVersion 2 = 建单 1 + 归档 1 */
+    const mkArchived = () =>
+        mkOrder({
+            lifecycleStatus: "ARCHIVED" as const,
+            archivedAt: new Date("2026-10-05T08:00:00Z"),
+            archivedBy: BigInt(actor.id),
+            archiveReason: "行情不好客户弃单",
+            rowVersion: 2n,
+        });
+
+    beforeEach(() => {
+        store = emptyStore();
+        store.orders.push(mkArchived());
+        ctx = mkService(store);
+    });
+
+    it("订单不存在 404；幂等键非法 400；版本不匹配 409；未归档订单 409", async () => {
+        await expect(ctx.service.unarchiveOrder("ZM999999999", { expectedVersion: 2 }, actor, ID_KEY)).rejects.toThrow(
+            new NotFoundException("订单不存在"),
+        );
+        await expect(ctx.service.unarchiveOrder("ZM260912001", { expectedVersion: 2 }, actor, "short")).rejects.toThrow(
+            BadRequestException,
+        );
+        await expect(ctx.service.unarchiveOrder("ZM260912001", { expectedVersion: 9 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException("订单已被其他人修改，请刷新后重试"),
+        );
+        store.orders[0]!.lifecycleStatus = "ACTIVE" as const;
+        await expect(ctx.service.unarchiveOrder("ZM260912001", { expectedVersion: 2 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException("订单未归档，无需回退"),
+        );
+        expect(ctx.tx.salesOrderTable.update).not.toHaveBeenCalled();
+    });
+
+    it("非归档人 403（超管同样受限）：archived_by 判等在服务层强校验", async () => {
+        store.orders[0]!.archivedBy = 999n;
+        await expect(ctx.service.unarchiveOrder("ZM260912001", { expectedVersion: 2 }, actor, ID_KEY)).rejects.toThrow(
+            new ForbiddenException("只有归档人本人可以回退归档"),
+        );
+        // 防御分支：ARCHIVED 态下 archived_by 理论上非空（ck_sales_order_archive），空值同样拒绝
+        store.orders[0]!.archivedBy = null;
+        await expect(ctx.service.unarchiveOrder("ZM260912001", { expectedVersion: 2 }, actor, ID_KEY)).rejects.toThrow(
+            new ForbiddenException("只有归档人本人可以回退归档"),
+        );
+        expect(ctx.tx.salesOrderTable.update).not.toHaveBeenCalled();
+    });
+
+    it("回退成功：归档三要素清空、版本 +1、写 UNARCHIVE 日志与 op_log、返回活跃订单", async () => {
+        store.outboundNet.set(500n, 40);
+        const result = await ctx.service.unarchiveOrder(
+            "ZM260912001",
+            { expectedVersion: 2, reason: "归档错了，恢复跟进" },
+            actor,
+            ID_KEY,
+        );
+        expect(result).toMatchObject({
+            lifecycleStatus: "active",
+            version: 3,
+            qty: 100,
+            outbound: 40,
+        });
+        expect(result.archivedAt).toBeUndefined();
+        expect(result.archivedBy).toBeUndefined();
+        const stored = store.orders[0]!;
+        expect(stored.lifecycleStatus).toBe("ACTIVE");
+        expect(stored.archivedAt).toBeNull();
+        expect(stored.archivedBy).toBeNull();
+        expect(stored.archiveReason).toBeNull();
+        expect(store.changeLogs.at(-1)).toMatchObject({
+            eventType: "UNARCHIVE",
+            reason: "归档错了，恢复跟进",
+            beforeVersion: 2n,
+            afterVersion: 3n,
+        });
+        expect(store.opLogs.at(-1)).toMatchObject({ action: "unarchive_order", targetCode: "ZM260912001" });
+        expect(ctx.idempotency.complete).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ httpStatus: 200, resource: { type: "order", code: "ZM260912001" } }),
+        );
+    });
+
+    it("未带备注回退：change_log reason 允许为空，op_log 快照记回退后语境", async () => {
+        store.outboundNet.set(500n, 40);
+        const result = await ctx.service.unarchiveOrder("ZM260912001", { expectedVersion: 2 }, actor, ID_KEY);
+        expect(result).toMatchObject({ lifecycleStatus: "active", version: 3, outbound: 40 });
+        expect(store.changeLogs.at(-1)).toMatchObject({ eventType: "UNARCHIVE", reason: "" });
+        expect(store.opLogs.at(-1)).toMatchObject({
+            action: "unarchive_order",
+            detailJson: expect.objectContaining({ lifecycleStatus: "ACTIVE", unarchivedBy: "郭均" }),
+        });
+    });
+
+    it("重放直接返回首次响应，不再执行业务", async () => {
+        store.outboundNet.set(500n, 40);
+        const replayBody = { version: 3, lifecycleStatus: "active" };
+        const local = mkService(
+            store,
+            vi.fn(async () => ({ replay: { httpStatus: 200, body: replayBody }, placeholderId: null })),
+        );
+        const result = await local.service.unarchiveOrder("ZM260912001", { expectedVersion: 2 }, actor, ID_KEY);
         expect(result).toEqual(replayBody);
         expect(local.tx.salesOrderTable.update).not.toHaveBeenCalled();
     });

@@ -22,6 +22,7 @@ vi.mock("@/context/useApp", () => ({ useApp: () => ({ role: "staff", can: () => 
 vi.mock("@/data/queries", () => ({
     useWbView: () => ({ snap: snapshot, isLoading: false, refreshing: false }),
     useWbRefresh: () => ({ refresh: vi.fn() }),
+    useUnarchiveOrder: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 const toastSpy = vi.fn();
 vi.mock("@/components/ui/toastContexts", () => ({ useToast: () => toastSpy }));

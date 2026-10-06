@@ -118,6 +118,7 @@ export const ACTION_CATALOG = {
         { id: "create", label: "新建订单" },
         { id: "edit", label: "编辑订单" },
         { id: "archive", label: "归档订单", protected: true },
+        { id: "unarchive", label: "归档回退", protected: true },
         { id: "delete", label: "删除订单", protected: true },
     ],
     customers: [
@@ -279,6 +280,7 @@ const ACTION_SHORT: Record<string, string> = {
     create: "新建",
     edit: "编辑",
     archive: "归档",
+    unarchive: "回退",
     delete: "删除",
     "bulk-transfer": "移交",
     register: "入库",

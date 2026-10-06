@@ -50,6 +50,16 @@ export type OrderArchiveEventDetail = OrderSnapshotCore & {
     reason: string | null;
 };
 
+/** unarchive_order：行内快照（回退后 ACTIVE 形态）+ 回退人与原因（系统日志页
+ *  reason 展示依赖 detail；归档语境在 ARCHIVE 日志与 before_json 留档） */
+export type OrderUnarchiveEventDetail = OrderSnapshotCore & {
+    customer: string;
+    customerCode: string;
+    bomCode: string;
+    unarchivedBy: string;
+    reason: string | null;
+};
+
 /** delete_order：删除后订单与 BOM 行均可能不复存在，op_log 是唯一留存 */
 export type OrderDeleteEventDetail = OrderSnapshotCore & {
     customer: string;
@@ -155,6 +165,7 @@ export type OutboundDeleteEventDetail = ShipmentSnapshotCore & {
 export type OpLogDetailOf = {
     create_order: OrderCreateEventDetail;
     archive_order: OrderArchiveEventDetail;
+    unarchive_order: OrderUnarchiveEventDetail;
     delete_order: OrderDeleteEventDetail;
     create_customer: CustomerCreateEventDetail;
     update_customer: CustomerUpdateEventDetail;

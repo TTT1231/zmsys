@@ -51,6 +51,7 @@ import {
     useArchiveOrder,
     useCreateOrder,
     useDeleteOrder,
+    useUnarchiveOrder,
     useUpdateOrder,
     useWbRefresh,
     useWbView,
@@ -610,7 +611,7 @@ function EditOrderModal({
                 <Modal
                     open
                     onClose={() => setConfirmArchive(false)}
-                    label="终态操作"
+                    label="归档结案"
                     title="归档销售订单"
                     subtitle={`${order.orderNo} · ${order.customer}`}
                     width={480}
@@ -632,10 +633,12 @@ function EditOrderModal({
                                 即将归档订单 <span className="tnum font-semibold text-ink">{order.orderNo}</span>（
                                 {order.customer} · 订单 {num(order.qty)} 个 · 已发 {num(order.outbound)} 个）。
                                 <p className="mt-1 text-subtle">
-                                    归档即结案：订单将从销售订单列表移入「归档订单」，仅供查询，不可修改或删除。
+                                    归档即结案：订单将从销售订单列表移入「归档订单」，归档期间不可修改或删除。
                                     {order.outbound > 0 && order.outbound < order.qty && " 剩余欠量不再安排交付。"}
                                 </p>
-                                <p className="mt-1 font-medium text-td-strong">归档为最终操作，不可恢复。</p>
+                                <p className="mt-1 font-medium text-td-strong">
+                                    归档后仅归档操作人本人可回退（入口在归档订单的订单详情）。
+                                </p>
                             </div>
                         </div>
                         <TextArea
@@ -667,7 +670,32 @@ export function OrderDetailModal({
     onEdit?: () => void;
 }) {
     const snap = useSnap();
+    const { user, can } = useApp();
+    const toast = useToast();
+    const unarchiveOrder = useUnarchiveOrder();
+    const [confirmUnarchive, setConfirmUnarchive] = useState(false);
+    const [unarchiveRemark, setUnarchiveRemark] = useState("");
     if (!order) return null;
+    /* 归档回退仅归档操作人本人可见可用（权限 + 账号判等，后端权威校验同口径）；
+       销售订单页只喂活跃订单，本入口实际只在归档订单页详情触达 */
+    const canUnarchive =
+        order.lifecycleStatus === "archived" &&
+        can("orders:unarchive") &&
+        !!order.archivedByAccount &&
+        order.archivedByAccount === user?.account;
+    const submitUnarchive = () => {
+        if (unarchiveOrder.isPending) return;
+        unarchiveOrder.mutate(
+            { orderNo: order.orderNo, expectedVersion: order.version, reason: unarchiveRemark.trim() },
+            {
+                onSuccess: () => {
+                    toast.success(`订单 ${order.orderNo} 已回退，可在「销售订单」查看`);
+                    setConfirmUnarchive(false);
+                    onClose();
+                },
+            },
+        );
+    };
     const bom = derived ? derived.bomIndex.get(order.bomCode) : bomByCode(snap, order.bomCode);
     const maxShip = derived ? (derived.byOrderNo.get(order.orderNo)?.maxShip ?? 0) : maxShipOf(snap, order.orderNo);
     const status = orderStatusOfMax(order, maxShip);
@@ -694,6 +722,11 @@ export function OrderDetailModal({
                             登记发货
                         </Button>
                     )}
+                    {canUnarchive && (
+                        <Button size="sm" icon="restore" onClick={() => setConfirmUnarchive(true)}>
+                            归档回退
+                        </Button>
+                    )}
                     <Button size="sm" variant="secondary" onClick={onClose}>
                         关闭
                     </Button>
@@ -708,7 +741,7 @@ export function OrderDetailModal({
                         { label: "剩余待交付", value: remaining },
                     ]}
                     status={<StatusBadge status={status.key} label={status.label} />}
-                    note={order.lifecycleStatus === "archived" ? "订单已归档，仅供查询，不可修改。" : undefined}
+                    note={order.lifecycleStatus === "archived" ? "订单已归档，仅供查询；归档人可回退。" : undefined}
                 />
                 <RecordProduct categories={snap.bomCategories} bom={bom} bomCode={order.bomCode} />
                 <RecordFields
@@ -762,6 +795,46 @@ export function OrderDetailModal({
                     </div>
                 </details>
             </div>
+            {confirmUnarchive && (
+                <Modal
+                    open
+                    onClose={() => setConfirmUnarchive(false)}
+                    label="归档回退"
+                    title="回退归档订单"
+                    subtitle={`${order.orderNo} · ${order.customer}`}
+                    width={480}
+                    footer={
+                        <>
+                            <Button size="sm" variant="secondary" onClick={() => setConfirmUnarchive(false)}>
+                                取消
+                            </Button>
+                            <Button size="sm" disabled={unarchiveOrder.isPending} onClick={submitUnarchive}>
+                                {unarchiveOrder.isPending ? "正在回退…" : "确认回退"}
+                            </Button>
+                        </>
+                    }
+                >
+                    <div className="flex flex-col gap-3">
+                        <div className="flex items-start gap-3 rounded-panel border border-line bg-soft p-4">
+                            <Icon name="restore" size={20} className="mt-0.5 shrink-0 text-muted" />
+                            <div className="text-14 leading-6 text-td">
+                                即将回退订单 <span className="tnum font-semibold text-ink">{order.orderNo}</span>（
+                                {order.customer} · 订单 {num(order.qty)} 个 · 已发 {num(order.outbound)} 个）。
+                                <p className="mt-1 text-subtle">
+                                    回退后订单将返回「销售订单」，恢复编辑、发货等操作；归档人/归档时间/归档备注将清空，
+                                    归档与回退过程保留在系统日志。
+                                </p>
+                            </div>
+                        </div>
+                        <TextArea
+                            label="回退备注（选填）"
+                            placeholder="如：归档错了，恢复跟进"
+                            value={unarchiveRemark}
+                            onChange={event => setUnarchiveRemark(event.target.value.slice(0, 500))}
+                        />
+                    </div>
+                </Modal>
+            )}
         </Modal>
     );
 }

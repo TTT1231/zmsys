@@ -14,6 +14,7 @@ const useWbView = vi.fn();
 vi.mock("@/data/queries", () => ({
     useSystemLogs: (...args: unknown[]) => useSystemLogs(...(args as [])),
     useWbView: (...args: unknown[]) => useWbView(...(args as [])),
+    useUnarchiveOrder: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 const pageOf = (items: SystemLogPage["items"], nextCursor: SystemLogPage["nextCursor"] = null): SystemLogPage => ({

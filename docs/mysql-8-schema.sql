@@ -153,6 +153,7 @@ INSERT INTO sys_permission (code, kind, menu_key, action_id, label, protected) V
     ('orders:edit', 'ACTION', 'orders', 'edit', '编辑订单', 0),
     ('orders:delete', 'ACTION', 'orders', 'delete', '删除订单', 1),
     ('orders:archive', 'ACTION', 'orders', 'archive', '归档订单', 1),
+    ('orders:unarchive', 'ACTION', 'orders', 'unarchive', '归档回退', 1),
     ('customers:view', 'ACTION', 'customers', 'view', '查看', 0),
     ('customers:create', 'ACTION', 'customers', 'create', '新建客户', 0),
     ('customers:edit', 'ACTION', 'customers', 'edit', '编辑客户', 0),
@@ -968,7 +969,7 @@ CREATE TABLE sales_order_change_log (
     id BIGINT NOT NULL,
     order_id BIGINT NOT NULL,
     operator_id BIGINT NOT NULL,
-    event_type ENUM('CREATE', 'UPDATE', 'ARCHIVE') NOT NULL,
+    event_type ENUM('CREATE', 'UPDATE', 'ARCHIVE', 'UNARCHIVE') NOT NULL,
     before_version BIGINT UNSIGNED NULL,
     after_version BIGINT UNSIGNED NOT NULL,
     reason VARCHAR(500) NOT NULL DEFAULT '',
@@ -988,11 +989,11 @@ CREATE TABLE sales_order_change_log (
     CONSTRAINT ck_sales_order_change_after CHECK (JSON_TYPE(after_json) = 'OBJECT'),
     CONSTRAINT ck_sales_order_change_versions CHECK (
         (event_type = 'CREATE' AND before_version IS NULL AND after_version = 1)
-        OR (event_type IN ('UPDATE', 'ARCHIVE') AND before_version IS NOT NULL AND after_version = before_version + 1)
+        OR (event_type IN ('UPDATE', 'ARCHIVE', 'UNARCHIVE') AND before_version IS NOT NULL AND after_version = before_version + 1)
     ),
     CONSTRAINT ck_sales_order_change_request CHECK (
         (request_key IS NULL OR CHAR_LENGTH(request_key) BETWEEN 8 AND 128)
-        AND (event_type NOT IN ('CREATE', 'ARCHIVE') OR request_key IS NOT NULL)
+        AND (event_type NOT IN ('CREATE', 'ARCHIVE', 'UNARCHIVE') OR request_key IS NOT NULL)
     )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -1244,6 +1245,7 @@ CREATE TABLE op_log (
     operator_role_snapshot VARCHAR(32) NOT NULL,
     action ENUM(
         'ship', 'create_customer', 'create_order', 'delete_order', 'delete_bom', 'archive_order',
+        'unarchive_order',
         'create_inbound', 'void_inbound', 'delete_inbound',
         'void_outbound', 'delete_outbound',
         'create_bom', 'update_customer',
