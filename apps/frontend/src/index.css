@@ -814,6 +814,20 @@ button:active:not(:disabled) {
         ::-webkit-scrollbar-track {
             background: transparent;
         }
+        /* 页面滚动条的空轨道跟随相邻区域：顶栏底色 + 底部分隔线 + 内容区底色。
+           只修饰根滚动条，避免滑块滚到底部后，顶栏右侧露出画布色的窄条。
+           4rem 与 Topbar 的 h-16 同源，字体缩放时边界也同步缩放。 */
+        html:has(#mainContent):not(:has([data-maximized]))::-webkit-scrollbar-track {
+            background: linear-gradient(
+                to bottom,
+                color-mix(in srgb, var(--color-surface) 88%, var(--color-canvas)) 0,
+                color-mix(in srgb, var(--color-surface) 88%, var(--color-canvas)) calc(4rem - 1px),
+                var(--color-line) calc(4rem - 1px),
+                var(--color-line) 4rem,
+                var(--color-canvas) 4rem,
+                var(--color-canvas) 100%
+            );
+        }
         ::-webkit-scrollbar-thumb {
             min-width: 32px;
             min-height: 32px;
