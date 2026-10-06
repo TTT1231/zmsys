@@ -5,6 +5,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it } from "vitest";
 import { BomCell } from "@/components/bom/BomCell";
+import { BOM_CATEGORIES } from "@/data/categories";
 import { detailBom } from "../../fixtures/recordDetails";
 afterEach(cleanup);
 it("摘要显示关键分组，展开后能核对全部物料", async () => {
@@ -29,4 +30,22 @@ it("BOM 表中可省略重复编码与品类，保留物料核对入口", () => 
     render(<BomCell bom={detailBom} bomCode={detailBom.code} showIdentity={false} />);
     expect(screen.queryByText(detailBom.code)).not.toBeInTheDocument();
     expect(screen.getByText("查看物料（5）")).toBeInTheDocument();
+});
+it("复合品类列表行的子选系列：旋转XK3 为接线工艺，不出现微动组件字样", () => {
+    const xk3 = {
+        ...detailBom,
+        name: "旋转XK3",
+        items: [
+            {
+                materialId: "3401",
+                groupKey: "pc-shell",
+                groupName: "PC塑料外壳",
+                name: "圆孔长外壳（茶色）",
+                quantity: 1,
+            },
+        ],
+    };
+    render(<BomCell bom={xk3} bomCode="XK3005" categories={BOM_CATEGORIES} />);
+    expect(screen.getByText("接线工艺：插线")).toBeInTheDocument();
+    expect(screen.queryByText(/微动/)).not.toBeInTheDocument();
 });

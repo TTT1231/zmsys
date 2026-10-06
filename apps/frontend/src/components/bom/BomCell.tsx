@@ -48,7 +48,7 @@ export function BomCell({
             )}
             {composition?.composite && (
                 <p className="bom-composite mt-1 text-13 font-medium text-primary-strong">
-                    微动组件：{composition.series}
+                    {composition.childKind}：{composition.series}
                 </p>
             )}
             <p className="bom-summary mt-1 text-13 leading-5 text-muted" title={summary}>

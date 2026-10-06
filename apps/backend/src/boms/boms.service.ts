@@ -225,18 +225,20 @@ export class BomsService {
             async (tx: Tx, { idempotencyKey: key }) => {
                 const category = await this.lockCategoryByName(tx, dto.name);
                 const childCategories = childCategoriesOf(category.childCategories);
+                /* 子选叫法：旋转XK3 为接线工艺（焊线/插线），其余复合品类（跌倒开关）为微动开关类型 */
+                const childLabel = category.categoryKey === "rotary-xk3" ? "接线工艺" : "微动开关类型";
                 let childCategoryRow: BomCategoryRow | null = null;
                 if (childCategories.length > 0) {
                     if (!dto.childCategory) {
-                        throw new BadRequestException("请选择微动开关类型");
+                        throw new BadRequestException(`请选择${childLabel}`);
                     }
                     if (!childCategories.includes(dto.childCategory)) {
-                        throw new BadRequestException("微动开关类型不在本品类允许范围内");
+                        throw new BadRequestException(`${childLabel}不在本品类允许范围内`);
                     }
                     childCategoryRow = await tx.bomCategory.findUnique({ where: { categoryKey: dto.childCategory } });
                     // 目录容器品类（焊线/插线）停用仅表示不出现在建档下拉，仍可被引用合并目录
                     if (!childCategoryRow) {
-                        throw new BadRequestException("微动开关类型不存在或已停用");
+                        throw new BadRequestException(`${childLabel}不存在或已停用`);
                     }
                 }
 

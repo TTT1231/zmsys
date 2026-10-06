@@ -539,6 +539,32 @@ describe("BOM/成品档案 (e2e)", () => {
         expect(second.json().data.code).not.toBe(created.json().data.code);
     });
 
+    it("旋转XK3：接线工艺二分——校验文案按接线工艺，插线目录可建档", async () => {
+        const shell = await itemIdOf("xk3-plug", "PC塑料外壳", "圆孔长外壳（茶色）");
+
+        // 未带 childCategory → 400（文案是接线工艺，不是微动开关类型）
+        const missing = await createBom({ name: "旋转XK3", materialItemIds: [shell] }, `e2e-bom-${RUN}-xk3-missing`);
+        expect(missing.statusCode).toBe(400);
+        expect(missing.json().message).toBe("请选择接线工艺");
+
+        // childCategory 不在允许列表 → 400
+        const wrong = await createBom(
+            { name: "旋转XK3", materialItemIds: [shell], childCategory: "new-micro-switch" },
+            `e2e-bom-${RUN}-xk3-wrong`,
+        );
+        expect(wrong.statusCode).toBe(400);
+        expect(wrong.json().message).toBe("接线工艺不在本品类允许范围内");
+
+        // 合法建档：插线目录（childCategory = xk3-plug）
+        const created = await createBom(
+            { name: "旋转XK3", materialItemIds: [shell], childCategory: "xk3-plug" },
+            `e2e-bom-${RUN}-xk3-ok`,
+        );
+        expect(created.statusCode).toBe(200);
+        expect(created.json().data.code).toMatch(/^XK3\d{3,}$/);
+        expect(created.json().data.spec).toContain("PC塑料外壳：圆孔长外壳（茶色）");
+    });
+
     it("staff 无 bom:create 403", async () => {
         const staffToken = await createUser(accountOf("staff02"), "staff");
         const direction = await itemIdOf("rotary-switch", "方向", "正面");

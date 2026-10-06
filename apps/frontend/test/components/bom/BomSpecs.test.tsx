@@ -113,3 +113,26 @@ it("跌倒开关按新建目录分为本体和老微动，详情和行内展开�
     rerender(<BomSpecs bom={bom} categories={BOM_CATEGORIES} layout="list" showIdentity={false} />);
     expect(screen.getByRole("region", { name: "微动开关 · 老微动" })).toHaveTextContent("带CB");
 });
+
+it("旋转XK3 详情不输出空的本体节，子件节按接线工艺命名", () => {
+    const bom = {
+        ...microBom,
+        code: "XK3005",
+        name: "旋转XK3",
+        items: [
+            {
+                materialId: "3401",
+                groupKey: "pc-shell",
+                groupName: "PC塑料外壳",
+                name: "圆孔长外壳（茶色）",
+                quantity: 1,
+            },
+            { materialId: "3406", groupKey: "pc-base", groupName: "PC塑料底座", name: "底座：茶色", quantity: 1 },
+        ],
+    };
+    render(<BomSpecs bom={bom} categories={BOM_CATEGORIES} />);
+    expect(screen.queryByRole("region", { name: "旋转XK3本体" })).not.toBeInTheDocument();
+    const section = screen.getByRole("region", { name: "接线工艺 · 插线" });
+    expect(section).toHaveTextContent("圆孔长外壳（茶色）");
+    expect(section).toHaveTextContent("2 项物料");
+});

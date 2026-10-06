@@ -1550,7 +1550,7 @@ components:
                 childCategory:
                     type: string
                     maxLength: 40
-                    description: 品类子选 key（品类标记 childCategories 时必填，如跌倒开关的微动开关类型 new-micro-switch / old-micro-switch）；该子品类完整物料目录并入校验范围
+                    description: 品类子选 key（品类标记 childCategories 时必填，如跌倒开关的微动开关类型 new-micro-switch / old-micro-switch、旋转XK3 的接线工艺 xk3-wire / xk3-plug）；该子品类完整物料目录并入校验范围
 
                 remark:
                     type: string

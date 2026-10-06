@@ -31,3 +31,25 @@ it("旧本体物料即使退出目录，也按冻结分组保留在本体中", (
     expect(result.sections[0].items).toEqual([retired]);
     expect(result.series).toBe("老微动");
 });
+
+/* 旋转XK3：接线工艺二分——主品类无自有目录，不输出空本体节，子件节按接线工艺命名 */
+const xk3Item = {
+    materialId: "3401",
+    groupKey: "pc-shell",
+    groupName: "PC塑料外壳",
+    name: "圆孔长外壳（茶色）",
+    quantity: 1,
+};
+it("旋转XK3 无本体节，子件节按接线工艺命名（不出现微动开关字样）", () => {
+    const result = bomComposition({ name: "旋转XK3", items: [xk3Item] }, BOM_CATEGORIES);
+    expect(result.composite).toBe(true);
+    expect(result.sections.map(section => section.title)).toEqual(["接线工艺 · 插线"]);
+    expect(result.series).toBe("插线");
+    expect(result.childKind).toBe("接线工艺");
+});
+it("旋转XK3 的未知历史物料进系列待确认节，同样不冠微动开关", () => {
+    const unknown = { ...xk3Item, materialId: "retired" };
+    const result = bomComposition({ name: "旋转XK3", items: [unknown] }, BOM_CATEGORIES);
+    expect(result.sections.map(section => section.title)).toEqual(["接线工艺 · 系列待确认"]);
+    expect(result.series).toBe("系列待确认");
+});
