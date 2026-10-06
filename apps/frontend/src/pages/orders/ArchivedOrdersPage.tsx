@@ -40,7 +40,8 @@ const SORT_COLUMNS: Array<{ key: ArchivedSortKey; label: string }> = [
     { key: "archivedAt", label: "归档时间" },
 ];
 
-/** 归档订单：终态存档仅供查询（编辑/发货/取消入口均不提供），归档人与时间见详情 */
+/** 归档订单：存档仅供查询（编辑/发货入口均不提供），归档人与时间见详情；
+ *  误归档由归档操作人本人在详情中回退（orders:unarchive，后端判等归档人） */
 export function ArchivedOrdersPage() {
     const { snap, isLoading, refreshing: overlay } = useWbView();
     const { refresh } = useWbRefresh();

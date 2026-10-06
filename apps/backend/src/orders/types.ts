@@ -16,5 +16,7 @@ export interface Order {
     createdAt: string;
     archivedAt?: string;
     archivedBy?: string;
+    /** 归档操作人账号（仅归档终态返回）：前端归档回退入口判等用，账号唯一且不可改 */
+    archivedByAccount?: string;
     archiveReason?: string;
 }

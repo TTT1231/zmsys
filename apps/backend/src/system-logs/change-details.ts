@@ -12,6 +12,7 @@ import type {
     InboundVoidEventDetail,
     OrderArchiveEventDetail,
     OrderCreateEventDetail,
+    OrderUnarchiveEventDetail,
     OrderSnapshotCore,
     ShipEventDetail,
     ShipmentSnapshotCore,
@@ -139,6 +140,15 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
             return [
                 { key: "customer", label: "客户", before: null, after: asText(snapshot.customer) },
                 { key: "lifecycleStatus", label: "订单状态", before: "进行中", after: "已归档" },
+                { key: "qty", label: "订单数量", before: null, after: qtyText(snapshot.qty) },
+            ].filter(change => change.after !== null);
+        }
+        case "unarchive_order": {
+            // 回退前必为 ARCHIVED（未归档不可回退），状态变更可推断；数量为回退时口径
+            const snapshot = (detail ?? {}) as OrderUnarchiveEventDetail;
+            return [
+                { key: "customer", label: "客户", before: null, after: asText(snapshot.customer) },
+                { key: "lifecycleStatus", label: "订单状态", before: "已归档", after: "进行中" },
                 { key: "qty", label: "订单数量", before: null, after: qtyText(snapshot.qty) },
             ].filter(change => change.after !== null);
         }

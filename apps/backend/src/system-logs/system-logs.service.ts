@@ -43,6 +43,7 @@ interface LogSourceRow {
 const OP_LOG_DOMAIN: Record<TimelineOpLogAction, SystemLogDomain> = {
     create_order: "order",
     archive_order: "order",
+    unarchive_order: "order",
     delete_order: "order",
     create_customer: "customer",
     update_customer: "customer",
@@ -60,6 +61,7 @@ const OP_LOG_DOMAIN: Record<TimelineOpLogAction, SystemLogDomain> = {
 const OP_LOG_ACTION: Record<TimelineOpLogAction, SystemLogAction> = {
     create_order: "create",
     archive_order: "archive",
+    unarchive_order: "unarchive",
     delete_order: "delete",
     create_customer: "create",
     update_customer: "edit",

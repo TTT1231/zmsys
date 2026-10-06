@@ -12,7 +12,7 @@ export class SystemLogsQueryDto {
 
     /** 操作类型筛选；缺省全部 */
     @IsOptional()
-    @IsIn(["create", "edit", "transfer", "archive", "delete", "void", "ship", "adjust"])
+    @IsIn(["create", "edit", "transfer", "archive", "unarchive", "delete", "void", "ship", "adjust"])
     action?: SystemLogAction;
 
     /** 时间范围：今天 / 最近 7 天 / 最近 30 天（均含今天，北京日界）/ 自定义 */

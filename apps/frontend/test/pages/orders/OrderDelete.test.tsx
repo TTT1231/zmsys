@@ -20,6 +20,7 @@ vi.mock("@/data/queries", () => ({
     useCreateOrder: () => ({ mutate: vi.fn(), isPending: false }),
     useUpdateOrder: () => ({ mutate: vi.fn(), isPending: false }),
     useArchiveOrder: () => ({ mutate: vi.fn(), isPending: false }),
+    useUnarchiveOrder: () => ({ mutate: vi.fn(), isPending: false }),
     useDeleteOrder: () => ({ mutate: deleteMutate, isPending: false }),
 }));
 

@@ -53,6 +53,7 @@ import {
     updateInbound,
     updateOrder as updateOrderReq,
     updateUser as updateUserReq,
+    unarchiveOrder as unarchiveOrderReq,
     voidInbound,
     voidOutbound,
 } from "@/api";
@@ -242,6 +243,12 @@ export const useArchiveOrder = () =>
     useWbMutation((input: { orderNo: string; expectedVersion: number; reason?: string }) => {
         const { orderNo, ...body } = input;
         return archiveOrderReq(orderNo, body);
+    });
+/** 回退归档（仅归档操作人本人，超级管理员）：备注选填，空串由后端归一 */
+export const useUnarchiveOrder = () =>
+    useWbMutation((input: { orderNo: string; expectedVersion: number; reason?: string }) => {
+        const { orderNo, ...body } = input;
+        return unarchiveOrderReq(orderNo, body);
     });
 export const useDeleteOrder = () =>
     useWbMutation((input: { orderNo: string; expectedVersion: number }) => {

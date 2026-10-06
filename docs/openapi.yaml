@@ -174,7 +174,7 @@ paths:
             tags: [orders]
             operationId: archiveOrder
             summary: 归档订单（终态）
-            description: 受保护权限 `orders:archive`，仅 super。收尾已完成或部分发货的订单使其退出活跃视图：归档后订单从销售订单页移入归档订单页，仅供查询，不可修改/删除，剩余欠量（若有）不再安排交付。一件未发的订单不可归档（手误单走删除）；存在未作废出库单时归档直接放行，已发数量保留。归档为最终终态，不可恢复，且冻结依赖链：该订单的出库单不可作废/删除（审计依据），被引用 BOM 不可删除。归档人、归档时间与备注（选填）随行落库并写 change_log ARCHIVE 事件与 op_log 供审计。幂等（Idempotency-Key）。
+            description: 受保护权限 `orders:archive`，仅 super。收尾已完成或部分发货的订单使其退出活跃视图：归档后订单从销售订单页移入归档订单页，仅供查询，不可修改/删除，剩余欠量（若有）不再安排交付。一件未发的订单不可归档（手误单走删除）；存在未作废出库单时归档直接放行，已发数量保留。归档期间冻结依赖链：该订单的出库单不可作废/删除（审计依据），被引用 BOM 不可删除；归档后仅归档操作人本人可经 unarchiveOrder 回退。归档人、归档时间与备注（选填）随行落库并写 change_log ARCHIVE 事件与 op_log 供审计。幂等（Idempotency-Key）。
             parameters:
                 - $ref: "#/components/parameters/OrderNo"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -183,6 +183,31 @@ paths:
                 content:
                     application/json:
                         schema: { $ref: "#/components/schemas/ArchiveOrderInput" }
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/OrderEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
+
+    /orders/{orderNo}/unarchive:
+        post:
+            tags: [orders]
+            operationId: unarchiveOrder
+            summary: 回退归档订单
+            description: 受保护权限 `orders:unarchive`，仅 super，且仅归档操作人本人（服务端按 `archived_by` 判等，超管同样受限；非归档人 403）。把误归档的订单退回 ACTIVE：订单返回销售订单页，恢复编辑/发货/删除，出库单恢复可作废/删除，可发量分配重新纳入该订单；归档三要素（archived_at/archived_by/archive_reason）随回退清空（DB CHECK 强制），归档与回退语境由 ARCHIVE/UNARCHIVE 变更日志快照保留。回退备注（选填）随行落库；写 change_log UNARCHIVE 事件与 op_log（unarchive_order）供审计。再次归档时新归档人接替回退权。幂等（Idempotency-Key）。
+            parameters:
+                - $ref: "#/components/parameters/OrderNo"
+                - $ref: "#/components/parameters/IdempotencyKey"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/UnarchiveOrderInput" }
             responses:
                 "200":
                     description: 成功
@@ -863,7 +888,7 @@ paths:
                   required: false
                   schema:
                       type: string
-                      enum: [create, edit, transfer, archive, delete, void, ship, adjust]
+                      enum: [create, edit, transfer, archive, unarchive, delete, void, ship, adjust]
                 - name: range
                   in: query
                   required: false
@@ -1319,6 +1344,7 @@ components:
                 createdAt: { type: string, format: date-time, description: 创建时刻 }
                 archivedAt: { type: string, format: date-time, description: 仅归档终态返回 }
                 archivedBy: { type: string, description: 归档操作人姓名 }
+                archivedByAccount: { type: string, description: 归档操作人账号（仅归档终态返回），前端归档回退入口判等用 }
                 archiveReason: { type: string, description: 归档备注（选填） }
 
         CreateOrderInput:
@@ -1353,6 +1379,14 @@ components:
             properties:
                 expectedVersion: { type: integer, minimum: 1 }
                 reason: { type: string, maxLength: 500, description: 归档备注（选填） }
+
+        UnarchiveOrderInput:
+            type: object
+            additionalProperties: false
+            required: [expectedVersion]
+            properties:
+                expectedVersion: { type: integer, minimum: 1 }
+                reason: { type: string, maxLength: 500, description: 回退备注（选填） }
 
         DeleteOrderInput:
             type: object
@@ -1875,7 +1909,7 @@ components:
                         name: { type: string, description: 操作人姓名（op_log 来源为快照；其余来源为当前姓名） }
                         role: { type: string, description: 角色 code（super/admin/warehouse/sales/staff） }
                 domain: { type: string, enum: [customer, order, bom, inbound, outbound] }
-                action: { type: string, enum: [create, edit, transfer, archive, delete, void, ship, adjust] }
+                action: { type: string, enum: [create, edit, transfer, archive, unarchive, delete, void, ship, adjust] }
                 targetCode: { type: string, description: 订单号/客户编码/BOM 编码/单号 }
                 targetName: { type: [string, "null"], description: 目标名称快照；无名称路径的事件为 null }
                 changes:

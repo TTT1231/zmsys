@@ -96,6 +96,14 @@ const ACTION_META: Record<SystemLogAction, ActionMeta> = {
         dot: "bg-violet",
         text: "text-violet",
     },
+    unarchive: {
+        label: "回退归档",
+        verb: "回退了归档",
+        icon: "restore",
+        tone: "bg-teal-soft text-teal",
+        dot: "bg-teal",
+        text: "text-teal",
+    },
     delete: {
         label: "删除",
         verb: "删除了",

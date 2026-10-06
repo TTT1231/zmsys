@@ -421,6 +421,96 @@ describe("系统日志 (e2e)", () => {
         expect(items.map(item => item.action)).toEqual(["archive", "edit", "create"]);
     });
 
+    it("回退归档：unarchive 事件进订单域时间线（已归档→进行中）且 action 筛选命中", async () => {
+        // 独立订单（keyword 隔离）：直插出库流水满足归档前提，归档后由归档人回退
+        const order = await post(
+            "/orders",
+            superToken,
+            {
+                customerCode: customerCodeA,
+                bomCode,
+                qty: 100,
+                deliverDate: "2027-06-30",
+                orderDate: today(),
+                remark: `e2e 日志回退订单 ${RUN}`,
+            },
+            `e2e-sl-${RUN}-unarc-order`,
+        );
+        expect(order.statusCode).toBe(200);
+        const targetNo = (order.body.data as { orderNo: string }).orderNo;
+
+        const superUser = await prisma.sysUser.findUnique({ where: { account: "guojun" } });
+        const orderId = (await prisma.salesOrderTable.findUnique({ where: { orderNo: targetNo } }))!.id;
+        const now = new Date();
+        await prisma.outboundShipment.create({
+            data: {
+                id: snowflake.next(),
+                shipmentNo: `CKE2ESL${RUN}`,
+                orderId,
+                originalQty: 30,
+                businessDate: now,
+                state: "REGISTERED",
+                requestKey: `e2e-sl-${RUN}-unarc-ship`,
+                registeredBy: superUser!.id,
+                registeredAt: now,
+            },
+        });
+        await prisma.outboundLedger.create({
+            data: {
+                id: snowflake.next(),
+                eventNo: `CKE2ESL${RUN}-E1`,
+                shipmentId: (await prisma.outboundShipment.findUnique({ where: { shipmentNo: `CKE2ESL${RUN}` } }))!.id,
+                entryType: "NORMAL",
+                qtyDelta: 30,
+                businessDate: now,
+                operatorId: superUser!.id,
+                requestKey: `e2e-sl-${RUN}-unarc-ledger`,
+                createdAt: now,
+            },
+        });
+
+        const archive = await post(
+            `/orders/${targetNo}/archive`,
+            superToken,
+            { expectedVersion: 1 },
+            `e2e-sl-${RUN}-unarc-arc`,
+        );
+        expect(archive.statusCode).toBe(200);
+        const unarchive = await post(
+            `/orders/${targetNo}/unarchive`,
+            superToken,
+            { expectedVersion: 2, reason: "归档错了，恢复跟进" },
+            `e2e-sl-${RUN}-unarc-unarc`,
+        );
+        expect(unarchive.statusCode).toBe(200);
+
+        // 时间线降序：回退 → 归档 → 创建
+        const page = await logs(superToken, `?domain=order&keyword=${targetNo}&limit=100`);
+        expect(page.statusCode).toBe(200);
+        expect(entriesOf(page).map(item => item.action)).toEqual(["unarchive", "archive", "create"]);
+
+        const entry = entriesOf(page)[0]!;
+        expect(entry).toMatchObject({
+            domain: "order",
+            action: "unarchive",
+            targetCode: targetNo,
+            targetName: `日志客户甲_${RUN}`,
+            reason: "归档错了，恢复跟进",
+        });
+        expect(entry.actor).toEqual({ name: "郭均", role: "super" });
+        // 状态由已归档推断为进行中，快照数量为回退时口径
+        expect(entry.changes).toEqual([
+            { key: "customer", label: "客户", before: null, after: `日志客户甲_${RUN}` },
+            { key: "lifecycleStatus", label: "订单状态", before: "已归档", after: "进行中" },
+            { key: "qty", label: "订单数量", before: null, after: "100 个" },
+        ]);
+
+        // action=unarchive 筛选只命中回退事件
+        const filtered = await logs(superToken, `?action=unarchive&keyword=${targetNo}&limit=100`);
+        expect(filtered.statusCode).toBe(200);
+        expect(entriesOf(filtered).map(item => item.action)).toEqual(["unarchive"]);
+    });
+
     it("客户域：创建/编辑/移交三类动作，电话只记是否变更、移交带 from→to", async () => {
         const page = await logs(superToken, `?domain=customer&keyword=${RUN}&limit=100`);
         expect(page.statusCode).toBe(200);
