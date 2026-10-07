@@ -51,7 +51,6 @@ export const PERMISSIONS = {
     OUTBOUND_VIEW: "outbound:view",
     OUTBOUND_SHIP: "outbound:ship",
     OUTBOUND_VOID: "outbound:void",
-    OUTBOUND_PRINT: "outbound:print",
     OUTBOUND_DELETE: "outbound:delete", // 默认授仓管，超管可按需授予其他角色
 
     // ---- 用户与权限（受保护，仅 super）----

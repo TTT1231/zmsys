@@ -30,7 +30,7 @@ interface AppState {
     setGlobalSearch: (value: string) => void;
     /** 当前角色的授权（含菜单与操作权限码），由 /auth/profile 下发 */
     grant: RoleGrant;
-    /** 权限码判断：can("outbound:print") */
+    /** 权限码判断：can("outbound:ship") */
     can: (perm: PermCode) => boolean;
     /** 登录成功后建立会话并返回登录用户（供欢迎提示等使用）；失败抛出带 message 的错误供登录页展示 */
     login: (account: string, password: string) => Promise<WbUser | null>;

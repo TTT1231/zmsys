@@ -5,7 +5,6 @@ import type { Tx } from "../prisma/transaction.runner";
 import { SnowflakeGenerator } from "../common/snowflake";
 import { IdempotencyService } from "../idempotency/idempotency.service";
 import { formatDateColumn, formatBeijingStamp, toDateColumn } from "../common/datetime";
-import { bomSpecOf } from "../common/bom-display";
 import type { ExpectedVersionDto } from "../common/dto/expected-version.dto";
 import { assertVersionMatches, lockRowForWrite, lockRowByKey, lockRowsById } from "../domain/concurrency";
 import { computeShippableQty } from "../domain/inventory";
@@ -14,7 +13,7 @@ import type { ShipmentSnapshotCore } from "../domain/snapshots";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
 import type { AuthUser } from "../common/types/auth-user";
 import type { OutboundShipment } from "../generated/prisma/client";
-import type { OutboundPrintDocument, OutboundRow } from "./types";
+import type { OutboundRow } from "./types";
 import type { CreateOutboundDto } from "./dto/create-outbound.dto";
 
 /** api_idempotency 的 operation_key，与前端 mock 同粒度 */
@@ -22,7 +21,7 @@ const CREATE_OPERATION_KEY = "outbound:create";
 const voidOperationKeyOf = (no: string): string => `outbound:void:${no}`;
 const deleteOperationKeyOf = (no: string): string => `outbound:delete:${no}`;
 
-/** 单头 + 响应映射必需的关联（列表/作废/删除路径；打印路径另取冻结快照，见 PRINT_SHIPMENT_INCLUDE） */
+/** 单头 + 响应映射必需的关联（列表/登记/作废/删除路径共用） */
 type ShipmentRow = OutboundShipment & {
     order: {
         orderNo: string;
@@ -47,12 +46,6 @@ const SHIPMENT_INCLUDE = {
     },
     registrar: { select: { name: true } },
     ledgers: { select: { entryType: true, remark: true } },
-} satisfies Prisma.OutboundShipmentInclude;
-
-/** 打印文档额外携带订单冻结 bomSpecSnapshot（规格摘要取快照，不读当前目录） */
-const PRINT_SHIPMENT_INCLUDE = {
-    ...SHIPMENT_INCLUDE,
-    order: { select: { ...SHIPMENT_INCLUDE.order.select, bomSpecSnapshot: true } },
 } satisfies Prisma.OutboundShipmentInclude;
 
 @Injectable()
@@ -341,40 +334,6 @@ export class OutboundService {
             remark: this.normalRemarkOf(row),
             state: row.state === "VOIDED" ? "voided" : "registered",
             version: Number(row.rowVersion),
-        };
-    }
-
-    /**
-     * 打印出库单文档（契约 outbound:print，纯读）：未删除的任意状态（含已作废）可打、可重复，
-     * 实时组装不落日志不改单头状态；printedBy/printedAt 反映本次输出时点。
-     * 文档快照源：订单冻结快照（不读当前客户/BOM 主数据与物料目录，防漂移），
-     * state/voidReason 来自单头，供打印件渲染作废标注。
-     */
-    async printOutboundDocument(shipmentNo: string, actor: AuthUser): Promise<OutboundPrintDocument> {
-        const current = await this.prisma.outboundShipment.findUnique({
-            where: { shipmentNo },
-            include: PRINT_SHIPMENT_INCLUDE,
-        });
-        if (!current || current.deletedAt !== null) {
-            throw new NotFoundException("出库单不存在");
-        }
-        const voided = current.state === "VOIDED";
-        return {
-            no: current.shipmentNo,
-            orderNo: current.order.orderNo,
-            customer: current.order.customerNameSnapshot,
-            customerCode: current.order.customer.customerCode,
-            bomCode: current.order.bom.bomCode,
-            bomSpec: bomSpecOf(current.order.bomSpecSnapshot),
-            qty: current.originalQty,
-            date: formatDateColumn(current.businessDate),
-            registeredAt: current.registeredAt.toISOString(),
-            operator: current.registrar.name,
-            remark: this.normalRemarkOf(current),
-            state: voided ? "voided" : "registered",
-            ...(voided ? { voidReason: current.voidReason ?? "" } : {}),
-            printedBy: actor.name,
-            printedAt: new Date().toISOString(),
         };
     }
 

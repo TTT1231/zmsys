@@ -154,7 +154,7 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 - `material_item`：可选物料项（如“6.3支架：铜镀银”“二脚底座（无挡脚）”），完整物料名逐项可选，不再组合。
 - `bom_item`：BOM 明细行，建档时冻结 `group_key/group_name/name/position/quantity` 快照（数量分组 1-99，其余恒 1）。
 
-**目录不可变边界**：已被 `bom_item` 引用的物料不得改名、移组或复用 id；规格变化 = 新增物料项 + 旧项停用；停用只影响新建选择，已建 BOM 依靠快照完整显示。唯一例外是**名称规范化**——同一规格仅修正显示名（如触点大小 0.3 → 3.0mm、卡线片 0.15 → 底盖0.15，见迁移 20260923000000）：原地改名保留 id，且同一迁移内必须同步改写 `bom_item` 冻结名与订单 `bom_spec_snapshot`，保证新旧档案显示一致；`sales_order_change_log` 为历史凭证不回改。订单 `bom_spec_snapshot` 冻结 `{items: [{materialId, groupKey, groupName, name, position, quantity}], modelCode, spec}`（JSON 对象，quantity 于 2026-09 加入，旧快照缺省按 1），出库打印文档的 `bomSpec` 直接取该冻结值，不读当前目录。
+**目录不可变边界**：已被 `bom_item` 引用的物料不得改名、移组或复用 id；规格变化 = 新增物料项 + 旧项停用；停用只影响新建选择，已建 BOM 依靠快照完整显示。唯一例外是**名称规范化**——同一规格仅修正显示名（如触点大小 0.3 → 3.0mm、卡线片 0.15 → 底盖0.15，见迁移 20260923000000）：原地改名保留 id，且同一迁移内必须同步改写 `bom_item` 冻结名与订单 `bom_spec_snapshot`，保证新旧档案显示一致；`sales_order_change_log` 为历史凭证不回改。订单 `bom_spec_snapshot` 冻结 `{items: [{materialId, groupKey, groupName, name, position, quantity}], modelCode, spec}`（JSON 对象，quantity 于 2026-09 加入，旧快照缺省按 1），展示侧（系统日志的规格构成等）直接取该冻结值，不读当前目录。
 
 ### 5.2 `bom_table`
 
@@ -240,25 +240,16 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 
 ### 7.3 `outbound_shipment` / `outbound_ledger`
 
-出库单头只有两个状态：`REGISTERED`（已登记）与 `VOIDED`（已作废）。2026-09 迁移将历史 `PRINTED` 单头回退为 `REGISTERED`（打印不再是状态），该回退不产生 `outbound_state_log` 事件。
+出库单头只有两个状态：`REGISTERED`（已登记）与 `VOIDED`（已作废）。2026-09 迁移将历史 `PRINTED` 单头回退为 `REGISTERED`，该回退不产生 `outbound_state_log` 事件。
 
 - 仓管/超级管理员登记时，在同一事务创建 `outbound_shipment(state=REGISTERED)` 和一条正向 `outbound_ledger`，库存和订单累计已发立即生效。
 - 作废是唯一逆向操作：仓管或超级管理员对 `REGISTERED` 单填写作废原因，事务追加等额负向冲销流水并将单头置为 `VOIDED`，库存与订单净额随之恢复；已作废单不能重复作废；作废另在 `op_log` 记 `void_outbound`。
-- 未删除的已作废出库单仍可打印（打印件带作废标注）；客户退货必须走后续销售退货入库，原出库事实永久保留。
-- **删除已作废单（2026-09 起，软删除）**：权限 `outbound:delete`（默认授仓管，非受保护）。仅 `VOIDED` 可删（作废时已追加冲销、订单已发量已恢复）。删除 = 单头打 `deleted_at` 标记、出库列表与 BOM 库存流水过滤，按单号打印返回 404，不递增 `row_version`、不写状态日志；`op_log` 记 `delete_outbound` 与删除前快照（含原始发货备注、登记人/时点、作废原因），登记发货的 `ship` 日志也冻结原始备注。7 天保留期后 maintenance 物理清理：连带 `outbound_state_log` 与 `NORMAL`+`CORRECTION` 数量流水同删（先删 CORRECTION 再删 NORMAL，自引用外键顺序）；零和冲销对不改变任何统计与订单已发。出库单软删除后，关联订单在净发货为零时可立即软删除（见 6.1）。
+- 未删除的已作废出库单不可修改；客户退货必须走后续销售退货入库，原出库事实永久保留。
+- **删除已作废单（2026-09 起，软删除）**：权限 `outbound:delete`（默认授仓管，非受保护）。仅 `VOIDED` 可删（作废时已追加冲销、订单已发量已恢复）。删除 = 单头打 `deleted_at` 标记、出库列表与 BOM 库存流水过滤，不递增 `row_version`、不写状态日志；`op_log` 记 `delete_outbound` 与删除前快照（含原始发货备注、登记人/时点、作废原因），登记发货的 `ship` 日志也冻结原始备注。7 天保留期后 maintenance 物理清理：连带 `outbound_state_log` 与 `NORMAL`+`CORRECTION` 数量流水同删（先删 CORRECTION 再删 NORMAL，自引用外键顺序）；零和冲销对不改变任何统计与订单已发。出库单软删除后，关联订单在净发货为零时可立即软删除（见 6.1）。
 
 同一出库单的有效出库量等于其 `outbound_ledger Σqty_delta`，不得小于 0。冲销事件必须引用原正向事件；原数量事件永不更新或删除。
 
-### 7.4 打印文档输出
-
-打印是无副作用的纯读动作，不再是“放行点”：
-
-- 持有 `outbound:print` 权限者（管理员/超级管理员）可对任意状态（含已作废）的单据发起打印，可重复，不需要原因，不落任何日志、不修改单头状态与版本。
-- 后端按请求实时组装文档：单据内容取订单冻结快照（客户名、BOM 编码、规格，不读当前主数据与目录），`state`/`voidReason` 取单头当前值（打印件据此渲染作废标注），`printedBy`/`printedAt` 为本次输出人与时点。
-- 无并发控制：与作废同时发生时，打印件可能反映作废前一瞬的状态——纯输出语义下可接受，以单头落库状态为准。
-- 纸质签字和安排人员发货属于线下流程，不伪装成系统电子签名。
-
-### 7.5 客户撤单场景（无取消生命周期）
+### 7.4 客户撤单场景（无取消生命周期）
 
 - 未发货不要了：由超级管理员直接删除订单（须净发货为 0 且关联出库单均已删除）。
 - 已部分发货后不要了：由超级管理员归档结案，剩余欠量随归档关闭。

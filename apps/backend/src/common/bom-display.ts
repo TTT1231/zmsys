@@ -2,7 +2,7 @@
  * BOM 物料目录契约与快照摘要（db-scheme.md §5）：BOM = 品类 + 选中物料集合，
  * 建档时冻结 groupKey/groupName/name/position/quantity 到 bom_item；展示与
  * 摘要（“组名：物料名 ×N”按冻结 position 排序，数量 1 省略 ×N）不依赖当前
- * 目录——目录后续改名、排序调整或停用都不影响已建 BOM 与订单/出库打印快照。
+ * 目录——目录后续改名、排序调整或停用都不影响已建 BOM 与订单冻结快照。
  */
 
 /** 契约 BomCatalogNode（openapi boms tag）：分区为纯展示树节点，分组挂可选物料 */
@@ -89,9 +89,9 @@ export function bomItemViewsOf(items: readonly BomItemSnapshotInput[]): BomItemV
 }
 
 /**
- * 打印文档 bomSpec（契约 outbound:print）：取订单冻结快照的 spec 字符串；
- * 存量快照缺失的 spec 已由迁移 20260947000000 一次性回填，读侧不再按 items
- * 兜底重拼——异常缺失返回空串（与空值不展示口径一致）。
+ * 订单冻结快照的规格摘要（系统日志 change-details 的「规格构成」展示）：
+ * 取快照的 spec 字符串；存量快照缺失的 spec 已由迁移 20260947000000 一次性
+ * 回填，读侧不再按 items 兜底重拼——异常缺失返回空串（与空值不展示口径一致）。
  */
 export function bomSpecOf(snapshot: unknown): string {
     const shape = snapshot as { spec?: unknown } | null;

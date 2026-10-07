@@ -1110,10 +1110,7 @@ function MatrixTab() {
                                         <td key={role.id} className="border border-line px-3 py-2 text-center">
                                             <span className="inline-flex max-w-45 flex-wrap justify-center gap-1">
                                                 {nonView.map(action => (
-                                                    <Badge
-                                                        key={action.id}
-                                                        tone={action.id === "print" ? "ready" : "progress"}
-                                                    >
+                                                    <Badge key={action.id} tone="progress">
                                                         {action.label}
                                                     </Badge>
                                                 ))}

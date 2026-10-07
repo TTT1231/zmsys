@@ -7,9 +7,9 @@ import { CreateOutboundDto } from "./dto/create-outbound.dto";
 import { VoidResourceDto } from "../common/dto/void-resource.dto";
 import { ExpectedVersionDto } from "../common/dto/expected-version.dto";
 import type { AuthUser } from "../common/types/auth-user";
-import type { OutboundPrintDocument, OutboundRow } from "./types";
+import type { OutboundRow } from "./types";
 
-/** 成品出库（openapi outbound tag）：登记 → 需要时打印纸质单；作废只追加冲销流水 */
+/** 成品出库（openapi outbound tag）：登记/作废/删除；作废只追加冲销流水 */
 @Controller("outbound")
 export class OutboundController {
     constructor(private readonly outboundService: OutboundService) {}
@@ -53,15 +53,5 @@ export class OutboundController {
         @Headers("idempotency-key") idempotencyKey: string | undefined,
     ): Promise<null> {
         return this.outboundService.deleteOutbound(no, dto, actor, idempotencyKey);
-    }
-
-    /** 打印文档为纯读输出：任意状态可打、可重复，不落日志不改状态 */
-    @Get(":no/print")
-    @Permissions([PERMISSIONS.OUTBOUND_PRINT], "无权打印出库单")
-    async printOutboundDocument(
-        @Param("no") no: string,
-        @CurrentUser() actor: AuthUser,
-    ): Promise<OutboundPrintDocument> {
-        return this.outboundService.printOutboundDocument(no, actor);
     }
 }

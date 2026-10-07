@@ -1,7 +1,7 @@
 /**
  * 成品出入库集成测试：真实 HTTP 管线 + 真实测试库（*_test 种子数据）。
  * 覆盖用户核心场景：销售订单 600 件 → 入库 200 → 发货 200 → 订单累计已发 200；
- * 以及 §6.2 可发量拦截、§7.1 当天修正/作废窗口、库存调整、打印文档输出与作废。
+ * 以及 §6.2 可发量拦截、§7.1 当天修正/作废窗口、库存调整与作废。
  * 运行前置：pnpm test:db:reset。
  */
 import "./db-guard";
@@ -347,7 +347,7 @@ describe("成品出入库 (e2e)", () => {
         });
     });
 
-    it("修正后库存可再发 100：累计已发 300；打印文档为纯读输出（权限、可重复、不改状态）", async () => {
+    it("修正后库存可再发 100：累计已发 300", async () => {
         const shipped = await post(
             "/api/outbound",
             warehouseToken,
@@ -357,52 +357,9 @@ describe("成品出入库 (e2e)", () => {
         expect(shipped.statusCode).toBe(200);
         secondShipmentNo = shipped.json().data.no;
         expect(await outboundOfOrder(orderNo)).toBe(300);
-
-        // 仓管无 outbound:print 权限 → 403
-        const denied = await app.inject({
-            method: "GET",
-            url: `/api/outbound/${secondShipmentNo}/print`,
-            headers: authHeaders(warehouseToken),
-        });
-        expect(denied.statusCode).toBe(403);
-
-        // super GET 打印文档：订单冻结规格摘要，无幂等头无请求体
-        const printed = await app.inject({
-            method: "GET",
-            url: `/api/outbound/${secondShipmentNo}/print`,
-            headers: authHeaders(superToken),
-        });
-        expect(printed.statusCode).toBe(200);
-        const document = printed.json().data;
-        expect(document).toMatchObject({
-            no: secondShipmentNo,
-            orderNo,
-            qty: 100,
-            state: "registered",
-            printedBy: "郭均",
-            bomSpec: expect.stringContaining("底座：二脚底座（无挡脚）"),
-        });
-        expect(document.printedAt).toBeDefined();
-        expect(document).not.toHaveProperty("printVersion");
-
-        // 可重复打印：再次 GET 200，且不落任何日志、单头状态与版本不变
-        const again = await app.inject({
-            method: "GET",
-            url: `/api/outbound/${secondShipmentNo}/print`,
-            headers: authHeaders(superToken),
-        });
-        expect(again.statusCode).toBe(200);
-        const stored = await prisma.outboundShipment.findUnique({
-            where: { shipmentNo: secondShipmentNo },
-        });
-        expect(stored).toMatchObject({ state: "REGISTERED", rowVersion: 1n });
-        const stateLogs = await prisma.outboundStateLog.findMany({
-            where: { shipment: { shipmentNo: secondShipmentNo } },
-        });
-        expect(stateLogs.map(log => log.eventType)).toEqual(["REGISTER"]);
     });
 
-    it("出库作废（未打印）：追加冲销后累计已发回落、库存恢复；作废幂等重放", async () => {
+    it("出库作废：追加冲销后累计已发回落、库存恢复；作废幂等重放", async () => {
         const key = `e2e-led-${RUN}-voidship`;
         const voided = await post(
             `/api/outbound/${firstShipmentNo}/void`,
@@ -796,12 +753,6 @@ describe("成品出入库 (e2e)", () => {
         expect(shipDel.json().data).toBeNull();
         const outList = await app.inject({ method: "GET", url: "/api/outbound", headers: authHeaders(superToken) });
         expect(outList.json().data.some((row: { no: string }) => row.no === shipNo)).toBe(false);
-        const printDeleted = await app.inject({
-            method: "GET",
-            url: `/api/outbound/${shipNo}/print`,
-            headers: authHeaders(superToken),
-        });
-        expect(printDeleted.statusCode).toBe(404);
         const stockLedgerAfter = await app.inject({
             method: "GET",
             url: `/api/bom-stocks/${BOM_CODE}/ledger`,
