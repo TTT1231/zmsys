@@ -72,9 +72,10 @@ export function AppLayout() {
     const title =
         status === "authenticated" ? (accessDenied ? "没有访问权限" : resolveTitle(location.pathname, role)) : "";
 
+    // 浏览器标签页固定为「众茂生产」，不随页面变化（页面名只在顶栏展示）
     useEffect(() => {
-        if (title) document.title = `${title} · 众茂生产系统`;
-    }, [title]);
+        document.title = "众茂生产";
+    }, []);
 
     // 认证守卫：未登录进登录页；本地 token 校验中显示全屏加载画面（避免未授权请求）
     if (status === "guest") return <Navigate to="/login" replace />;

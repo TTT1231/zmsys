@@ -116,7 +116,6 @@ export function ErrorPage({ kind }: ErrorPageProps) {
     const copy = ERROR_PAGE_COPY[kind];
 
     useEffect(() => {
-        document.title = `${copy.title} · 众茂生产系统`;
         titleRef.current?.focus();
     }, [copy.title]);
 
