@@ -16,8 +16,11 @@ import { materialSetHash } from "../src/common/bom-spec";
 
 const RUN = Date.now().toString(36);
 
-/** 固定测试 BOM（与 orders e2e 同款，存在则复用；重置库后单跑本文件可自建） */
-const BOM_CODE = "ZME2E0001";
+/** 专用测试 BOM：不与 orders 套件共用——同 BOM 库存池按交期升序分配给全部活动
+ *  订单，orders 留下的 2026 交期残单会先占池，本套件 2027 交期订单就发不出货
+ *  （全量跑时文件顺序决定成败）。备注参与 spec_hash，与 orders 同明细空备注的
+ *  BOM 身份区分开，避免撞 uk_bom_identity。 */
+const BOM_CODE = "ZME2ESL01";
 const BOM_REMARK = "e2e 日志 BOM 备注";
 const BOM_ITEMS = [
     { groupKey: "base", groupName: "底座", name: "三脚底座（有挡脚）", position: 1 },
@@ -93,12 +96,9 @@ describe("系统日志 (e2e)", () => {
         snowflake = app.get(SnowflakeGenerator);
         superToken = await login("guojun");
 
-        // 固定测试 BOM：存在则复用（重跑不撞唯一键）；明细按建档冻结快照造数。
-        // remark 为订单日志 BOM 备注断言的来源，复用旧行缺省空串时补写
+        // 专用 BOM：存在则复用（重跑不撞唯一键）；哈希输入与建档 remark 同源，
+        // 订单日志的 BOM 备注断言取的就是它
         const existing = await prisma.bomTable.findUnique({ where: { bomCode: BOM_CODE } });
-        if (existing && existing.remark === "") {
-            await prisma.bomTable.update({ where: { bomCode: BOM_CODE }, data: { remark: BOM_REMARK } });
-        }
         if (!existing) {
             const category = await prisma.bomCategory.findUnique({ where: { categoryKey: "new-micro-switch" } });
             const superUser = await prisma.sysUser.findUnique({ where: { account: "guojun" } });
@@ -125,7 +125,7 @@ describe("系统日志 (e2e)", () => {
                     specHash: materialSetHash(
                         category!.id,
                         materialIds.map(id => ({ id: id.toString(), quantity: 1 })),
-                        "",
+                        BOM_REMARK,
                     ),
                     requestKey: `e2e-bom-${BOM_CODE}`,
                     remark: BOM_REMARK,
