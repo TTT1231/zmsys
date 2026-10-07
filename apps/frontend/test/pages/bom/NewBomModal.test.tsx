@@ -201,7 +201,7 @@ it("目录块顺序：根分组在外壳侧在前、触点分区始终排最后�
         (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
     const { rerender } = render(<NewBomModal open onClose={vi.fn()} />);
     await pickCategory(user, "旋转XK3");
-    // 接线工艺二分：先选插线，出现插线目录
+    // 焊线工艺二分：先选插线，出现插线目录
     await user.click(screen.getByRole("radio", { name: "插线" }));
     const shell = screen.getByRole("button", { name: "PC塑料外壳" });
     const hardware = screen.getByRole("button", { name: "五金件" });

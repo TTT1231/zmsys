@@ -225,8 +225,8 @@ export class BomsService {
             async (tx: Tx, { idempotencyKey: key }) => {
                 const category = await this.lockCategoryByName(tx, dto.name);
                 const childCategories = childCategoriesOf(category.childCategories);
-                /* 子选叫法：旋转XK3 为接线工艺（焊线/插线），其余复合品类（跌倒开关）为微动开关类型 */
-                const childLabel = category.categoryKey === "rotary-xk3" ? "接线工艺" : "微动开关类型";
+                /* 子选叫法：旋转XK3 为焊线工艺（焊线/插线），其余复合品类（跌倒开关）为微动开关类型 */
+                const childLabel = category.categoryKey === "rotary-xk3" ? "焊线工艺" : "微动开关类型";
                 let childCategoryRow: BomCategoryRow | null = null;
                 if (childCategories.length > 0) {
                     if (!dto.childCategory) {

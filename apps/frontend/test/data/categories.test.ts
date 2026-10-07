@@ -179,7 +179,7 @@ describe("catalogRowsOf", () => {
 });
 
 describe("旋转XK3 / 安全开关目录", () => {
-    it("旋转XK3：接线工艺二分——主品类无目录指向焊线/插线；插线目录三根分组 + 五金件分区", () => {
+    it("旋转XK3：焊线工艺二分——主品类无目录指向焊线/插线；插线目录三根分组 + 五金件分区", () => {
         const xk3 = categoryOf("旋转XK3")!;
         expect(xk3.groups).toEqual([]);
         expect(xk3.childCategories).toEqual(["xk3-wire", "xk3-plug"]);

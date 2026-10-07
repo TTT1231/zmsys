@@ -146,7 +146,7 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 
 ### 5.1 `bom_category` + 物料目录三张表
 
-品类目录由后端提供（`bom_category`：稳定 key、显示名称、编码前缀、最小序号宽度、可空 `child_categories` JSON 数组），前端只能消费。已用品类前缀：旋转XK2 `XK2`、旋转XK3 `XK3`、新微动 `KW`、老微动 `KWO`、安全开关 `AQ`、跌倒开关 `KD`、琴键开关 `KQ`（编码如 `XK2001` / `KW001` / `KWO001` / `AQ001` / `KD001` / `KQ001`）；另有焊线 `XK3W`（xk3-wire）、插线 `XK3P`（xk3-plug）两个停用品类，仅作为旋转XK3 的接线工艺目录容器（child_categories 引用），不出现在建档品类下拉。`child_categories` 标记变体品类：建档时先从列表中单选一个子品类，物料目录按 5.2 合并校验，不引用任何已建 BOM（跌倒开关 → `["new-micro-switch", "old-micro-switch"]` 选微动开关类型，旋转XK3 → `["xk3-wire", "xk3-plug"]` 选接线工艺）。
+品类目录由后端提供（`bom_category`：稳定 key、显示名称、编码前缀、最小序号宽度、可空 `child_categories` JSON 数组），前端只能消费。已用品类前缀：旋转XK2 `XK2`、旋转XK3 `XK3`、新微动 `KW`、老微动 `KWO`、安全开关 `AQ`、跌倒开关 `KD`、琴键开关 `KQ`（编码如 `XK2001` / `KW001` / `KWO001` / `AQ001` / `KD001` / `KQ001`）；另有焊线 `XK3W`（xk3-wire）、插线 `XK3P`（xk3-plug）两个停用品类，仅作为旋转XK3 的焊线工艺目录容器（child_categories 引用），不出现在建档品类下拉。`child_categories` 标记变体品类：建档时先从列表中单选一个子品类，物料目录按 5.2 合并校验，不引用任何已建 BOM（跌倒开关 → `["new-micro-switch", "old-micro-switch"]` 选微动开关类型，旋转XK3 → `["xk3-wire", "xk3-plug"]` 选焊线工艺）。
 
 可选物料目录由三张表表达，目录修改只走数据库迁移并同步 mock 种子：
 
@@ -163,7 +163,7 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 - 判重：materialItemIds 校验为正十进制 BIGINT 数字串 → `BigInt(id).toString()` 规范化（消除前导零双表示）→ 去重 → 与各自数量组成 `[id, quantity]` 对、按 id 数值升序 → 序列化为 `[[id, quantity], ...]`，再与品类 id、备注组成三元素 JSON 数组（数字不加引号，备注为 trim 后原文）→ SHA-256 `spec_hash`（BINARY(32)）。同一物料集合、不同数量或不同备注 = 不同 BOM。不得无分隔拼接、不得转 Number 排序。备注维度于 2026-09 加入指纹，存量以同构 SQL 重算（迁移 20260927000000）。
 - 唯一键 `(category_id, spec_hash)` 禁止重复 BOM；命中时返回 409 及已有 `bom_code`（输入顺序与重复 id 不影响指纹）。
 - 建档校验（后端权威）：ids 非空、去重；物料经组归属该品类（品类标记 `child_categories` 时可同时归属所选子品类，目录合并校验）；品类/分区/分组/物料均启用；单选组最多 1 项；数量仅 `qty=1` 分组的选中项允许 1-99 整数（缺省 1），其余分组携带非 1 数量拒绝。所有组皆可不选（客户决定要不要 A 面这类项），但整份 BOM 至少选 1 项。旧规格体系的跨字段规则（新微动支架/静片 6.3/4.8 同口径等）已废除，同类部件互斥由单选分组结构表达。
-- 跌倒开关、旋转XK3 等品类通过 `child_categories` 标记合并子品类目录：建档时先选子品类（`childCategory`，如跌倒开关的微动开关类型 new-micro-switch / old-micro-switch、旋转XK3 的接线工艺 xk3-wire / xk3-plug，均二选一），可选物料 = 本品类目录 + 所选子品类完整目录（分区/分组/物料原样并入树），统一走普通物料勾选，不引用任何已建 BOM。
+- 跌倒开关、旋转XK3 等品类通过 `child_categories` 标记合并子品类目录：建档时先选子品类（`childCategory`，如跌倒开关的微动开关类型 new-micro-switch / old-micro-switch、旋转XK3 的焊线工艺 xk3-wire / xk3-plug，均二选一），可选物料 = 本品类目录 + 所选子品类完整目录（分区/分组/物料原样并入树），统一走普通物料勾选，不引用任何已建 BOM。
 - BOM 建档后不原地修改物料集合；构成变化时新建 BOM。已引用或已有流水的档案保留原状；未被引用的手误档案可删除：
     - 仅超级管理员（受保护权限 `bom:delete`）；前端无权限不显示删除入口，后端仍独立校验。
     - `sales_order_table` 不得有任何引用（含已归档订单——归档单永不物理清理即视为引用），`inbound_ledger` 与 `stock_adjustment` 不得有任何流水；出库流水经订单引用订单被删前提是零出库，故无需单独校验。数据库外键 RESTRICT 是最终防线。

@@ -182,8 +182,8 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
 
     const category = bomCategories?.find(item => item.name === name);
     const childCategory = bomCategories?.find(item => item.key === childCategoryKey);
-    /* 子选标签：旋转XK3 的变体是接线工艺（焊线/插线），其余为跌倒开关的微动类型 */
-    const childLabel = category?.key === "rotary-xk3" ? "接线工艺" : "微动开关类型";
+    /* 子选标签：旋转XK3 的变体是焊线工艺（焊线/插线），其余为跌倒开关的微动类型 */
+    const childLabel = category?.key === "rotary-xk3" ? "焊线工艺" : "微动开关类型";
     /* 合并树：本品类目录 + 子品类目录（跌倒开关 = 跌倒盖/底/钢球/翘板 + 微动开关物料嵌套在"微动开关"大类下） */
     const tipoverBlocks = useMemo(() => (category ? catalogBlocksOf(category) : []), [category]);
     const childBlocks = useMemo(() => (childCategory ? catalogBlocksOf(childCategory) : []), [childCategory]);

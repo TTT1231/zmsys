@@ -326,7 +326,7 @@ INSERT INTO bom_category (id, category_key, name, code_prefix, seq_width, child_
     (1007, 'piano-key-switch', '琴键开关', 'KQ', 3),
     (1008, 'xk3-wire', '焊线', 'XK3W', 3),
     (1009, 'xk3-plug', '插线', 'XK3P', 3);
--- 焊线/插线为旋转XK3 的接线工艺目录容器（child_categories 引用），停用后不在建档下拉出现。
+-- 焊线/插线为旋转XK3 的焊线工艺目录容器（child_categories 引用），停用后不在建档下拉出现。
 UPDATE bom_category SET status = 0 WHERE id IN (1008, 1009);
 
 -- 物料目录节点：分区（SECTION，仅展示与折叠、不挂物料）或分组（GROUP，挂可选物料）。
@@ -653,7 +653,7 @@ INSERT INTO material_item (id, group_id, name, sort_order) VALUES
 -- + 五金件分区（小静片/半圆静片/动片 各 不电镀·镀锡、带圈动片、钢球、卡线片、弹簧——
 -- 弹簧为多选组，0.45长/短弹簧可同时勾选）；
 -- 无触点分区（XK3 类开关不带触点，电流不大）。
--- 旋转XK3 拆接线工艺（child_categories 指向焊线/插线）：插线目录（下）挂 xk3-plug(1009)，
+-- 旋转XK3 拆焊线工艺（child_categories 指向焊线/插线）：插线目录（下）挂 xk3-plug(1009)，
 -- 焊线目录挂 xk3-wire(1008)：外壳/底座各一种，杆子圆轴/扁轴4.8，
 -- 静片（多选）/动片/弹簧（多选）/3.0mm电镀钢球。
 INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, multi, sort_order) VALUES

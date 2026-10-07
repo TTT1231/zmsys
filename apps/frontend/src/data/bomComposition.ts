@@ -8,7 +8,7 @@ export interface BomCompositionSection {
 }
 const BODY_GROUPS = new Set(["tipover-cover", "tipover-base", "steel-ball", "rocker"]);
 
-/* 复合品类子选的叫法（与新建 BOM 的子选标签同口径）：旋转XK3 为接线工艺（焊线/插线），
+/* 复合品类子选的叫法（与新建 BOM 的子选标签同口径）：旋转XK3 为焊线工艺（焊线/插线），
  * 跌倒开关为微动开关类型——分节标题与列表行不得把两类混用。
  * section=详情分节前缀（空串=不加前缀，直接以焊线/插线等子品类名作标题），
  * row=列表行前缀，empty=无子件物料时的系列文案。 */
@@ -18,7 +18,7 @@ interface ChildKind {
     empty: string;
 }
 const CHILD_KINDS: Record<string, ChildKind> = {
-    旋转XK3: { section: "", row: "接线工艺", empty: "未记录工艺物料" },
+    旋转XK3: { section: "", row: "焊线工艺", empty: "未记录工艺物料" },
     跌倒开关: { section: "微动开关", row: "微动组件", empty: "未记录微动物料" },
 };
 
@@ -55,7 +55,7 @@ export function bomComposition(bom: Pick<Bom, "name" | "items">, categories: Bom
         const key = matches.length === 1 ? matches[0].key : "unknown";
         buckets.set(key, [...(buckets.get(key) ?? []), item]);
     }
-    /* 旋转XK3 主品类无自有目录（物料全在接线工艺子品类），不输出空的本体节 */
+    /* 旋转XK3 主品类无自有目录（物料全在焊线工艺子品类），不输出空的本体节 */
     const sections: BomCompositionSection[] =
         body.length || !parent || parent.groups.length ? [{ key: "body", title: `${bom.name}本体`, items: body }] : [];
     const seriesNames: string[] = [];

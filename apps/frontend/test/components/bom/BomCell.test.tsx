@@ -31,7 +31,7 @@ it("BOM 表中可省略重复编码与品类，保留物料核对入口", () => 
     expect(screen.queryByText(detailBom.code)).not.toBeInTheDocument();
     expect(screen.getByText("查看物料（5）")).toBeInTheDocument();
 });
-it("复合品类列表行的子选系列：旋转XK3 为接线工艺，不出现微动组件字样", () => {
+it("复合品类列表行的子选系列：旋转XK3 为焊线工艺，不出现微动组件字样", () => {
     const xk3 = {
         ...detailBom,
         name: "旋转XK3",
@@ -46,6 +46,6 @@ it("复合品类列表行的子选系列：旋转XK3 为接线工艺，不出现
         ],
     };
     render(<BomCell bom={xk3} bomCode="XK3005" categories={BOM_CATEGORIES} />);
-    expect(screen.getByText("接线工艺：插线")).toBeInTheDocument();
+    expect(screen.getByText("焊线工艺：插线")).toBeInTheDocument();
     expect(screen.queryByText(/微动/)).not.toBeInTheDocument();
 });

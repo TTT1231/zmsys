@@ -32,7 +32,7 @@ it("旧本体物料即使退出目录，也按冻结分组保留在本体中", (
     expect(result.series).toBe("老微动");
 });
 
-/* 旋转XK3：接线工艺二分——主品类无自有目录，不输出空本体节，子件节直接以焊线/插线命名 */
+/* 旋转XK3：焊线工艺二分——主品类无自有目录，不输出空本体节，子件节直接以焊线/插线命名 */
 const xk3Item = {
     materialId: "3401",
     groupKey: "pc-shell",
@@ -45,7 +45,7 @@ it("旋转XK3 无本体节，子件节不加前缀直接命名（不出现微动
     expect(result.composite).toBe(true);
     expect(result.sections.map(section => section.title)).toEqual(["插线"]);
     expect(result.series).toBe("插线");
-    expect(result.childKind).toBe("接线工艺");
+    expect(result.childKind).toBe("焊线工艺");
 });
 it("旋转XK3 的未知历史物料进系列待确认节，同样不冠微动开关", () => {
     const unknown = { ...xk3Item, materialId: "retired" };
