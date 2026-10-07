@@ -49,8 +49,16 @@ describe("lockRowByKey（自然键定位锁）", () => {
         expect(queryRaw).toHaveBeenCalledOnce();
         const [strings, ...values] = queryRaw.mock.calls[0] as unknown as [string[], ...unknown[]];
         expect(renderSql(strings, ...values)).toBe(
-            "SELECT id FROM sales_order_table WHERE order_no = DD2601010001 FOR UPDATE",
+            "SELECT order_no FROM sales_order_table WHERE order_no = DD2601010001 FOR UPDATE",
         );
+    });
+
+    it("SELECT 列为键列自身：sys_role 无 id 列（回归：SELECT id 曾致 1054 → 500）", async () => {
+        const { tx, queryRaw } = createTx();
+        await lockRowByKey(tx, "sys_role", "warehouse");
+        expect(queryRaw).toHaveBeenCalledOnce();
+        const [strings, ...values] = queryRaw.mock.calls[0] as unknown as [string[], ...unknown[]];
+        expect(renderSql(strings, ...values)).toBe("SELECT code FROM sys_role WHERE code = warehouse FOR UPDATE");
     });
 
     it("表名不在白名单时类型即拒绝（编译期约束，无运行时拼接面）", () => {

@@ -7,10 +7,10 @@ import type { Tx } from "../prisma/transaction.runner";
  * id 升序去重后 FOR UPDATE；乐观锁版本比对不一致或更新 0 行受影响即 409。
  */
 
-/** 允许行锁的业务表（raw SQL 表名无法参数化，封闭白名单防注入） */
+/** 允许按 id 行锁的业务表（raw SQL 表名无法参数化，封闭白名单防注入）。
+ *  sys_role 不在此列：其主键即 code、无 id 列，按 id 锁必然 1054 */
 const LOCKABLE_TABLES = [
     "sys_user",
-    "sys_role",
     "custom_table",
     "bom_table",
     "sales_order_table",
@@ -48,12 +48,15 @@ export async function lockRowsById(tx: Tx, table: LockableTable, ids: readonly b
 }
 
 /**
- * 自然键定位锁：`SELECT id ... WHERE <唯一键列> = ? FOR UPDATE`。表名与列名取自
- * 封闭白名单，值随 Prisma 参数化；不存在时锁定读结果为空，存在性由调用方
- * 锁后重读并抛 404。必须在 TransactionRunner 事务回调内调用。
+ * 自然键定位锁：`SELECT <唯一键列> ... WHERE <唯一键列> = ? FOR UPDATE`。SELECT 列
+ * 取键列自身——白名单表并非都有 id 列（sys_role 主键即 code，e2e/生产实测 SELECT id
+ * 报 1054 → 500），锁行只依赖 WHERE 定位，取何列无关紧要。表名与列名取自封闭白名单，
+ * 值随 Prisma 参数化；不存在时锁定读结果为空，存在性由调用方锁后重读并抛 404。
+ * 必须在 TransactionRunner 事务回调内调用。
  */
 export async function lockRowByKey(tx: Tx, table: LockableKeyTable, value: string): Promise<void> {
-    await tx.$queryRaw`SELECT id FROM ${Prisma.raw(table)} WHERE ${Prisma.raw(LOCKABLE_KEY_COLUMNS[table])} = ${value} FOR UPDATE`;
+    const column = LOCKABLE_KEY_COLUMNS[table];
+    await tx.$queryRaw`SELECT ${Prisma.raw(column)} FROM ${Prisma.raw(table)} WHERE ${Prisma.raw(column)} = ${value} FOR UPDATE`;
 }
 
 /**
