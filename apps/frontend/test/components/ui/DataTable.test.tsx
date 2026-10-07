@@ -3,9 +3,11 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ComponentProps } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DataTable } from "@/components/ui/DataTable";
 import { SortTh } from "@/components/ui/SortTh";
+import { PreferencesContext } from "@/context/usePreferences";
 const auth = vi.hoisted(() => ({ account: "user-a" }));
 vi.mock("@/context/useApp", () => ({ useApp: () => ({ user: auth }) }));
 function stubResizeObserver() {
@@ -139,20 +141,75 @@ it("指针拖动改变列宽，结束拖动后移动不再更改宽度", () => {
     expect(handle).toHaveAttribute("aria-valuenow", "224");
 });
 
-it("操作列固定，旧偏好中的极窄操作列不会恢复，也没有拖动入口", async () => {
+it("操作列固定但可调宽，旧偏好中的极窄操作列被推荐宽兜底", async () => {
     localStorage.setItem("zm-table:v2:user-a:test", JSON.stringify({ widths: { 操作: 96 } }));
     const user = userEvent.setup();
     render(<Table />);
-    expect(screen.queryByRole("separator", { name: "调整操作列宽" })).not.toBeInTheDocument();
+    // 操作列 min 锚定推荐宽：存进去的 96px 顶回 120，行内链接文字不被截断
+    expect(screen.getByRole("separator", { name: "调整操作列宽" })).toHaveAttribute("aria-valuenow", "120");
     await user.click(screen.getByRole("button", { name: "显示设置" }));
-    expect(screen.queryByRole("spinbutton", { name: "操作列宽" })).not.toBeInTheDocument();
-    expect(screen.getByText("始终显示")).toBeInTheDocument();
-    expect(screen.getByRole("dialog")).not.toHaveTextContent("px");
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByRole("checkbox", { name: "操作" })).toBeDisabled();
+    // 固定列（操作/identity）行都有"始终显示"标注；按操作列所在行断言
+    const row = dialog.getByRole("checkbox", { name: "操作" }).closest("div")!;
+    expect(row).toHaveTextContent("始终显示");
+    expect(within(row).getByRole("combobox", { name: "操作的宽窄" })).toBeEnabled();
 });
 
-it("全部可调列锁定后以表格内弹性区铺满，操作列保持最右", async () => {
+it("操作列可拖动调宽并持久化", () => {
+    render(<Table />);
+    const handle = screen.getByRole("separator", { name: "调整操作列宽" });
+    handle.setPointerCapture = vi.fn();
+    fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientX: 0 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 80 });
+    expect(handle).toHaveAttribute("aria-valuenow", "200");
+    fireEvent.pointerUp(handle, { pointerId: 1 });
+    expect(JSON.parse(localStorage.getItem("zm-table:v2:user-a:test")!).widths).toEqual({ 操作: 200 });
+});
+
+it("适合屏幕一键恢复推荐布局并给出可感知反馈", async () => {
+    localStorage.setItem("zm-table:v2:user-a:test", JSON.stringify({ widths: { 数量: 300 } }));
+    const user = userEvent.setup();
+    render(<Table />);
+    expect(screen.getByRole("separator", { name: "调整数量列宽" })).toHaveAttribute("aria-valuenow", "300");
+    await user.click(screen.getByRole("button", { name: "适合屏幕" }));
+    // 手动宽度全部释放，回到随字号缩放的推荐布局；状态位短暂提示，点击可感知
+    expect(screen.getByRole("status")).toHaveTextContent("已恢复推荐布局");
+    expect(screen.getByRole("separator", { name: "调整数量列宽" })).toHaveAttribute("aria-valuenow", "160");
+    expect(JSON.parse(localStorage.getItem("zm-table:v2:user-a:test")!).widths).toEqual({});
+});
+
+it("推荐列宽随字号偏好缩放，大字号下操作列推荐宽同步放大", () => {
+    const value = {
+        preferences: {
+            themeMode: "light",
+            themePreset: "default",
+            layout: "sidebar-nav",
+            fontSize: 18,
+            colorWeakMode: false,
+            colorGrayMode: false,
+        },
+        isDark: false,
+        setThemeMode: () => {},
+        setThemePreset: () => {},
+        setLayout: () => {},
+        setFontSize: () => {},
+        setColorWeakMode: () => {},
+        setColorGrayMode: () => {},
+        reset: () => {},
+    } as ComponentProps<typeof PreferencesContext.Provider>["value"];
+    render(
+        <PreferencesContext.Provider value={value}>
+            <Table />
+        </PreferencesContext.Provider>,
+    );
+    // 120 × 18/16 = 135；数量 160 × 1.125 = 180
+    expect(screen.getByRole("separator", { name: "调整操作列宽" })).toHaveAttribute("aria-valuenow", "135");
+    expect(screen.getByRole("separator", { name: "调整数量列宽" })).toHaveAttribute("aria-valuenow", "180");
+});
+
+it("剩余宽度按占比摊给所有列（含手动列与操作列），标准档不再需要弹性填充列", async () => {
     const callbacks = stubResizeObserver();
-    // 备注列硬下限 140（两行内容列），保存值低于下限时渲染时顶到下限
     localStorage.setItem("zm-table:v2:user-a:test", JSON.stringify({ widths: { 编号: 150, 数量: 120, 备注: 140 } }));
     const view = render(<Table />);
     const body = view.container.querySelector(".managed-table-body")!;
@@ -162,16 +219,17 @@ it("全部可调列锁定后以表格内弹性区铺满，操作列保持最右"
 
     const table = screen.getByRole("table");
     expect(table).toHaveStyle({ width: "900px" });
-    expect(table.querySelector("col[data-table-fill]")).toHaveStyle({ width: "370px" });
-    const operationHeader = screen.getByRole("columnheader", { name: "操作" });
-    expect(operationHeader.previousElementSibling).toHaveAttribute("data-table-fill");
-    expect(screen.getAllByRole("columnheader")).toHaveLength(4);
-    const row = screen.getByRole("cell", { name: "300" }).parentElement!;
-    expect(row.children).toHaveLength(5);
-    expect(row.children[3]).toHaveAttribute("data-table-fill");
+    // 370 富余按 150:120:140:120 占比摊给四列（含手动列与固定操作列），多轮消化取整余数
+    const cols = table.querySelectorAll("col");
+    expect(cols).toHaveLength(4);
+    expect(cols[0]).toHaveStyle({ width: "255px" });
+    expect(cols[1]).toHaveStyle({ width: "204px" });
+    expect(cols[2]).toHaveStyle({ width: "238px" });
+    expect(cols[3]).toHaveStyle({ width: "203px" });
+    expect(table.querySelector("col[data-table-fill]")).toBeNull();
 
     view.rerender(<Table empty />);
-    expect(screen.getByRole("cell", { name: "暂无数据" })).toHaveAttribute("colspan", "5");
+    expect(screen.getByRole("cell", { name: "暂无数据" })).toHaveAttribute("colspan", "4");
 });
 
 it("紧凑档宽内容列收紧到 220，剩余宽度整体交给弹性区", async () => {

@@ -3,6 +3,7 @@ import {
     cloneElement,
     Fragment,
     isValidElement,
+    useContext,
     useEffect,
     useLayoutEffect,
     useImperativeHandle,
@@ -13,6 +14,7 @@ import {
     type Ref,
 } from "react";
 import { useApp } from "@/context/useApp";
+import { FONT_BASE, PreferencesContext } from "@/context/usePreferences";
 import { Icon } from "@/lib/icons";
 import { Button } from "./Button";
 import { EmptyRow } from "./EmptyRow";
@@ -39,6 +41,7 @@ interface DataTableProps {
     /** 单层表头和普通 tbody 行；表头文字作为稳定列标识。 */
     children: ReactNode;
     tableId: string;
+    /** 16px 基准的推荐列宽：随字号偏好等比缩放（见 fontScale），手动宽度不缩放。 */
     defaultWidths: number[];
     identityColumn?: number;
     /** 横向滚动时左侧固定的原始列索引（按从左到右）；缺省固定 identityColumn 一列。
@@ -100,6 +103,13 @@ function TableView({
     storageKey,
 }: DataTableProps & { storageKey: string }) {
     const bodyRef = useRef<HTMLDivElement>(null);
+    // 推荐宽随根字号偏好缩放：字号走 --text-*、间距走 rem，都随 --app-font-scale 放大，
+    // 列宽却是写死的 px——不同步时大字号下列宽原地不动，内容普遍加宽 12.5%，
+    // 紧口径列（操作列 100px vs「查看详情」约 103px）直接截成「查看详情…」。
+    // 缩放的只是推荐值：手动宽度是用户的显式选择不跟缩，点「适合屏幕」回到推荐布局。
+    // 测试环境（jsdom）没有 PreferencesProvider，按基准字号 1 倍处理。
+    const appFontSize = useContext(PreferencesContext)?.preferences.fontSize;
+    const fontScale = (appFontSize ?? FONT_BASE) / FONT_BASE;
     const [viewport, setViewport] = useState(0);
     // 列最小宽锚定表头内容的完整宽度（managed-th 为 nowrap，scrollWidth 即文字+排序图标完整宽，
     // 与当前列宽无关）：表头回答"这列是什么"，任何压缩下都必须完整可读；列内容在窄列下
@@ -134,29 +144,42 @@ function TableView({
     const lastStartIndex = Math.max(...startSet);
     const columns = headers.map((header, index) => {
         const label = header.props.label ?? labelOf(header.props.children);
-        const width = defaultWidths[index] ?? 160;
-        const wide = /BOM|成品|物料构成|客户信息/.test(label) && width >= 220;
-        const recommended = compact && wide ? Math.min(width, 220) : width;
+        const raw = defaultWidths[index] ?? 160;
+        const wide = /BOM|成品|物料构成|客户信息/.test(label) && raw >= 220;
+        const recommended = Math.round((compact && wide ? Math.min(raw, 220) : raw) * fontScale);
+        // 最右操作列：sticky 固定在视口右侧、不可隐藏（locked），但宽度可手动调整——
+        // 行内链接是该列唯一出口，min 锚定推荐宽（随字号缩放），压缩永远压不断「查看详情」；
+        // 其余列 min 锚定表头内容完整宽，内容在窄列下截断（title/详情弹窗兜底）
+        const action = index === headers.length - 1;
         return {
             header,
             index,
             label,
             key: label,
             width: recommended,
-            min: Math.max(Math.min(recommended, headerMins[label] ?? 90), badgeMins[label] ?? 0),
+            min: action
+                ? recommended
+                : Math.max(
+                      Math.min(recommended, headerMins[label] ?? Math.round(90 * fontScale)),
+                      badgeMins[label] ?? 0,
+                  ),
             max: 800,
             grow: wide,
-            fixed: index === headers.length - 1,
-            locked: startSet.has(index) || index === headers.length - 1,
+            fixed: action,
+            locked: startSet.has(index) || action,
         };
     });
     const visible = columns.filter(column => column.locked || !preferences.hidden.includes(column.label));
     const widths = fitTableWidths(visible, draftPreferences ?? preferences.widths, viewport, {
         stretch: !compact,
+        // 拖拽中的列由指针 1:1 控制，不参与占比分摊——否则拖窄的量会被按占比回填，
+        // 光标移动 100px 列只缩 75px，肉眼可见的"拖不动"
+        hold: draftPreferences ? (dragRef.current?.label ?? undefined) : undefined,
     });
     const widthOf = (column: (typeof columns)[number]) => widths[column.label] ?? column.width;
     const totalWidth = visible.reduce((sum, column) => sum + widthOf(column), 0);
-    // 自动列达到上限或全部被用户锁定时，以无语义弹性列补齐，并把固定操作列留在最右侧。
+    // 标准档剩余宽度已按占比摊给各列；仅紧凑档（不吸收剩余）或全部列到顶时
+    // 才需要无语义弹性列补齐，并把固定操作列留在最右侧。
     const fillWidth = Math.max(0, viewport - totalWidth);
     const hasFillColumn = fillWidth > 0;
     const renderedColumnCount = visible.length + (hasFillColumn ? 1 : 0);
@@ -266,7 +289,7 @@ function TableView({
                 entries.every(([key, value]) => current[key] === value);
             return same ? current : badges;
         });
-    }, [viewport, headers.length, compact]);
+    }, [viewport, headers.length, compact, fontScale]);
     useEffect(() => {
         try {
             localStorage.removeItem(storageKey.replace(":v2:", ":v1:"));
@@ -278,7 +301,9 @@ function TableView({
     const resize = (label: string, desired: number) => {
         const next = resizeTableColumn(visible, widths, label, desired);
         const nextWidth = next[label];
-        if (nextWidth === undefined) return;
+        // 已在 min/max 边界时调宽无实际效果，不落手动宽度——否则下拉框变成
+        // "已手动调整"而宽度纹丝不动，看起来又是一座调不动的死列
+        if (nextWidth === undefined || nextWidth === widths[label]) return;
         setPreferences(current => ({ ...current, widths: { ...current.widths, [label]: nextWidth } }));
     };
     const restoreColumn = (label: string) =>
@@ -287,11 +312,24 @@ function TableView({
             delete widths[label];
             return { ...current, widths };
         });
+    // 「适合屏幕」一键快调：清掉手动宽度，回到随当前字号缩放的推荐布局 + 占比分摊，
+    // 面向日常业务流的"看着自然清爽"，不承载隐藏列/密度这类显式偏好（那是显示设置的事）。
+    // 状态位短暂反馈——即便本来就是推荐布局也让点击可感知，不再像"没反应"
+    const [fitNotice, setFitNotice] = useState(false);
+    const fitNoticeTimer = useRef<number | undefined>(undefined);
+    useEffect(() => () => window.clearTimeout(fitNoticeTimer.current), []);
+    const fitToScreen = () => {
+        setPreferences(current => ({ ...current, widths: {} }));
+        setFitNotice(true);
+        window.clearTimeout(fitNoticeTimer.current);
+        fitNoticeTimer.current = window.setTimeout(() => setFitNotice(false), 1600);
+    };
     const finishDrag = (cancel = false) => {
         const drag = dragRef.current;
         if (!drag) return;
         const nextWidth = drag.draft[drag.label];
-        if (!cancel && nextWidth !== undefined)
+        // 被 min/max 钳回起拖宽度＝未发生调整，同样不落手动宽度
+        if (!cancel && nextWidth !== undefined && nextWidth !== drag.width)
             setPreferences(current => ({ ...current, widths: { ...current.widths, [drag.label]: nextWidth } }));
         dragRef.current = null;
         setDraftPreferences(null);
@@ -308,14 +346,17 @@ function TableView({
                 <span className="text-13 text-muted" role="status">
                     {draftPreferences
                         ? `正在调整「${activeColumn}」`
-                        : recordCount !== undefined
-                          ? `${recordCount} 条记录`
-                          : ""}
+                        : fitNotice
+                          ? "已恢复推荐布局"
+                          : recordCount !== undefined
+                            ? `${recordCount} 条记录`
+                            : ""}
                 </span>
                 <div className="flex items-center gap-2">
                     <button
                         type="button"
-                        onClick={() => setPreferences(current => ({ ...current, widths: {} }))}
+                        onClick={fitToScreen}
+                        title="一键回到随当前字号缩放的推荐列宽，手动拖过的列一并释放"
                         className="table-display-button"
                     >
                         适合屏幕
@@ -348,7 +389,9 @@ function TableView({
                     <thead>
                         <tr className={headRow?.props.className}>
                             {visible.map((column, index) => {
-                                const control = !column.fixed ? (
+                                // 操作列同样给拖拽手柄（sticky th 的 18px 右 gutter 内）：
+                                // 固定≠不可调，用户可自主加宽/收窄，显示设置里同一份宽度语义
+                                const control = (
                                     <span
                                         role="separator"
                                         aria-orientation="vertical"
@@ -424,7 +467,7 @@ function TableView({
                                         onPointerCancel={() => finishDrag(true)}
                                         onLostPointerCapture={() => finishDrag()}
                                     />
-                                ) : null;
+                                );
                                 const shared = {
                                     key: column.label,
                                     "data-pinned": pinned(column.index),
@@ -572,31 +615,28 @@ function TableView({
                                 />
                                 {column.label}
                             </label>
-                            {column.fixed ? (
-                                <span className="text-13 text-muted">始终显示</span>
-                            ) : (
-                                <select
-                                    aria-label={`${column.label}的宽窄`}
-                                    disabled={preferences.hidden.includes(column.label) && !column.locked}
-                                    value={preferences.widths[column.label] === undefined ? "recommended" : "custom"}
-                                    onChange={event => {
-                                        if (event.target.value === "recommended") restoreColumn(column.label);
-                                        else
-                                            resize(
-                                                column.label,
-                                                widthOf(column) + (event.target.value === "wider" ? 80 : -48),
-                                            );
-                                    }}
-                                    className="min-h-9 rounded-md border border-line-strong bg-surface px-2 text-13"
-                                >
-                                    <option value="recommended">推荐宽度</option>
-                                    <option value="narrower">窄一些</option>
-                                    <option value="wider">宽一些</option>
-                                    {preferences.widths[column.label] !== undefined && (
-                                        <option value="custom">已手动调整</option>
-                                    )}
-                                </select>
-                            )}
+                            {column.locked && <span className="text-13 text-muted">始终显示</span>}
+                            <select
+                                aria-label={`${column.label}的宽窄`}
+                                disabled={preferences.hidden.includes(column.label) && !column.locked}
+                                value={preferences.widths[column.label] === undefined ? "recommended" : "custom"}
+                                onChange={event => {
+                                    if (event.target.value === "recommended") restoreColumn(column.label);
+                                    else
+                                        resize(
+                                            column.label,
+                                            widthOf(column) + (event.target.value === "wider" ? 80 : -48),
+                                        );
+                                }}
+                                className="min-h-9 rounded-md border border-line-strong bg-surface px-2 text-13"
+                            >
+                                <option value="recommended">推荐宽度</option>
+                                <option value="narrower">窄一些</option>
+                                <option value="wider">宽一些</option>
+                                {preferences.widths[column.label] !== undefined && (
+                                    <option value="custom">已手动调整</option>
+                                )}
+                            </select>
                         </div>
                     ))}
                 </div>

@@ -3,23 +3,40 @@ import { fitTableWidths, resizeTableColumn } from "@/lib/tableColumns";
 const columns = [
     { key: "name", width: 180, min: 120, max: 800 },
     { key: "spec", width: 360, min: 280, max: 800, grow: true },
-    { key: "actions", width: 120, min: 120, max: 120, fixed: true },
+    // 操作列：fixed 不参与自动收缩/扩张，但手动宽度生效（min=推荐宽兜底内容，max 与普通列一致）
+    { key: "actions", width: 120, min: 120, max: 800, fixed: true },
 ];
-it("推荐布局优先加宽产品信息，操作列不受存储的错误值影响", () => {
-    expect(fitTableWidths(columns, { actions: 96 }, 1000)).toEqual({ name: 180, spec: 700, actions: 120 });
+it("存储的过窄操作列被下限兜底，剩余宽度按占比摊给所有列", () => {
+    // 340 富余按 180:360:120 占比摊分（多轮消化取整余数），操作列 96 被下限顶回 120
+    expect(fitTableWidths(columns, { actions: 96 }, 1000)).toEqual({ name: 273, spec: 546, actions: 181 });
 });
-it("拖动只改变当前列，遵守自身边界且不能拖动操作列", () => {
+it("拖动只改变当前列并遵守自身边界，操作列同样可手动调宽", () => {
     const widths = fitTableWidths(columns, {}, 660);
     const next = resizeTableColumn(columns, widths, "name", 2000);
     expect(next).toEqual({ name: 800, spec: 360, actions: 120 });
-    expect(resizeTableColumn(columns, next, "actions", 640)).toEqual(next);
+    expect(resizeTableColumn(columns, next, "actions", 640)).toEqual({ name: 800, spec: 360, actions: 640 });
     expect(resizeTableColumn(columns, next, "name", -100)).toEqual({ name: 120, spec: 360, actions: 120 });
 });
-it("手动缩窄后保留目标列宽，由未调整的内容列填满容器", () => {
-    expect(fitTableWidths(columns, { name: 150 }, 1000)).toEqual({ name: 150, spec: 730, actions: 120 });
+it("hold 的拖拽中列不参与分摊，其余列按占比吸收富余", () => {
+    // 拖 name 至 120：400 富余按 360:120 占比只摊给 spec 与 actions，name 严格跟随指针
+    expect(fitTableWidths(columns, { name: 120 }, 1000, { hold: "name" })).toEqual({
+        name: 120,
+        spec: 660,
+        actions: 220,
+    });
 });
-it("全部数据列均已手动调整时不篡改偏好，剩余宽度交给表格弹性区", () => {
-    expect(fitTableWidths(columns, { name: 150, spec: 300 }, 1600)).toEqual({ name: 150, spec: 300, actions: 120 });
+it("操作列手动宽度参与占比呼吸，溢出收缩仍不让位", () => {
+    // 260 富余按 180:360:200 占比摊给全部列（含固定操作列）
+    expect(fitTableWidths(columns, { actions: 200 }, 1000)).toEqual({ name: 244, spec: 486, actions: 270 });
+    // 溢出时只收内容列（spec 到最小、name 随后），手动操作列不动
+    expect(fitTableWidths(columns, { actions: 200 }, 540)).toEqual({ name: 120, spec: 280, actions: 200 });
+});
+it("手动缩窄后保留目标列宽，剩余宽度按占比摊给全部列", () => {
+    expect(fitTableWidths(columns, { name: 150 }, 1000)).toEqual({ name: 239, spec: 571, actions: 190 });
+});
+it("全部列手动调整后仍按占比呼吸，存储值本身不被篡改", () => {
+    // 570 富余恰好让所有列等比翻倍（150:300:120 → 300:600:240）；返回值是渲染宽，不含落盘语义
+    expect(fitTableWidths(columns, { name: 150, spec: 300 }, 1140)).toEqual({ name: 300, spec: 600, actions: 240 });
 });
 it("推荐宽度超出容器时先压内容列再压普通列，默认视图收进单屏", () => {
     // 660 → 540：先收 spec（360→280 到最小宽），剩余 40 再收 name（180→140）
