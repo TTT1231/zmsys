@@ -141,6 +141,11 @@
     --color-primary-strong: hsl(212 100% 27.1%);
     --color-primary-soft: hsl(213.9 85.2% 94.7%);
     --color-primary-border: hsl(212.1 82.9% 86.3%);
+    /* 品牌 logo 方块：跟随主色（预设切换同步变色），暗色下提亮一档保持清爽直观；
+       浅色默认同主色，暗色变体在 html.dark 里重声明 */
+    --color-brand: var(--color-primary);
+    /* 经典品牌蓝（favicon 同源）：仅登录页固定渐变横幅上的 logo 使用（有意不随主题） */
+    --color-brand-classic: #1763cf;
     --color-accent: #0284c7;
     --color-accent-soft: #e0f2fe;
     --color-success: #047857;
@@ -372,6 +377,8 @@ html.dark {
     --color-primary-strong: hsl(212 100% 72%);
     --color-primary-soft: hsl(212 100% 45% / 0.16);
     --color-primary-border: hsl(212 100% 62% / 0.38);
+    /* 品牌 logo 方块：暗色下提亮一档（primary-hover 58%），深底上更清爽、切换时变化可感知 */
+    --color-brand: var(--color-primary-hover);
 
     --color-accent: #38bdf8;
     --color-accent-soft: rgba(56, 189, 248, 0.14);

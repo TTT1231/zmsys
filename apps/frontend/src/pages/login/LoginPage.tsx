@@ -146,7 +146,7 @@ export function LoginPage() {
 
                 {/* 品牌标识（移动端 + 桌面端共用） */}
                 <div className="relative flex items-center gap-3">
-                    <BrandLogo decorative className="size-11" />
+                    <BrandLogo decorative followTheme={false} className="size-11" />
                     <div className="leading-tight">
                         <div className="text-17 font-semibold text-white">众茂生产系统</div>
                         <div className="text-13 text-indigo-100">订单驱动的成品仓库管理</div>
