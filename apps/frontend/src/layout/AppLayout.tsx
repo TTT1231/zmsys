@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 import { ROLE_META, useApp, type Role } from "@/context/useApp";
 import { ContentMaximizeContext } from "@/context/useContentMaximize";
@@ -51,16 +51,20 @@ export function AppLayout() {
     }, [maximized]);
 
     // 切换布局模式时重置折叠态：不同形态对 collapsed 的语义不同（树形/面板收起 vs 双列收子栏）。
-    // 依赖用布局枚举而非 sidebarForm：垂直↔侧边导航同属 tree 形态，形态不变也要回到展开态
-    useEffect(() => {
+    // 依赖用布局枚举而非 sidebarForm：垂直↔侧边导航同属 tree 形态，形态不变也要回到展开态。
+    // 渲染期条件调整 state（官方替代 setState-in-effect 的写法）：布局变化时立即重渲染，不闪旧折叠态
+    const [prevLayout, setPrevLayout] = useState(preferences.layout);
+    if (prevLayout !== preferences.layout) {
+        setPrevLayout(preferences.layout);
         setCollapsed(false);
-    }, [preferences.layout]);
+    }
 
-    // 首屏(含登录后首次进入)不播页面进入动画,避免拖慢首次内容感知;此后路由切换播放
-    const firstRender = useRef(true);
-    useEffect(() => {
-        firstRender.current = false;
-    });
+    // 首屏(含登录后首次进入)不播页面进入动画,避免拖慢首次内容感知;此后路由切换播放。
+    // 同为渲染期条件调整：pathname 变化即标记「已导航」，重渲染先于提交，新页面带上动画类
+    const [navState, setNavState] = useState({ played: false, pathname: location.pathname });
+    if (navState.pathname !== location.pathname) {
+        setNavState({ played: true, pathname: location.pathname });
+    }
 
     const activeMenu = MENU_CATALOG.find(
         menu => menu.to && menu.key !== "workbench" && location.pathname.startsWith(menu.to),
@@ -115,7 +119,7 @@ export function AppLayout() {
                 <AppContentErrorBoundary>
                     <Suspense fallback={<PageLoading routeLevel />}>
                         {/* key 只用 pathname(不含 search):改筛选参数不重播进入动画 */}
-                        <div key={location.pathname} className={firstRender.current ? "" : "animate-page-enter"}>
+                        <div key={location.pathname} className={navState.played ? "animate-page-enter" : ""}>
                             <Outlet />
                         </div>
                     </Suspense>
