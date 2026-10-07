@@ -179,17 +179,18 @@ export function Sidebar({ collapsed, open, onClose, maximized = false, form, bel
     );
 }
 
-/* 移动端底部导航：中间入口按菜单授权过滤（客户档案等未授权模块不可达） */
+/* 移动端底部导航：入口按菜单授权过滤（工作台被收回时不占首格，客户档案等未授权模块不可达） */
 export function MobileBottomNav({ onOpenDrawer }: { onOpenDrawer: () => void }) {
     const { role, grant } = useApp();
-    const centerItems = [
+    const centerItems: Array<{ key: string; label: string; icon: string; to: string; end?: boolean }> = [
+        { key: "workbench", label: "工作台", icon: "grid", to: "/workbench", end: true },
         { key: "orders", label: role === "warehouse" ? "待发货" : "订单", icon: "order", to: "/orders" },
         { key: "customers", label: "客户", icon: "contacts", to: "/customers" },
         { key: "inbound", label: "入库", icon: "inbound", to: "/inbound" },
         { key: "outbound", label: "出库", icon: "outbound", to: "/outbound" },
     ]
         .filter(item => grant.menus.includes(item.key))
-        .slice(0, 3);
+        .slice(0, 4);
 
     const itemClass = ({ isActive }: { isActive: boolean }) =>
         `flex flex-col items-center justify-center gap-0.5 text-11 transition ${
@@ -201,17 +202,13 @@ export function MobileBottomNav({ onOpenDrawer }: { onOpenDrawer: () => void }) 
             aria-label="移动导航"
             className="fixed inset-x-0 bottom-0 z-40 grid min-h-16 border-t border-line bg-surface/90 backdrop-blur-lg lg:hidden"
             style={{
-                gridTemplateColumns: `repeat(${centerItems.length + 2}, minmax(0, 1fr))`,
+                gridTemplateColumns: `repeat(${centerItems.length + 1}, minmax(0, 1fr))`,
                 paddingBottom: "env(safe-area-inset-bottom)",
                 height: "calc(64px + env(safe-area-inset-bottom))",
             }}
         >
-            <NavLink to="/workbench" className={itemClass} end>
-                <Icon name="grid" size={20} strokeWidth={1.7} />
-                工作台
-            </NavLink>
             {centerItems.map(item => (
-                <NavLink key={item.to + item.label} to={item.to} className={itemClass}>
+                <NavLink key={item.to + item.label} to={item.to} end={item.end} className={itemClass}>
                     <Icon name={item.icon} size={20} strokeWidth={1.7} />
                     {item.label}
                 </NavLink>

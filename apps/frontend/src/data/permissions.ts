@@ -271,6 +271,13 @@ export function menuVisible(grant: RoleGrant, key: string): boolean {
     return grant.menus.includes(key);
 }
 
+/** 登录/回首页的落地路径：按菜单字典顺序取第一个已授权且带路由的入口；
+ *  全无授权时回退工作台（路由守卫会展示「没有访问权限」页，与侧边栏口径一致） */
+export function firstAllowedPath(grant: RoleGrant): string {
+    const menu = MENU_CATALOG.find(item => item.to && grant.menus.includes(item.key));
+    return menu?.to ?? "/workbench";
+}
+
 export function menuLabelFor(menu: MenuNode, role: RoleId): string {
     return menu.labelByRole?.[role] ?? menu.label;
 }

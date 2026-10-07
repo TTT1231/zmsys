@@ -1,7 +1,16 @@
 import { lazy } from "react";
+import { Navigate } from "react-router";
+import { useApp } from "@/context/useApp";
+import { firstAllowedPath } from "@/data/permissions";
 
 /* 页面懒加载:路由 chunk 分离,首次访问由 Suspense fallback(PageLoading)兜底,
    同时驱动顶部路由进度条;布局外壳保持静态,切换路由时顶栏/侧栏不重挂 */
+
+/** 根路径落地页：按当前授权取第一个可用菜单；工作台被收回时不落工作台 */
+export function HomeRedirect() {
+    const { grant } = useApp();
+    return <Navigate to={firstAllowedPath(grant)} replace />;
+}
 
 export const LoginPage = lazy(() => import("./pages/login/LoginPage").then(m => ({ default: m.LoginPage })));
 export const WorkbenchPage = lazy(() =>

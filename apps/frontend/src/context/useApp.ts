@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import type { WbUser } from "@/api";
+import type { ProfileResult, WbUser } from "@/api";
 import { type PermCode, type RoleGrant, type RoleId } from "@/data/permissions";
 
 /* 认证上下文的非组件部分（context 对象、hook、角色元数据）单独成文件，
@@ -32,8 +32,8 @@ interface AppState {
     grant: RoleGrant;
     /** 权限码判断：can("outbound:ship") */
     can: (perm: PermCode) => boolean;
-    /** 登录成功后建立会话并返回登录用户（供欢迎提示等使用）；失败抛出带 message 的错误供登录页展示 */
-    login: (account: string, password: string) => Promise<WbUser | null>;
+    /** 登录成功后建立会话并返回完整 profile（用户 + 授权：欢迎提示用 user，落地页用 grant）；失败抛出带 message 的错误供登录页展示 */
+    login: (account: string, password: string) => Promise<ProfileResult>;
     logout: () => Promise<void>;
     /** 重新拉取 /auth/profile（角色授权变更后刷新自身权限） */
     refreshProfile: () => Promise<void>;
@@ -47,7 +47,7 @@ export const AppContext = createContext<AppState>({
     setGlobalSearch: () => {},
     grant: EMPTY_GRANT,
     can: () => false,
-    login: async () => null,
+    login: async () => ({ user: {} as WbUser, grant: EMPTY_GRANT }),
     logout: async () => {},
     refreshProfile: async () => {},
 });

@@ -28,6 +28,7 @@ import {
     ROLES,
     actionsOf,
     diffGrants,
+    firstAllowedPath,
     type RoleGrant,
     type RoleId,
 } from "@/data/permissions";
@@ -54,12 +55,12 @@ const ownedCustomerCount = (customers: Customer[], account: string) =>
     customers.filter(customer => customer.ownerAccount === account).length;
 
 export function PermissionsPage() {
-    const { can } = useApp();
+    const { can, grant } = useApp();
     const { snap, isLoading } = useWbView();
     const { data: grantLogData } = useGrantLog();
     const [tab, setTab] = useState<PermTab>("accounts");
 
-    if (!can("permissions:view")) return <Navigate to="/workbench" replace />;
+    if (!can("permissions:view")) return <Navigate to={firstAllowedPath(grant)} replace />;
 
     const users = snap.users;
     const roleCount = new Set(users.map(user => user.role)).size;

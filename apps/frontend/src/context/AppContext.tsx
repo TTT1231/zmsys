@@ -40,7 +40,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             await loginRequest({ account, password });
             const profile = await fetchProfile();
             applyProfile(profile);
-            return profile.user;
+            return profile;
         },
         [applyProfile],
     );

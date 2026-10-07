@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from "react-router";
 import { Icon } from "@/lib/icons";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useApp } from "@/context/useApp";
+import { firstAllowedPath } from "@/data/permissions";
 import { isApiError } from "@/http";
 import { useNotification, useToast } from "@/components/ui/toastContexts";
 import { SliderCaptcha } from "./SliderCaptcha";
@@ -48,9 +49,9 @@ function fieldClass(invalid: string | boolean, extra = "") {
     } ${extra}`;
 }
 
-/* 登录页：账号密码 + 滑块验证 → POST /auth/login → 建立会话后进入自己角色的工作台 */
+/* 登录页：账号密码 + 滑块验证 → POST /auth/login → 建立会话后进入授权内的第一个页面 */
 export function LoginPage() {
-    const { status, login } = useApp();
+    const { status, grant, login } = useApp();
     const navigate = useNavigate();
     const toast = useToast();
     const notify = useNotification();
@@ -76,7 +77,7 @@ export function LoginPage() {
     const [forgetValidated, setForgetValidated] = useState(false);
     const forgetAccountError = forgetValidated && !forgetAccount.trim() ? "请输入账号" : "";
 
-    if (status === "authenticated") return <Navigate to="/workbench" replace />;
+    if (status === "authenticated") return <Navigate to={firstAllowedPath(grant)} replace />;
 
     const onSubmit = async (event: FormEvent) => {
         event.preventDefault();
@@ -89,11 +90,12 @@ export function LoginPage() {
         }
         setBusy(true);
         try {
-            const user = await login(account.trim(), password);
+            const profile = await login(account.trim(), password);
             /* 登录成功才落盘：勾选存账号+密码（base64 混淆），取消存空串，下次进入自动回填 */
             localStorage.setItem(REMEMBER_KEY, remember ? encodeRemembered({ account: account.trim(), password }) : "");
-            notify({ title: "登录成功", message: user?.name ? `欢迎回来，${user.name}` : "欢迎回来" });
-            navigate("/workbench", { replace: true });
+            notify({ title: "登录成功", message: profile.user.name ? `欢迎回来，${profile.user.name}` : "欢迎回来" });
+            /* 用本次 profile 的授权算落地页，避免读闭包里还没更新的旧 grant */
+            navigate(firstAllowedPath(profile.grant), { replace: true });
         } catch (err) {
             toast.error(loginErrorMessage(err));
             /* vben 同款：登录失败重置滑块，要求重新验证 */

@@ -1,5 +1,7 @@
 import { Component, useEffect, useRef, type ErrorInfo, type ReactNode } from "react";
 import { Link, useLocation, useRouteError } from "react-router";
+import { useApp } from "@/context/useApp";
+import { firstAllowedPath } from "@/data/permissions";
 import { Icon } from "@/lib/icons";
 
 import { errorPageKindForRouteError } from "./routeError";
@@ -114,6 +116,9 @@ const primaryActionClassName = `${actionClassName} bg-primary text-white shadow-
 export function ErrorPage({ kind }: ErrorPageProps) {
     const titleRef = useRef<HTMLHeadingElement>(null);
     const copy = ERROR_PAGE_COPY[kind];
+    const { grant } = useApp();
+    /* 回退入口跟随授权：工作台被收回的用户不再被指回无权限的工作台 */
+    const homePath = firstAllowedPath(grant);
 
     useEffect(() => {
         titleRef.current?.focus();
@@ -163,8 +168,8 @@ export function ErrorPage({ kind }: ErrorPageProps) {
                             重新加载
                         </button>
                     ) : (
-                        <Link to="/workbench" replace className={primaryActionClassName}>
-                            回到工作台
+                        <Link to={homePath} replace className={primaryActionClassName}>
+                            {homePath === "/workbench" ? "回到工作台" : "回到首页"}
                         </Link>
                     )}
                 </div>

@@ -66,9 +66,8 @@ export function AppLayout() {
         setNavState({ played: true, pathname: location.pathname });
     }
 
-    const activeMenu = MENU_CATALOG.find(
-        menu => menu.to && menu.key !== "workbench" && location.pathname.startsWith(menu.to),
-    );
+    // 工作台与其他菜单一样按授权守卫（menu:workbench 可被收回），未授权路由一律展示无权限页
+    const activeMenu = MENU_CATALOG.find(menu => menu.to && location.pathname.startsWith(menu.to));
     const breadcrumbMenu = MENU_CATALOG.find(menu => menu.to && location.pathname.startsWith(menu.to));
     const accessDenied = Boolean(activeMenu && !grant.menus.includes(activeMenu.key));
     // 授权未就绪（loading/guest）时不按空 grant 判无权限、不动标题：

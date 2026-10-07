@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { createBrowserRouter, Navigate } from "react-router";
+import { createBrowserRouter } from "react-router";
 import { AppLayout } from "./layout/AppLayout";
 import { PageLoading } from "./components/ui/PageLoading";
 import { ProgressLayout } from "./components/RouteProgressBar";
@@ -11,6 +11,7 @@ import {
     BackupPage,
     BomPage,
     CustomersPage,
+    HomeRedirect,
     InboundPage,
     LoginPage,
     OrdersPage,
@@ -40,7 +41,7 @@ export const router = createBrowserRouter([
             {
                 element: <AppLayout />,
                 children: [
-                    { path: "/", element: <Navigate to="/workbench" replace /> },
+                    { path: "/", element: <HomeRedirect /> },
                     { path: "/workbench", element: <WorkbenchPage /> },
                     { path: "/search", element: <SearchPage /> },
                     { path: "/orders", element: <OrdersPage /> },
