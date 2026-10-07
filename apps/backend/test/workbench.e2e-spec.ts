@@ -10,6 +10,7 @@ import { Test } from "@nestjs/testing";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { AppModule } from "../src/app.module";
 import { configureApp } from "../src/main";
+import { PERMISSIONS } from "../src/constants";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { SnowflakeGenerator } from "../src/common/snowflake";
 import { beijingDayKey } from "../src/common/beijing-day";
@@ -198,6 +199,32 @@ describe("工作台聚合 (e2e)", () => {
         const data = await overview();
         expect(data.asOf).toBe(today());
         expect(data.unit).toBe("个");
+    });
+
+    it("角色被收回工作台菜单后 403，恢复授权后 200", async () => {
+        // 直改授权行模拟超管在「用户与权限」关闭工作台；grant_version 递增使权限缓存失效
+        const original = await prisma.sysGrant.findUnique({
+            where: { roleCode_permissionCode: { roleCode: "warehouse", permissionCode: PERMISSIONS.MENU_WORKBENCH } },
+        });
+        expect(original).toBeTruthy();
+        const bumpVersion = () =>
+            prisma.sysRole.update({ where: { code: "warehouse" }, data: { grantVersion: { increment: 1 } } });
+        await prisma.sysGrant.delete({
+            where: { roleCode_permissionCode: { roleCode: "warehouse", permissionCode: PERMISSIONS.MENU_WORKBENCH } },
+        });
+        try {
+            await bumpVersion();
+            const denied = await app.inject({
+                method: "GET",
+                url: "/api/workbench/overview",
+                headers: authHeaders(warehouseToken),
+            });
+            expect(denied.statusCode).toBe(403);
+        } finally {
+            await prisma.sysGrant.create({ data: { ...original! } });
+            await bumpVersion();
+        }
+        expect(await overview()).toMatchObject({ asOf: today() });
     });
 
     it("产品由冻结明细派生规格，入库 60 后库存按 v_bom_stock 口径 +60", async () => {

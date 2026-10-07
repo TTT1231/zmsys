@@ -826,7 +826,8 @@ paths:
             operationId: getWorkbenchOverview
             summary: 工作台经营总览聚合
             description: |
-                登录即可访问（各角色公共首页）。返回工作台读模型：products 含 v_bom_stock
+                需菜单权限 `menu:workbench`（super 直通）。角色被收回「工作台」后返回 403，
+                前端登录改为落地其授权内第一个页面。返回工作台读模型：products 含 v_bom_stock
                 实时库存，orders 的 shipped 为 v_order_outbound_qty 净额（无流水订单缺行按 0），
                 movements 按业务日聚合有效入库与出库净额（含作废冲销）；库存调整计入库存
                 但不出现在出入库趋势。周期汇总、交付风险、客户排行与趋势分桶由前端派生。
@@ -837,6 +838,7 @@ paths:
                         application/json:
                             schema: { $ref: "#/components/schemas/WorkbenchOverviewEnvelope" }
                 "401": { $ref: "#/components/responses/Unauthorized" }
+                "403": { $ref: "#/components/responses/Forbidden" }
 
     /system-logs:
         get:
