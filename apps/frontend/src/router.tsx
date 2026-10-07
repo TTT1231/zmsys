@@ -11,6 +11,7 @@ import {
     BackupPage,
     BomPage,
     CustomersPage,
+    DeliveryGanttPage,
     HomeRedirect,
     InboundPage,
     LoginPage,
@@ -43,6 +44,7 @@ export const router = createBrowserRouter([
                 children: [
                     { path: "/", element: <HomeRedirect /> },
                     { path: "/workbench", element: <WorkbenchPage /> },
+                    { path: "/workbench/delivery-gantt", element: <DeliveryGanttPage /> },
                     { path: "/search", element: <SearchPage /> },
                     { path: "/orders", element: <OrdersPage /> },
                     { path: "/archived-orders", element: <ArchivedOrdersPage /> },

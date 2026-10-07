@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>众茂生产</title>
+  <style>:root{color-scheme:light;--color-brand:#006be6;--color-primary:var(--color-brand);--color-primary-strong:#004a9e;--color-primary-soft:#edf5ff;--color-primary-border:#b7d0f0;--color-ink:#101828;--color-text:#344054;--color-muted:#596579;--color-line:#dce2ea;--color-canvas:#f5f7fb;--color-surface:#fff;--color-soft:#f8fafc;--color-selected:#f1f6ff;--color-weekend:#f1f3f6;--color-today:#e9f3ff;--color-success:#047857;--color-success-soft:#e8f5ee;--color-warning:#9a4d05;--color-warning-soft:#fff4df;--delivery-shipped:#e99c97;--delivery-available:#b4ddc7;--delivery-pending:#edf1f5;--delivery-text:#17202f;--delivery-divider:#344054;--delivery-hatch:#803d38;--head-height:62px;--font:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+:root.dark{color-scheme:dark;--color-primary-strong:#a4caff;--color-primary-soft:#173153;--color-primary-border:#426a9a;--color-ink:#f1f5f9;--color-text:#d7e1ed;--color-muted:#a7b5c6;--color-line:#3b4c61;--color-canvas:#111923;--color-surface:#182331;--color-soft:#202e40;--color-selected:#223852;--color-weekend:#233145;--color-today:#233b57;--color-success:#05835e;--color-success-soft:#173b30;--color-warning:#ffc174;--color-warning-soft:#463520;--delivery-shipped:#bc7972;--delivery-available:#82b49b;--delivery-pending:#a9b6c6;--delivery-divider:#17202f;--delivery-hatch:#592a26}
+*{box-sizing:border-box}body{margin:0;background:var(--color-canvas);font:14px/1.5 var(--font);color:var(--color-ink)}button,input,select{font:inherit;color:inherit}button{cursor:pointer;touch-action:manipulation}button,input,select,summary{outline-offset:3px}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--color-primary)}button:disabled{cursor:default;opacity:.6}[hidden]{display:none!important}svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.7;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:none}[data-icon]{display:inline-flex;align-items:center;justify-content:center;flex:none}.sr-only{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.skip{position:fixed;z-index:20;left:12px;top:-100px;background:var(--color-primary);color:white;padding:10px 15px;border-radius:8px}.skip:focus{top:10px}
+main{max-width:1800px;padding:20px 24px;margin:auto}.workspace{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}.timeline-card,.inspector-card{background:var(--color-surface);border:1px solid var(--color-line);border-radius:12px;overflow:hidden;min-width:0}.card-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 18px 12px}.card-heading h1{font-size:18px;font-weight:600;margin:0}.card-heading p{font-size:12px;color:var(--color-muted);margin:6px 0 0;font-variant-numeric:tabular-nums}.heading-actions{display:flex;align-items:center;gap:8px;flex:none}
+.button,.icon-button{border:1px solid var(--color-line);border-radius:7px;background:var(--color-surface);display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:8px 12px;font-size:12px;white-space:nowrap}.button:hover,.icon-button:hover{background:var(--color-primary-soft);border-color:var(--color-primary-border)}.button.secondary{background:var(--color-soft)}.button.primary{background:var(--color-primary-soft);color:var(--color-primary-strong);border-color:var(--color-primary-border)}.button.compact{min-height:32px;padding:4px 10px}.icon-button{width:34px;height:34px;min-height:34px;padding:0;color:var(--color-muted);flex:none}.icon-button svg{width:16px;height:16px}.text-button{border:0;background:transparent;color:var(--color-primary-strong);padding:6px 3px;font-size:12px}.text-button:hover{text-decoration:underline}.segmented{display:inline-flex;padding:3px;border:1px solid var(--color-line);border-radius:8px;background:var(--color-soft);flex:none}.segmented button{border:0;border-radius:5px;padding:7px 10px;background:transparent;font-size:12px;color:var(--color-muted);white-space:nowrap;min-height:32px}.segmented button.active{background:var(--color-surface);box-shadow:0 1px 3px #10182812;color:var(--color-primary-strong);font-weight:600}.segmented button:hover{color:var(--color-primary-strong)}
+.filters{display:flex;align-items:center;gap:10px;padding:8px 18px 14px;border-bottom:1px solid var(--color-line);flex-wrap:wrap}.search{display:flex;align-items:center;gap:8px;border:1px solid var(--color-line);border-radius:7px;width:260px;max-width:100%;padding:8px 10px;color:var(--color-muted);min-height:38px;flex-shrink:1}.search svg{width:16px;height:16px}.search input{border:0;background:transparent;width:100%;min-width:0;font-size:12px;outline:none}.search input::placeholder{color:var(--color-muted)}.search:focus-within{outline:2px solid var(--color-primary);outline-offset:2px}.scope-controls{display:flex;align-items:center;gap:3px}.scope-button{border:0;background:transparent;color:var(--color-muted);padding:8px;border-radius:6px;white-space:nowrap;font-size:12px;min-height:36px}.scope-button span{font-size:11px;margin-left:3px;font-variant-numeric:tabular-nums}.scope-button.active{color:var(--color-primary-strong);background:var(--color-primary-soft);font-weight:600}.scope-button:hover{background:var(--color-soft)}.scope-button.active:hover{background:var(--color-primary-soft)}.focus-chip{display:flex;align-items:center;gap:8px;border:1px solid var(--color-primary-border);background:var(--color-primary-soft);color:var(--color-primary-strong);border-radius:6px;padding:7px 9px;font-size:12px;white-space:nowrap;min-height:36px}.focus-chip svg{width:14px;height:14px}.sort-control{margin-left:auto}.sort-control select{border:1px solid var(--color-line);border-radius:6px;padding:7px;background:var(--color-surface);font-size:11px;min-height:36px;max-width:180px}
+.calendar-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 18px}.date-nav{display:flex;align-items:center;gap:8px;white-space:nowrap}.date-nav>span{font-size:12px;font-weight:550;font-variant-numeric:tabular-nums}.period-switch button{padding:5px 8px;font-size:11px}.legend{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:0 18px 14px;color:var(--color-muted);font-size:11px}.legend>div{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.legend>div>span{display:inline-flex;gap:5px;align-items:center;white-space:nowrap}.legend-bar{display:inline-block;width:16px;height:8px;border-radius:2px}.legend-bar.shipped{background:repeating-linear-gradient(135deg,transparent,transparent 3px,var(--delivery-hatch) 3px,var(--delivery-hatch) 4px),var(--delivery-shipped)}.legend-bar.available{background:var(--delivery-available)}.legend-bar.pending{background:var(--delivery-pending);border:1px solid var(--color-muted)}.legend-bar.done{background:var(--color-success)}.legend-diamond{width:7px;height:7px;background:var(--color-muted);transform:rotate(45deg);margin:1px 3px}
+.gantt-scroll{max-height:min(680px,calc(100vh - 260px));overflow:auto;scroll-padding-top:var(--head-height)}.gantt-grid{display:grid;grid-template-columns:270px minmax(500px,1fr);min-width:770px}.gantt-grid[data-period="30"]{grid-template-columns:270px minmax(1110px,1fr);min-width:1380px}.row-labels{position:sticky;left:0;z-index:2;isolation:isolate;background:var(--color-surface);border-right:1px solid var(--color-line)}.row-heading{position:sticky;top:0;z-index:4;display:flex;align-items:center;justify-content:space-between;height:var(--head-height);background:var(--color-soft);padding:0 14px;border-top:1px solid var(--color-line);border-bottom:1px solid var(--color-line);font-size:11px;color:var(--color-muted)}#rows{position:relative}.row-button{display:block;width:100%;border:0;border-bottom:1px solid var(--color-line);background:var(--color-surface);text-align:left;position:absolute;left:0;padding:12px 14px}.row-button:hover,.row-button.hovered{background:var(--color-soft)}.row-button.selected{background:var(--color-selected)}.row-button.selected::before{content:"";position:absolute;top:0;bottom:0;left:0;width:3px;background:var(--bom-color)}.row-button.active-order{box-shadow:inset 0 0 0 2px var(--bom-color)}.row-button:focus-visible{outline-offset:-3px}.row-primary{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:12px;font-weight:550}.row-primary>strong{font-size:13px;font-weight:650;margin-left:auto;font-variant-numeric:tabular-nums}.row-secondary{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--color-muted);font-size:11px;margin-top:7px}.bom-key{display:inline-flex;align-items:center;justify-content:center;min-width:27px;height:20px;line-height:1;border-radius:4px;background:var(--color-soft);color:var(--color-text);border-left:3px solid var(--bom-color);font-size:11px;font-weight:650;padding:0 4px;font-variant-numeric:tabular-nums;flex:none}.status{font-size:11px;border-radius:4px;padding:1px 4px;background:var(--color-soft);color:var(--color-muted);font-weight:500;white-space:nowrap}.status.risk{background:var(--color-warning-soft);color:var(--color-warning)}.status.good,.status.finished{background:var(--color-success-soft);color:var(--color-success)}.group-wrap{position:absolute;left:0;right:0;display:flex;align-items:stretch;border-bottom:1px solid var(--color-line);background:var(--color-soft)}.group-wrap .row-button{position:relative;border:0;flex:1;padding:8px 7px 8px 14px;min-width:0;background:transparent}.group-wrap .row-secondary{font-size:11px;margin-top:4px}.group-wrap .row-primary{font-size:12px}.group-toggle{border:0;border-left:1px solid var(--color-line);background:transparent;width:34px;flex:none;display:flex;align-items:center;justify-content:center;color:var(--color-muted)}.group-toggle:hover{background:var(--color-primary-soft)}.group-toggle svg{width:16px;height:16px}
+.chart-column{min-width:0;position:relative;z-index:0;isolation:isolate}.date-header{display:grid;position:sticky;top:0;z-index:3;height:var(--head-height);padding-right:10px;background:var(--color-soft);border-top:1px solid var(--color-line);border-bottom:1px solid var(--color-line)}.date-cell{text-align:center;position:relative;padding-top:6px;font-size:11px;color:var(--color-muted);line-height:1.6;white-space:nowrap;border-left:1px solid var(--color-line)}.date-cell small{display:block;font-size:11px}.date-cell.weekend{background:var(--color-weekend)}.date-cell.today{background:var(--color-today);color:var(--color-primary-strong)}.date-cell i{display:block;position:absolute;bottom:3px;left:50%;transform:translateX(-50%);font-size:10px;line-height:13px;padding:0 4px;border-radius:3px;background:var(--color-primary);color:white;font-style:normal}#gantt{width:100%;min-width:0;overflow:hidden;position:relative}#chart-surface{position:absolute;left:0;right:0}#gantt svg{width:100%;height:100%;stroke:none;stroke-width:1;fill:initial;stroke-linecap:initial;stroke-linejoin:initial}.empty{text-align:center;padding:60px 20px;color:var(--color-muted)}.empty h2{font-size:15px;color:var(--color-text);margin:12px 0 18px}.empty>span svg{width:26px;height:26px}
+.inspector{min-width:0}.inspector-heading{padding:14px 16px;border-bottom:1px solid var(--color-line);display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:62px}.inspector-heading h2{font-size:14px;margin:0;font-weight:600}.inspector-heading h2 span{font-size:12px;font-weight:400;color:var(--color-muted);margin-left:6px}.inspector-heading .icon-button{border:0}.pill{font-size:11px;color:var(--color-muted)}.inspector-body{padding:16px}.plain-note{font-size:12px;color:var(--color-muted);margin:0;line-height:1.8}.bom-overview-list{display:flex;flex-direction:column;gap:8px}.bom-overview{border:1px solid var(--color-line);background:var(--color-surface);border-radius:7px;padding:12px 10px;text-align:left;width:100%}.bom-overview:hover{border-color:var(--color-primary-border);background:var(--color-primary-soft)}.bom-overview>div{display:flex;align-items:center;gap:6px;font-size:12px}.bom-overview>div>strong{font-weight:550;min-width:0}.bom-overview>div>span:last-child{margin-left:auto;font-size:11px;color:var(--color-muted);white-space:nowrap}.bom-overview small{display:flex;justify-content:space-between;gap:7px;color:var(--color-muted);font-size:11px;margin-top:7px}.bom-overview small>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bom-overview small strong{font-weight:500;color:var(--color-text);white-space:nowrap}.product-label{display:flex;gap:7px;align-items:center;font-size:13px}.product-label strong{font-weight:550}.product-title{font-size:14px;font-weight:550;margin:8px 0 4px}.product-spec{font-size:11px;line-height:1.8;color:var(--color-muted)}.quantity-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:18px 0}.quantity-grid small{display:block;font-size:11px;color:var(--color-muted)}.quantity-grid strong{display:block;font-size:20px;font-weight:600;margin-top:4px;font-variant-numeric:tabular-nums}.quantity-grid>div:last-child strong{color:var(--color-primary-strong)}.related-button{width:100%;margin-bottom:16px}.allocation-list{display:flex;flex-direction:column;gap:7px}.allocation-row{border:1px solid var(--color-line);background:var(--color-surface);border-radius:7px;padding:10px;text-align:left;width:100%}.allocation-row:hover,.allocation-row.selected{border-color:var(--color-primary-border);background:var(--color-selected)}.allocation-row>div{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px}.allocation-row strong{font-weight:550;font-variant-numeric:tabular-nums}.allocation-row small{display:flex;justify-content:space-between;font-size:11px;color:var(--color-muted);margin-top:5px;gap:8px}.overdue-text{color:var(--color-warning)}.selected-quantities{margin:10px 0 0;padding:9px 10px;border-radius:6px;background:var(--color-soft);font-size:11px;color:var(--color-text);line-height:1.8}.detail-link{width:100%;justify-content:space-between;margin-top:9px}.due-summary{margin-top:16px;border-top:1px solid var(--color-line);padding-top:12px}.due-summary summary{font-size:12px;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;color:var(--color-text)}.due-summary summary svg{width:14px;height:14px;color:var(--color-muted)}.due-summary[open] summary svg{transform:rotate(180deg)}table{width:100%;border-collapse:collapse;text-align:right;font-size:11px;margin-top:12px}th{background:var(--color-soft);font-weight:500;color:var(--color-muted)}th,td{padding:8px 5px;border-top:1px solid var(--color-line);font-variant-numeric:tabular-nums}th:first-child,td:first-child{text-align:left}.due-summary p{font-size:12px;line-height:1.8;color:var(--color-muted);padding:10px;background:var(--color-soft);border-radius:6px;margin:10px 0 0}.due-summary strong{color:var(--color-text);font-weight:600}
+dialog{width:min(560px,calc(100vw - 24px));max-height:85vh;border:1px solid var(--color-line);border-radius:12px;background:var(--color-surface);color:var(--color-ink);padding:0;box-shadow:0 20px 70px #0004}dialog::backdrop{background:#10182866}.detail-heading{display:flex;align-items:center;justify-content:space-between;padding:18px;border-bottom:1px solid var(--color-line)}.detail-heading h2{font-size:17px;margin:0}.detail-body{padding:20px}.detail-id{font-size:15px;font-weight:600;margin:0 0 16px}.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.detail-grid dt{font-size:12px;color:var(--color-muted)}.detail-grid dd{margin:5px 0 0;font-size:14px;font-variant-numeric:tabular-nums}.detail-footer{display:flex;justify-content:flex-end;padding:0 20px 20px}.mobile-list{display:none}.mobile-order{width:100%;border:0;border-bottom:1px solid var(--color-line);background:var(--color-surface);padding:15px;text-align:left}.mobile-order.selected{background:var(--color-selected)}.mobile-order>.row-primary{font-size:13px}.mobile-due{font-size:12px;color:var(--color-muted);margin:10px 0}.mobile-progress{height:12px;display:flex;border-radius:4px;border:1px solid var(--bom-color);overflow:hidden;background:var(--delivery-pending)}.mobile-progress i{display:block;height:100%;border-right:1px solid var(--delivery-divider)}.mobile-progress .shipped{background:repeating-linear-gradient(135deg,transparent,transparent 3px,var(--delivery-hatch) 3px,var(--delivery-hatch) 4px),var(--delivery-shipped)}.mobile-progress .available{background:var(--delivery-available)}.mobile-progress.done{background:var(--color-success)}.mobile-order .row-secondary{font-size:12px}.mobile-group{display:flex;align-items:stretch;background:var(--color-soft);border-bottom:1px solid var(--color-line)}.mobile-group>button:first-child{flex:1;text-align:left;border:0;background:transparent;padding:12px 15px;color:var(--color-text)}.mobile-group p{font-size:12px;margin:6px 0 0;color:var(--color-muted)}
+@media(min-width:1600px){.workspace{grid-template-columns:minmax(0,1fr) 330px}.gantt-grid{grid-template-columns:280px minmax(500px,1fr)}.gantt-grid[data-period="30"]{grid-template-columns:280px minmax(1110px,1fr);min-width:1390px}.gantt-scroll{max-height:min(740px,calc(100vh - 270px))}}
+@media(max-width:1150px){main{padding:18px}.workspace{grid-template-columns:minmax(0,1fr) 290px;gap:14px}.search{width:220px}.filters{gap:8px;padding:8px 14px 12px}.card-heading{padding:16px 14px 12px}.legend,.calendar-toolbar{padding-left:14px;padding-right:14px}.legend>span{display:none}}
+@media(max-width:1050px){.workspace{grid-template-columns:1fr}.inspector .bom-overview-list,.inspector .allocation-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.gantt-scroll{max-height:560px}.legend>span{display:block}.search{width:260px}.sort-control{margin-left:auto}}
+@media(max-width:600px){main{padding:12px}.card-heading{padding:15px 12px 10px;flex-wrap:wrap;align-items:flex-start;gap:10px}.card-heading h1{font-size:17px}.heading-actions{width:100%;justify-content:space-between}.segmented button,.scope-button{min-height:40px;font-size:12px}.filters{padding:10px 12px;gap:8px}.search{width:100%;flex-basis:100%;min-height:44px}.search input{font-size:16px}.scope-button{padding:8px}.sort-control{width:100%;margin-left:0}.sort-control select{width:100%;max-width:none;min-height:44px;font-size:13px}.icon-button{width:44px;height:44px;min-height:44px}.calendar-toolbar{display:none}.legend{padding:12px;gap:8px;font-size:11px}.legend>span{display:none}.legend>div{gap:9px}.gantt-scroll{display:none!important}.mobile-list{display:block;max-height:65vh;overflow:auto;scroll-padding-top:0}.inspector .bom-overview-list,.inspector .allocation-list{grid-template-columns:1fr}.group-toggle{width:44px;min-height:44px}.detail-grid{gap:16px 10px}}
+:root{--color-success-text:#047857;--scrollbar-size:12px;--scrollbar-thumb:#8593a7;--scrollbar-hover:#64748b;--scrollbar-active:#475569;--scrollbar-track:var(--color-soft)}.dark{--color-success-text:#7adbb5;--scrollbar-thumb:#708198;--scrollbar-hover:#97a7be;--scrollbar-active:#b9c7da}.status.good,.status.finished{color:var(--color-success-text)}
+/* Native scrolling keeps its keyboard and drag behavior; only the chrome changes. */
+:where(html,.gantt-scroll,.mobile-list,dialog){scrollbar-width:thin;scrollbar-color:var(--scrollbar-thumb) var(--scrollbar-track)}
+@supports selector(::-webkit-scrollbar){
+  @media not (forced-colors:active){
+    html,.gantt-scroll,.mobile-list,dialog{scrollbar-width:auto;scrollbar-color:auto}
+    :where(html,.gantt-scroll,.mobile-list,dialog)::-webkit-scrollbar{width:var(--scrollbar-size);height:var(--scrollbar-size)}
+    :where(html,.gantt-scroll,.mobile-list,dialog)::-webkit-scrollbar-track{background:var(--scrollbar-track);border-radius:999px}
+    :where(html,.gantt-scroll,.mobile-list,dialog)::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border:3px solid var(--scrollbar-track);border-radius:999px;min-height:36px;min-width:36px;background-clip:padding-box}
+    :where(html,.gantt-scroll,.mobile-list,dialog)::-webkit-scrollbar-thumb:hover{background-color:var(--scrollbar-hover)}
+    :where(html,.gantt-scroll,.mobile-list,dialog)::-webkit-scrollbar-thumb:active{background-color:var(--scrollbar-active)}
+    :where(html,.gantt-scroll,.mobile-list,dialog)::-webkit-scrollbar-button{display:none;width:0;height:0}
+    :where(html,.gantt-scroll,.mobile-list,dialog)::-webkit-scrollbar-corner{background:var(--scrollbar-track)}
+  }
+}
+@media(forced-colors:active){html,.gantt-scroll,.mobile-list,dialog{scrollbar-width:auto;scrollbar-color:auto}}
+.gantt-grid,.gantt-grid[data-period="30"]{--label-width:270px;grid-template-columns:var(--label-width) minmax(var(--time-min-width,500px),1fr);min-width:calc(var(--label-width) + var(--time-min-width,500px))}
+.date-range-button{border:0;background:transparent;padding:5px 4px;font-size:12px;font-weight:550;font-variant-numeric:tabular-nums;border-radius:5px}.date-range-button:hover{background:var(--color-primary-soft);color:var(--color-primary-strong)}.date-inputs{display:grid;grid-template-columns:1fr 1fr;gap:16px}.date-inputs label{font-size:13px;color:var(--color-muted)}.date-inputs input{display:block;width:100%;padding:10px;margin-top:8px;border:1px solid var(--color-line);border-radius:6px;background:var(--color-surface);color:var(--color-ink)}
+@media(min-width:1600px){.gantt-grid,.gantt-grid[data-period="30"]{--label-width:280px}}
+@media(max-width:600px){.calendar-toolbar{display:flex;justify-content:flex-start;padding:10px 12px}.date-nav{flex-wrap:wrap;gap:6px;width:100%}.date-range-button{min-height:44px;flex:1}.date-nav .button{min-height:44px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body>
+  <a class="skip" href="#main">跳到订单交付时间线</a>
+  <main id="main">
+    <div class="workspace">
+      <section class="timeline-card" aria-labelledby="timeline-title">
+        <div class="card-heading"><div><h1 id="timeline-title">订单交付时间线</h1><p id="overview-count" role="status" aria-live="polite" aria-atomic="true"></p></div><div class="heading-actions"><div class="segmented view-switch" role="group" aria-label="甘特图视角"><button data-view="orders" aria-pressed="true">按交期</button><button data-view="grouped" aria-pressed="false">同 BOM 分组</button></div></div></div>
+        <div class="filters"><label class="search"><span data-icon="search"></span><input id="search" type="search" placeholder="订单 / 客户 / BOM / A 编号" aria-label="搜索订单、客户、BOM 编码、名称、规格或 A 编号"></label><div id="metrics" class="scope-controls" role="group" aria-label="订单范围"></div><div id="focus-control" hidden></div><button id="clear-active-filters" class="text-button" hidden>清除筛选</button><label class="sort-control"><span class="sr-only">订单排序</span><select id="sort" aria-label="订单排序"><option value="due">交期从近到远</option><option value="gap">待入库从多到少</option><option value="overdue">逾期天数从多到少</option></select></label></div>
+        <div class="calendar-toolbar"><div class="date-nav"><button id="previous" class="icon-button" aria-label="开始日期向前扩展一天" title="开始日期减 1 天"><span data-icon="chevron-left"></span></button><button id="date-range" class="date-range-button" aria-label="选择日期范围" title="直接选择日期范围"></button><button id="next" class="icon-button" aria-label="结束日期向后扩展一天" title="结束日期加 1 天"><span data-icon="chevron-right"></span></button><button id="today" class="button secondary compact" title="恢复默认日期范围">今天</button></div></div>
+        <div class="legend"><div><span><i class="legend-bar shipped"></i>已出库</span><span><i class="legend-bar available"></i>库存可发</span><span><i class="legend-bar pending"></i>待入库</span><span><i class="legend-bar done"></i>全部发完</span><span><i class="legend-diamond"></i>交期</span></div><span>条长看交期 · 分段看数量</span></div>
+        <div class="gantt-scroll" aria-label="订单时间线，可用订单行的按钮选择订单"><div class="gantt-grid"><div class="row-labels"><div id="row-heading" class="row-heading"></div><div id="rows"></div></div><div class="chart-column"><div id="date-header" class="date-header"></div><div id="gantt" role="img" aria-label="订单交期与出入库数量比例图，使用左侧订单按钮选择订单" aria-describedby="chart-description"><div id="chart-surface"></div></div></div></div></div>
+        <p id="chart-description" class="sr-only">条长表示下单到交期，条内分段表示数量比例。相同 BOM 使用相同 A 编号和边框色。红色斜纹已出库，浅绿库存可发，灰色待入库，整条深绿已发完。使用左侧订单按钮选择，Enter 选择，上下箭头移动焦点，双击或订单详情按钮查看详情。</p>
+        <div id="mobile-list" class="mobile-list" hidden></div>
+        <div id="empty" class="empty" hidden><span data-icon="search"></span><h2>没有符合条件的订单</h2><button id="clear-filters" class="button secondary">清除搜索和筛选</button></div>
+      </section>
+      <aside id="inspector" class="inspector" aria-label="BOM 关联订单"></aside>
+    </div>
+  </main>
+  <dialog id="date-dialog" aria-labelledby="date-picker-title"><form id="date-form"><div class="detail-heading"><h2 id="date-picker-title">选择日期范围</h2><button id="close-date" type="button" class="icon-button" aria-label="关闭日期选择">×</button></div><div class="detail-body date-inputs"><label>开始日期<input id="date-start" type="date" required></label><label>结束日期<input id="date-end" type="date" required></label></div><div class="detail-footer"><button type="submit" class="button primary">查看此范围</button></div></form></dialog>
+  <dialog id="order-dialog" aria-labelledby="order-detail-title"><div id="order-detail"></div></dialog>
+  
+  <script>(function (root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.DeliveryTimeline = api;
+})(typeof window === 'object' ? window : globalThis, function () {
+  'use strict';
+  const DAY = 86400000;
+  const day = date => Date.parse(date + 'T00:00:00Z') / DAY;
+  const iso = value => new Date(value * DAY).toISOString().slice(0, 10);
+  const businessDate = (now = new Date()) => new Intl.DateTimeFormat('sv-SE', {timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
+  function palette(index) {
+    const fixed = ['#447dcc','#8061bb','#28868b','#6e7f98'];
+    if (index < fixed.length) return fixed[index];
+    const h=(index*137.508+18)%360,s=(52+index%3*8)/100,l=(34+index%2*4)/100,a=s*Math.min(l,1-l);
+    return '#'+[0,8,4].map(n=>{const k=(n+h/30)%12;return Math.round(255*(l-a*Math.max(-1,Math.min(k-3,9-k,1)))).toString(16).padStart(2,'0');}).join('');
+  }
+  function fromWorkbench(data) {
+    return {asOf:data.asOf,unit:data.unit,products:data.products.map(p=>({id:p.code,code:p.code,name:[p.category,p.model].filter(Boolean).join(' / '),spec:p.spec,stock:p.stock})),orders:data.orders.map(o=>({id:o.no,customer:o.customer,bom:o.bomCode,date:o.date,due:o.due,qty:o.qty,shipped:o.shipped,archived:o.archived}))};
+  }
+  // The identity ledger is keyed by full BOM code. New BOMs append; removal or
+  // API ordering never renumbers existing identities. Production persists this ledger.
+  function identify(registry, ledger = {}) {
+    const result = {...ledger};
+    let next = Math.max(0, ...Object.values(result).map(x => Number(x.key?.slice(1)) || 0));
+    registry.forEach(b => {
+      result[b.code] ||= {key:`A${++next}`,color:b.color || palette(next-1)};
+    });
+    return {ledger:result,boms:registry.map(b=>({...b,...result[b.code]}))};
+  }
+  function derive(data, boms) {
+    const asOf = day(data.asOf), byBom = new Map(boms.map(b=>[b.id, {...b,orders:[],pending:0,gap:0} ]));
+    const orders = [];
+    for (const item of data.orders) {
+      if (item.archived) continue;
+      const b = byBom.get(item.bom);
+      if (!b) continue;
+      const qty=Math.max(0,item.qty),shipped=Math.max(0,Math.min(qty,item.shipped)),remaining=Math.max(0,qty-shipped);
+      const o={...item,qty,shipped,remaining,date:day(item.date),due:day(item.due),bomData:b};
+      b.orders.push(o);orders.push(o);
+    }
+    const compare=(a,b)=>a.due-b.due||a.id.localeCompare(b.id);
+    for (const b of byBom.values()) {
+      b.orders.sort(compare);
+      const identity={id:b.id,code:b.code,name:b.name,spec:b.spec,stock:b.stock,key:b.key,color:b.color,orderCount:b.orders.length};
+      let stock=Math.max(0,b.stock);
+      for (const o of b.orders) {
+        o.bomData=identity;
+        o.stockAllocation=Math.min(stock,o.remaining);stock-=o.stockAllocation;
+        o.inbound=Math.max(0,o.remaining-o.stockAllocation);
+        o.overdue=o.remaining>0&&o.due<asOf;o.overdueDays=o.overdue?asOf-o.due:0;
+        o.status=o.remaining===0?'已发完':o.overdue?`逾期 ${o.overdueDays} 天`:o.stockAllocation>=o.remaining?'库存可发':o.stockAllocation>0?'部分库存可发':'待入库';
+        b.pending+=o.remaining;
+        o.search=[o.id,o.customer,b.code,b.key,b.name,b.spec].join(' ').toLowerCase();
+      }
+      b.gap=Math.max(0,b.pending-b.stock);
+    }
+    orders.sort(compare);
+    return {orders,boms:[...byBom.values()].filter(b=>b.orders.length),byBom,asOf};
+  }
+  function match(model,state) {
+    const q=state.query.trim().toLowerCase();
+    return model.orders.filter(o=>(!state.focusBom||o.bom===state.focusBom)&&(!state.riskOnly||o.overdue)&&(!state.sharedOnly||o.bomData.orderCount>1)&&(!q||(/^a\d+$/.test(q)?o.bomData.key.toLowerCase()===q:o.search.includes(q)))).sort((a,b)=>state.sort==='gap'?b.inbound-a.inbound||a.due-b.due:state.sort==='overdue'?b.overdueDays-a.overdueDays||a.due-b.due:a.due-b.due||a.id.localeCompare(b.id));
+  }
+  function layout(visible,state) {
+    const rows=[];let height=0;
+    const add=(r,h)=>{rows.push({...r,height:h,top:height,mid:height+h/2});height+=h;};
+    if(state.view==='orders')visible.forEach(o=>add({kind:'order',order:o,bom:o.bomData},68));
+    else {
+      const groups=new Map();visible.forEach(o=>{if(!groups.has(o.bom))groups.set(o.bom,[]);groups.get(o.bom).push(o);});
+      for(const group of groups.values()) {
+        const b=group[0].bomData;
+        if(group.length>1) {
+          add({kind:'group',bom:b,orders:group},60);
+          if(state.expanded.has(b.id))group.forEach(o=>add({kind:'order',order:o,bom:b},68));
+        }else add({kind:'order',order:group[0],bom:b},68);
+      }
+    }
+    return {rows,height};
+  }
+  return {DAY,day,iso,businessDate,fromWorkbench,identify,derive,match,layout};
+});
+</script>
+  <script>
+(() => {
+  const data = window.parent === window ? null : window.parent.__zmsysDeliveryGanttData;
+  window.deliveryData = data
+    ? window.DeliveryTimeline.fromWorkbench(data)
+    : { asOf: window.DeliveryTimeline.businessDate(), unit: '个', products: [], orders: [] };
+  window.echarts = window.parent === window ? undefined : window.parent.__zmsysDeliveryGanttEcharts;
+})();
+</script>
+  <script>(() => {
+  'use strict';
+  const {DAY,day,iso,identify,derive,match,layout}=DeliveryTimeline;
+  const $=id=>document.getElementById(id),fmt=n=>new Intl.NumberFormat('zh-CN').format(n),md=n=>iso(n).slice(5).replace('-','/');
+  const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const paths={search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>','chevron-left':'<path d="m14 6-6 6 6 6"/>','chevron-right':'<path d="m10 6 6 6-6 6"/>','chevron-down':'<path d="m6 9 6 6 6-6"/>',close:'<path d="m6 6 12 12M6 18 18 6"/>',moon:'<path d="M20 15a9 9 0 0 1-11-11A9 9 0 1 0 20 15Z"/>',sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/>',external:'<path d="M14 3h7v7M21 3 11 13M10 3H3v18h18v-7"/>'};
+  const icon=name=>`<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name]||paths.search}</svg>`;
+  document.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=icon(el.dataset.icon));
+  function readStore(key,fallback){try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}}
+  function writeStore(key,value){try{localStorage.setItem(key,JSON.stringify(value));}catch{/* file mode may deny storage */}}
+  const identities=identify(deliveryData.products,readStore('delivery-bom-identities-v1',{}));writeStore('delivery-bom-identities-v1',identities.ledger);
+  const model=derive(deliveryData,identities.boms),TODAY=model.asOf,bomFor=id=>model.byBom.get(id);
+  const defaults={view:'orders',dateVersion:4,days:15,start:TODAY-7,end:TODAY+7,query:'',sharedOnly:false,riskOnly:false,sort:'due',selectedBom:null,selectedOrder:null,focusBom:null,returnView:null,expanded:new Set(model.boms.map(b=>b.id)),top:0,left:0,mobileTop:0};
+  const state={...defaults};
+  let chart,renderer,rows=[],visible=[],totalHeight=0,rangeStart=0,rangeEnd=0,rangeKey='',hoverOrder=null,searchTimer,scrollFrame,saveTimer,summaryOpen=true;
+  const mobile=matchMedia('(max-width:600px)');
+  const parentRoot=window.parent===window?document.documentElement:window.parent.document.documentElement;
+  function snapshot(){const scroll=document.querySelector('.gantt-scroll');return {query:state.query,sharedOnly:state.sharedOnly,riskOnly:state.riskOnly,sort:state.sort,view:state.view,expanded:new Set(state.expanded),dateVersion:4,start:state.start,end:state.end,days:state.days,top:scroll.scrollTop,left:scroll.scrollLeft,mobileTop:$('mobile-list').scrollTop};}
+  function pack(value){return {...value,expanded:[...value.expanded],returnView:value.returnView?pack(value.returnView):null};}
+  function clean(value){
+    if(!value||typeof value!=='object')return null;
+    const v4=value.dateVersion===4;
+    const valid=v4&&Number.isFinite(value.start)&&Number.isFinite(value.end)&&value.end>=value.start&&Math.abs(value.start-TODAY)<36500&&Math.abs(value.end-TODAY)<36500;
+    const from=valid?value.start:TODAY-7,to=valid?value.end:TODAY+7;
+    return {dateVersion:4,query:typeof value.query==='string'?value.query.slice(0,160):'',sharedOnly:!!value.sharedOnly,riskOnly:!!value.riskOnly,sort:['due','gap','overdue'].includes(value.sort)?value.sort:'due',view:value.view==='grouped'?'grouped':'orders',days:to-from+1,start:from,end:to,expanded:new Set(Array.isArray(value.expanded)?value.expanded.filter(id=>bomFor(id)):model.boms.map(b=>b.id)),top:Math.max(0,Number(value.top)||0),left:v4?Math.max(0,Number(value.left)||0):0,mobileTop:Math.max(0,Number(value.mobileTop)||0)};
+  }
+  function readLocation(){
+    try{
+      const value=JSON.parse(decodeURIComponent(location.hash.slice(1))),base=clean(value);if(!base)return;
+      Object.assign(state,base,{selectedBom:bomFor(value.selectedBom)?value.selectedBom:null,selectedOrder:model.orders.some(o=>o.id===value.selectedOrder)?value.selectedOrder:null,focusBom:bomFor(value.focusBom)?value.focusBom:null,returnView:clean(value.returnView)});
+      if(state.selectedOrder)state.selectedBom=model.orders.find(o=>o.id===state.selectedOrder).bom;
+      if(state.focusBom)state.selectedBom=state.focusBom;
+    }catch{/* no state fragment */}
+  }
+  function saveLocation(){
+    const scroll=document.querySelector('.gantt-scroll');state.top=scroll.scrollTop;state.left=scroll.scrollLeft;state.mobileTop=$('mobile-list').scrollTop;
+    const value=pack({...state});
+    try{history.replaceState(null,'','#'+encodeURIComponent(JSON.stringify(value)));}catch{/* still works when opened as a local file */}
+  }
+  function themeColor(hex){if(!document.documentElement.classList.contains('dark'))return hex;return '#'+[1,3,5].map(i=>Math.round(parseInt(hex.slice(i,i+2),16)*.65+255*.35).toString(16).padStart(2,'0')).join('');}
+  const keyTag=b=>`<span class="bom-key" style="--bom-color:${themeColor(b.color)}" title="${esc(b.code)}">${b.key}</span>`;
+  const statusTag=o=>`<span class="status ${o.remaining===0?'finished':o.overdue?'risk':o.stockAllocation>0?'good':''}">${esc(o.status)}</span>`;
+  const orderLabel=o=>`${o.customer}，${o.id}，BOM ${o.bomData.key} ${o.bomData.code}，下单 ${iso(o.date)}，交期 ${iso(o.due)}，订单 ${o.qty} 个，已出库 ${o.shipped} 个，库存可发 ${o.stockAllocation} 个，待入库 ${o.inbound} 个，${o.status}`;
+  function focusToken(){const el=document.activeElement;if(!el)return null;for(const attr of ['id','data-order','data-select-order','data-select-bom','data-group','data-toggle','data-scope'])if(el.getAttribute(attr))return {attr,value:el.getAttribute(attr)};return null;}
+  function restoreToken(token){if(!token)return;const el=[...document.querySelectorAll(`[${token.attr}]`)].find(el=>el.getAttribute(token.attr)===token.value);if(el&&!el.hidden)el.focus({preventScroll:true});}
+  function updateControls(){
+    if(document.activeElement!==$('search'))$('search').value=state.query;
+    $('sort').value=state.sort;
+    document.querySelectorAll('[data-view]').forEach(el=>{const active=el.dataset.view===state.view;el.classList.toggle('active',active);el.setAttribute('aria-pressed',String(active));});
+    $('date-range').textContent=`${iso(state.start).replaceAll('-','/')} — ${iso(state.end).replaceAll('-','/')}`;
+    document.querySelector('.gantt-grid').dataset.period=String(state.days);
+    document.querySelector('.gantt-grid').style.setProperty('--time-min-width',Math.max(500,state.days*35+10)+'px');
+    $('date-header').style.gridTemplateColumns=`repeat(${state.days},minmax(0,1fr))`;
+    $('date-header').innerHTML=Array.from({length:state.days},(_,i)=>{const d=state.start+i,w=new Date(d*DAY).getUTCDay();return `<div class="date-cell ${[0,6].includes(w)?'weekend':''} ${d===TODAY?'today':''}"><span>${md(d)}</span><small>周${'日一二三四五六'[w]}</small>${d===TODAY?'<i>今天</i>':''}</div>`;}).join('');
+    $('clear-active-filters').hidden=!state.query.trim()&&!state.sharedOnly&&!state.riskOnly;
+    $('previous').disabled=false;$('next').disabled=false;
+  }
+  function renderMetrics(){
+    const message=visible.length?`${visible.length} 笔订单 · ${new Set(visible.map(o=>o.bom)).size} 种 BOM · 待交 ${fmt(visible.reduce((s,o)=>s+o.remaining,0))} 个`:'没有符合条件的订单';
+    if($('overview-count').textContent!==message)$('overview-count').textContent=message;
+    const counts={all:model.orders.length,shared:model.orders.filter(o=>o.bomData.orderCount>1).length,overdue:model.orders.filter(o=>o.overdue).length};
+    $('metrics').innerHTML=state.focusBom?'':[['all','全部订单'],['shared','共用 BOM'],['overdue','逾期']].map(([scope,text])=>{const active=scope==='all'?!state.sharedOnly&&!state.riskOnly:scope==='shared'?state.sharedOnly:state.riskOnly;return `<button data-scope="${scope}" class="scope-button ${active?'active':''}" aria-pressed="${active}">${text} <span>${counts[scope]}</span></button>`;}).join('');
+    $('focus-control').hidden=!state.focusBom;
+    $('focus-control').innerHTML=state.focusBom?`<button id="leave-focus" class="focus-chip" aria-label="退出关联筛选，恢复原视图">${keyTag(bomFor(state.focusBom))}<span>关联订单 · ${visible.length} 笔</span>${icon('close')}</button>`:'';
+  }
+  function groupRange(r){const dates=r.orders.map(o=>o.due);return {first:Math.min(...dates),last:Math.max(...dates)};}
+  function rowHTML(r){
+    const b=r.bom,selected=b.id===state.selectedBom,style=`height:${r.height}px;top:${r.top}px;--bom-color:${themeColor(b.color)}`;
+    if(r.kind==='group'){
+      const open=state.expanded.has(b.id),sum=r.orders.reduce((s,o)=>s+o.remaining,0);
+      return `<div class="group-wrap" style="${style}"><button class="row-button ${selected?'selected':''}" data-group="${b.id}" aria-pressed="${selected}" aria-label="选择 ${b.key} ${esc(b.code)}，${r.orders.length} 笔订单，待交合计 ${sum} 个"><div class="row-primary">${keyTag(b)}<span>${esc(b.code)}</span><strong title="组内待交合计">${fmt(sum)}</strong></div><div class="row-secondary"><span>${r.orders.length} 笔订单 · ${esc(b.name)}</span></div></button><button class="group-toggle" data-toggle="${b.id}" aria-expanded="${open}" aria-label="${open?'收起':'展开'} ${b.key} 关联订单">${icon(open?'chevron-down':'chevron-right')}</button></div>`;
+    }
+    const o=r.order,active=o.id===state.selectedOrder;
+    return `<button class="row-button ${selected?'selected':''} ${active?'active-order':''}" style="${style}" data-order="${o.id}" aria-pressed="${active}" aria-label="${esc(orderLabel(o))}"><div class="row-primary">${keyTag(b)}<span>${o.id}</span><strong>${fmt(o.remaining)}</strong></div><div class="row-secondary"><span>${esc(o.customer)}</span>${statusTag(o)}</div></button>`;
+  }
+  function renderMobile(){
+    $('mobile-list').hidden=!mobile.matches||!visible.length;
+    if(!mobile.matches){$('mobile-list').innerHTML='';return;}
+    $('mobile-list').innerHTML=rows.map(r=>{
+      if(r.kind==='group'){const b=r.bom,range=groupRange(r),open=state.expanded.has(b.id);return `<div class="mobile-group"><button data-group="${b.id}" aria-pressed="${b.id===state.selectedBom}">${keyTag(b)} ${esc(b.code)} · ${r.orders.length} 笔<p>交期 ${md(range.first)} — ${md(range.last)} · 待交合计 ${fmt(r.orders.reduce((s,o)=>s+o.remaining,0))} 个</p></button><button class="group-toggle" data-toggle="${b.id}" aria-expanded="${open}" aria-label="${open?'收起':'展开'} ${b.key} 关联订单">${icon(open?'chevron-down':'chevron-right')}</button></div>`;}
+      const o=r.order;return `<button class="mobile-order ${o.id===state.selectedOrder?'selected':''}" data-order="${o.id}" style="--bom-color:${themeColor(r.bom.color)}" aria-pressed="${o.id===state.selectedOrder}" aria-label="${esc(orderLabel(o))}"><div class="row-primary">${keyTag(r.bom)}<span>${o.id}</span><strong>${fmt(o.remaining)}</strong></div><div class="row-secondary"><span>${esc(o.customer)}</span>${statusTag(o)}</div><p class="mobile-due">${md(o.date)} 下单 → ${md(o.due)} 交期</p><div class="mobile-progress ${o.remaining===0?'done':''}" aria-hidden="true">${o.remaining?`<i class="shipped" style="width:${o.shipped/o.qty*100}%"></i><i class="available" style="width:${o.stockAllocation/o.qty*100}%"></i>`:''}</div><div class="row-secondary"><span>已出库 ${fmt(o.shipped)}</span><span>可发 ${fmt(o.stockAllocation)}</span><span>待入库 ${fmt(o.inbound)}</span></div></button>`;
+    }).join('');
+  }
+  function renderRows(){
+    const result=layout(visible,state);rows=result.rows;totalHeight=result.height;
+    $('row-heading').innerHTML=state.view==='orders'?'销售订单 / BOM<span>待交（个）</span>':'BOM / 关联订单<span>待交合计（个）</span>';
+    $('rows').style.height=`${totalHeight}px`;$('gantt').style.height=`${Math.max(1,totalHeight)}px`;
+    document.querySelector('.gantt-scroll').hidden=!rows.length;$('empty').hidden=!!visible.length;
+    rangeKey='';renderViewport(true);renderMobile();
+  }
+  function renderViewport(force=false){
+    const scroll=document.querySelector('.gantt-scroll');
+    const windowed=rows.length>80&&!mobile.matches;
+    const low=Math.max(0,scroll.scrollTop-220),high=scroll.scrollTop+scroll.clientHeight+220;
+    const subset=windowed?rows.filter(r=>r.top+r.height>=low&&r.top<=high):rows;
+    const start=windowed?(subset[0]?.top||0):0,end=windowed?(subset.at(-1)?.top+subset.at(-1)?.height||1):Math.max(1,totalHeight);
+    const key=`${start}:${end}`;if(!force&&key===rangeKey)return;
+    rangeKey=key;rangeStart=start;rangeEnd=end;
+    $('rows').innerHTML=subset.map(rowHTML).join('');
+    $('chart-surface').style.top=`${start}px`;$('chart-surface').style.height=`${end-start}px`;
+    renderChart(subset);
+  }
+  function renderInspector(){
+    if(!state.selectedBom){
+      const shared=model.boms.filter(b=>b.orders.length>1&&visible.some(o=>o.bom===b.id));
+      $('inspector').innerHTML=`<section class="inspector-card"><div class="inspector-heading"><h2>共用 BOM</h2><span class="pill">${shared.length} 种</span></div><div class="inspector-body">${shared.length?`<div class="bom-overview-list">${shared.map(b=>`<button class="bom-overview" data-select-bom="${b.id}"><div>${keyTag(b)}<strong>${esc(b.code)}</strong><span>${b.orders.length} 单</span></div><small><span>${esc(b.name)}</span><strong>${fmt(b.pending)} 个待交</strong></small></button>`).join('')}</div>`:'<p class="plain-note">暂无共用 BOM</p>'}</div></section>`;return;
+    }
+    const b=bomFor(state.selectedBom),orders=b.orders,chosen=orders.find(o=>o.id===state.selectedOrder)||orders[0];
+    const byDate=new Map();orders.filter(o=>o.remaining>0).forEach(o=>byDate.set(o.due,(byDate.get(o.due)||0)+o.remaining));
+    let cumulative=0;const schedule=[...byDate].sort((a,c)=>a[0]-c[0]).map(([due,qty])=>{cumulative+=qty;return `<tr><td class="${due<TODAY?'overdue-text':''}">${md(due)}</td><td>${fmt(qty)}</td><td>${fmt(cumulative)}</td></tr>`;}).join('');
+    const first=[...byDate].sort((a,c)=>a[0]-c[0])[0];
+    $('inspector').innerHTML=`<section class="inspector-card"><div class="inspector-heading"><h2>关联订单 <span>${orders.length} 笔</span></h2><button id="close-inspector" class="icon-button" aria-label="关闭 BOM 详情并退出关联筛选">${icon('close')}</button></div><div class="inspector-body"><div class="product-label">${keyTag(b)}<strong>${esc(b.code)}</strong></div><div class="product-title">${esc(b.name)}</div><div class="product-spec">${esc(b.spec)}</div><div class="quantity-grid"><div><small>待交合计</small><strong>${fmt(b.pending)}</strong></div><div><small>现有库存</small><strong>${fmt(b.stock)}</strong></div><div><small>需补入库</small><strong>${fmt(b.gap)}</strong></div></div><button id="inspector-related" class="button primary related-button" aria-pressed="${!!state.focusBom}">${icon(state.focusBom?'chevron-left':'search')} ${state.focusBom?(state.returnView?.query||state.returnView?.sharedOnly||state.returnView?.riskOnly?'返回原筛选结果':'返回全部订单'):'只看这些订单'}</button><div class="allocation-list">${orders.map(o=>`<button class="allocation-row ${o.id===chosen.id?'selected':''}" data-select-order="${o.id}" aria-pressed="${o.id===chosen.id}" aria-label="${esc(orderLabel(o))}"><div><span>${esc(o.customer)}</span><strong>${o.remaining?`${fmt(o.remaining)} 个待交`:'已发完'}</strong></div><small>${o.id}<span class="${o.overdue?'overdue-text':''}">${md(o.due)} 交期</span></small></button>`).join('')}</div>${chosen?`<div class="selected-quantities">${esc(chosen.customer)}：已出库 ${fmt(chosen.shipped)} · 库存可发 ${fmt(chosen.stockAllocation)} · 待入库 ${fmt(chosen.inbound)}</div><button id="open-order" class="button secondary detail-link">查看所选订单详情 ${icon('external')}</button>`:''}<details class="due-summary" ${summaryOpen?'open':''}><summary>按交期汇总需求 ${icon('chevron-down')}</summary>${schedule?`<table><thead><tr><th>交期</th><th>当期待交</th><th>累计待交</th></tr></thead><tbody>${schedule}</tbody></table>`:''}<p>${first?`${md(first[0])} ${first[0]<TODAY?'已到交期，':'前'}需备齐 <strong>${fmt(first[1])}</strong> 个，还需入库 <strong>${fmt(Math.max(0,first[1]-b.stock))}</strong> 个。`:'该 BOM 的订单均已发完。'}</p></details></div></section>`;
+    $('inspector').querySelector('details').ontoggle=e=>summaryOpen=e.target.open;
+  }
+  function enterFocus(){if(!state.selectedBom||state.focusBom)return;state.returnView=snapshot();state.focusBom=state.selectedBom;state.query='';$('search').value='';state.sharedOnly=false;state.riskOnly=false;state.view='orders';render();document.querySelector('.gantt-scroll').scrollTop=0;$('mobile-list').scrollTop=0;saveLocation();}
+  function leaveFocus(){const previous=state.returnView;state.focusBom=null;state.returnView=null;state.selectedBom=null;state.selectedOrder=null;if(previous)Object.assign(state,previous);$('search').value=state.query;render();if(previous){const scroll=document.querySelector('.gantt-scroll');scroll.scrollTop=previous.top;scroll.scrollLeft=previous.left;$('mobile-list').scrollTop=previous.mobileTop||0;renderViewport(true);}saveLocation();}
+  function closeInspector(){if(state.focusBom)leaveFocus();else{state.selectedBom=null;state.selectedOrder=null;render();}}
+  function revealOrder(id){
+    const o=model.orders.find(o=>o.id===id);if(!o)return;
+    if(!match(model,state).some(x=>x.id===id))enterFocus();
+    if(state.view==='grouped')state.expanded.add(o.bom);
+    if(o.due<state.start||o.due>state.end){state.start=Math.min(state.start,o.date);state.end=Math.max(state.end,o.due);}
+    render();
+    const r=rows.find(r=>r.kind==='order'&&r.order.id===id),scroll=document.querySelector('.gantt-scroll');
+    if(r&&!mobile.matches){const h=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--head-height'),10);if(r.top<scroll.scrollTop)scroll.scrollTop=r.top;else if(r.top+r.height>scroll.scrollTop+scroll.clientHeight-h)scroll.scrollTop=r.top+r.height-scroll.clientHeight+h;renderViewport(true);}
+    if(mobile.matches)$('mobile-list').querySelector(`[data-order="${id}"]`)?.scrollIntoView({block:'nearest'});
+    saveLocation();
+  }
+  function selectOrder(id,reveal=false){const o=model.orders.find(o=>o.id===id);if(!o)return;state.selectedBom=o.bom;state.selectedOrder=id;if(reveal)revealOrder(id);else render();}
+  function selectBom(id){state.selectedBom=id;state.selectedOrder=bomFor(id).orders.find(o=>visible.some(v=>v.id===o.id))?.id||bomFor(id).orders[0]?.id;render();}
+  function toggleGroup(id){if(state.expanded.has(id))state.expanded.delete(id);else state.expanded.add(id);render();}
+  function openOrder(id=state.selectedOrder){
+    const o=model.orders.find(o=>o.id===id);if(!o)return;
+    // The host can supply the real sales-order route. The standalone file opens
+    // the complete read-only order view, rather than a dead placeholder link.
+    if(typeof window.deliveryOpenOrder==='function'){window.deliveryOpenOrder(o.id);return;}
+    $('order-detail').innerHTML=`<div class="detail-heading"><h2 id="order-detail-title">销售订单详情</h2><button id="close-order" class="icon-button" aria-label="关闭销售订单详情">${icon('close')}</button></div><div class="detail-body"><p class="detail-id">${o.id} ${statusTag(o)}</p><dl class="detail-grid">${[['客户',o.customer],['引用 BOM',`${o.bomData.key} · ${o.bomData.code}`],['下单日期',iso(o.date)],['约定交期',iso(o.due)],['订单数量',`${fmt(o.qty)} 个`],['已出库',`${fmt(o.shipped)} 个`],['库存可发',`${fmt(o.stockAllocation)} 个`],['待入库',`${fmt(o.inbound)} 个`]].map(([k,v])=>`<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl></div><div class="detail-footer"><button id="locate-order" class="button primary">定位到时间线</button></div>`;
+    $('close-order').onclick=()=>$('order-dialog').close();$('locate-order').onclick=()=>{$('order-dialog').close();selectOrder(o.id,true);};
+    $('order-dialog').showModal();
+  }
+  function tooltip(p){
+    const d=p.data;if(!d)return '';
+    if(d.group){const r=d.group,range=groupRange(r);return `<b>${r.bom.key} · ${esc(r.bom.code)}</b><br>${r.orders.length} 笔订单 · 待交合计 ${fmt(r.orders.reduce((s,o)=>s+o.remaining,0))} 个<br>最早交期 ${md(range.first)} · 最晚交期 ${md(range.last)}<br>展开分组可查看各订单进度`;}
+    if(!d.order)return '';const o=d.order;return `<b>${o.bomData.key} · ${esc(o.bomData.code)}</b><br>${esc(o.customer)} · ${o.id}<br>下单 ${md(o.date)} → 交期 ${md(o.due)}<br>订单量 ${fmt(o.qty)} 个 · 待交 ${fmt(o.remaining)} 个<br>已出库 ${fmt(o.shipped)} 个 · 库存可发 ${fmt(o.stockAllocation)} 个<br>待入库 ${fmt(o.inbound)} 个${o.overdue?`<br><b>${o.status}</b>`:''}`;
+  }
+  function colors(){
+    const probe=document.createElement('span');probe.hidden=true;document.body.appendChild(probe);
+    const read=name=>{probe.style.color=`var(${name})`;return getComputedStyle(probe).color;};
+    const result={surface:read('--color-surface'),soft:read('--color-soft'),selected:read('--color-selected'),line:read('--color-line'),text:read('--color-text'),muted:read('--color-muted'),primary:read('--color-primary'),warning:read('--color-warning'),weekend:read('--color-weekend'),today:read('--color-today'),shipped:read('--delivery-shipped'),available:read('--delivery-available'),pending:read('--delivery-pending'),done:read('--color-success'),barText:read('--delivery-text'),divider:read('--delivery-divider'),hatch:read('--delivery-hatch')};probe.remove();return result;
+  }
+  function bindChart(){
+    chart.on('click',p=>{if(p.data?.order)selectOrder(p.data.order.id);else if(p.data?.group)selectBom(p.data.group.bom.id);});
+    chart.on('dblclick',p=>{if(p.data?.order)openOrder(p.data.order.id);});
+    chart.on('mouseover',p=>{if(p.data?.order)setHover(p.data.order.id);});chart.on('mouseout',p=>{if(p.data?.order)setHover(null);});chart.on('globalout',()=>setHover(null));
+  }
+  function setHover(id){
+    if(id===hoverOrder)return;hoverOrder=id;
+    document.querySelectorAll('#rows [data-order]').forEach(el=>el.classList.toggle('hovered',el.dataset.order===id));
+    const r=rows.find(r=>r.kind==='order'&&r.order.id===id);
+    if(chart)chart.setOption({series:[{id:'hover-lane',data:r?[{value:[r.mid,r.height]}]:[]}]});
+  }
+  function renderChart(chartRows){
+    if(!window.echarts){$('gantt').textContent='图表加载失败，请刷新页面。';return;}
+    const nextRenderer=model.orders.length>150?'canvas':'svg';
+    if(!chart||renderer!==nextRenderer){chart?.dispose();renderer=nextRenderer;chart=echarts.init($('chart-surface'),null,{renderer});bindChart();}
+    if(mobile.matches){chart.clear();return;}
+    const periodStart=state.start,periodEnd=state.start+state.days,selectedBom=state.selectedBom,selectedOrder=state.selectedOrder,tones=colors();
+    const tasks=[],markers=[],groups=[];
+    chartRows.forEach(r=>{if(r.kind==='order'){tasks.push({id:r.order.id,value:[r.mid,r.order.date,r.order.due+1],order:r.order,bom:r.bom});markers.push({id:r.order.id,value:[r.mid,r.order.due+.5],order:r.order});}else groups.push({id:r.bom.id,value:[r.mid],group:r,open:state.expanded.has(r.bom.id)});});
+    const dates=Array.from({length:state.days},(_,i)=>({value:[periodStart+i],weekend:[0,6].includes(new Date((periodStart+i)*DAY).getUTCDay()),today:periodStart+i===TODAY}));
+    const textStyle={fontFamily:'Microsoft YaHei, sans-serif',fontSize:12,color:tones.text};
+    chart.resize();
+    chart.setOption({animation:false,backgroundColor:tones.surface,grid:{left:0,right:10,top:0,bottom:0},xAxis:{type:'value',min:periodStart,max:periodEnd,show:false},yAxis:{type:'value',min:rangeStart,max:rangeEnd,inverse:true,show:false},tooltip:{trigger:'item',confine:true,showDelay:180,hideDelay:60,formatter:tooltip,backgroundColor:tones.surface,borderColor:tones.line,padding:[10,12],textStyle,extraCssText:'border-radius:8px;line-height:1.8;box-shadow:0 6px 24px #10182826;pointer-events:none'},series:[
+      {id:'lanes',encode:{y:0},type:'custom',silent:true,z:0,data:chartRows.map(r=>({value:[r.mid]})),renderItem:(p,api)=>{const r=chartRows[p.dataIndex],y=api.coord([periodStart,r.mid])[1];return {type:'group',children:[{type:'rect',shape:{x:0,y:y-r.height/2,width:p.coordSys.width,height:r.height},style:{fill:r.bom.id===selectedBom?tones.selected:r.kind==='group'?tones.soft:tones.surface}},{type:'line',shape:{x1:0,y1:y+r.height/2,x2:p.coordSys.width,y2:y+r.height/2},style:{stroke:tones.line,lineWidth:1}}]};}},
+      {id:'dates',encode:{x:0},type:'custom',silent:true,z:1,data:dates,renderItem:(p,api)=>{const d=dates[p.dataIndex],x=api.coord([api.value(0),rangeStart])[0],next=api.coord([api.value(0)+1,rangeStart])[0];return {type:'group',children:[...(d.today||d.weekend?[{type:'rect',shape:{x,y:0,width:next-x,height:p.coordSys.height},style:{fill:d.today?tones.today:tones.weekend,opacity:.65}}]:[]),{type:'line',shape:{x1:x,y1:0,x2:x,y2:p.coordSys.height},style:{stroke:tones.line,lineWidth:1}}]};}},
+      {id:'group-range',encode:{y:0},type:'custom',z:3,clip:true,emphasis:{disabled:true},data:groups,renderItem:(p,api)=>{
+        const d=groups[p.dataIndex],r=d.group,range=groupRange(r),y=api.coord([periodStart,r.mid])[1],color=themeColor(r.bom.color),firstQty=r.orders.filter(o=>o.due===range.first).reduce((s,o)=>s+o.remaining,0);
+        const a=api.coord([range.first+.5,r.mid])[0],b=api.coord([range.last+.5,r.mid])[0],left=Math.max(8,Math.min(p.coordSys.width-8,a)),right=Math.max(left,Math.min(p.coordSys.width-8,b));
+        const children=[{type:'text',style:{x:12,y:y-10,text:`${d.open?'交期':'交期范围'} ${md(range.first)} — ${md(range.last)}${d.open?'':` · 最早待交 ${fmt(firstQty)} 个`}`,font:'11px Microsoft YaHei, sans-serif',fill:tones.text,verticalAlign:'middle',width:p.coordSys.width-24,overflow:'truncate'}}];
+        if(!d.open){children.push({type:'line',shape:{x1:left,y1:y+12,x2:right,y2:y+12},style:{stroke:color,lineWidth:4,lineCap:'round'}},{type:'polygon',shape:{points:[[left,y+7],[left+5,y+12],[left,y+17],[left-5,y+12]]},style:{fill:range.first<TODAY?tones.warning:color}});if(right>left+5)children.push({type:'line',shape:{x1:right,y1:y+7,x2:right,y2:y+17},style:{stroke:color,lineWidth:2}});}
+        return {type:'group',children};
+      }},
+      {id:'tasks',name:'订单交付周期',type:'custom',z:4,clip:true,emphasis:{disabled:true},encode:{x:[1,2],y:0},data:tasks,renderItem:(p,api)=>{
+        const d=tasks[p.dataIndex],o=d.order,a=api.coord([api.value(1),api.value(0)]),b=api.coord([api.value(2),api.value(0)]),done=o.remaining===0;
+        const rect=echarts.graphic.clipRectByRect({x:a[0]+2,y:a[1]-14,width:Math.max(1,b[0]-a[0]-4),height:28},{x:0,y:0,width:p.coordSys.width,height:p.coordSys.height});
+        if(!rect){const left=o.due<periodStart,x=left?8:p.coordSys.width-8;return {type:'group',children:[{type:'polygon',shape:{points:left?[[x+4,a[1]-4],[x-2,a[1]],[x+4,a[1]+4]]:[[x-4,a[1]-4],[x+2,a[1]],[x-4,a[1]+4]]},style:{fill:o.overdue?tones.warning:tones.muted}},{type:'text',style:{x:left?x+13:x-13,y:a[1],text:`${left?'交期早于窗口':'交期在窗口后'} · ${md(o.due)}`,align:left?'left':'right',font:'11px Microsoft YaHei, sans-serif',fill:o.overdue?tones.warning:tones.muted,verticalAlign:'middle'}}]};}
+        const sw=rect.width*o.shipped/o.qty,aw=rect.width*o.stockAllocation/o.qty,children=[{type:'rect',shape:{...rect,r:5},style:{fill:done?tones.done:tones.pending}}];
+        if(!done&&sw>0){children.push({type:'rect',shape:{x:rect.x,y:rect.y,width:sw,height:28,r:[5,0,0,5]},style:{fill:tones.shipped}});for(let x=rect.x+1;x<rect.x+sw-2;x+=8){const len=Math.min(5,rect.x+sw-2-x);children.push({type:'line',shape:{x1:x,y1:rect.y+5,x2:x+len,y2:rect.y+5-len},style:{stroke:tones.hatch,lineWidth:1}});}}
+        if(!done&&aw>0)children.push({type:'rect',shape:{x:rect.x+sw,y:rect.y,width:aw,height:28},style:{fill:tones.available}});
+        if(!done)[sw,sw+aw].filter((x,i,arr)=>x>0&&x<rect.width&&arr.indexOf(x)===i).forEach(x=>children.push({type:'line',shape:{x1:rect.x+x,y1:rect.y+1,x2:rect.x+x,y2:rect.y+27},style:{stroke:tones.divider,lineWidth:1}}));
+        children.push({type:'rect',shape:{...rect,r:5},style:{fill:'transparent',stroke:themeColor(d.bom.color),lineWidth:o.id===selectedOrder?2.5:d.bom.id===selectedBom?2:1}});
+        if(rect.width>36)children.push({type:'text',style:{x:rect.x+8,y:rect.y+15,text:rect.width<115?(done?`✓ ${d.bom.key}`:d.bom.key):done?`✓ ${d.bom.key} · 已发完`:`${d.bom.key} · ${fmt(o.remaining)}`,font:'12px Microsoft YaHei, sans-serif',fill:done?'#ffffff':tones.barText,verticalAlign:'middle',width:rect.width-22,overflow:'truncate'}});
+        if(o.date<periodStart)children.push({type:'polygon',shape:{points:[[rect.x+5,rect.y+11],[rect.x+2,rect.y+14],[rect.x+5,rect.y+17]]},style:{fill:done?'#fff':tones.barText}});
+        if(o.due>=periodEnd)children.push({type:'polygon',shape:{points:[[rect.x+rect.width-5,rect.y+11],[rect.x+rect.width-2,rect.y+14],[rect.x+rect.width-5,rect.y+17]]},style:{fill:done?'#fff':tones.barText}});
+        if(o.overdue){const due=api.coord([o.due+1,api.value(0)])[0],today=api.coord([TODAY+1,api.value(0)])[0];if(today>0&&due<p.coordSys.width)children.push({type:'line',shape:{x1:Math.max(0,due),y1:a[1],x2:Math.min(p.coordSys.width,today),y2:a[1]},style:{stroke:tones.warning,lineWidth:2,lineDash:[4,4]}});}
+        return {type:'group',children};
+      }},
+      {id:'markers',encode:{x:1,y:0},name:'约定交期',type:'custom',z:5,clip:true,emphasis:{disabled:true},data:markers,renderItem:(p,api)=>{const d=markers[p.dataIndex],pos=api.coord([api.value(1),api.value(0)]),y=pos[1]+25;if(pos[0]<6||pos[0]>p.coordSys.width-6)return;const color=d.order.overdue?tones.warning:tones.muted,edge=pos[0]>p.coordSys.width-48;return {type:'group',children:[{type:'polygon',shape:{points:[[pos[0],y-4],[pos[0]+4,y],[pos[0],y+4],[pos[0]-4,y]]},style:{fill:color}},{type:'text',style:{x:pos[0]+(edge?-8:8),y,text:md(d.order.due),font:'11px Microsoft YaHei, sans-serif',fill:color,align:edge?'right':'left',verticalAlign:'middle'}}]};}},
+      {id:'today-line',encode:{x:0},type:'custom',silent:true,z:6,data:[{value:[TODAY+.5]}],renderItem:(p,api)=>{const x=api.coord([api.value(0),rangeStart])[0];if(x<0||x>p.coordSys.width)return;return {type:'line',shape:{x1:x,y1:0,x2:x,y2:p.coordSys.height},style:{stroke:tones.primary,lineWidth:1,lineDash:[4,4]}};}},
+      {id:'hover-lane',encode:{y:0},type:'custom',silent:true,z:7,data:[],renderItem:(p,api)=>{const y=api.coord([periodStart,api.value(0)])[1];return {type:'rect',shape:{x:1,y:y-api.value(1)/2+1,width:p.coordSys.width-2,height:api.value(1)-2},style:{fill:'transparent',stroke:tones.primary,lineWidth:1}};}}
+    ]},true);
+    hoverOrder=null;
+  }
+  function render(){
+    const token=focusToken(),started=performance.now();state.days=state.end-state.start+1;const candidates=match(model,state);visible=candidates.filter(o=>o.due>=state.start&&o.date<=state.end);updateControls();renderMetrics();renderInspector();renderRows();restoreToken(token);saveLocation();
+    document.querySelector('.timeline-card').dataset.renderMs=(performance.now()-started).toFixed(1);
+    document.querySelector('.timeline-card').dataset.renderedRows=String($('rows').children.length);
+  }
+  function clearFilters(){clearTimeout(searchTimer);state.query='';$('search').value='';state.riskOnly=false;state.sharedOnly=false;if(!state.focusBom){state.selectedBom=null;state.selectedOrder=null;}render();document.querySelector('.gantt-scroll').scrollTop=0;saveLocation();}
+  function applyTheme(){document.documentElement.classList.toggle('dark',parentRoot.classList.contains('dark'));}
+  const parentThemeObserver=window.parent===window?null:new MutationObserver(()=>{const dark=parentRoot.classList.contains('dark');if(document.documentElement.classList.contains('dark')!==dark){applyTheme();render();}});
+  parentThemeObserver?.observe(parentRoot,{attributes:true,attributeFilter:['class']});
+  document.addEventListener('click',e=>{
+    const el=e.target.closest('button');if(!el)return;
+    if(el.dataset.order){selectOrder(el.dataset.order);return;}
+    if(el.dataset.selectOrder){selectOrder(el.dataset.selectOrder,true);return;}
+    if(el.dataset.selectBom){selectBom(el.dataset.selectBom);return;}
+    if(el.dataset.group){selectBom(el.dataset.group);return;}
+    if(el.dataset.toggle){toggleGroup(el.dataset.toggle);return;}
+    if(el.dataset.scope){clearTimeout(searchTimer);state.sharedOnly=el.dataset.scope==='shared';state.riskOnly=el.dataset.scope==='overdue';state.selectedBom=null;state.selectedOrder=null;render();document.querySelector('.gantt-scroll').scrollTop=0;saveLocation();return;}
+    if(el.dataset.view){state.view=el.dataset.view;render();document.querySelector('.gantt-scroll').scrollTop=0;saveLocation();return;}
+    if(el.id==='leave-focus')leaveFocus();else if(el.id==='inspector-related')state.focusBom?leaveFocus():enterFocus();else if(el.id==='close-inspector')closeInspector();else if(el.id==='open-order')openOrder();
+  });
+  document.addEventListener('dblclick',e=>{const row=e.target.closest('[data-order]');if(row)openOrder(row.dataset.order);});
+  document.addEventListener('mouseover',e=>{const row=e.target.closest('#rows [data-order]');if(row)setHover(row.dataset.order);});
+  $('rows').addEventListener('mouseleave',()=>setHover(null));
+  $('rows').addEventListener('focusin',e=>{const row=e.target.closest('[data-order]');if(row)setHover(row.dataset.order);});
+  $('rows').addEventListener('focusout',()=>setHover(null));
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){if($('order-dialog').open||$('date-dialog').open)return;if(state.selectedBom)closeInspector();return;}
+    const row=e.target.closest('[data-order]');if(!row||!['ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();
+    const ordered=rows.filter(r=>r.kind==='order').map(r=>r.order),index=ordered.findIndex(o=>o.id===row.dataset.order),next=ordered[index+(e.key==='ArrowDown'?1:-1)];if(!next)return;
+    selectOrder(next.id,true);const selector=mobile.matches?'#mobile-list':'#rows';document.querySelector(`${selector} [data-order="${next.id}"]`)?.focus({preventScroll:true});
+  });
+  $('search').oninput=e=>{clearTimeout(searchTimer);state.query=e.target.value;searchTimer=setTimeout(()=>{state.selectedBom=null;state.selectedOrder=null;render();document.querySelector('.gantt-scroll').scrollTop=0;saveLocation();},160);};
+  $('sort').onchange=e=>{state.sort=e.target.value;render();document.querySelector('.gantt-scroll').scrollTop=0;saveLocation();};
+  $('previous').onclick=()=>{state.start-=1;render();};
+  $('next').onclick=()=>{state.end+=1;render();};
+  $('today').onclick=()=>{state.start=TODAY-7;state.end=TODAY+7;document.querySelector('.gantt-scroll').scrollLeft=0;render();};
+  $('date-range').onclick=()=>{$('date-start').value=iso(state.start);$('date-end').value=iso(state.end);$('date-end').setCustomValidity('');$('date-dialog').showModal();};
+  $('close-date').onclick=()=>$('date-dialog').close();
+  $('date-form').onsubmit=e=>{e.preventDefault();const from=day($('date-start').value),to=day($('date-end').value);if(to<from){$('date-end').setCustomValidity('结束日期不能早于开始日期');$('date-end').reportValidity();return;}state.start=from;state.end=to;state.selectedBom=null;state.selectedOrder=null;$('date-dialog').close();render();document.querySelector('.gantt-scroll').scrollLeft=0;};
+  $('date-end').oninput=()=>$('date-end').setCustomValidity('');
+  $('clear-filters').onclick=clearFilters;$('clear-active-filters').onclick=clearFilters;
+  const scroll=document.querySelector('.gantt-scroll');scroll.onscroll=()=>{cancelAnimationFrame(scrollFrame);scrollFrame=requestAnimationFrame(()=>renderViewport());clearTimeout(saveTimer);saveTimer=setTimeout(saveLocation,180);};
+  $('mobile-list').onscroll=()=>{clearTimeout(saveTimer);saveTimer=setTimeout(saveLocation,180);};
+  const observer=new ResizeObserver(()=>{chart?.resize();if(rows.length>80)renderViewport(true);});observer.observe($('chart-surface'));
+  mobile.addEventListener('change',()=>render());
+  window.addEventListener('hashchange',()=>{readLocation();const top=state.top,left=state.left,mobileTop=state.mobileTop;$('search').value=state.query;render();scroll.scrollTop=top;scroll.scrollLeft=left;$('mobile-list').scrollTop=mobileTop;renderViewport(true);});
+  window.addEventListener('pagehide',()=>{saveLocation();clearTimeout(searchTimer);clearTimeout(saveTimer);observer.disconnect();parentThemeObserver?.disconnect();chart?.dispose();});
+  readLocation();applyTheme();const restoredTop=state.top,restoredLeft=state.left,restoredMobile=state.mobileTop;render();scroll.scrollTop=restoredTop;scroll.scrollLeft=restoredLeft;$('mobile-list').scrollTop=restoredMobile;renderViewport(true);saveLocation();
+})();
+</script>
+</body>
+</html>

@@ -41,7 +41,7 @@ export const NAV_GROUPS = [
 ] as const;
 
 export const MENU_CATALOG: MenuNode[] = [
-    { key: "workbench", label: "工作台", icon: "grid", group: "工作台", to: "/workbench", end: true },
+    { key: "workbench", label: "工作台", icon: "grid", group: "工作台", to: "/workbench" },
     {
         key: "archived-orders",
         label: "归档订单",

@@ -23,6 +23,7 @@ import {
 } from "@/data/workbench";
 import { useWorkbenchData } from "./useWorkbenchData";
 import { WorkbenchTrend, workbenchSelectClass } from "./WorkbenchTrend";
+import { WorkbenchViews } from "./WorkbenchViews";
 import { ArchivedOrdersPie, CustomerRankingChart, ProductProgressChart } from "./WorkbenchCharts";
 
 type Detail =
@@ -183,6 +184,7 @@ function OwnerWorkbench() {
     return (
         <div className="relative flex flex-col gap-5 pb-4">
             {overlay && <LoadingOverlay />}
+            <WorkbenchViews active="overview" />
             <PageHeading
                 eyebrow="BUSINESS OVERVIEW"
                 title="经营总览"

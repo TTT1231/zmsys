@@ -16,6 +16,9 @@ export const LoginPage = lazy(() => import("./pages/login/LoginPage").then(m => 
 export const WorkbenchPage = lazy(() =>
     import("./pages/workbench/WorkbenchPage").then(m => ({ default: m.WorkbenchPage })),
 );
+export const DeliveryGanttPage = lazy(() =>
+    import("./pages/workbench/DeliveryGanttPage").then(m => ({ default: m.DeliveryGanttPage })),
+);
 export const SearchPage = lazy(() => import("./pages/workbench/SearchPage").then(m => ({ default: m.SearchPage })));
 export const OrdersPage = lazy(() => import("./pages/orders/OrdersPage").then(m => ({ default: m.OrdersPage })));
 export const ArchivedOrdersPage = lazy(() =>
