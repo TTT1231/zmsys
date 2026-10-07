@@ -2,7 +2,7 @@
  * - 菜单 / 操作字典（MENU_CATALOG / ACTION_CATALOG）随代码版本维护
  * - 角色 → 菜单 / 操作的授权关系是后端数据（sys_grant 表），经 /auth/profile 下发、
  *   /roles/:roleId/grants 编辑；本文件只保留字典与纯派生工具
- * - 权限码格式 `${menuKey}:${actionId}`，如 outbound:print
+ * - 权限码格式 `${menuKey}:${actionId}`，如 outbound:ship
  */
 
 export type RoleId = "super" | "admin" | "warehouse" | "sales" | "staff";
@@ -144,7 +144,6 @@ export const ACTION_CATALOG = {
         { id: "view", label: "查看台账" },
         { id: "ship", label: "登记发货" },
         { id: "void", label: "作废" },
-        { id: "print", label: "打印" },
         { id: "delete", label: "删除出库记录" },
     ],
     permissions: [
@@ -165,7 +164,7 @@ export const ONLY_FOR_ACTION_GROUPS: ReadonlyMap<string, readonly RoleId[]> = ne
     ["system-restore", ["super"]],
 ]);
 
-/** 权限码字面量联合（"outbound:print" 等），拼错编译期报错 */
+/** 权限码字面量联合（"outbound:ship" 等），拼错编译期报错 */
 export type PermCode = {
     [M in keyof typeof ACTION_CATALOG]: `${M}:${(typeof ACTION_CATALOG)[M][number]["id"]}`;
 }[keyof typeof ACTION_CATALOG];
@@ -219,7 +218,7 @@ export function buildDefaultGrants(): GrantMap {
                 customers: ["view", "create", "edit"],
                 bom: ["view", "create"],
                 inbound: ["view"],
-                outbound: ["view", "print"],
+                outbound: ["view"],
             },
         },
         warehouse: {
@@ -261,7 +260,7 @@ export const DEFAULT_GRANTS = buildDefaultGrants();
 
 /* ---------- 派生工具 ---------- */
 
-/** 权限码判断：can(grant, "outbound:print") */
+/** 权限码判断：can(grant, "outbound:ship") */
 export function can(grant: RoleGrant | undefined, perm: PermCode): boolean {
     if (!grant) return false;
     const [menu, action] = perm.split(":");
@@ -288,7 +287,6 @@ const ACTION_SHORT: Record<string, string> = {
     ship: "发货",
     void: "作废",
     "void-any-day": "跨天作废",
-    print: "打印",
     manage: "管理",
 };
 

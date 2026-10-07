@@ -130,7 +130,7 @@ export class OrdersService {
                     throw new NotFoundException("客户不存在");
                 }
                 // BOM 快照冻结（db-scheme.md §6.1）：明细取建档冻结行（position 排序），
-                // modelCode/spec 由其派生；下单后目录变更不影响本订单与打印
+                // modelCode/spec 由其派生；下单后目录变更不影响本订单快照
                 const bomSnapshot = await this.freezeBomSnapshot(tx, bom.id);
 
                 const now = new Date();

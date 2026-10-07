@@ -1,10 +1,4 @@
-import type {
-    CreateOutboundInput,
-    DeleteOutboundInput,
-    OutboundPrintDocument,
-    OutboundRow,
-    VoidOutboundInput,
-} from "./types";
+import type { CreateOutboundInput, DeleteOutboundInput, OutboundRow, VoidOutboundInput } from "./types";
 import { requestClient } from "@/http";
 import { idempotencyConfig } from "./idempotency";
 
@@ -23,9 +17,4 @@ export function voidOutbound(no: string, input: VoidOutboundInput): Promise<Outb
 /** 删除已作废出库单（软删除）：响应恒为 data:null，列表刷新由 useWbMutation 失效驱动 */
 export function deleteOutbound(no: string, input: DeleteOutboundInput): Promise<null> {
     return requestClient.post<null>(`/outbound/${no}/delete`, input, idempotencyConfig());
-}
-
-/** 打印文档为纯读输出：任意状态可打、可重复，无需幂等头 */
-export function printOutboundDocument(no: string): Promise<OutboundPrintDocument> {
-    return requestClient.get<OutboundPrintDocument>(`/outbound/${no}/print`);
 }

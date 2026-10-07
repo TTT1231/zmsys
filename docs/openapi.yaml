@@ -17,7 +17,7 @@ info:
         - 创建、归档、删除、作废与库存调整类 POST 必须携带 `Idempotency-Key`。同一用户、操作和 key 的相同请求重放原成功响应；请求体不同返回 409。
         - 可变资源使用 `expectedVersion` 做乐观锁；版本或并发业务状态冲突返回 409。
         - 业务编码由后端通过 `biz_sequence` 事务取号，禁止使用 `MAX(code)+1`。
-        - 库存 = 有效入库合计 + 库存调整合计 - 有效出库净额。出库登记、作废与订单归档/删除按固定顺序加行锁并在一个事务提交；打印为纯读输出无副作用。
+        - 库存 = 有效入库合计 + 库存调整合计 - 有效出库净额。出库登记、作废与订单归档/删除按固定顺序加行锁并在一个事务提交。
         - 业务日期使用 `yyyy-MM-dd`；系统时间使用带时区 ISO 8601，数据库保存 UTC。
         - 工作台数据由 `/workbench/overview` 聚合端点统一供给（订单/台账契约当前无分页，仍返回完整计算窗口）；后续启用服务端分页时，不能以分页局部数据在派生侧计算全局库存。
 servers:
@@ -38,7 +38,7 @@ tags:
     - name: inbound
       description: 成品入库、当天修正和库存调整
     - name: outbound
-      description: 出库登记、作废与打印文档输出
+      description: 出库登记与作废
     - name: users
       description: 系统用户与离岗移交
     - name: roles
@@ -631,7 +631,7 @@ paths:
             tags: [outbound]
             operationId: deleteOutbound
             summary: 删除已作废的出库单（软删除）
-            description: 权限 `outbound:delete`，默认 warehouse/super（非受保护，super 可按需授予其他角色）。仅 VOIDED 状态可删（作废时已追加冲销、订单已发量已恢复）。软删除：单头打 `deleted_at` 标记、出库列表与 BOM 库存流水不再返回，打印接口按单号查询也返回 404；不递增 row_version、不写状态日志。`op_log` 记 delete_outbound 与删除前快照（含原始发货备注、登记人/时点及作废原因）。7 天保留期后由 maintenance 定时物理清理（连带状态日志与 NORMAL+CORRECTION 数量流水同删，零和不改变统计）。
+            description: 权限 `outbound:delete`，默认 warehouse/super（非受保护，super 可按需授予其他角色）。仅 VOIDED 状态可删（作废时已追加冲销、订单已发量已恢复）。软删除：单头打 `deleted_at` 标记、出库列表与 BOM 库存流水不再返回；不递增 row_version、不写状态日志。`op_log` 记 delete_outbound 与删除前快照（含原始发货备注、登记人/时点及作废原因）。7 天保留期后由 maintenance 定时物理清理（连带状态日志与 NORMAL+CORRECTION 数量流水同删，零和不改变统计）。
             parameters:
                 - $ref: "#/components/parameters/OutboundNo"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -646,23 +646,6 @@ paths:
                 "403": { $ref: "#/components/responses/Forbidden" }
                 "404": { $ref: "#/components/responses/NotFound" }
                 "409": { $ref: "#/components/responses/Conflict" }
-
-    /outbound/{no}/print:
-        get:
-            tags: [outbound]
-            operationId: printOutboundDocument
-            summary: 获取出库单打印文档
-            description: 权限 `outbound:print`，默认 admin/super。纯读输出：未软删除的任意状态（含已作废）可打、可重复；已软删除的出库单返回 404。不需要原因与版本，不落日志、不改单头状态。文档按订单冻结快照实时组装，state/voidReason 取单头当前值（作废单打印件渲染作废标注），printedBy/printedAt 为本次输出人与时点。
-            parameters:
-                - $ref: "#/components/parameters/OutboundNo"
-            responses:
-                "200":
-                    description: 打印文档；客户端只据此渲染，不能再用当前主数据重新拼单。
-                    content:
-                        application/json:
-                            schema: { $ref: "#/components/schemas/OutboundPrintEnvelope" }
-                "403": { $ref: "#/components/responses/Forbidden" }
-                "404": { $ref: "#/components/responses/NotFound" }
 
     /users:
         get:
@@ -1656,29 +1639,6 @@ components:
                 date: { type: string, format: date }
                 remark: { type: string, maxLength: 500 }
 
-        OutboundPrintDocument:
-            type: object
-            required: [no, orderNo, customer, customerCode, bomCode, bomSpec, qty, date, registeredAt, operator, remark, state, printedBy, printedAt]
-            properties:
-                no: { type: string }
-                orderNo: { type: string }
-                customer: { type: string }
-                customerCode: { type: string }
-                bomCode: { type: string }
-                bomSpec: { type: string }
-                qty: { type: integer, minimum: 1 }
-                date: { type: string, format: date }
-                registeredAt: { type: string, format: date-time, description: 实际登记时刻（区别于手选补录的出库日期） }
-                operator: { type: string, description: 出库登记人 }
-                remark: { type: string }
-                state:
-                    type: string
-                    enum: [registered, voided]
-                    description: 单头当前状态；voided 时打印件渲染作废标注
-                voidReason: { type: string, description: 仅 voided 时出现 }
-                printedBy: { type: string }
-                printedAt: { type: string, format: date-time }
-
         CreateUserInput:
             type: object
             additionalProperties: false
@@ -1835,11 +1795,6 @@ components:
                 - $ref: "#/components/schemas/Envelope"
                 - type: object
                   properties: { code: { const: 0 }, data: { type: array, items: { $ref: "#/components/schemas/OutboundRow" } }, message: { const: ok } }
-        OutboundPrintEnvelope:
-            allOf:
-                - $ref: "#/components/schemas/Envelope"
-                - type: object
-                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/OutboundPrintDocument" }, message: { const: ok } }
         UserEnvelope:
             allOf:
                 - $ref: "#/components/schemas/Envelope"

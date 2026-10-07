@@ -30,82 +30,18 @@ import { SortTh } from "@/components/ui/SortTh";
 import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { makeLedgerSort, nextSortState, type LedgerSortKey, type SortState } from "@/lib/tableSort";
 import { DateField, TextArea, TextField } from "@/components/ui/Field";
-import {
-    useCreateOutbound,
-    useDeleteOutbound,
-    usePrintOutbound,
-    useVoidOutbound,
-    useWbRefresh,
-    useWbView,
-} from "@/data/queries";
+import { useCreateOutbound, useDeleteOutbound, useVoidOutbound, useWbRefresh, useWbView } from "@/data/queries";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { bomByCode, bomIndexOf, deriveOrders, orderStatusOfMax, remainingOf } from "@/data/views";
 import { todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/toastContexts";
-import type { OutboundPrintDocument, OutboundRow } from "@/api";
+import type { OutboundRow } from "@/api";
 
 /* 台账排序：单号/编码/数量/日期四列，文案按出库前缀差异化（桌面表头与移动端排序下拉共用） */
 const ledgerSort = makeLedgerSort<OutboundRow>({ no: "出库单号", qty: "发货数量", date: "出库日期" });
 
-const escapeHtml = (value: string) =>
-    value.replace(
-        /[&<>"']/g,
-        ch =>
-            ({
-                "&": "&amp;",
-                "<": "&lt;",
-                ">": "&gt;",
-                '"': "&quot;",
-                "'": "&#39;",
-            })[ch] ?? ch,
-    );
-
 const outboundStateLabel = (row: OutboundRow) => (row.state === "registered" ? "已登记" : "已作废");
-
-/* 拿到后端实时组装的文档后，向预先打开的窗口渲染单据并调起浏览器打印；作废单带醒目标注。 */
-function renderOutboundDocument(document: OutboundPrintDocument, win: Window) {
-    win.document.title = `出库单 ${document.no}`;
-    const voided = document.state === "voided";
-    const items: Array<[string, string]> = [
-        ["出库单号", escapeHtml(document.no)],
-        ["关联订单", escapeHtml(document.orderNo)],
-        ["客户", escapeHtml(`${document.customer}（${document.customerCode}）`)],
-        ["BOM 编码", escapeHtml(document.bomCode)],
-        ["规格", escapeHtml(document.bomSpec || "—")],
-        ["发货数量", escapeHtml(`${num(document.qty)} 个`)],
-        ["出库日期", escapeHtml(document.date)],
-        ["登记人", escapeHtml(document.operator)],
-        ["登记时间", escapeHtml(new Date(document.registeredAt).toLocaleString())],
-        ["打印人", escapeHtml(document.printedBy)],
-        ["备注", escapeHtml(document.remark || "—")],
-        ...(voided ? ([["作废原因", escapeHtml(document.voidReason || "—")]] as Array<[string, string]>) : []),
-    ];
-    const html = `
-    <div style="font-family: Inter, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; max-width: 640px; margin: 32px auto; color: #101828;">
-      ${
-          voided
-              ? `<p style="margin: 0 0 12px; font-size: 15px; font-weight: 700; color: #b42318; border: 2px solid #b42318; border-radius: 6px; padding: 6px 12px; text-align: center;">已作废 · 本单数量不计入有效出库</p>`
-              : ""
-      }
-      <h1 style="margin: 0 0 4px; font-size: 20px;">出库单</h1>
-      <p style="margin: 0 0 16px; font-size: 12px; color: #6e7075;">众茂生产系统 · 打印时间 ${new Date(document.printedAt).toLocaleString()}</p>
-      <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-        ${items
-            .map(
-                ([label, value]) => `
-              <tr>
-                <td style="width: 96px; padding: 8px 10px; border: 1px solid #e4e7ec; background: #f8fafc; color: #6e7075;">${label}</td>
-                <td style="padding: 8px 10px; border: 1px solid #e4e7ec;">${value}</td>
-              </tr>`,
-            )
-            .join("")}
-      </table>
-    </div>`;
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    win.document.body.replaceChildren(...doc.body.childNodes);
-    win.print();
-}
 
 export function OutboundModal({
     open,
@@ -489,7 +425,6 @@ export function OutboundPage() {
     const { can } = useApp();
     const { snap, isLoading, refreshing: overlay } = useWbView();
     const { refresh } = useWbRefresh();
-    const printRequest = usePrintOutbound();
     const voidRequest = useVoidOutbound();
     const deleteRequest = useDeleteOutbound();
     const toast = useToast();
@@ -547,34 +482,9 @@ export function OutboundPage() {
     const sorted = useMemo(() => ledgerSort.sortRows(filtered, sort), [filtered, sort]);
     const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize);
     const canRegister = can("outbound:ship");
-    const canPrint = can("outbound:print");
     const canVoid = can("outbound:void");
     const canDeleteVoided = can("outbound:delete");
     const applySort = (key: LedgerSortKey) => setSort(current => nextSortState(current, key));
-
-    const requestPrint = (row: OutboundRow) => {
-        if (printRequest.isPending) return;
-        const win = window.open("", "_blank", "width=760,height=640");
-        if (!win) {
-            toast.error("浏览器拦截了打印窗口，请允许本站打开新窗口后重试");
-            return;
-        }
-        win.opener = null;
-        win.document.title = `正在生成出库单 ${row.no}`;
-        win.document.body.textContent = "正在生成出库单…";
-        printRequest.mutate(
-            { no: row.no },
-            {
-                onError: error => {
-                    win.close();
-                    toast.error(error.message);
-                },
-                onSuccess: document => {
-                    if (!win.closed) renderOutboundDocument(document, win);
-                },
-            },
-        );
-    };
 
     // 清空条件只作用于筛选行（搜索/状态/品类/操作人）；分页由用户自行操作
     const clearFilters = () => {
@@ -835,7 +745,7 @@ export function OutboundPage() {
                     actions={
                         currentDetail && (
                             <>
-                                {/* 危险入口固定最左（软红底），打印保持主按钮紧邻关闭：已登记/已作废两种状态槽位一致 */}
+                                {/* 危险入口固定最左（软红底），紧邻关闭按钮：已登记/已作废两种状态槽位一致 */}
                                 {canVoid && currentDetail.state === "registered" && (
                                     <Button
                                         size="sm"
@@ -855,16 +765,6 @@ export function OutboundPage() {
                                         onClick={() => setDeleteTarget(currentDetail)}
                                     >
                                         删除
-                                    </Button>
-                                )}
-                                {canPrint && (
-                                    <Button
-                                        size="sm"
-                                        disabled={printRequest.isPending}
-                                        onClick={() => requestPrint(currentDetail)}
-                                    >
-                                        {/* 打印是常规操作不带图标（图标库也无 print 字形，传了会落到 info 兜底） */}
-                                        {printRequest.isPending ? "处理中…" : "打印"}
                                     </Button>
                                 )}
                             </>

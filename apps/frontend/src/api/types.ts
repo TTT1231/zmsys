@@ -231,26 +231,6 @@ export interface SystemLogQuery {
     beforeId?: string;
 }
 
-/** 打印文档（GET /outbound/{no}/print 响应）：后端实时组装的纸质单快照，
- * 打印无副作用不落日志；state/voidReason 供打印件渲染作废标注 */
-export interface OutboundPrintDocument {
-    no: string;
-    orderNo: string;
-    customer: string;
-    customerCode: string;
-    bomCode: string;
-    bomSpec: string;
-    qty: number;
-    date: string;
-    registeredAt: string; // 实际登记时刻 ISO（区别于手选补录的出库日期）
-    operator: string;
-    remark: string;
-    state: "registered" | "voided";
-    voidReason?: string;
-    printedBy: string;
-    printedAt: string;
-}
-
 export interface WbUser {
     version: number;
     name: string;

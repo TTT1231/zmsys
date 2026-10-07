@@ -46,7 +46,7 @@ function Probe() {
             <span data-testid="status">{app.status}</span>
             <span data-testid="role">{app.role}</span>
             <span data-testid="can-register">{String(app.can("inbound:register"))}</span>
-            <span data-testid="can-print">{String(app.can("outbound:print"))}</span>
+            <span data-testid="can-delete">{String(app.can("orders:delete"))}</span>
         </div>
     );
 }
@@ -86,7 +86,7 @@ describe("AppProvider session restore", () => {
         await waitFor(() => expect(statusOf()).toBe("authenticated"));
         expect(screen.getByTestId("role").textContent).toBe("warehouse");
         expect(screen.getByTestId("can-register").textContent).toBe("true");
-        expect(screen.getByTestId("can-print").textContent).toBe("false");
+        expect(screen.getByTestId("can-delete").textContent).toBe("false");
     });
 
     it("falls back to guest when profile request fails", async () => {
@@ -151,8 +151,8 @@ describe("AppProvider login / logout", () => {
         const renewed = { ...profile, grant: DEFAULT_GRANTS.super };
         vi.mocked(fetchProfile).mockResolvedValue(renewed);
         await captured.current!.refreshProfile();
-        // 授权更新后 can() 立即反映新权限（super 可打印出库单）
-        await waitFor(() => expect(screen.getByTestId("can-print").textContent).toBe("true"));
+        // 授权更新后 can() 立即反映新权限（受保护的 orders:delete 仅 super 持有）
+        await waitFor(() => expect(screen.getByTestId("can-delete").textContent).toBe("true"));
         expect(fetchProfile).toHaveBeenCalledTimes(2);
     });
 });

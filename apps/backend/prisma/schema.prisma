@@ -74,7 +74,7 @@ enum InboundChangeEventType {
   VOID
 }
 
-/// outbound_shipment.state：两态（打印为纯输出动作，不再是状态）
+/// outbound_shipment.state：两态（打印功能已于 2026-10 整体移除）
 enum OutboundShipmentState {
   REGISTERED
   VOIDED
@@ -589,7 +589,7 @@ model StockAdjustment {
   @@map("stock_adjustment")
 }
 
-/// 出库单：REGISTERED/VOIDED 两态；打印为无副作用纯输出（不落日志不改状态），作废是唯一逆向入口
+/// 出库单：REGISTERED/VOIDED 两态；作废是唯一逆向入口（打印功能已于 2026-10 移除）
 model OutboundShipment {
   id                 BigInt               @id
   shipmentNo         String               @unique(map: "uk_outbound_shipment_no") @map("shipment_no") @db.VarChar(28)

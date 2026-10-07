@@ -12,7 +12,6 @@ const state = vi.hoisted(() => ({
     inboundStatus: "active" as "active" | "voided",
     allowed: true,
     today: "2026-09-13",
-    print: vi.fn(),
     void: vi.fn(),
     del: vi.fn(),
     extraPerms: [] as string[],
@@ -20,8 +19,7 @@ const state = vi.hoisted(() => ({
 vi.mock("@/context/useApp", () => ({
     useApp: () => ({
         role: "super",
-        can: (code: string) =>
-            state.allowed && [...state.extraPerms, "outbound:print", "outbound:void", "inbound:edit"].includes(code),
+        can: (code: string) => state.allowed && [...state.extraPerms, "outbound:void", "inbound:edit"].includes(code),
     }),
 }));
 /* beijingDateOf 用真实实现（fixtures 的 createdAt 为 UTC 时刻），"今天"由测试态控制 */
@@ -39,7 +37,6 @@ vi.mock("@/data/queries", () => ({
         },
     }),
     useWbRefresh: () => ({ refresh: vi.fn() }),
-    usePrintOutbound: () => ({ mutate: state.print, isPending: false }),
     useVoidOutbound: () => ({ mutate: state.void, isPending: false }),
     useVoidInbound: () => ({ mutate: state.void, isPending: false }),
     useDeleteOutbound: () => ({ mutate: state.del, isPending: false }),
@@ -62,16 +59,14 @@ function openOutbound() {
         </MemoryRouter>,
     );
     const table = within(screen.getByRole("table"));
-    expect(table.queryByRole("button", { name: "打印" })).not.toBeInTheDocument();
     expect(table.queryByRole("button", { name: "作废" })).not.toBeInTheDocument();
     fireEvent.click(table.getByRole("button", { name: "查看详情" }));
     const detail = within(screen.getByRole("dialog", { name: detailOutbound.no }));
     expect(detail.getByRole("region", { name: "详情" })).toHaveTextContent("BOM 备注：—");
     return detail;
 }
-it("已登记出库提供打印与作废；作废要求原因并携带乐观锁版本", () => {
+it("已登记出库提供作废；作废要求原因并携带乐观锁版本", () => {
     const detail = openOutbound();
-    expect(detail.getByRole("button", { name: "打印" })).toBeInTheDocument();
     fireEvent.click(detail.getByRole("button", { name: "作废" }));
     const confirm = within(screen.getByRole("dialog", { name: "作废出库单" }));
     expect(confirm.getByText(/库存增加/)).toBeInTheDocument();
@@ -83,16 +78,15 @@ it("已登记出库提供打印与作废；作废要求原因并携带乐观锁�
         expect.anything(),
     );
 });
-it("已作废出库仍可打印（打印件带作废标注），但不再提供作废", () => {
+it("已作废出库不再提供作废", () => {
     state.outboundState = "voided";
     const detail = openOutbound();
-    expect(detail.getByRole("button", { name: "打印" })).toBeInTheDocument();
     expect(detail.queryByRole("button", { name: "作废" })).not.toBeInTheDocument();
 });
-it("没有写权限时详情仍可读，但不提供打印和作废入口", () => {
+it("没有写权限时详情仍可读，但不提供作废和删除入口", () => {
     state.allowed = false;
     const detail = openOutbound();
-    expect(detail.queryByRole("button", { name: /打印|作废|删除/ })).not.toBeInTheDocument();
+    expect(detail.queryByRole("button", { name: /作废|删除/ })).not.toBeInTheDocument();
 });
 it("已作废出库对持删除权限者出现删除入口，确认后携带乐观锁版本调用", () => {
     state.outboundState = "voided";

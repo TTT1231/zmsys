@@ -45,7 +45,6 @@ import {
     fetchStockAdjustments,
     fetchSystemLogs,
     fetchUsers,
-    printOutboundDocument,
     resetUserPassword as resetUserPasswordReq,
     saveRoleGrants,
     setUserActive as setUserActiveReq,
@@ -319,9 +318,6 @@ export const useDeleteOutbound = () =>
         const { no, ...body } = input;
         return deleteOutbound(no, body);
     });
-/** 打印为纯读输出：裸 useMutation 仅驱动 pending 态，成功后不失效任何查询缓存 */
-export const usePrintOutbound = () =>
-    useMutation({ mutationFn: (input: { no: string }) => printOutboundDocument(input.no) });
 export const useCreateUser = () => useWbMutation(createUser);
 
 export const useUpdateUser = () =>

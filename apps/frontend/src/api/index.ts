@@ -12,7 +12,7 @@ export {
     deleteInbound,
     fetchStockAdjustments,
 } from "./inbound";
-export { fetchOutboundLedger, createOutbound, voidOutbound, deleteOutbound, printOutboundDocument } from "./outbound";
+export { fetchOutboundLedger, createOutbound, voidOutbound, deleteOutbound } from "./outbound";
 export {
     fetchUsers,
     fetchCustomerOwnerOptions,

@@ -19,7 +19,7 @@ const actor = {
 
 const ID_KEY = "idem-key-01";
 
-/** 订单冻结快照（建档形态）：打印 bomSpec 直接取其中的 spec 字符串 */
+/** 订单冻结快照（建档形态）：spec 字符串由建档时冻结，展示侧直接取用 */
 const BOM_SNAPSHOT = {
     items: [
         { materialId: "3101", groupKey: "base", groupName: "底座", name: "二脚底座（无挡脚）", position: 1 },
@@ -301,7 +301,6 @@ describe("OutboundService.createOutbound", () => {
             operator: "郭均",
             date: "2026-09-13",
         });
-        expect(created).not.toHaveProperty("printVersion");
         expect(store.ledgers).toHaveLength(1);
         expect(store.ledgers[0]).toMatchObject({ entryType: "NORMAL", qtyDelta: 200 });
         expect(store.stateLogs).toHaveLength(1);
@@ -423,69 +422,6 @@ describe("OutboundService.deleteOutbound", () => {
     });
 });
 
-describe("OutboundService.printOutboundDocument", () => {
-    it("纯读输出：文档含订单冻结规格摘要，不改状态不落任何日志，可重复", async () => {
-        const store = emptyStore();
-        store.shipments.push(mkShipment());
-        const { service } = mkService(store);
-        const first = await service.printOutboundDocument("CK26091301", actor);
-        expect(first).toMatchObject({
-            no: "CK26091301",
-            orderNo: "ZM260913001",
-            customer: "深圳市智造电子",
-            bomSpec: "底座：二脚底座（无挡脚） · 支架：6.3支架：铜镀银",
-            qty: 200,
-            operator: "郭均",
-            remark: "首次发货",
-            state: "registered",
-            printedBy: "郭均",
-        });
-        expect(first.printedAt).toBeDefined();
-        expect(first).not.toHaveProperty("voidReason");
-
-        const second = await service.printOutboundDocument("CK26091301", actor);
-        expect(second.no).toBe("CK26091301");
-        expect(store.shipments[0]).toMatchObject({ state: "REGISTERED", rowVersion: 1n });
-        expect(store.stateLogs).toHaveLength(0);
-        expect(store.opLogs).toHaveLength(0);
-        expect(store.ledgers).toHaveLength(0);
-    });
-
-    it("已作废出库可打印：文档携带作废标注与原因", async () => {
-        const store = emptyStore();
-        store.shipments.push(mkShipment({ state: "VOIDED", rowVersion: 2n, voidReason: "登记错误" }));
-        const { service } = mkService(store);
-        const document = await service.printOutboundDocument("CK26091301", actor);
-        expect(document).toMatchObject({ state: "voided", voidReason: "登记错误" });
-        expect(store.shipments[0]).toMatchObject({ state: "VOIDED", rowVersion: 2n });
-    });
-
-    it("订单已归档的出库单仍可打印（打印不校验订单状态）", async () => {
-        const store = emptyStore();
-        store.shipments.push(mkShipment({ order: mkOrder({ lifecycleStatus: "ARCHIVED" }) }));
-        const { service } = mkService(store);
-        const document = await service.printOutboundDocument("CK26091301", actor);
-        expect(document).toMatchObject({ state: "registered", no: "CK26091301" });
-    });
-
-    it("出库单不存在 404", async () => {
-        const store = emptyStore();
-        const { service } = mkService(store);
-        await expect(service.printOutboundDocument("CK99999999", actor)).rejects.toThrow(
-            new NotFoundException("出库单不存在"),
-        );
-    });
-
-    it("已软删除出库单不可再通过单号打印", async () => {
-        const store = emptyStore();
-        store.shipments.push(mkShipment({ state: "VOIDED", deletedAt: new Date() }));
-        const { service } = mkService(store);
-        await expect(service.printOutboundDocument("CK26091301", actor)).rejects.toThrow(
-            new NotFoundException("出库单不存在"),
-        );
-    });
-});
-
 describe("OutboundService.listOutbound", () => {
     it("两态单头映射；remark 取正向事件；作废原因仅 voided 返回", async () => {
         const store = emptyStore();
@@ -504,7 +440,6 @@ describe("OutboundService.listOutbound", () => {
         expect(list).toHaveLength(2);
         expect(list[0]).toMatchObject({ no: "CK26091301", state: "registered", remark: "首次发货" });
         expect(list[0]).not.toHaveProperty("voidReason");
-        expect(list[0]).not.toHaveProperty("printVersion");
         expect(list[1]).toMatchObject({ no: "CK26091303", state: "voided", voidReason: "登记错误" });
     });
 });
