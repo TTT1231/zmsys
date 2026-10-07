@@ -486,7 +486,7 @@ function EditOrderModal({
                 <>
                     <div className="mr-auto flex flex-wrap items-center gap-1">
                         {canArchive && (
-                            <Button size="sm" icon="archive" onClick={() => setConfirmArchive(true)}>
+                            <Button variant="ghost" size="sm" icon="archive" onClick={() => setConfirmArchive(true)}>
                                 归档订单
                             </Button>
                         )}

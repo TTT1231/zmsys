@@ -40,23 +40,25 @@ export function Button({
         : variant === "link"
           ? "text-14 font-medium underline-offset-2 transition"
           : `inline-flex ${size === "sm" ? "min-h-10" : "min-h-11"} items-center justify-center gap-1.5 rounded-btn px-4 text-14 font-medium transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60`;
-    const styles =
-        variant === "primary"
-            ? "bg-primary text-white hover:bg-primary-hover"
-            : variant === "danger"
-              ? "bg-danger text-white hover:bg-danger/90"
-              : variant === "danger-soft"
-                ? /* 详情弹窗 footer 的危险入口：软红底描边，弱于实心 danger 的一级破坏性 */
-                  "border border-danger/30 bg-danger-soft text-danger"
-                : variant === "ghost"
+    const styles = iconOnly
+        ? /* 纯图标按钮一律中性灰（不随主题/预设变色），语气色由调用方 className 覆写 */
+          ""
+        : variant === "primary"
+          ? "bg-primary text-white hover:bg-primary-hover"
+          : variant === "danger"
+            ? "bg-danger text-white hover:bg-danger/90"
+            : variant === "danger-soft"
+              ? /* 详情弹窗 footer 的危险入口：软红底描边，弱于实心 danger 的一级破坏性 */
+                "border border-danger/30 bg-danger-soft text-danger"
+              : variant === "ghost"
+                ? tone === "danger"
+                    ? "text-danger hover:bg-danger-soft"
+                    : "text-muted hover:bg-soft hover:text-ink"
+                : variant === "link"
                   ? tone === "danger"
-                      ? "text-danger hover:bg-danger-soft"
-                      : "text-muted hover:bg-soft hover:text-ink"
-                  : variant === "link"
-                    ? tone === "danger"
-                        ? "text-danger hover:underline"
-                        : "text-primary-strong hover:underline"
-                    : "border border-line-strong bg-surface text-ink hover:border-primary-border hover:text-primary-strong";
+                      ? "text-danger hover:underline"
+                      : "text-primary-strong hover:underline"
+                  : "border border-line-strong bg-surface text-ink hover:border-primary-border hover:text-primary-strong";
     return (
         <button type="button" className={mergeClasses(box, styles, className)} {...rest}>
             {icon && <Icon name={icon} size={16} />}
