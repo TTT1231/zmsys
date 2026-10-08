@@ -356,7 +356,7 @@ export function DeliveryProgress({ data }: { data: WorkbenchData }) {
                                                     title="BOM 当前总库存；可发量按交期分配"
                                                 >
                                                     <span>库存</span>
-                                                    <strong className="text-14 font-semibold text-ink">
+                                                    <strong className="rounded-md border border-primary-border bg-primary-soft px-1.5 py-0.25 text-14 font-semibold text-primary-strong">
                                                         {plainNum(Math.max(0, order.product?.stock ?? 0))}
                                                     </strong>
                                                 </span>

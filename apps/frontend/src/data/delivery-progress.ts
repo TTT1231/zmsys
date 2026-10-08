@@ -33,24 +33,44 @@ function bomHash(code: string) {
     return hash >>> 0;
 }
 
+function colorCoordinates(color: DeliveryColor) {
+    const angle = (color.hue * Math.PI) / 180;
+    return [color.lightness / 100, color.chroma * Math.cos(angle), color.chroma * Math.sin(angle)] as const;
+}
+
+function coordinateDistance(a: readonly number[], b: readonly number[]) {
+    return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+}
+
 function colorDistance(a: DeliveryColor, b: DeliveryColor) {
-    const angle = (hue: number) => (hue * Math.PI) / 180;
-    return (
-        ((a.lightness - b.lightness) / 100) ** 2 +
-        (a.chroma * Math.cos(angle(a.hue)) - b.chroma * Math.cos(angle(b.hue))) ** 2 +
-        (a.chroma * Math.sin(angle(a.hue)) - b.chroma * Math.sin(angle(b.hue))) ** 2
-    );
+    return coordinateDistance(colorCoordinates(a), colorCoordinates(b));
 }
 
 /** 同屏 BOM 去重后确定性分配，优先保持编码的身份色，冲突时使用空闲色系。 */
 export function bomColors(codes: Iterable<string>) {
+    const uniqueCodes = [...new Set(codes)].sort();
     const colors = new Map<string, DeliveryColor>();
     const used = new Set<number>();
-    for (const code of [...new Set(codes)].sort()) {
+    // 基础色用完后，从更大色域挑选与所有已分配颜色距离最远的候选，避免固定偏移的近似色。
+    const hueCount = Math.max(36, Math.ceil(uniqueCodes.length / 5));
+    const candidates =
+        uniqueCodes.length > BOM_PALETTE.length
+            ? [46, 54, 62, 70, 78].flatMap(lightness =>
+                  [0.12, 0.17, 0.22].flatMap(chroma =>
+                      Array.from({ length: hueCount }, (_, index) => ({
+                          hue: (index * 360) / hueCount,
+                          lightness,
+                          chroma,
+                      })),
+                  ),
+              )
+            : [];
+    const coordinates = candidates.map(colorCoordinates);
+    const distances = new Float64Array(candidates.length).fill(Infinity);
+    for (const code of uniqueCodes) {
         let index = bomHash(code) % BOM_PALETTE.length;
-        const tier = Math.floor(colors.size / BOM_PALETTE.length);
-        if (colors.size % BOM_PALETTE.length === 0) used.clear();
-        if (tier === 0) {
+        let color: DeliveryColor;
+        if (colors.size < BOM_PALETTE.length) {
             const separation = (candidate: DeliveryColor) =>
                 Math.min(1, ...[...colors.values()].map(color => colorDistance(candidate, color)));
             if (used.has(index) || separation(BOM_PALETTE[index]) < 0.18 ** 2) {
@@ -64,21 +84,21 @@ export function bomColors(codes: Iterable<string>) {
                     }
                 }
             }
+            used.add(index);
+            color = BOM_PALETTE[index];
         } else {
-            while (used.has(index)) index = (index + 1) % BOM_PALETTE.length;
+            let best = 0;
+            for (let candidate = 1; candidate < distances.length; candidate++) {
+                if (distances[candidate] > distances[best]) best = candidate;
+            }
+            color = candidates[best];
+            distances[best] = -1;
         }
-        used.add(index);
-        const base = BOM_PALETTE[index];
-        colors.set(
-            code,
-            tier === 0
-                ? base
-                : {
-                      hue: (base.hue + tier * 11) % 360,
-                      lightness: Math.max(42, base.lightness - 8),
-                      chroma: base.chroma,
-                  },
-        );
+        colors.set(code, color);
+        const assigned = colorCoordinates(color);
+        for (let candidate = 0; candidate < distances.length; candidate++) {
+            distances[candidate] = Math.min(distances[candidate], coordinateDistance(assigned, coordinates[candidate]));
+        }
     }
     return colors;
 }

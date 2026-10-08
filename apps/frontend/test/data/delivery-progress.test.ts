@@ -84,10 +84,22 @@ describe("交付进度", () => {
         expect(bomColors([...codes].reverse())).toEqual(colors);
         expect(bomColors([...codes, "KD001"])).toEqual(colors);
     });
-    it("BOM 超过基础色板容量时扩展颜色，仍不把哈希冲突的 BOM 画成完全相同颜色", () => {
+    it("基础色板用完后扩展颜色，与其他 BOM 保持差异而非仅挪动一点色相", () => {
         const codes = Array.from({ length: 30 }, (_, index) => `KD${index}`);
         const colors = bomColors(codes);
         expect(new Set([...colors.values()].map(color => JSON.stringify(color))).size).toBe(codes.length);
+        const values = [...colors.values()].map(color => {
+            const angle = (color.hue * Math.PI) / 180;
+            return [color.lightness / 100, color.chroma * Math.cos(angle), color.chroma * Math.sin(angle)];
+        });
+        for (let index = 0; index < values.length; index++) {
+            for (let other = index + 1; other < values.length; other++) {
+                const a = values[index],
+                    b = values[other];
+                expect(Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])).toBeGreaterThan(0.09);
+            }
+        }
+        expect(bomColors([...codes].reverse())).toEqual(colors);
     });
 });
 
