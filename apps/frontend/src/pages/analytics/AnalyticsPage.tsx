@@ -2,12 +2,14 @@
 import { PageLoading } from "@/components/ui/PageLoading";
 import { useWorkbenchData } from "@/pages/workbench/useWorkbenchData";
 import { DeliveryProgress } from "./DeliveryProgress";
+import { BusinessRelations } from "./BusinessRelations";
 
 export function AnalyticsPage() {
     const { data, isLoading } = useWorkbenchData();
 
     return (
         <div className="flex flex-col gap-4 pb-4">
+            <BusinessRelations />
             {isLoading ? (
                 <PageLoading className="min-h-96" />
             ) : data.asOf ? (

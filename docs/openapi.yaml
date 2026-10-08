@@ -820,6 +820,59 @@ paths:
                 "404": { $ref: "#/components/responses/NotFound" }
                 "409": { $ref: "#/components/responses/Conflict" }
 
+    /workbench/relations:
+        get:
+            tags: [workbench]
+            operationId: getWorkbenchRelations
+            summary: 分析页及 agent 共用的业务关系聚合
+            description: |
+                同时需要 menu:analytics 和 menu:workbench（super 直通），沿用 Bearer JWT。
+                返回可直接渲染的 nodes/edges；nodes.facts 为 agent 可计算的原始字段，properties 为中文展示字段。
+                单据、有效出库净额与当前库存由同一个 Repeatable Read 只读事务快照读取。
+                日期含首尾：订单按 orderDate，出入库按 businessDate；范围内出库引用的历史订单也保留。
+                status=all 时还纳入范围内仅有入库、没有订单的 BOM；指定 orderNo/customerCode 时不混入无关 BOM。
+                completed 表示累计有效出库 >= 订单数量，含已交满归档单；archived 表示归档，可能尚未交满，两组可重叠。
+                软删订单/单据不返回；作废未删单据保留 voided 标记，qty 是原登记量，不是有效出库量。
+                order.facts.shipped 与 bom.facts.stock 为当前全生命周期净额（统一视图口径），不是区间流水合计或期末历史库存。
+                counts 为日期/编号条件下各状态订单数；typeCounts 为状态筛选后、类型筛选前的节点数。
+                summary 在类型筛选前计算，按单位分组；已归档订单 pendingQty=0，unshippedQty 仍保留历史未发量。
+                types 限定返回实体类型，边只在两端都返回时保留；facts 中被过滤的引用 ID 可以不出现在 nodes 中。
+                未传 start/end 不限日期，前端默认近30天。建议 agent 带日期或业务编号缩小范围。
+            parameters:
+                - in: query
+                  name: status
+                  schema: { type: string, enum: [open, completed, archived, all], default: open }
+                  description: 订单范围；open 为未完成未归档。
+                - in: query
+                  name: start
+                  schema: { type: string, format: date }
+                - in: query
+                  name: end
+                  schema: { type: string, format: date }
+                - in: query
+                  name: types
+                  schema: { type: string, example: 'bom,customer,order' }
+                  description: 逗号分隔 bom/customer/order/inbound/outbound/person；不传为六类，空串为不显示任何类型。
+                - in: query
+                  name: orderNo
+                  schema: { type: string, maxLength: 24 }
+                  description: 精确订单号。
+                - in: query
+                  name: bomCode
+                  schema: { type: string, maxLength: 32 }
+                - in: query
+                  name: customerCode
+                  schema: { type: string, maxLength: 24 }
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/RelationsEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+
     /workbench/overview:
         get:
             tags: [workbench]
@@ -1827,6 +1880,153 @@ components:
                 - $ref: "#/components/schemas/Envelope"
                 - type: object
                   properties: { code: { const: 0 }, data: { type: array, items: { $ref: "#/components/schemas/GrantLogEntry" } }, message: { const: ok } }
+        RelationsEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/RelationsData" }, message: { const: ok } }
+        RelationsData:
+            type: object
+            required: [schemaVersion, asOf, generatedAt, filters, nodes, edges, counts, typeCounts, summary]
+            properties:
+                schemaVersion: { type: integer, const: 1 }
+                asOf: { type: string, format: date, description: 当前北京业务日 }
+                generatedAt: { type: string, format: date-time }
+                filters:
+                    type: object
+                    required: [status, start, end, types, orderNo, bomCode, customerCode]
+                    properties:
+                        status: { type: string, enum: [open, completed, archived, all] }
+                        start: { type: [string, 'null'], format: date }
+                        end: { type: [string, 'null'], format: date }
+                        types: { type: array, items: { $ref: "#/components/schemas/RelationType" } }
+                        orderNo: { type: [string, 'null'] }
+                        bomCode: { type: [string, 'null'] }
+                        customerCode: { type: [string, 'null'] }
+                nodes: { type: array, items: { $ref: "#/components/schemas/RelationNode" } }
+                edges: { type: array, items: { $ref: "#/components/schemas/RelationEdge" } }
+                counts:
+                    type: object
+                    required: [open, completed, archived, all]
+                    properties:
+                        open: { type: integer, minimum: 0 }
+                        completed: { type: integer, minimum: 0 }
+                        archived: { type: integer, minimum: 0 }
+                        all: { type: integer, minimum: 0 }
+                typeCounts:
+                    type: object
+                    required: [bom, customer, order, inbound, outbound, person]
+                    additionalProperties: { type: integer, minimum: 0 }
+                summary:
+                    type: object
+                    required: [orderCount, overdueOrderIds, quantitiesByUnit]
+                    properties:
+                        orderCount: { type: integer, minimum: 0 }
+                        overdueOrderIds: { type: array, items: { type: string }, description: 有待交量且交期早于当前北京日的订单 ID }
+                        quantitiesByUnit:
+                            type: array
+                            items:
+                                type: object
+                                required: [unit, ordered, shipped, pending]
+                                properties:
+                                    unit: { type: string }
+                                    ordered: { type: number }
+                                    shipped: { type: number, description: 所选订单全生命周期有效出库净额 }
+                                    pending: { type: number, description: 所选未归档订单当前待交量 }
+        RelationType:
+            type: string
+            enum: [bom, customer, order, inbound, outbound, person]
+        RelationNode:
+            type: object
+            required: [id, type, name, properties, facts]
+            properties:
+                id: { type: string, description: '类型前缀:数据库ID；ID 使用十进制字符串，不转 JS number。' }
+                type: { $ref: "#/components/schemas/RelationType" }
+                name: { type: string }
+                properties: { type: object, additionalProperties: { type: string }, description: 中文展示字段，计算请使用 facts }
+                voided: { type: boolean, description: 仅已作废单据为 true }
+                facts:
+                    oneOf:
+                        - $ref: "#/components/schemas/RelationBomFacts"
+                        - $ref: "#/components/schemas/RelationCustomerFacts"
+                        - $ref: "#/components/schemas/RelationOrderFacts"
+                        - $ref: "#/components/schemas/RelationInboundFacts"
+                        - $ref: "#/components/schemas/RelationOutboundFacts"
+                        - $ref: "#/components/schemas/RelationPersonFacts"
+                    discriminator: { propertyName: type }
+        RelationEdge:
+            type: object
+            required: [source, target, relation, kind]
+            properties:
+                source: { type: string }
+                target: { type: string }
+                relation: { type: string, enum: [下单, 订购, 入库, 发货, 建档, 负责客户, 创建订单, 归档, 检验入库, 登记发货] }
+                kind: { type: string, enum: [business, person] }
+        RelationBomFacts:
+            type: object
+            required: [type, code, unit, stock, createdById]
+            properties:
+                type: { const: bom }
+                code: { type: string }
+                unit: { type: string }
+                stock: { type: number, description: v_bom_stock 当前净库存，不按日期截断 }
+                createdById: { type: string }
+        RelationCustomerFacts:
+            type: object
+            required: [type, code, ownerId]
+            properties:
+                type: { const: customer }
+                code: { type: string }
+                ownerId: { type: string }
+        RelationOrderFacts:
+            type: object
+            required: [type, no, date, due, qty, shipped, unshippedQty, pendingQty, archived, unit, bomId, customerId, createdById, archivedById]
+            properties:
+                type: { const: order }
+                no: { type: string }
+                date: { type: string, format: date }
+                due: { type: string, format: date }
+                qty: { type: number }
+                shipped: { type: number, description: v_order_outbound_qty 全生命周期净额 }
+                unshippedQty: { type: number, description: max(0, qty - shipped)，归档单也保留 }
+                pendingQty: { type: number, description: 归档为0，其他等于 unshippedQty }
+                archived: { type: boolean }
+                unit: { type: string }
+                bomId: { type: string }
+                customerId: { type: string }
+                createdById: { type: string }
+                archivedById: { type: [string, 'null'] }
+        RelationInboundFacts:
+            type: object
+            required: [type, no, date, qty, voided, unit, bomId, operatorId]
+            properties:
+                type: { const: inbound }
+                no: { type: string }
+                date: { type: string, format: date }
+                qty: { type: number, description: 当前单据登记数量，作废后无库存贡献 }
+                voided: { type: boolean }
+                unit: { type: string }
+                bomId: { type: string }
+                operatorId: { type: string }
+        RelationOutboundFacts:
+            type: object
+            required: [type, no, date, qty, voided, unit, bomId, orderId, operatorId]
+            properties:
+                type: { const: outbound }
+                no: { type: string }
+                date: { type: string, format: date }
+                qty: { type: number, description: originalQty；作废后有效贡献为0，计算时排除 voided=true }
+                voided: { type: boolean }
+                unit: { type: string }
+                bomId: { type: string }
+                orderId: { type: string }
+                operatorId: { type: string }
+        RelationPersonFacts:
+            type: object
+            required: [type, role]
+            properties:
+                type: { const: person }
+                role: { type: string }
         WorkbenchOverviewEnvelope:
             allOf:
                 - $ref: "#/components/schemas/Envelope"
