@@ -19,7 +19,8 @@
  * | 成品入库  | BOM 备注 | warning | bomByCode(snap, ...)?.remark |
  * | 库存      | BOM 备注 | warning | row.remark                   |
  * | 物料与BOM | BOM 备注 | warning | bom.remark                   |
- * 订单备注不设表格独立列（并入客户格备注行，见 CustomerCell 的 remark）。
+ * | 归档订单  | 订单备注 | plain   | order.remark                 |
+ * 销售订单页的订单备注不设表格独立列（并入客户格备注行，见 CustomerCell 的 remark）。
  */
 export function RemarkCell({ remark, variant = "plain" }: { remark?: string | null; variant?: "warning" | "plain" }) {
     const text = remark?.trim();

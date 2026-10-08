@@ -19,6 +19,7 @@ import { StatusBadge } from "@/components/ui/Badge";
 import { Button, TableLink } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { CustomerCell, DateCell, QtyCell } from "@/components/ui/cells";
+import { RemarkCell } from "@/components/ui/RemarkCell";
 import { SortTh } from "@/components/ui/SortTh";
 import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { nextSortState, type SortState } from "@/lib/tableSort";
@@ -182,7 +183,7 @@ export function ArchivedOrdersPage() {
                         ) : (
                             <DataTable
                                 tableId="archived-orders"
-                                defaultWidths={[140, 150, 260, 100, 115, 130, 155, 95, 150, 110, 105]}
+                                defaultWidths={[140, 150, 250, 100, 110, 125, 150, 95, 145, 150, 105, 100]}
                                 recordCount={filtered.length}
                                 identityColumn={0}
                                 scrollRef={tableScrollRef}
@@ -195,10 +196,10 @@ export function ArchivedOrdersPage() {
                                             dir={sort.dir}
                                             onSort={() => applySort("orderNo")}
                                             className="cell-pad-wide"
-                                            width="11%"
+                                            width="10%"
                                         />
-                                        <th style={{ width: "12%" }}>客户</th>
-                                        <th style={{ width: "16%" }}>成品 / BOM</th>
+                                        <th style={{ width: "11%" }}>客户</th>
+                                        <th style={{ width: "15%" }}>成品 / BOM</th>
                                         <SortTh
                                             label="订单数量"
                                             active={sort.key === "qty"}
@@ -213,18 +214,19 @@ export function ArchivedOrdersPage() {
                                             onSort={() => applySort("deliverDate")}
                                             width="9%"
                                         />
-                                        <th style={{ width: "11%" }}>交付情况</th>
+                                        <th style={{ width: "10%" }}>交付情况</th>
                                         <SortTh
                                             label="归档时间"
                                             active={sort.key === "archivedAt"}
                                             dir={sort.dir}
                                             onSort={() => applySort("archivedAt")}
-                                            width="11%"
+                                            width="10%"
                                         />
                                         <th style={{ width: "7%" }}>归档人</th>
-                                        <th style={{ width: "9%" }}>归档备注</th>
+                                        <th style={{ width: "8%" }}>归档备注</th>
+                                        <th style={{ width: "10%" }}>订单备注</th>
                                         <th style={{ width: "8%" }}>状态</th>
-                                        <th className="min-w-24 cell-pad-wide text-center" style={{ width: "10%" }}>
+                                        <th className="min-w-24 cell-pad-wide text-center" style={{ width: "9%" }}>
                                             操作
                                         </th>
                                     </tr>
@@ -232,7 +234,7 @@ export function ArchivedOrdersPage() {
                                 <tbody>
                                     {pageRows.length === 0 && (
                                         <EmptyRow
-                                            colSpan={11}
+                                            colSpan={12}
                                             description="暂无归档订单；在销售订单的编辑弹窗中归档发过货的订单（已完成或部分发货）后，会在这里显示"
                                         />
                                     )}
@@ -292,6 +294,9 @@ export function ArchivedOrdersPage() {
                                                     >
                                                         {order.archiveReason || "—"}
                                                     </div>
+                                                </td>
+                                                <td>
+                                                    <RemarkCell remark={order.remark} />
                                                 </td>
                                                 <td>
                                                     <StatusBadge status={status.key} label={status.label} />
