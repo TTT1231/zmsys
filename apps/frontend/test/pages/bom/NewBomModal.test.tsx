@@ -44,12 +44,12 @@ it("单选组：换选替换旧项、可再点取消；右框按组分节且无�
     render(<NewBomModal open onClose={vi.fn()} />);
     await pickCategory(user, "新微动");
 
-    await user.click(itemCheckbox("二脚底座（无挡脚）"));
+    await user.click(itemCheckbox("二脚底座有CB（无挡脚）"));
     await user.click(itemCheckbox("6.3支架：铜镀银"));
     let right = screen.getByRole("group", { name: /已选物料（2）/ });
     // 分节呈现：组名小节标题 + 纯物料名（不再逐行带“组名：”前缀）
     expect(within(right).getByText("底座")).toBeInTheDocument();
-    expect(within(right).getByText("二脚底座（无挡脚）")).toBeInTheDocument();
+    expect(within(right).getByText("二脚底座有CB（无挡脚）")).toBeInTheDocument();
     expect(within(right).getByText("支架")).toBeInTheDocument();
     expect(within(right).queryByText(/底座：/)).not.toBeInTheDocument();
 
@@ -369,7 +369,7 @@ it("跌倒开关：品类子选微动类型后合并树展示，提交携带 chi
     // 折叠微动开关大类 → 整棵微动物料树隐藏
     await user.click(screen.getByRole("button", { name: "微动开关类型" }));
     expect(screen.queryByRole("button", { name: "PA66塑料" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("checkbox", { name: "二脚底座（无挡脚）" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "二脚底座有CB（无挡脚）" })).not.toBeInTheDocument();
 
     // 展开 → 物料树恢复
     await user.click(screen.getByRole("button", { name: "微动开关类型" }));
@@ -381,7 +381,7 @@ it("跌倒开关：品类子选微动类型后合并树展示，提交携带 chi
     await user.click(itemCheckbox("跌倒底"));
     await user.click(itemCheckbox("18mm钢球"));
     await user.click(itemCheckbox("翘板"));
-    await user.click(itemCheckbox("二脚底座（无挡脚）"));
+    await user.click(itemCheckbox("二脚底座有CB（无挡脚）"));
     await user.click(itemCheckbox("6.3支架：铜镀银"));
 
     await user.click(screen.getByRole("button", { name: "保存 BOM" }));
@@ -399,7 +399,7 @@ it("跌倒开关：品类子选微动类型后合并树展示，提交携带 chi
     await user.click(screen.getByRole("button", { name: "确认切换" }));
     expect(screen.getByRole("button", { name: "跌倒盖" })).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "带CB" })).toBeInTheDocument();
-    expect(screen.queryByRole("checkbox", { name: "二脚底座（无挡脚）" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "二脚底座有CB（无挡脚）" })).not.toBeInTheDocument();
 }, 15000);
 
 it("普通品类不出现子选下拉", async () => {
@@ -415,10 +415,10 @@ it("初始即预留配置区；取消切换保留原品类和已选物料", asyn
     render(<NewBomModal open onClose={vi.fn()} />);
     expect(screen.getByText("请选择产品品类，随后配置物料")).toBeInTheDocument();
     await pickCategory(user, "新微动");
-    await user.click(itemCheckbox("二脚底座（无挡脚）"));
+    await user.click(itemCheckbox("二脚底座有CB（无挡脚）"));
     await pickCategory(user, "老微动");
     expect(screen.getByRole("dialog", { name: "切换后将清空已选物料" })).toHaveTextContent("当前已选 1 项物料");
     await user.click(screen.getByRole("button", { name: "保留当前配置" }));
     expect(screen.getByLabelText(/产品品类/)).toHaveValue("新微动");
-    expect(itemCheckbox("二脚底座（无挡脚）")).toBeChecked();
+    expect(itemCheckbox("二脚底座有CB（无挡脚）")).toBeChecked();
 });

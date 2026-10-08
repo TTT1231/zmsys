@@ -59,6 +59,7 @@ describe("categoryOf", () => {
             ["group", "触点大小", false],
             ["group", "触点厚度", false],
             ["group", "触点类别", false],
+            ["group", "外壳", false],
         ]);
         const micro = cat("新微动");
         expect(micro.seqWidth).toBeUndefined();
@@ -98,6 +99,8 @@ describe("catalogRowsOf", () => {
     it("按目录序拍平分区→组→物料；分区不产出行、空组无行", () => {
         const rows = catalogRowsOf(cat("新微动"));
         expect(rows.map(row => row.groupName)).toEqual([
+            "底座",
+            "底座",
             "底座",
             "底座",
             "盖子",
@@ -142,7 +145,7 @@ describe("catalogRowsOf", () => {
             id: "3101",
             groupKey: "base",
             groupName: "底座",
-            name: "二脚底座（无挡脚）",
+            name: "二脚底座有CB（无挡脚）",
         });
     });
 
@@ -193,7 +196,19 @@ describe("旋转XK3 / 安全开关目录", () => {
         expect(plug.groups.filter(node => node.kind === "section").map(node => node.name)).toEqual(["五金件"]);
         const itemsOf = (groupName: string) =>
             plug.groups.find(node => node.name === groupName)!.items.map(item => item.name);
-        expect(itemsOf("PC塑料外壳")).toHaveLength(5);
+        expect(itemsOf("PC塑料外壳")).toHaveLength(10);
+        expect(itemsOf("PC塑料外壳")).toEqual([
+            "圆孔长外壳有CB（茶色）",
+            "圆孔长外壳无CB（茶色）",
+            "圆孔长外壳有CB（透明）",
+            "圆孔长外壳无CB（透明）",
+            "圆孔短外壳有CB（茶色）",
+            "圆孔短外壳无CB（茶色）",
+            "椭圆孔长外壳有CB（茶色）",
+            "椭圆孔长外壳无CB（茶色）",
+            "无耳外壳有CB（茶色）",
+            "无耳外壳无CB（茶色）",
+        ]);
         expect(itemsOf("小静片")).toEqual(["不电镀", "镀锡"]);
         // 动片两类合计 5 项：动片 4 项 + 带圈动片 1 项
         expect(itemsOf("动片")).toEqual(["不电镀", "镀锡", "长动片（不摇头）", "短动片（摇头）"]);
@@ -204,7 +219,7 @@ describe("旋转XK3 / 安全开关目录", () => {
         expect(itemsOf("弹簧")).toEqual(["0.45长弹簧", "0.45短弹簧"]);
     });
 
-    it("焊线目录：外壳/底座各一种，杆子圆轴/扁轴4.8，静片/弹簧多选，3.0mm电镀钢球", () => {
+    it("焊线目录：外壳有/无CB 两种，杆子圆轴/扁轴4.8，静片/弹簧多选，3.0mm电镀钢球", () => {
         const wire = categoryOf("焊线")!;
         expect(wire.groups.map(node => node.name)).toEqual([
             "PC塑料",
@@ -219,7 +234,7 @@ describe("旋转XK3 / 安全开关目录", () => {
         ]);
         const itemsOf = (groupName: string) =>
             wire.groups.find(node => node.name === groupName)!.items.map(item => item.name);
-        expect(itemsOf("外壳")).toEqual(["外壳"]);
+        expect(itemsOf("外壳")).toEqual(["有CB外壳", "无CB外壳"]);
         expect(itemsOf("PA66塑料杆子")).toEqual(["圆轴", "扁轴4.8"]);
         expect(itemsOf("静片")).toEqual(["小静片", "半圆静片"]);
         expect(wire.groups.find(node => node.name === "静片")).toMatchObject({ multi: true });

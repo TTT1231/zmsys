@@ -22,7 +22,7 @@ const today = (): string => new Date().toISOString().slice(0, 10);
 /** 固定测试 BOM（重跑复用，不撞唯一键） */
 const BOM_CODE = "ZME2E0002";
 const BOM_ITEMS = [
-    { groupKey: "base", groupName: "底座", name: "二脚底座（无挡脚）", position: 1 },
+    { groupKey: "base", groupName: "底座", name: "二脚底座有CB（无挡脚）", position: 1 },
     { groupKey: "button", groupName: "按钮", name: "7.6mm", position: 2 },
 ];
 
@@ -32,7 +32,7 @@ const BOM_ITEMS = [
  *  uk_bom_identity（含 boms.e2e 经 API 建档的单物料/支架组合） */
 const CHAIN_BOM_CODE = "ZME2E0006";
 const CHAIN_BOM_ITEMS = [
-    { groupKey: "base", groupName: "底座", name: "三脚底座（有挡脚）", position: 1 },
+    { groupKey: "base", groupName: "底座", name: "三脚底座有CB（有挡脚）", position: 1 },
     { groupKey: "button", groupName: "按钮", name: "8.0mm", position: 2 },
 ];
 
@@ -506,7 +506,7 @@ describe("成品出入库 (e2e)", () => {
             const otherBase = await prisma.materialItem.findFirst({
                 where: {
                     group: { name: "底座", category: { categoryKey: "new-micro-switch" } },
-                    name: "三脚底座（有挡脚）",
+                    name: "三脚底座有CB（有挡脚）",
                 },
                 select: { id: true },
             });

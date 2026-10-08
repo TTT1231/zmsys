@@ -121,8 +121,13 @@ describe("BOM/成品档案 (e2e)", () => {
         });
         expect(categories[0]).not.toHaveProperty("childCategories");
 
-        // 旋转XK2：7 个根单选组 + 尾部触点分区（触点大小/厚度/类别 单选）
-        const rotary = categories[0].groups as Array<{ kind: string; name: string; multi: boolean | null }>;
+        // 旋转XK2：7 个根单选组 + 尾部触点分区（触点大小/厚度/类别 单选）+ 末位外壳 CB 维度组
+        const rotary = categories[0].groups as Array<{
+            kind: string;
+            name: string;
+            multi: boolean | null;
+            items?: Array<{ name: string }>;
+        }>;
         expect(rotary.map(group => [group.kind, group.name, group.multi])).toEqual([
             ["group", "型号", false],
             ["group", "规格", false],
@@ -135,6 +140,11 @@ describe("BOM/成品档案 (e2e)", () => {
             ["group", "触点大小", false],
             ["group", "触点厚度", false],
             ["group", "触点类别", false],
+            ["group", "外壳", false],
+        ]);
+        expect(rotary.find(group => group.name === "外壳")!.items?.map(item => item.name)).toEqual([
+            "有CB外壳",
+            "无CB外壳",
         ]);
 
         // 新微动：PA66塑料 / 五金件 两分区，组挂分区下且为单选
@@ -214,8 +224,10 @@ describe("BOM/成品档案 (e2e)", () => {
             "触点",
         ]);
         expect(micro.find(group => group.name === "底座")!.items.map(item => item.name)).toEqual([
-            "二脚底座（无挡脚）",
-            "三脚底座（有挡脚）",
+            "二脚底座有CB（无挡脚）",
+            "二脚底座无CB（无挡脚）",
+            "三脚底座有CB（有挡脚）",
+            "三脚底座无CB（有挡脚）",
         ]);
     });
 
@@ -329,7 +341,7 @@ describe("BOM/成品档案 (e2e)", () => {
         expect(micro.groups.map(group => group.name)).not.toContain("PA66塑料");
         expect(micro.groups.map(group => group.name)).not.toContain("底座");
 
-        const base = await itemIdOf("new-micro-switch", "底座", "二脚底座（无挡脚）");
+        const base = await itemIdOf("new-micro-switch", "底座", "二脚底座有CB（无挡脚）");
         const denied = await createBom({ name: "新微动", materialItemIds: [base] }, `e2e-bom-${RUN}-section-off`);
         expect(denied.statusCode).toBe(400);
         expect(denied.json().message).toBe("物料不存在、已停用或不属于该品类");
@@ -412,7 +424,7 @@ describe("BOM/成品档案 (e2e)", () => {
         // 新微动续接品类内 MAX(3744) → KW3745；若 JOIN 品类过滤丢失，
         // 老微动 KWO012 会混入新微动 MAX 计算误续接
         const [microBase, microBracket] = await Promise.all([
-            itemIdOf("new-micro-switch", "底座", "三脚底座（有挡脚）"),
+            itemIdOf("new-micro-switch", "底座", "三脚底座有CB（有挡脚）"),
             itemIdOf("new-micro-switch", "支架", "6.3支架：铜镀银"),
         ]);
         const microNext = await createBom(
@@ -467,7 +479,7 @@ describe("BOM/成品档案 (e2e)", () => {
         ]);
         const tipoverIds = [cover, base, ball, rocker];
         const microIds = await Promise.all([
-            itemIdOf("new-micro-switch", "底座", "二脚底座（无挡脚）"),
+            itemIdOf("new-micro-switch", "底座", "二脚底座有CB（无挡脚）"),
             itemIdOf("new-micro-switch", "盖子", "盖子"),
             itemIdOf("new-micro-switch", "按钮", "8.5mm"),
             itemIdOf("new-micro-switch", "支架", "6.3支架：铜镀银"),
@@ -499,7 +511,7 @@ describe("BOM/成品档案 (e2e)", () => {
         expect(created.json().data.code).toMatch(/^KD\d{3,}$/);
         expect(created.json().data.items).toHaveLength(9);
         expect(created.json().data.spec).toContain("跌倒盖：跌倒盖KW16 / 有CB字");
-        expect(created.json().data.spec).toContain("底座：二脚底座（无挡脚）");
+        expect(created.json().data.spec).toContain("底座：二脚底座有CB（无挡脚）");
         expect(created.json().data.spec).toContain("静片：6.3静片：铜镀银");
 
         // 不带 childCategory 的普通品类物料混入（旋转XK2 的型号）→ 400
@@ -540,7 +552,7 @@ describe("BOM/成品档案 (e2e)", () => {
     });
 
     it("旋转XK3：焊线工艺二分——校验文案按焊线工艺，插线目录可建档", async () => {
-        const shell = await itemIdOf("xk3-plug", "PC塑料外壳", "圆孔长外壳（茶色）");
+        const shell = await itemIdOf("xk3-plug", "PC塑料外壳", "圆孔长外壳有CB（茶色）");
 
         // 未带 childCategory → 400（文案是焊线工艺，不是微动开关类型）
         const missing = await createBom({ name: "旋转XK3", materialItemIds: [shell] }, `e2e-bom-${RUN}-xk3-missing`);
@@ -562,7 +574,74 @@ describe("BOM/成品档案 (e2e)", () => {
         );
         expect(created.statusCode).toBe(200);
         expect(created.json().data.code).toMatch(/^XK3\d{3,}$/);
-        expect(created.json().data.spec).toContain("PC塑料外壳：圆孔长外壳（茶色）");
+        expect(created.json().data.spec).toContain("PC塑料外壳：圆孔长外壳有CB（茶色）");
+    });
+
+    it("CB 维度目录：新微动无CB底座可建档且底座单选互斥；XK2 外壳组二选一；焊线无CB外壳可建档", async () => {
+        // 新微动：无CB 底座建档
+        const nocbBase = await itemIdOf("new-micro-switch", "底座", "二脚底座无CB（无挡脚）");
+        const created = await createBom({ name: "新微动", materialItemIds: [nocbBase] }, `e2e-bom-${RUN}-nocb-base`);
+        expect(created.statusCode).toBe(200);
+        expect(created.json().data.spec).toContain("底座：二脚底座无CB（无挡脚）");
+
+        // 底座组单选：有CB + 无CB 同选 → 400
+        const cbBase = await itemIdOf("new-micro-switch", "底座", "二脚底座有CB（无挡脚）");
+        const both = await createBom(
+            { name: "新微动", materialItemIds: [cbBase, nocbBase] },
+            `e2e-bom-${RUN}-base-both-cb`,
+        );
+        expect(both.statusCode).toBe(400);
+        expect(both.json().message).toBe("分组「底座」只能选择一项物料");
+
+        // 旋转XK2：外壳组（有CB/无CB 单选，不选亦可建档）
+        const [model, shellCb, shellNocb] = await Promise.all([
+            itemIdOf("rotary-switch", "型号", "1-1"),
+            itemIdOf("rotary-switch", "外壳", "有CB外壳"),
+            itemIdOf("rotary-switch", "外壳", "无CB外壳"),
+        ]);
+        const withShell = await createBom(
+            { name: "旋转XK2", materialItemIds: [model, shellCb] },
+            `e2e-bom-${RUN}-xk2-shell-cb`,
+        );
+        expect(withShell.statusCode).toBe(200);
+        expect(withShell.json().data.spec).toContain("外壳：有CB外壳");
+        const withoutShell = await createBom(
+            { name: "旋转XK2", materialItemIds: [model, shellNocb] },
+            `e2e-bom-${RUN}-xk2-shell-nocb`,
+        );
+        expect(withoutShell.statusCode).toBe(200);
+        expect(withoutShell.json().data.spec).toContain("外壳：无CB外壳");
+        const shellClash = await createBom(
+            { name: "旋转XK2", materialItemIds: [model, shellCb, shellNocb] },
+            `e2e-bom-${RUN}-xk2-shell-both`,
+        );
+        expect(shellClash.statusCode).toBe(400);
+        expect(shellClash.json().message).toBe("分组「外壳」只能选择一项物料");
+
+        // 焊线：改名后的有CB外壳 + 新增无CB外壳
+        const wireShellCb = await itemIdOf("xk3-wire", "外壳", "有CB外壳");
+        const wireShellNocb = await itemIdOf("xk3-wire", "外壳", "无CB外壳");
+        const wireCreated = await createBom(
+            { name: "旋转XK3", materialItemIds: [wireShellNocb], childCategory: "xk3-wire" },
+            `e2e-bom-${RUN}-xk3w-shell-nocb`,
+        );
+        expect(wireCreated.statusCode).toBe(200);
+        expect(wireCreated.json().data.spec).toContain("外壳：无CB外壳");
+        const wireClash = await createBom(
+            { name: "旋转XK3", materialItemIds: [wireShellCb, wireShellNocb], childCategory: "xk3-wire" },
+            `e2e-bom-${RUN}-xk3w-shell-both`,
+        );
+        expect(wireClash.statusCode).toBe(400);
+        expect(wireClash.json().message).toBe("分组「外壳」只能选择一项物料");
+
+        // 插线：无CB 新变体可解析建档
+        const plugNocb = await itemIdOf("xk3-plug", "PC塑料外壳", "圆孔长外壳无CB（透明）");
+        const plugCreated = await createBom(
+            { name: "旋转XK3", materialItemIds: [plugNocb], childCategory: "xk3-plug" },
+            `e2e-bom-${RUN}-xk3p-shell-nocb`,
+        );
+        expect(plugCreated.statusCode).toBe(200);
+        expect(plugCreated.json().data.spec).toContain("PC塑料外壳：圆孔长外壳无CB（透明）");
     });
 
     it("staff 无 bom:create 403", async () => {

@@ -25,7 +25,7 @@ const today = (): string => beijingDayKey();
 /** 固定测试 BOM（重跑复用，不撞唯一键；物料组合避开其它 e2e 套件的 uk_bom_identity） */
 const BOM_CODE = "ZME2E0004";
 const BOM_ITEMS = [
-    { groupKey: "base", groupName: "底座", name: "二脚底座（无挡脚）", position: 1 },
+    { groupKey: "base", groupName: "底座", name: "二脚底座有CB（无挡脚）", position: 1 },
     { groupKey: "button", groupName: "按钮", name: "8.5mm", position: 2 },
 ];
 
@@ -242,7 +242,7 @@ describe("工作台聚合 (e2e)", () => {
             code: BOM_CODE,
             category: "新微动",
             model: "",
-            spec: "底座：二脚底座（无挡脚） · 按钮：8.5mm",
+            spec: "底座：二脚底座有CB（无挡脚） · 按钮：8.5mm",
             unit: "个",
             stock: baseline.stock + 60,
         });

@@ -23,7 +23,7 @@ const today = (): string => new Date().toISOString().slice(0, 10);
  * 避免撞 (category, spec_hash) 的 uk_bom_identity 唯一键 */
 const BOM_CODE = "ZME2E0003";
 const BOM_ITEMS = [
-    { groupKey: "base", groupName: "底座", name: "三脚底座（有挡脚）", position: 1 },
+    { groupKey: "base", groupName: "底座", name: "三脚底座有CB（有挡脚）", position: 1 },
     { groupKey: "button", groupName: "按钮", name: "7.6mm", position: 2 },
 ];
 

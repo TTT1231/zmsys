@@ -442,7 +442,8 @@ CREATE TABLE bom_item (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 目录种子（id 段 2001+ 分区/组、3001+ 物料）。
--- 旋转XK2（1001 / XK2 / 3）：7 个单选根组 + 尾部触点分区（与新微动同目录）；
+-- 旋转XK2（1001 / XK2 / 3）：7 个单选根组 + 尾部触点分区（与新微动同目录）+
+-- 末位「外壳」CB 维度组（20261008100100，存量档已补挂有CB外壳）；
 -- A面/B面共用同一组触点与盖板选项。
 INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, multi, sort_order) VALUES
     (2001, 1001, NULL, 'GROUP', '型号', 'model', 0, 1),
@@ -455,7 +456,8 @@ INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, m
     (2607, 1001, NULL, 'SECTION', '触点', NULL, NULL, 8),
     (2608, 1001, 2607, 'GROUP', '触点大小', 'contact-size', 0, 1),
     (2609, 1001, 2607, 'GROUP', '触点厚度', 'contact-thickness', 0, 2),
-    (2610, 1001, 2607, 'GROUP', '触点类别', 'contact-kind', 0, 3);
+    (2610, 1001, 2607, 'GROUP', '触点类别', 'contact-kind', 0, 3),
+    (2720, 1001, NULL, 'GROUP', '外壳', 'shell', 0, 9);
 
 INSERT INTO material_item (id, group_id, name, sort_order) VALUES
     -- 型号全集（含「无」；1-1 / 2-1 保留原 id 3001 / 3002）
@@ -547,7 +549,10 @@ INSERT INTO material_item (id, group_id, name, sort_order) VALUES
     (3620, 2609, '0.2', 2),
     (3621, 2609, '0.3', 3),
     (3622, 2610, '铜', 1),
-    (3623, 2610, '银', 2);
+    (3623, 2610, '银', 2),
+    -- 外壳（CB 维度，20261008100100）
+    (3780, 2720, '有CB外壳', 1),
+    (3781, 2720, '无CB外壳', 2);
 
 -- 新微动（1003 / KW / 4）：PA66塑料 / 五金件 两分区，分区内按部件类型单选组。
 INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, multi, sort_order) VALUES
@@ -568,8 +573,10 @@ INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, m
     (2121, 1003, 2103, 'GROUP', '触点类别', 'contact-kind', 0, 3);
 
 INSERT INTO material_item (id, group_id, name, sort_order) VALUES
-    (3101, 2111, '二脚底座（无挡脚）', 1),
-    (3102, 2111, '三脚底座（有挡脚）', 2),
+    (3101, 2111, '二脚底座有CB（无挡脚）', 1),
+    (3772, 2111, '二脚底座无CB（无挡脚）', 2),
+    (3102, 2111, '三脚底座有CB（有挡脚）', 3),
+    (3773, 2111, '三脚底座无CB（有挡脚）', 4),
     (3103, 2112, '盖子', 1),
     (3104, 2113, '7.6mm', 1),
     (3105, 2113, '8.0mm', 2),
@@ -680,11 +687,16 @@ INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, m
     (2719, 1008, 2715, 'GROUP', '钢球', 'steel-ball', 0, 0, 4);
 
 INSERT INTO material_item (id, group_id, name, sort_order) VALUES
-    (3401, 2401, '圆孔长外壳（茶色）', 1),
-    (3402, 2401, '圆孔长外壳（透明）', 2),
-    (3403, 2401, '圆孔短外壳（茶色）', 3),
-    (3404, 2401, '椭圆孔长外壳无CB字（茶色）', 4),
-    (3405, 2401, '无耳外壳无CB字（茶色）', 5),
+    (3401, 2401, '圆孔长外壳有CB（茶色）', 1),
+    (3775, 2401, '圆孔长外壳无CB（茶色）', 2),
+    (3402, 2401, '圆孔长外壳有CB（透明）', 3),
+    (3776, 2401, '圆孔长外壳无CB（透明）', 4),
+    (3403, 2401, '圆孔短外壳有CB（茶色）', 5),
+    (3777, 2401, '圆孔短外壳无CB（茶色）', 6),
+    (3778, 2401, '椭圆孔长外壳有CB（茶色）', 7),
+    (3404, 2401, '椭圆孔长外壳无CB（茶色）', 8),
+    (3779, 2401, '无耳外壳有CB（茶色）', 9),
+    (3405, 2401, '无耳外壳无CB（茶色）', 10),
     (3406, 2402, '底座：茶色', 1),
     (3407, 2402, '底座：透明', 2),
     (3408, 2403, '圆轴长杆子', 1),
@@ -706,7 +718,8 @@ INSERT INTO material_item (id, group_id, name, sort_order) VALUES
     (3421, 2416, '底盖0.2', 3),
     (3422, 2417, '0.45长弹簧', 1),
     (3423, 2417, '0.45短弹簧', 2),
-    (3754, 2712, '外壳', 1),
+    (3754, 2712, '有CB外壳', 1),
+    (3774, 2712, '无CB外壳', 2),
     (3755, 2713, '底座', 1),
     (3756, 2714, '圆轴', 1),
     (3757, 2714, '扁轴4.8', 2),

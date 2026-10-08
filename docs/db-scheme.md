@@ -151,10 +151,10 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 可选物料目录由三张表表达，目录修改只走数据库迁移并同步 mock 种子：
 
 - `material_group`：目录树节点。`kind=SECTION` 为分区（纯展示与折叠，只能为根节点、不挂物料、无 key/multi/qty，如“PA66塑料 / 五金件”）；`kind=GROUP` 为分组（挂可选物料），必须有稳定 `group_key`、`multi` 选择语义与 `qty` 数量语义——`multi=0` 单选（0/1 项，换选替换、可取消），`multi=1` 多选（可全选/清空）；`qty=1` 数量分组（选中项可携带 1-99 数量，前端呈 −/×N/+ 步进器，如琴键开关的扣板/连锁片/静片/动片），`qty=0` 恒为 1。分组可直接挂品类或挂同品类分区下；禁止跨品类挂接与超过两级的层级。分区停用后其下所有物料不可用于新建 BOM。`group_key='model'` 的分组选中项即 BOM 型号。
-- `material_item`：可选物料项（如“6.3支架：铜镀银”“二脚底座（无挡脚）”），完整物料名逐项可选，不再组合。
+- `material_item`：可选物料项（如“6.3支架：铜镀银”“二脚底座有CB（无挡脚）”），完整物料名逐项可选，不再组合。
 - `bom_item`：BOM 明细行，建档时冻结 `group_key/group_name/name/position/quantity` 快照（数量分组 1-99，其余恒 1）。
 
-**目录不可变边界**：已被 `bom_item` 引用的物料不得改名、移组或复用 id；规格变化 = 新增物料项 + 旧项停用；停用只影响新建选择，已建 BOM 依靠快照完整显示。唯一例外是**名称规范化**——同一规格仅修正显示名（如触点大小 0.3 → 3.0mm、卡线片 0.15 → 底盖0.15，见迁移 20260923000000）：原地改名保留 id，且同一迁移内必须同步改写 `bom_item` 冻结名与订单 `bom_spec_snapshot`，保证新旧档案显示一致；`sales_order_change_log` 为历史凭证不回改。订单 `bom_spec_snapshot` 冻结 `{items: [{materialId, groupKey, groupName, name, position, quantity}], modelCode, spec}`（JSON 对象，quantity 于 2026-09 加入，旧快照缺省按 1），展示侧（系统日志的规格构成等）直接取该冻结值，不读当前目录。
+**目录不可变边界**：已被 `bom_item` 引用的物料不得改名、移组或复用 id；规格变化 = 新增物料项 + 旧项停用；停用只影响新建选择，已建 BOM 依靠快照完整显示。唯一例外是**名称规范化**——同一规格仅修正显示名（如触点大小 0.3 → 3.0mm、卡线片 0.15 → 底盖0.15，见迁移 20260923000000）：原地改名保留 id，且同一迁移内必须同步改写 `bom_item` 冻结名与订单 `bom_spec_snapshot`，保证新旧档案显示一致；`sales_order_change_log` before/after 与 `op_log`（仅订单目标）中的 `$.bomSpec` 名称/摘要亦同步勘误（先例 20261006100000、20261008100000），`create_bom`/`delete_bom` 建档审计保留操作时历史事实。订单 `bom_spec_snapshot` 冻结 `{items: [{materialId, groupKey, groupName, name, position, quantity}], modelCode, spec}`（JSON 对象，quantity 于 2026-09 加入，旧快照缺省按 1），展示侧（系统日志的规格构成等）直接取该冻结值，不读当前目录。
 
 ### 5.2 `bom_table`
 

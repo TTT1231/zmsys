@@ -2,7 +2,7 @@ import type { Bom } from "@/api";
 
 /** 仅决定列表摘要的优先级，不参与物料校验或编码规则；完整冻结清单始终可展开。 */
 const SUMMARY_GROUPS: Record<string, string[]> = {
-    旋转XK2: ["model", "spec", "direction"],
+    旋转XK2: ["model", "spec", "direction", "shell"],
     旋转XK3: ["pc-shell", "pc-base", "pa66-lever"],
     新微动: ["base", "button", "contact-kind"],
     老微动: ["base", "button", "contact-kind"],

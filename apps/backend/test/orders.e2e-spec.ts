@@ -23,14 +23,14 @@ const today = (): string => new Date().toISOString().slice(0, 10);
  * 物料集合与 ledger e2e 的夹具不同（判重键为品类+集合，并行文件不得撞同一集合）。 */
 const BOM_CODE = "ZME2E0001";
 const BOM_ITEMS = [
-    { groupKey: "base", groupName: "底座", name: "三脚底座（有挡脚）", position: 1 },
+    { groupKey: "base", groupName: "底座", name: "三脚底座有CB（有挡脚）", position: 1 },
     { groupKey: "button", groupName: "按钮", name: "8.5mm", position: 2 },
 ];
 
 /** 整单编辑（换 BOM）的第二 BOM：二脚底座 + 8.1mm 按钮，编码与物料组合同样避开其它套件（ledger 占 ZME2E0002、bom-stock-ledger 占 ZME2E0003、workbench 占 ZME2E0004） */
 const BOM2_CODE = "ZME2E0005";
 const BOM2_ITEMS = [
-    { groupKey: "base", groupName: "底座", name: "二脚底座（无挡脚）", position: 1 },
+    { groupKey: "base", groupName: "底座", name: "二脚底座有CB（无挡脚）", position: 1 },
     { groupKey: "button", groupName: "按钮", name: "8.1mm", position: 2 },
 ];
 
@@ -284,7 +284,7 @@ describe("销售订单 (e2e)", () => {
         // 冻结形态：{ items, modelCode, spec }，与建档快照同构
         expect(stored!.bomSpecSnapshot).toMatchObject({
             modelCode: "",
-            spec: "底座：三脚底座（有挡脚） · 按钮：8.5mm",
+            spec: "底座：三脚底座有CB（有挡脚） · 按钮：8.5mm",
             items: BOM_ITEMS.map(item => expect.objectContaining({ groupName: item.groupName, name: item.name })),
         });
         const opLog = await prisma.opLog.findFirst({ where: { action: "create_order", targetCode: orderNo } });
@@ -464,7 +464,7 @@ describe("销售订单 (e2e)", () => {
         });
         // BOM 明细按第二 BOM 建档重冻（二脚底座 + 8.1mm 按钮）
         expect(stored!.bomSpecSnapshot).toMatchObject({
-            spec: "底座：二脚底座（无挡脚） · 按钮：8.1mm",
+            spec: "底座：二脚底座有CB（无挡脚） · 按钮：8.1mm",
         });
         // 变更日志带前后客户（改名后的当前名随订单建档冻结）
         const logs = await prisma.salesOrderChangeLog.findMany({ where: { order: { orderNo: target.orderNo } } });
