@@ -48,6 +48,7 @@ export function ArchivedOrdersPage() {
     const { snap, isLoading, refreshing: overlay } = useWbView();
     const { refresh } = useWbRefresh();
     const [statusFilter, setStatusFilter] = useState("全部状态");
+    const [categoryFilter, setCategoryFilter] = useState("全部品类");
     const [dateStart, setDateStart] = useState("");
     const [dateEnd, setDateEnd] = useState("");
     const [sort, setSort] = useState<SortState<ArchivedSortKey>>({ key: "archivedAt", dir: "desc" });
@@ -64,6 +65,10 @@ export function ArchivedOrdersPage() {
      * 不在分配行内，byOrderNo 未命中 → 可发 0，状态回落交付进度口径，与逐单派生完全一致） */
     const derived = useMemo(() => deriveOrders(snap), [snap]);
 
+    /* 品类筛选与销售订单/成品入库同口径：BOM 名即品类，选项为在档 BOM 品类去重 */
+    const bomCategory = useMemo(() => new Map(snap.boms.map(bom => [bom.code, bom.name])), [snap.boms]);
+    const categories = useMemo(() => [...new Set(snap.boms.map(bom => bom.name))], [snap.boms]);
+
     const filtered = useMemo(() => {
         const kw = keyword.trim().toLowerCase();
         return archived.filter(order => {
@@ -71,6 +76,7 @@ export function ArchivedOrdersPage() {
                 const status = derived.byOrderNo.get(order.orderNo)?.status ?? orderStatusOfMax(order, 0);
                 if (status.label !== statusFilter) return false;
             }
+            if (categoryFilter !== "全部品类" && bomCategory.get(order.bomCode) !== categoryFilter) return false;
             if (dateStart && order.deliverDate < dateStart) return false;
             if (dateEnd && order.deliverDate > dateEnd) return false;
             if (kw) {
@@ -81,7 +87,7 @@ export function ArchivedOrdersPage() {
             }
             return true;
         });
-    }, [archived, keyword, statusFilter, dateStart, dateEnd, derived]);
+    }, [archived, keyword, statusFilter, categoryFilter, dateStart, dateEnd, derived, bomCategory]);
 
     const sorted = useMemo(() => {
         const factor = sort.dir === "asc" ? 1 : -1;
@@ -100,13 +106,15 @@ export function ArchivedOrdersPage() {
 
     const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize);
     const dateFilterActive = !!dateStart || !!dateEnd;
-    const filtersActive = dateFilterActive || !!keyword.trim() || statusFilter !== "全部状态";
+    const filtersActive =
+        dateFilterActive || !!keyword.trim() || statusFilter !== "全部状态" || categoryFilter !== "全部品类";
 
     const applySort = (key: ArchivedSortKey) => setSort(current => nextSortState(current, key));
 
     const clearFilters = () => {
         setKeyword("");
         setStatusFilter("全部状态");
+        setCategoryFilter("全部品类");
         setDateStart("");
         setDateEnd("");
         setPage(1);
@@ -147,6 +155,15 @@ export function ArchivedOrdersPage() {
                             label="按归档前状态筛选"
                             options={STATUS_OPTIONS}
                         />
+                        <ToolbarSelect
+                            value={categoryFilter}
+                            onChange={value => {
+                                setCategoryFilter(value);
+                                setPage(1);
+                            }}
+                            label="按品类筛选"
+                            options={["全部品类", ...categories]}
+                        />
                         <MobileSortSelect
                             columns={SORT_COLUMNS}
                             value={sort}
@@ -183,7 +200,7 @@ export function ArchivedOrdersPage() {
                         ) : (
                             <DataTable
                                 tableId="archived-orders"
-                                defaultWidths={[140, 150, 250, 100, 110, 125, 150, 95, 145, 150, 105, 100]}
+                                defaultWidths={[140, 150, 250, 100, 110, 125, 150, 95, 145, 150, 150, 105, 100]}
                                 recordCount={filtered.length}
                                 identityColumn={0}
                                 scrollRef={tableScrollRef}
@@ -225,6 +242,7 @@ export function ArchivedOrdersPage() {
                                         <th style={{ width: "7%" }}>归档人</th>
                                         <th style={{ width: "8%" }}>归档备注</th>
                                         <th style={{ width: "10%" }}>订单备注</th>
+                                        <th style={{ width: "12%" }}>BOM 备注</th>
                                         <th style={{ width: "8%" }}>状态</th>
                                         <th className="min-w-24 cell-pad-wide text-center" style={{ width: "9%" }}>
                                             操作
@@ -234,7 +252,7 @@ export function ArchivedOrdersPage() {
                                 <tbody>
                                     {pageRows.length === 0 && (
                                         <EmptyRow
-                                            colSpan={12}
+                                            colSpan={13}
                                             description="暂无归档订单；在销售订单的编辑弹窗中归档发过货的订单（已完成或部分发货）后，会在这里显示"
                                         />
                                     )}
@@ -297,6 +315,9 @@ export function ArchivedOrdersPage() {
                                                 </td>
                                                 <td>
                                                     <RemarkCell remark={order.remark} />
+                                                </td>
+                                                <td>
+                                                    <RemarkCell remark={bom?.remark} variant="warning" />
                                                 </td>
                                                 <td>
                                                     <StatusBadge status={status.key} label={status.label} />

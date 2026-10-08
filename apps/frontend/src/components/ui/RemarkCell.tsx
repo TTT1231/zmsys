@@ -21,6 +21,7 @@
  * | 物料与BOM | BOM 备注 | warning | bom.remark                   |
  * | 销售订单  | 订单备注 | plain   | order.remark                 |
  * | 归档订单  | 订单备注 | plain   | order.remark                 |
+ * | 归档订单  | BOM 备注 | warning | bomByCode(snap, ...)?.remark |
  */
 export function RemarkCell({ remark, variant = "plain" }: { remark?: string | null; variant?: "warning" | "plain" }) {
     const text = remark?.trim();
