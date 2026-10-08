@@ -6,7 +6,8 @@ import { plainNum } from "@/lib/format";
 import {
     calendarDays,
     deliveryProgress,
-    deliveryTimeSpan,
+    deliveryTimeSegments,
+    initialDeliveryViewport,
     zoomDeliveryViewport,
     type DeliveryOrder,
     type DeliveryViewport,
@@ -14,11 +15,10 @@ import {
 import type { WorkbenchData } from "@/data/workbench";
 import "./delivery-progress.css";
 
-const DEFAULT_VIEW: DeliveryViewport = { offset: -7, days: 15 };
 type DeliveryStyle = CSSProperties & {
     "--bom-color"?: string;
     "--today-position"?: string;
-    "--day-width"?: string;
+    "--grid-width"?: string;
     "--grid-offset"?: string;
 };
 
@@ -53,23 +53,42 @@ function QuantityProgress({ order, unit }: { order: DeliveryOrder; unit: string 
 }
 
 function OrderTimeline({ order, asOf, view }: { order: DeliveryOrder; asOf: string; view: DeliveryViewport }) {
-    const span = deliveryTimeSpan(order, asOf, view.days, view.offset);
+    const span = deliveryTimeSegments(order, asOf, view.days, view.offset);
     return (
-        <div className="delivery-timeline-cell" aria-label={`下单 ${order.date}，交期 ${order.due}`}>
+        <div
+            className="delivery-timeline-cell"
+            role="img"
+            aria-label={`BOM ${order.bomCode}；下单 ${order.date}，交期 ${order.due}；已发 ${plainNum(order.shipped)}，可发 ${plainNum(order.available)}，缺口 ${plainNum(order.gap)}`}
+            title={`${order.bomCode} · 已发 ${plainNum(order.shipped)} · 可发 ${plainNum(order.available)} · 缺口 ${plainNum(order.gap)}`}
+        >
+            <span className="delivery-chart-bom" style={{ left: `clamp(0px, ${span.left}%, calc(100% - 60px))` }}>
+                {order.bomCode}
+            </span>
             {span.width > 0 && (
-                <span className="delivery-time-bar" style={{ left: `${span.left}%`, width: `${span.width}%` }} />
+                <span className="delivery-time-bar" style={{ left: `${span.left}%`, width: `${span.width}%` }}>
+                    <span className="delivery-shipped" style={{ width: `${span.shippedWidth}%` }} />
+                    <span className="delivery-available" style={{ width: `${span.availableWidth}%` }} />
+                </span>
             )}
             <span
                 className={`delivery-due-marker ${span.outside ? `delivery-due-${span.outside}` : ""}`}
                 style={{ left: `${span.duePosition}%` }}
                 aria-hidden="true"
             />
-            {span.outside && (
-                <span className={`delivery-outside-label delivery-outside-${span.outside}`}>
+            {span.outside ? (
+                <time dateTime={order.due} className={`delivery-outside-label delivery-outside-${span.outside}`}>
                     {span.outside === "before" ? "← " : ""}
                     {shortDate(order.due)}
                     {span.outside === "after" ? " →" : ""}
-                </span>
+                </time>
+            ) : (
+                <time
+                    dateTime={order.due}
+                    className="delivery-chart-date"
+                    style={{ left: `clamp(24px, ${span.duePosition}%, calc(100% - 24px))` }}
+                >
+                    {shortDate(order.due)}
+                </time>
             )}
         </div>
     );
@@ -77,7 +96,8 @@ function OrderTimeline({ order, asOf, view }: { order: DeliveryOrder; asOf: stri
 
 export function DeliveryProgress({ data }: { data: WorkbenchData }) {
     const orders = useMemo(() => deliveryProgress(data), [data]);
-    const [view, setView] = useState<DeliveryViewport>(DEFAULT_VIEW);
+    const initialView = useMemo(() => initialDeliveryViewport(orders, data.asOf), [orders, data.asOf]);
+    const [view, setView] = useState<DeliveryViewport>(initialView);
     const [dragging, setDragging] = useState(false);
     const viewRef = useRef(view);
     const bodyRef = useRef<HTMLDivElement>(null);
@@ -99,11 +119,11 @@ export function DeliveryProgress({ data }: { data: WorkbenchData }) {
         const date = addDays(start, index);
         const position = ((calendarDays(data.asOf, date) - view.offset + 0.5) / view.days) * 100;
         return { date, position };
-    }).filter((tick, index) => tick.position > 0 && tick.position < 100 && index % tickStep === 0);
+    }).filter(tick => tick.position > 0 && tick.position < 100 && calendarDays(data.asOf, tick.date) % tickStep === 0);
     const timelineStyle: DeliveryStyle = {
         "--today-position": todayVisible ? `${todayPosition}%` : undefined,
-        "--day-width": `${100 / view.days}%`,
-        "--grid-offset": `${((Math.ceil(view.offset) - view.offset) / view.days) * 100}%`,
+        "--grid-width": `${(tickStep / view.days) * 100}%`,
+        "--grid-offset": `${ticks[0]?.position ?? 0}%`,
     };
 
     useEffect(() => {
@@ -134,7 +154,7 @@ export function DeliveryProgress({ data }: { data: WorkbenchData }) {
     }, [hasOrders]);
 
     const reset = () => {
-        setView(DEFAULT_VIEW);
+        setView(initialView);
         if (bodyRef.current) bodyRef.current.scrollTop = 0;
     };
     const beginDrag = (event: PointerEvent<HTMLDivElement>) => {
@@ -225,7 +245,7 @@ export function DeliveryProgress({ data }: { data: WorkbenchData }) {
                         </span>
                         <span
                             className="ml-auto"
-                            title="同 BOM 同色；备货进度 =（已发 + 按交期分配的库存）/ 订单量；库存是 BOM 当前总库存。"
+                            title="同 BOM 同色；条长表示下单到交期，分段表示已发、可发和缺口的数量占比，并非实际完成日期；库存是 BOM 当前总库存。"
                         >
                             同 BOM 同色
                         </span>
@@ -280,7 +300,7 @@ export function DeliveryProgress({ data }: { data: WorkbenchData }) {
                                     {ticks.map(tick => (
                                         <span
                                             key={tick.date}
-                                            style={{ left: `${tick.position}%` }}
+                                            style={{ left: `clamp(18px, ${tick.position}%, calc(100% - 18px))` }}
                                             className={tick.date === data.asOf ? "delivery-today-date" : ""}
                                         >
                                             {tickStep >= 3 ? shortDate(tick.date) : tick.date.slice(8)}
@@ -309,7 +329,7 @@ export function DeliveryProgress({ data }: { data: WorkbenchData }) {
                         >
                             {orders.map(order => {
                                 const style: DeliveryStyle = {
-                                    "--bom-color": `oklch(var(--delivery-bom-lightness) 0.12 ${order.colorHue})`,
+                                    "--bom-color": `oklch(calc(${order.color.lightness}% + var(--delivery-bom-lift)) ${order.color.chroma} ${order.color.hue})`,
                                 };
                                 return (
                                     <div
