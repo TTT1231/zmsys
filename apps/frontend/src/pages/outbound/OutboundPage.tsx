@@ -221,6 +221,12 @@ export function OutboundModal({
                             </div>
                             {/* 工艺差异独立警示条：发货前要核对的差异，不能混在规格小字里 */}
                             <BomRemarkNote remark={selectedBom?.remark} />
+                            {/* 订单备注：客户随单的业务要求，发货前同样要过目；低频字段，有才显示 */}
+                            {!!selectedOrder.remark.trim() && (
+                                <p className="whitespace-pre-wrap text-13 leading-5 text-td">
+                                    订单备注：<span className="font-medium">{selectedOrder.remark}</span>
+                                </p>
+                            )}
                             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
                                 <div className="min-w-0">
                                     <dt className="text-12 text-muted">订单数量</dt>
@@ -591,6 +597,10 @@ export function OutboundPage() {
                                             <CardField label="出库数量" value={`${num(row.qty)} 个`} strong />
                                             <CardField label="出库日期" value={row.date} />
                                             <CardField label="操作人" value={row.operator} />
+                                            {/* 订单备注低频，有才显示（数据同桌面列的 orderRemarkByNo） */}
+                                            {!!orderRemarkByNo.get(row.orderNo)?.trim() && (
+                                                <CardField label="订单备注" value={orderRemarkByNo.get(row.orderNo)} />
+                                            )}
                                         </div>
                                     </RecordCard>
                                 );
