@@ -15,6 +15,7 @@
  * | 页面      | 列头     | variant | 数据                         |
  * | 销售订单  | BOM 备注 | warning | bomByCode(snap, ...)?.remark |
  * | 成品出库  | BOM 备注 | warning | bomByCode(snap, ...)?.remark |
+ * | 成品出库  | 订单备注 | plain   | orderRemarkByNo.get(...)     |
  * | 成品出库  | 出库备注 | plain   | row.remark                   |
  * | 成品入库  | BOM 备注 | warning | bomByCode(snap, ...)?.remark |
  * | 库存      | BOM 备注 | warning | row.remark                   |

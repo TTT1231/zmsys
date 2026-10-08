@@ -450,7 +450,7 @@ export function OutboundPage() {
         resetKey: sort,
     });
     const [detail, setDetail] = useState<OutboundRow | null>(null);
-    /* 订单备注跟客户格走（订单维度信息）：按单号回捞，避免逐行 find */
+    /* 订单备注列（订单维度信息）：按单号回捞，避免逐行 find */
     const orderRemarkByNo = useMemo(
         () => new Map(snap.orders.map(order => [order.orderNo, order.remark])),
         [snap.orders],
@@ -603,7 +603,7 @@ export function OutboundPage() {
                         ) : (
                             <DataTable
                                 tableId="outbound"
-                                defaultWidths={[158, 190, 110, 302, 150, 110, 110, 90, 90, 150, 100]}
+                                defaultWidths={[158, 150, 110, 302, 150, 150, 110, 110, 90, 90, 150, 100]}
                                 recordCount={filtered.length}
                                 identityColumn={0}
                                 pinnedStart={[0, 1, 2, 3, 4]}
@@ -618,7 +618,7 @@ export function OutboundPage() {
                                             onSort={() => applySort("no")}
                                             className="cell-pad-wide"
                                         />
-                                        <th>客户 / 备注</th>
+                                        <th>客户</th>
                                         <th>销售订单号</th>
                                         <SortTh
                                             label="BOM 编码"
@@ -627,6 +627,7 @@ export function OutboundPage() {
                                             onSort={() => applySort("bomCode")}
                                         />
                                         <th>BOM 备注</th>
+                                        <th>订单备注</th>
                                         <SortTh
                                             label="发货数量（个）"
                                             active={sort.key === "qty"}
@@ -648,7 +649,7 @@ export function OutboundPage() {
                                 </thead>
                                 <tbody>
                                     {pageRows.length === 0 && (
-                                        <EmptyRow colSpan={11} description="没有找到匹配的出库记录" />
+                                        <EmptyRow colSpan={12} description="没有找到匹配的出库记录" />
                                     )}
                                     {pageRows.map(row => {
                                         const bom = bomIndex.get(row.bomCode);
@@ -675,7 +676,6 @@ export function OutboundPage() {
                                                     {/* 与销售订单列表同款：客户名可点开客户档案详情（档案已删除的不可点） */}
                                                     <CustomerCell
                                                         name={row.customer}
-                                                        remark={orderRemarkByNo.get(row.orderNo)}
                                                         onClick={
                                                             snap.customers.some(item => item.code === row.customerCode)
                                                                 ? () => setCustomerDetailCode(row.customerCode)
@@ -693,6 +693,9 @@ export function OutboundPage() {
                                                 </td>
                                                 <td>
                                                     <RemarkCell remark={bom?.remark} variant="warning" />
+                                                </td>
+                                                <td>
+                                                    <RemarkCell remark={orderRemarkByNo.get(row.orderNo)} />
                                                 </td>
                                                 <td>
                                                     <QtyCell value={row.qty} />
