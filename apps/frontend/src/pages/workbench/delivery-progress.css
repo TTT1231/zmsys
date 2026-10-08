@@ -1,0 +1,291 @@
+/* BOM 身份色与状态色分开；深色下提亮身份色，所有行保持同一底色。 */
+.delivery-board {
+    --delivery-bom-lightness: 56%;
+    --bom-color: var(--color-primary);
+    --delivery-pending: color-mix(in srgb, var(--color-line-strong) 55%, var(--color-soft));
+    container-type: inline-size;
+    container-name: delivery;
+    min-width: 0;
+    overflow: clip;
+}
+
+.dark .delivery-board {
+    --delivery-bom-lightness: 76%;
+}
+
+.delivery-grid {
+    display: grid;
+    /* 信息列固定且紧凑，所有新增宽度都交给时间线。 */
+    grid-template-columns: 148px 104px 64px minmax(0, 1fr);
+    align-items: center;
+    column-gap: 12px;
+    padding: 0 16px;
+}
+
+.delivery-table-head {
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-line);
+}
+.delivery-column-headings {
+    min-height: 52px;
+    color: var(--color-td-strong);
+    font-size: 13px;
+    font-weight: 600;
+}
+.delivery-progress-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.delivery-timeline-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+}
+.delivery-axis-row {
+    height: 35px;
+    align-items: start;
+}
+.delivery-axis-note {
+    font-size: 11px;
+    color: var(--color-muted);
+    padding-top: 3px;
+}
+.delivery-date-axis {
+    position: relative;
+    height: 35px;
+    font-size: 11px;
+    color: var(--color-muted);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+}
+.delivery-date-axis > span {
+    position: absolute;
+    transform: translateX(-50%);
+    top: 3px;
+    white-space: nowrap;
+}
+.delivery-today-date {
+    color: var(--color-primary-strong);
+    font-weight: 600;
+}
+.delivery-today-label {
+    position: absolute;
+    transform: translateX(-50%);
+    top: 19px;
+    color: var(--color-primary-strong);
+    font-size: 10px;
+    line-height: 14px;
+    white-space: nowrap;
+}
+.delivery-body {
+    max-height: min(620px, calc(100dvh - 420px));
+    min-height: 160px;
+    overflow: auto;
+    scrollbar-width: none;
+    touch-action: pan-y;
+    outline-offset: -3px;
+}
+.delivery-body::-webkit-scrollbar {
+    display: none;
+}
+.delivery-body.delivery-dragging .delivery-timeline {
+    cursor: grabbing;
+}
+.delivery-order-row {
+    border-top: 1px solid var(--color-line);
+    min-height: 94px;
+    background: var(--color-surface);
+}
+.delivery-order-cell {
+    padding: 14px 0;
+}
+.delivery-bom-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: none;
+    background: var(--bom-color);
+}
+.delivery-bom-label {
+    color: var(--bom-color);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+.delivery-progress-track {
+    position: relative;
+    display: flex;
+    height: 28px;
+    overflow: hidden;
+    border-radius: 4px;
+    background: var(--delivery-pending);
+}
+.delivery-progress-value {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 0 6px;
+    border-radius: 3px;
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 22px;
+}
+.delivery-shipped {
+    display: block;
+    background: var(--bom-color);
+}
+.delivery-available {
+    display: block;
+    background-color: color-mix(in srgb, var(--bom-color) 24%, var(--color-surface));
+    background-image: repeating-linear-gradient(
+        135deg,
+        transparent,
+        transparent 3px,
+        color-mix(in srgb, var(--bom-color) 60%, transparent) 3px,
+        color-mix(in srgb, var(--bom-color) 60%, transparent) 4px
+    );
+}
+.delivery-pending {
+    background: var(--delivery-pending);
+}
+.delivery-legend-swatch {
+    width: 20px;
+    height: 10px;
+    border-radius: 2px;
+    flex: none;
+}
+.delivery-timeline {
+    position: relative;
+    align-self: stretch;
+    cursor: grab;
+    user-select: none;
+    background-image: repeating-linear-gradient(
+        to right,
+        transparent calc(var(--grid-offset) - var(--day-width)),
+        transparent calc(var(--grid-offset) - 1px),
+        color-mix(in srgb, var(--color-line) 55%, transparent) calc(var(--grid-offset) - 1px),
+        color-mix(in srgb, var(--color-line) 55%, transparent) var(--grid-offset)
+    );
+}
+.delivery-has-today::after {
+    content: "";
+    position: absolute;
+    left: var(--today-position);
+    top: 0;
+    bottom: 0;
+    border-left: 1px dashed var(--color-primary);
+    pointer-events: none;
+}
+.delivery-timeline-cell {
+    position: relative;
+    height: 100%;
+    min-height: 94px;
+}
+.delivery-time-bar {
+    position: absolute;
+    top: calc(50% - 4px);
+    height: 8px;
+    background: color-mix(in srgb, var(--bom-color) 32%, var(--color-surface));
+    border-radius: 3px;
+}
+.delivery-due-marker {
+    position: absolute;
+    top: calc(50% - 4px);
+    width: 8px;
+    height: 8px;
+    transform: translateX(-50%) rotate(45deg);
+    background: var(--bom-color);
+}
+.delivery-due-before,
+.delivery-due-after {
+    transform: translateX(-50%);
+    background: none;
+    width: 0;
+    height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    top: calc(50% - 5px);
+}
+.delivery-due-before {
+    border-right: 6px solid var(--bom-color);
+}
+.delivery-due-after {
+    border-left: 6px solid var(--bom-color);
+}
+.delivery-outside-label {
+    position: absolute;
+    top: calc(50% + 12px);
+    font-size: 11px;
+    color: var(--color-muted);
+}
+.delivery-outside-before {
+    left: 0;
+}
+.delivery-outside-after {
+    right: 0;
+}
+
+/* 容器按实际可用宽度适配侧栏与窗口，窄屏保留全部数量和明确交期。 */
+@container delivery (max-width: 1100px) {
+    .delivery-grid {
+        grid-template-columns: 140px 96px 64px minmax(0, 1fr);
+    }
+}
+
+@container delivery (max-width: 820px) {
+    .delivery-grid {
+        grid-template-columns: minmax(0, 1fr) 104px 64px;
+    }
+    .delivery-timeline,
+    .delivery-timeline-heading,
+    .delivery-date-axis {
+        display: none;
+    }
+    .delivery-axis-row {
+        height: 25px;
+    }
+    .delivery-help {
+        display: none;
+    }
+}
+
+@container delivery (max-width: 620px) {
+    .delivery-grid {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        padding: 16px;
+    }
+    .delivery-table-head {
+        display: none;
+    }
+    .delivery-order-row {
+        align-items: start;
+    }
+    .delivery-order-cell {
+        padding: 0;
+        grid-column: 1;
+        grid-row: 1;
+    }
+    .delivery-due-cell {
+        grid-column: 2;
+        grid-row: 1;
+        padding-top: 0;
+        text-align: right;
+    }
+    .delivery-order-row > [role="cell"]:nth-child(2) {
+        grid-column: 1 / -1;
+        grid-row: 2;
+    }
+    .delivery-legend > span:last-child {
+        margin-left: 0;
+    }
+    .delivery-body {
+        max-height: 65dvh;
+    }
+}
