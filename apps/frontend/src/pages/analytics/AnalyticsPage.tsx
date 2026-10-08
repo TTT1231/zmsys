@@ -1,24 +1,13 @@
-/* 交付工作台直接展示备货数量与交期；只有超级管理员可读取。 */
-import { Navigate } from "react-router";
-import { useApp } from "@/context/useApp";
+/* 分析页：交付甘特图自工作台二级视图迁出独立成页；按菜单授权访问（menu:analytics），默认仅超管。 */
 import { PageLoading } from "@/components/ui/PageLoading";
+import { useWorkbenchData } from "@/pages/workbench/useWorkbenchData";
 import { DeliveryProgress } from "./DeliveryProgress";
-import { useWorkbenchData } from "./useWorkbenchData";
-import { WorkbenchViews } from "./WorkbenchViews";
 
-export function DeliveryGanttPage() {
-    const { role } = useApp();
-    if (role !== "super") return <Navigate to="/workbench" replace />;
-
-    return <SuperAdminDeliveryGantt />;
-}
-
-function SuperAdminDeliveryGantt() {
+export function AnalyticsPage() {
     const { data, isLoading } = useWorkbenchData();
 
     return (
         <div className="flex flex-col gap-4 pb-4">
-            <WorkbenchViews active="delivery" />
             {isLoading ? (
                 <PageLoading className="min-h-96" />
             ) : data.asOf ? (

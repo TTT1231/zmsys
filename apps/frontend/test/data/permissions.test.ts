@@ -67,6 +67,11 @@ describe("buildDefaultGrants", () => {
         expect(grants.super.actions.inbound).toEqual(["view", "register", "edit", "delete", "adjust", "void-any-day"]);
         expect(grants.super.actions.outbound).toEqual(["view", "ship", "void", "delete"]);
         expect(grants.super.actions.permissions).toEqual(["view", "manage"]);
+        // 分析页（交付甘特图迁出）：可授权菜单，默认仅超管持有
+        expect(grants.super.menus).toContain("analytics");
+        for (const role of ["admin", "warehouse", "sales", "staff"] as const) {
+            expect(grants[role].menus).not.toContain("analytics");
+        }
         // 管理员：出入库只读，无用户权限
         expect(grants.admin.menus).not.toContain("permissions");
         expect(grants.admin.actions.inbound).toEqual(["view"]);
@@ -135,11 +140,18 @@ describe("buildNavSections", () => {
             "业务导航",
             "系统",
         ]);
-        // 管理员无「用户与权限」授权，但工作台组仍有工作台/归档订单两项；非 super 无系统组
+        // 管理员默认无「分析页」「用户与权限」授权：工作台组仅剩工作台，归档订单随业务导航组；非 super 无系统组
         expect(buildNavSections("admin", grantOf("admin")).map(section => section.group)).toEqual([
             "工作台",
             "业务导航",
         ]);
+        const adminAll = buildNavSections("admin", grantOf("admin")).flatMap(section => section.items);
+        expect(adminAll.find(item => item.to === "/analytics")).toBeUndefined();
+        expect(
+            buildNavSections("admin", grantOf("admin"))
+                .find(section => section.group === "业务导航")
+                ?.items.some(item => item.to === "/archived-orders"),
+        ).toBe(true);
         // 组内一项都没有时整组不出现
         const ordersOnly: RoleGrant = { version: 1, menus: ["orders"], actions: {} };
         expect(buildNavSections("admin", ordersOnly).map(section => section.group)).toEqual(["业务导航"]);
@@ -161,7 +173,8 @@ describe("findActiveGroup", () => {
 
     it("resolves the group owning the current route by path prefix", () => {
         expect(findActiveGroup(sections, "/workbench")?.group).toBe("工作台");
-        expect(findActiveGroup(sections, "/permissions")?.group).toBe("工作台");
+        expect(findActiveGroup(sections, "/analytics")?.group).toBe("工作台");
+        expect(findActiveGroup(sections, "/permissions")?.group).toBe("系统");
         expect(findActiveGroup(sections, "/orders/12345")?.group).toBe("业务导航");
     });
 

@@ -136,6 +136,7 @@ CREATE TABLE sys_permission (
 
 INSERT INTO sys_permission (code, kind, menu_key, action_id, label, protected) VALUES
     ('menu:workbench', 'MENU', 'workbench', NULL, '工作台', 0),
+    ('menu:analytics', 'MENU', 'analytics', NULL, '分析页', 0),
     ('menu:orders', 'MENU', 'orders', NULL, '销售订单', 0),
     ('menu:customers', 'MENU', 'customers', NULL, '客户档案', 0),
     ('menu:bom', 'MENU', 'bom', NULL, '物料与BOM', 0),

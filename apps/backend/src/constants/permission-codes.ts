@@ -13,6 +13,7 @@ export const PERMISSIONS = {
     MENU_OUTBOUND: "menu:outbound",
     MENU_STOCK: "menu:stock",
     MENU_ARCHIVED_ORDERS: "menu:archived-orders",
+    MENU_ANALYTICS: "menu:analytics", // 可授权菜单，默认仅超管（不播普通角色授权行）
     // 受保护菜单（仅 super）
     MENU_PERMISSIONS: "menu:permissions",
     MENU_PERMISSIONS_ACCOUNTS: "menu:permissions-accounts",

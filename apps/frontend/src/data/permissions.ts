@@ -42,26 +42,8 @@ export const NAV_GROUPS = [
 
 export const MENU_CATALOG: MenuNode[] = [
     { key: "workbench", label: "工作台", icon: "grid", group: "工作台", to: "/workbench" },
-    {
-        key: "archived-orders",
-        label: "归档订单",
-        icon: "archive",
-        group: "工作台",
-        to: "/archived-orders",
-    },
-    {
-        key: "permissions",
-        label: "用户与权限",
-        icon: "shield",
-        group: "工作台",
-        to: "/permissions",
-        protected: true,
-        children: [
-            { key: "permissions-accounts", label: "账号管理" },
-            { key: "permissions-roles", label: "角色与权限" },
-            { key: "permissions-matrix", label: "权限矩阵" },
-        ],
-    },
+    /* 分析页：交付甘特图自工作台二级视图迁出独立成页；普通可授权菜单，默认仅超管持有 */
+    { key: "analytics", label: "分析页", icon: "calendar", group: "工作台", to: "/analytics" },
     {
         key: "orders",
         label: "销售订单",
@@ -69,6 +51,13 @@ export const MENU_CATALOG: MenuNode[] = [
         group: "业务导航",
         to: "/orders",
         labelByRole: { warehouse: "待发货订单" },
+    },
+    {
+        key: "archived-orders",
+        label: "归档订单",
+        icon: "archive",
+        group: "业务导航",
+        to: "/archived-orders",
     },
     { key: "customers", label: "客户档案", icon: "contacts", group: "业务导航", to: "/customers" },
     { key: "bom", label: "物料与 BOM", icon: "bom", group: "业务导航", to: "/bom" },
@@ -83,7 +72,20 @@ export const MENU_CATALOG: MenuNode[] = [
         onlyFor: ["warehouse"],
         note: "审计记录：业务创建、订单变更、入库修正、库存调整、出库作废及负责人移交均保留操作人与时间，不可删除、不可篡改。",
     },
-    /* 系统组：系统日志、数据库备份与恢复入口；备份/恢复仅超级管理员可见 */
+    /* 系统组：用户与权限、数据库备份与恢复、系统日志；均仅超级管理员可见 */
+    {
+        key: "permissions",
+        label: "用户与权限",
+        icon: "shield",
+        group: "系统",
+        to: "/permissions",
+        protected: true,
+        children: [
+            { key: "permissions-accounts", label: "账号管理" },
+            { key: "permissions-roles", label: "角色与权限" },
+            { key: "permissions-matrix", label: "权限矩阵" },
+        ],
+    },
     {
         key: "system-backup",
         label: "备份",
