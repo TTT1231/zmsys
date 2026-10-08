@@ -40,9 +40,8 @@ it("全选并保存：授权请求不含受保护菜单（permissions/system-log
     );
     fireEvent.click(screen.getByRole("tab", { name: "角色与权限" }));
 
-    // admin 默认授权已是全选态：先取消再全选，产生完整草稿后保存
+    // admin 默认未授「分析页」：全选初始未勾，单击一次产生完整草稿后保存
     const selectAll = screen.getByLabelText("全选", { selector: "input" });
-    fireEvent.click(selectAll);
     fireEvent.click(selectAll);
     fireEvent.click(screen.getByRole("button", { name: "保存授权" }));
 
@@ -60,6 +59,7 @@ it("全选并保存：授权请求不含受保护菜单（permissions/system-log
     }
     expect(payload.grant.actions["system-logs"] ?? []).toEqual([]);
     expect(payload.grant.menus).toContain("orders");
+    expect(payload.grant.menus).toContain("analytics");
 });
 
 it("菜单勾选区不渲染受保护菜单（不可勾给普通角色）", () => {

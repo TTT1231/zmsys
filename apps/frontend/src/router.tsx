@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { createBrowserRouter } from "react-router";
+import { Navigate, createBrowserRouter } from "react-router";
 import { AppLayout } from "./layout/AppLayout";
 import { PageLoading } from "./components/ui/PageLoading";
 import { ProgressLayout } from "./components/RouteProgressBar";
@@ -7,11 +7,11 @@ import { ErrorPage, RouterErrorPage } from "./pages/error/ErrorPage";
 /* 懒加载页面组件单独成文件(RouterPages.tsx):本文件还要导出 router 实例,
    混放组件定义会破坏 React Fast Refresh */
 import {
+    AnalyticsPage,
     ArchivedOrdersPage,
     BackupPage,
     BomPage,
     CustomersPage,
-    DeliveryGanttPage,
     HomeRedirect,
     InboundPage,
     LoginPage,
@@ -44,7 +44,9 @@ export const router = createBrowserRouter([
                 children: [
                     { path: "/", element: <HomeRedirect /> },
                     { path: "/workbench", element: <WorkbenchPage /> },
-                    { path: "/workbench/delivery-gantt", element: <DeliveryGanttPage /> },
+                    /* 旧工作台甘特图地址：迁移到独立分析页后保留重定向兜底 */
+                    { path: "/workbench/delivery-gantt", element: <Navigate to="/analytics" replace /> },
+                    { path: "/analytics", element: <AnalyticsPage /> },
                     { path: "/search", element: <SearchPage /> },
                     { path: "/orders", element: <OrdersPage /> },
                     { path: "/archived-orders", element: <ArchivedOrdersPage /> },

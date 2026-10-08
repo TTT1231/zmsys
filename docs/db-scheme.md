@@ -115,7 +115,7 @@
 - 勾选动作必须同时拥有其父菜单和对应 `view` 动作；保存时由服务端规范化并复核。
 - `(role_code, permission_code)` 为 `sys_grant` 主键。`permissions:view/manage`、客户批量移交、订单删除、订单归档、订单归档回退、BOM 删除、`menu:system-logs`、`system-logs:view`、`system-backup:run` 与 `system-restore:run` 属于受保护权限，只允许 `super`。
 - `menu:system-backup` / `menu:system-restore` 在目录中为非受保护菜单码，但不播普通角色授权，前端也不提供勾选。备份目录、恢复预检/任务查询与实际执行端点均检查对应受保护的 `:run` 动作，单独持有菜单码不能调用这些接口；系统日志端点检查 `system-logs:view`。默认角色分布及权限矩阵显示口径见 [角色与权限](business/roles.md)。
-- 建表脚本直接播种四个普通角色的默认授权。初始行使用 `grant_source=BOOTSTRAP` 且 `granted_by=NULL`；此后所有界面修改必须使用 `grant_source=USER` 和真实操作人。`super` 不依赖授权行，服务端固定视为全量权限。归档订单菜单 `menu:archived-orders` 为普通菜单，四个普通角色默认可见（数据来自既有 `orders:view`，归档动作本身仍仅 `super`）。
+- 建表脚本直接播种四个普通角色的默认授权。初始行使用 `grant_source=BOOTSTRAP` 且 `granted_by=NULL`；此后所有界面修改必须使用 `grant_source=USER` 和真实操作人。`super` 不依赖授权行，服务端固定视为全量权限。归档订单菜单 `menu:archived-orders` 为普通菜单，四个普通角色默认可见（数据来自既有 `orders:view`，归档动作本身仍仅 `super`）。分析页菜单 `menu:analytics`（交付甘特图自工作台二级视图迁出）同为普通可授权菜单，但不播普通角色 BOOTSTRAP 行——默认仅超管可见，需要时由超管在界面勾选授予；页面数据仍取自 `GET /workbench/overview`（校验 `menu:workbench`），授予分析页的角色须同时保留工作台菜单。
 
 ### 3.4 `sys_grant_log`
 

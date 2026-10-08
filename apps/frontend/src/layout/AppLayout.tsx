@@ -162,7 +162,7 @@ export function AppLayout() {
                 </div>
             )}
             {!maximized && <MobileBottomNav onOpenDrawer={() => setDrawerPath(location.pathname)} />}
-            {user && <GlobalWatermark text={user.name} subtle={location.pathname === "/workbench/delivery-gantt"} />}
+            {user && <GlobalWatermark text={user.name} subtle={location.pathname === "/analytics"} />}
         </ContentMaximizeContext.Provider>
     );
 }

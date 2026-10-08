@@ -2,7 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { DeliveryProgress } from "@/pages/workbench/DeliveryProgress";
+import { DeliveryProgress } from "@/pages/analytics/DeliveryProgress";
 import type { WorkbenchData } from "@/data/workbench";
 
 const snapshot: WorkbenchData = {
