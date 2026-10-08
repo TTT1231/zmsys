@@ -3,7 +3,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 
 /* 表格单元格：客户/单号双行；note 是低频编码（如客户编码），紧凑档随 customer-cell-note 隐藏；
-   remark 是订单备注行（虚线分隔的正文小字），紧凑档随 remark-sub-note 隐藏（全文走 title/详情） */
+   remark 是订单备注行（虚线分隔的正文小字），紧凑档随 remark-sub-note 隐藏（全文走 title/详情）；
+   现仅成品出库页传入 remark——销售/归档订单页的订单备注已拆为独立 RemarkCell 列 */
 export function CustomerCell({
     name,
     sub,

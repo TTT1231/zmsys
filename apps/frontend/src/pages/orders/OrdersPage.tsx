@@ -1283,7 +1283,7 @@ export function OrdersPage() {
                             >
                                 <DataTable
                                     tableId="orders"
-                                    defaultWidths={[44, 154, 260, 397, 150, 100, 100, 120, 140, 90, 150, 125, 100]}
+                                    defaultWidths={[44, 154, 200, 397, 150, 150, 100, 100, 120, 140, 90, 150, 125, 100]}
                                     recordCount={filtered.length}
                                     identityColumn={1}
                                     pinnedStart={[0, 1, 2, 3, 4]}
@@ -1303,9 +1303,10 @@ export function OrdersPage() {
                                                 className="cell-pad-wide"
                                                 width="14%"
                                             />
-                                            <th style={{ width: "14%" }}>客户 / 备注</th>
+                                            <th style={{ width: "10%" }}>客户</th>
                                             <th style={{ width: "24%" }}>成品 / BOM</th>
                                             <th style={{ width: "12%" }}>BOM 备注</th>
+                                            <th style={{ width: "12%" }}>订单备注</th>
                                             <SortTh
                                                 label="订单数量"
                                                 active={sort?.key === "qty"}
@@ -1344,7 +1345,7 @@ export function OrdersPage() {
                                     </thead>
                                     <tbody>
                                         {pageRows.length === 0 && (
-                                            <EmptyRow colSpan={13} description="没有找到匹配的订单" />
+                                            <EmptyRow colSpan={14} description="没有找到匹配的订单" />
                                         )}
                                         {pageRows.map(order => {
                                             const bom = derived.bomIndex.get(order.bomCode);
@@ -1396,7 +1397,6 @@ export function OrdersPage() {
                                                     <td>
                                                         <CustomerCell
                                                             name={order.customer}
-                                                            remark={order.remark}
                                                             onClick={
                                                                 customer
                                                                     ? () => setCustomerDetailCode(customer.code)
@@ -1413,6 +1413,9 @@ export function OrdersPage() {
                                                     </td>
                                                     <td>
                                                         <RemarkCell remark={bom?.remark} variant="warning" />
+                                                    </td>
+                                                    <td>
+                                                        <RemarkCell remark={order.remark} />
                                                     </td>
                                                     <td>
                                                         <QtyCell value={order.qty} />
