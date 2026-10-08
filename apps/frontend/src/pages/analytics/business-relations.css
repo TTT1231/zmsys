@@ -1,0 +1,133 @@
+/* 六种实体沿用原型身份色，文字/面板随系统主题；深色提升节点亮度。 */
+.relation-board {
+    --relation-bom: #8b72da;
+    --relation-customer: #36b798;
+    --relation-order: #6792dd;
+    --relation-inbound: #eda960;
+    --relation-outbound: #de7699;
+    --relation-person: #677185;
+    min-width: 0;
+    overflow: clip;
+    container-type: inline-size;
+}
+.dark .relation-board {
+    --relation-bom: #ad96f1;
+    --relation-customer: #5bd0b2;
+    --relation-order: #8aaff0;
+    --relation-inbound: #f2bb7d;
+    --relation-outbound: #eb94b2;
+    --relation-person: #9ba8bd;
+}
+.relation-stage {
+    position: relative;
+    isolation: isolate;
+    background: radial-gradient(
+        ellipse at center,
+        color-mix(in srgb, var(--relation-bom) 4%, transparent),
+        transparent 70%
+    );
+}
+.relation-canvas {
+    width: 100%;
+    height: clamp(480px, 62vh, 680px);
+    touch-action: none;
+    outline-offset: -3px;
+}
+.relation-hint {
+    position: absolute;
+    top: 16px;
+    left: 20px;
+    pointer-events: none;
+}
+.relation-tools {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    padding: 2px;
+}
+.relation-tools button {
+    width: 36px;
+    height: 36px;
+}
+.relation-message {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: var(--color-surface);
+}
+.relation-details {
+    position: absolute;
+    top: 48px;
+    right: 20px;
+    width: min(280px, calc(100% - 40px));
+    max-height: calc(100% - 75px);
+    overflow: auto;
+    padding: 14px 16px;
+}
+.relation-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.relation-dot {
+    display: inline-block;
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+.relation-legend {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 28px;
+    cursor: pointer;
+    border-radius: 4px;
+    color: var(--color-td-strong);
+    font-size: 12px;
+}
+.relation-legend[aria-pressed="false"] {
+    opacity: 0.4;
+    text-decoration: line-through;
+}
+.relation-legend:hover {
+    color: var(--color-primary-strong);
+}
+.relation-select {
+    width: 180px;
+    max-width: 100%;
+    min-width: 0;
+    height: 32px;
+}
+.relation-date {
+    width: 120px;
+    height: 36px;
+}
+@container (max-width: 500px) {
+    .relation-canvas {
+        height: 480px;
+    }
+    .relation-hint {
+        font-size: 11px;
+        left: 16px;
+    }
+    .relation-tools {
+        right: 12px;
+        bottom: 12px;
+    }
+    .relation-details {
+        right: 12px;
+        width: min(260px, calc(100% - 24px));
+    }
+    .relation-footer {
+        justify-content: center;
+    }
+}

@@ -231,6 +231,7 @@ function useWbMutation<TInput, TOutput>(mutationFn: (input: TInput) => Promise<T
         onError: error => toast.error(error.message),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: wbKeys.all });
+            queryClient.invalidateQueries({ queryKey: ["workbench"] });
             queryClient.invalidateQueries({ queryKey: bomKeys.stocks });
         },
     });
@@ -275,6 +276,7 @@ export const useCreateBom = () => {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: bomKeys.list });
             queryClient.invalidateQueries({ queryKey: wbKeys.all });
+            queryClient.invalidateQueries({ queryKey: ["workbench"] });
         },
     });
 };
@@ -288,6 +290,7 @@ export const useDeleteBom = () => {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: bomKeys.list });
             queryClient.invalidateQueries({ queryKey: wbKeys.all });
+            queryClient.invalidateQueries({ queryKey: ["workbench"] });
         },
     });
 };
