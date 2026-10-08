@@ -14,7 +14,7 @@ const CELL_H = 200;
 const GAP = 20;
 
 /** 画一张含两个对角标记的平铺 tile:canvas 取旋转后的外接矩形,background-repeat 平铺即得 vben 式稀疏斜纹 */
-function tileDataUrl(text: string): string | null {
+function tileDataUrl(text: string, subtle: boolean): string | null {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
@@ -32,7 +32,7 @@ function tileDataUrl(text: string): string | null {
     ctx.textBaseline = "middle";
     ctx.translate(canvas.width / 2, canvas.height / 2);
     ctx.rotate(ROTATE);
-    ctx.fillStyle = COLOR;
+    ctx.fillStyle = subtle ? "rgba(128, 128, 128, 0.12)" : COLOR;
     // 对角双标记:平移到未旋转 tile 的 (0,0) 原点后,在两个单元格中心各画一次
     ctx.fillText(text, -tileWidth / 2 + cellW / 2 - metrics.width / 2, -tileHeight / 2 + CELL_H / 2);
     ctx.fillText(
@@ -43,8 +43,8 @@ function tileDataUrl(text: string): string | null {
     return canvas.toDataURL();
 }
 
-export function GlobalWatermark({ text }: { text: string }) {
-    const dataUrl = useMemo(() => tileDataUrl(text), [text]);
+export function GlobalWatermark({ text, subtle = false }: { text: string; subtle?: boolean }) {
+    const dataUrl = useMemo(() => tileDataUrl(text, subtle), [text, subtle]);
 
     // 水印节点不进 React 树(卸载逻辑不受外部摘除牵连),挂 body 尾部;被改属性/被删除时 observer 立即恢复
     useEffect(() => {

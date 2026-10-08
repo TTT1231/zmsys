@@ -4,7 +4,7 @@ import {
     calendarDays,
     deliveryProgress,
     deliveryTimeSpan,
-    deliveryTimeSegments,
+    fullDeliveryViewport,
     initialDeliveryViewport,
     zoomDeliveryViewport,
 } from "@/data/delivery-progress";
@@ -104,7 +104,19 @@ describe("交付进度", () => {
 });
 
 describe("时间线平移与缩放", () => {
-    it("首屏覆盖待交订单和今天，发完与归档订单不挤占视窗", () => {
+    it("默认四周聚焦今天，早期和远期交期保留窗外方向", () => {
+        const view = initialDeliveryViewport();
+        expect(view.days).toBe(28);
+        expect(view.offset).toBeLessThan(0);
+        expect(view.offset + view.days).toBeGreaterThan(0);
+        expect(deliveryTimeSpan(order({ due: "2026-09-30" }), "2026-10-08", view.days, view.offset).outside).toBe(
+            "before",
+        );
+        expect(deliveryTimeSpan(order({ due: "2026-11-15" }), "2026-10-08", view.days, view.offset).outside).toBe(
+            "after",
+        );
+    });
+    it("完整跨度覆盖待交订单和今天，发完与归档订单不挤占视窗", () => {
         const snapshot = data([
             order({ date: "2026-09-01", due: "2026-09-30" }),
             order({ no: "later", date: "2026-10-01", due: "2026-10-21" }),
@@ -112,7 +124,7 @@ describe("时间线平移与缩放", () => {
             order({ no: "archive", date: "2025-01-01", archived: true }),
         ]);
         const orders = deliveryProgress(snapshot);
-        const view = initialDeliveryViewport(orders, snapshot.asOf);
+        const view = fullDeliveryViewport(orders, snapshot.asOf);
         expect(view.days).toBeLessThanOrEqual(90);
         expect(view.offset).toBeLessThan(0);
         expect(view.offset + view.days).toBeGreaterThan(0);
@@ -122,16 +134,15 @@ describe("时间线平移与缩放", () => {
             expect(span.left).toBeGreaterThan(0);
         }
     });
-    it("平移裁切进度分段，不将已离开视窗的数量重新铺满；同日交期没有除零", () => {
-        const row = { date: "2026-10-01", due: "2026-10-11", qty: 100, shipped: 20, available: 30 };
-        expect(deliveryTimeSegments(row, "2026-10-01", 20)).toMatchObject({ shippedWidth: 20, availableWidth: 30 });
-        expect(deliveryTimeSegments(row, "2026-10-01", 5, 3)).toMatchObject({ shippedWidth: 0, availableWidth: 50 });
-        expect(deliveryTimeSegments(row, "2026-10-01", 5, -3)).toMatchObject({ shippedWidth: 100, availableWidth: 0 });
-        expect(deliveryTimeSegments({ ...row, due: row.date }, "2026-10-01", 5)).toMatchObject({
-            width: 0,
-            shippedWidth: 0,
-            availableWidth: 0,
-        });
+    it("超过 90 天的完整跨度仍覆盖早期订单，放大后能缩回完整跨度", () => {
+        const rows = [order({ date: "2025-01-01", due: "2026-10-14" })];
+        const view = fullDeliveryViewport(rows, "2026-10-08");
+        expect(view.days).toBeGreaterThan(90);
+        expect(deliveryTimeSpan(rows[0], "2026-10-08", view.days, view.offset)).toMatchObject({ outside: null });
+        expect(deliveryTimeSpan(rows[0], "2026-10-08", view.days, view.offset).left).toBeGreaterThan(0);
+        const zoomed = zoomDeliveryViewport(view, 0.8, 0.5, view.days);
+        expect(zoomDeliveryViewport(zoomed, 1.25, 0.5, view.days).days).toBeCloseTo(view.days);
+        expect(zoomDeliveryViewport(zoomed, 1.25, 0.5, view.days).offset).toBeCloseTo(view.offset);
     });
     it("日期和交期落在格子中心，窗外交期仍有方向，平移不改变订单数据", () => {
         const inside = deliveryTimeSpan(order({ date: "2026-10-03", due: "2026-10-08" }), "2026-10-01", 15);

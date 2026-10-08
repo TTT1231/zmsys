@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type Keyboard
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/lib/icons";
 import { addDays, shortDate } from "@/lib/date";
-import { plainNum } from "@/lib/format";
+import { num, plainNum } from "@/lib/format";
 import {
     calendarDays,
     deliveryProgress,
-    deliveryTimeSegments,
+    deliveryTimeSpan,
+    fullDeliveryViewport,
     initialDeliveryViewport,
     zoomDeliveryViewport,
     type DeliveryOrder,
@@ -38,7 +39,11 @@ function DueDate({ order }: { order: DeliveryOrder }) {
 
 function QuantityProgress({ order, unit }: { order: DeliveryOrder; unit: string }) {
     return (
-        <div className="delivery-quantity min-w-0 tnum">
+        <div
+            className="delivery-quantity min-w-0 tnum"
+            title={`订单 ${num(order.qty)} ${unit} · 已发 ${num(order.shipped)} · 可发 ${num(order.available)} · 缺口 ${num(order.gap)}`}
+        >
+            <strong className="delivery-progress-value">{num(order.remaining)}</strong>
             <div
                 className="delivery-progress-track"
                 role="img"
@@ -46,29 +51,25 @@ function QuantityProgress({ order, unit }: { order: DeliveryOrder; unit: string 
             >
                 <span className="delivery-shipped" style={{ width: `${(order.shipped / order.qty) * 100}%` }} />
                 <span className="delivery-available" style={{ width: `${(order.available / order.qty) * 100}%` }} />
-                <strong className="delivery-progress-value">{plainNum(order.remaining)}</strong>
             </div>
         </div>
     );
 }
 
 function OrderTimeline({ order, asOf, view }: { order: DeliveryOrder; asOf: string; view: DeliveryViewport }) {
-    const span = deliveryTimeSegments(order, asOf, view.days, view.offset);
+    const span = deliveryTimeSpan(order, asOf, view.days, view.offset);
     return (
         <div
             className="delivery-timeline-cell"
             role="img"
-            aria-label={`BOM ${order.bomCode}；下单 ${order.date}，交期 ${order.due}；已发 ${plainNum(order.shipped)}，可发 ${plainNum(order.available)}，缺口 ${plainNum(order.gap)}`}
-            title={`${order.bomCode} · 已发 ${plainNum(order.shipped)} · 可发 ${plainNum(order.available)} · 缺口 ${plainNum(order.gap)}`}
+            aria-label={`BOM ${order.bomCode}；下单 ${order.date}，交期 ${order.due}；时间条表示下单至交期`}
+            title={`${order.bomCode} · 下单 ${order.date} · 交期 ${order.due}`}
         >
             <span className="delivery-chart-bom" style={{ left: `clamp(0px, ${span.left}%, calc(100% - 60px))` }}>
                 {order.bomCode}
             </span>
             {span.width > 0 && (
-                <span className="delivery-time-bar" style={{ left: `${span.left}%`, width: `${span.width}%` }}>
-                    <span className="delivery-shipped" style={{ width: `${span.shippedWidth}%` }} />
-                    <span className="delivery-available" style={{ width: `${span.availableWidth}%` }} />
-                </span>
+                <span className="delivery-time-bar" style={{ left: `${span.left}%`, width: `${span.width}%` }} />
             )}
             <span
                 className={`delivery-due-marker ${span.outside ? `delivery-due-${span.outside}` : ""}`}
@@ -96,7 +97,9 @@ function OrderTimeline({ order, asOf, view }: { order: DeliveryOrder; asOf: stri
 
 export function DeliveryProgress({ data }: { data: WorkbenchData }) {
     const orders = useMemo(() => deliveryProgress(data), [data]);
-    const initialView = useMemo(() => initialDeliveryViewport(orders, data.asOf), [orders, data.asOf]);
+    const initialView = useMemo(() => initialDeliveryViewport(), []);
+    const fullView = useMemo(() => fullDeliveryViewport(orders, data.asOf), [orders, data.asOf]);
+    const maxDays = Math.max(90, fullView.days);
     const [view, setView] = useState<DeliveryViewport>(initialView);
     const [dragging, setDragging] = useState(false);
     const viewRef = useRef(view);
@@ -114,12 +117,13 @@ export function DeliveryProgress({ data }: { data: WorkbenchData }) {
     const end = addDays(data.asOf, Math.ceil(view.offset + view.days) - 1);
     const todayPosition = ((0.5 - view.offset) / view.days) * 100;
     const todayVisible = todayPosition > 0 && todayPosition < 100;
-    const tickStep = view.days > 45 ? 7 : view.days > 24 ? 3 : view.days > 17 ? 2 : 1;
-    const ticks = Array.from({ length: Math.ceil(view.days) + 1 }, (_, index) => {
-        const date = addDays(start, index);
+    const tickStep = view.days > 70 ? Math.ceil(view.days / 10) : view.days > 24 ? 7 : view.days > 17 ? 2 : 1;
+    const firstTick = Math.ceil(view.offset / tickStep) * tickStep;
+    const ticks = Array.from({ length: Math.ceil(view.days / tickStep) + 1 }, (_, index) => {
+        const date = addDays(data.asOf, firstTick + index * tickStep);
         const position = ((calendarDays(data.asOf, date) - view.offset + 0.5) / view.days) * 100;
         return { date, position };
-    }).filter(tick => tick.position > 0 && tick.position < 100 && calendarDays(data.asOf, tick.date) % tickStep === 0);
+    }).filter(tick => tick.position > 0 && tick.position < 100);
     const timelineStyle: DeliveryStyle = {
         "--today-position": todayVisible ? `${todayPosition}%` : undefined,
         "--grid-width": `${(tickStep / view.days) * 100}%`,
@@ -146,12 +150,12 @@ export function DeliveryProgress({ data }: { data: WorkbenchData }) {
             const anchor = (event.clientX - rect.left) / rect.width;
             const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.width : 1);
             setView(current =>
-                zoomDeliveryViewport(current, Math.exp(Math.max(-0.5, Math.min(0.5, delta * 0.003))), anchor),
+                zoomDeliveryViewport(current, Math.exp(Math.max(-0.5, Math.min(0.5, delta * 0.003))), anchor, maxDays),
             );
         };
         body.addEventListener("wheel", wheel, { passive: false });
         return () => body.removeEventListener("wheel", wheel);
-    }, [hasOrders]);
+    }, [hasOrders, maxDays]);
 
     const reset = () => {
         setView(initialView);
@@ -200,7 +204,7 @@ export function DeliveryProgress({ data }: { data: WorkbenchData }) {
             }));
         } else if (["+", "=", "-"].includes(event.key)) {
             event.preventDefault();
-            setView(current => zoomDeliveryViewport(current, event.key === "-" ? 1.25 : 0.8, 0.5));
+            setView(current => zoomDeliveryViewport(current, event.key === "-" ? 1.25 : 0.8, 0.5, maxDays));
         } else if (event.key === "Home") {
             event.preventDefault();
             reset();
@@ -245,9 +249,9 @@ export function DeliveryProgress({ data }: { data: WorkbenchData }) {
                         </span>
                         <span
                             className="ml-auto"
-                            title="同 BOM 同色；条长表示下单到交期，分段表示已发、可发和缺口的数量占比，并非实际完成日期；库存是 BOM 当前总库存。"
+                            title="左侧细条表示已发、可发和缺口的数量占比；右侧时间条只表示下单到交期。BOM 色点用于识别同一 BOM；库存是 BOM 当前总库存。"
                         >
-                            同 BOM 同色
+                            色点识别 BOM · 时间条表示下单至交期
                         </span>
                     </div>
                     <div className="delivery-table" role="table" aria-label="未完成订单交付进度" style={timelineStyle}>
@@ -271,22 +275,35 @@ export function DeliveryProgress({ data }: { data: WorkbenchData }) {
                                             iconOnly
                                             icon="minus"
                                             aria-label="缩小时间线"
-                                            onClick={() => setView(current => zoomDeliveryViewport(current, 1.25, 0.5))}
+                                            onClick={() =>
+                                                setView(current => zoomDeliveryViewport(current, 1.25, 0.5, maxDays))
+                                            }
                                             className="size-9 rounded-md"
                                         />
                                         <Button
                                             variant="ghost"
                                             size="sm"
-                                            onClick={reset}
+                                            onClick={() => setView(fullView)}
                                             className="min-h-9 px-2 text-12"
                                         >
-                                            复位
+                                            完整跨度
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={reset}
+                                            title="回到今天附近四周"
+                                            className="min-h-9 px-2 text-12"
+                                        >
+                                            定位今天
                                         </Button>
                                         <Button
                                             iconOnly
                                             icon="plus"
                                             aria-label="放大时间线"
-                                            onClick={() => setView(current => zoomDeliveryViewport(current, 0.8, 0.5))}
+                                            onClick={() =>
+                                                setView(current => zoomDeliveryViewport(current, 0.8, 0.5, maxDays))
+                                            }
                                             className="size-9 rounded-md"
                                         />
                                     </div>

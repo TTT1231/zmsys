@@ -1,8 +1,11 @@
-/* BOM 身份色与状态色分开；深色下提亮身份色，所有行保持同一底色。 */
+/* BOM 身份色只用于小色点；数量状态统一随主题，时间条只编码日期。 */
 .delivery-board {
     --delivery-bom-lift: 0%;
     --bom-color: var(--color-primary);
     --delivery-pending: color-mix(in srgb, var(--color-line-strong) 55%, var(--color-soft));
+    --delivery-shipped: var(--color-progress-fill);
+    --delivery-available: color-mix(in srgb, var(--color-primary) 48%, var(--color-surface));
+    --delivery-time: color-mix(in srgb, var(--color-muted) 22%, var(--color-surface));
     container-type: inline-size;
     container-name: delivery;
     min-width: 0;
@@ -16,7 +19,7 @@
 .delivery-grid {
     display: grid;
     /* 信息列固定且紧凑，所有新增宽度都交给时间线。 */
-    grid-template-columns: 148px 104px 64px minmax(0, 1fr);
+    grid-template-columns: 148px 116px 64px minmax(0, 1fr);
     align-items: center;
     column-gap: 12px;
     padding: 0 16px;
@@ -43,6 +46,8 @@
     align-items: center;
     justify-content: space-between;
     gap: 4px;
+    flex-wrap: wrap;
+    padding-block: 6px;
 }
 .delivery-axis-row {
     height: 35px;
@@ -96,7 +101,6 @@
     cursor: grabbing;
 }
 .delivery-order-row {
-    --bom-ink: color-mix(in srgb, var(--bom-color) 55%, var(--color-ink));
     border-top: 1px solid var(--color-line);
     min-height: 84px;
     background: var(--color-surface);
@@ -105,60 +109,48 @@
     padding: 12px 0;
 }
 .delivery-bom-dot {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     flex: none;
     background: var(--bom-color);
-    border: 1px solid var(--bom-ink);
 }
 .delivery-bom-label {
-    color: var(--bom-ink);
+    color: var(--color-td-strong);
     font-weight: 600;
     overflow-wrap: anywhere;
 }
 .delivery-progress-track {
-    position: relative;
     display: flex;
-    height: 28px;
+    height: 6px;
+    margin-top: 7px;
     overflow: hidden;
-    border-radius: 4px;
+    border-radius: 3px;
     background: var(--delivery-pending);
 }
 .delivery-progress-value {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    padding: 0 6px;
-    border-radius: 3px;
-    background: var(--color-surface);
+    display: block;
+    text-align: right;
+    overflow-wrap: anywhere;
     color: var(--color-ink);
     font-size: 14px;
     font-weight: 600;
-    line-height: 22px;
+    line-height: 1.5;
 }
-.delivery-shipped {
+.delivery-board .delivery-shipped {
     display: block;
-    background: var(--bom-color);
+    background: var(--delivery-shipped);
 }
-.delivery-available {
+.delivery-board .delivery-available {
     display: block;
-    background-color: color-mix(in srgb, var(--bom-color) 40%, var(--color-surface));
-    background-image: repeating-linear-gradient(
-        135deg,
-        transparent,
-        transparent 3px,
-        var(--bom-ink, var(--bom-color)) 3px,
-        var(--bom-ink, var(--bom-color)) 4px
-    );
+    background: var(--delivery-available);
 }
 .delivery-pending {
     background: var(--delivery-pending);
 }
 .delivery-legend-swatch {
     width: 20px;
-    height: 10px;
+    height: 6px;
     border-radius: 2px;
     flex: none;
 }
@@ -171,8 +163,8 @@
         to right,
         transparent calc(var(--grid-offset) - var(--grid-width)),
         transparent calc(var(--grid-offset) - 1px),
-        color-mix(in srgb, var(--color-line) 65%, transparent) calc(var(--grid-offset) - 1px),
-        color-mix(in srgb, var(--color-line) 65%, transparent) var(--grid-offset)
+        color-mix(in srgb, var(--color-line) 40%, transparent) calc(var(--grid-offset) - 1px),
+        color-mix(in srgb, var(--color-line) 40%, transparent) var(--grid-offset)
     );
 }
 .delivery-has-today::after {
@@ -181,7 +173,7 @@
     left: var(--today-position);
     top: 0;
     bottom: 0;
-    border-left: 1px dashed var(--color-primary);
+    border-left: 1px dashed color-mix(in srgb, var(--color-primary) 65%, transparent);
     pointer-events: none;
 }
 .delivery-timeline-cell {
@@ -191,21 +183,19 @@
 }
 .delivery-time-bar {
     position: absolute;
-    top: calc(50% - 12px);
-    display: flex;
-    height: 24px;
+    top: calc(50% - 8px);
+    height: 16px;
     overflow: hidden;
-    border: 1px solid var(--bom-ink);
-    background: var(--delivery-pending);
-    border-radius: 5px;
+    background: var(--delivery-time);
+    border-radius: 4px;
 }
 .delivery-chart-bom {
     position: absolute;
     right: 0;
-    top: calc(50% - 32px);
+    top: calc(50% - 29px);
     max-width: 100%;
     overflow: hidden;
-    color: var(--bom-ink);
+    color: var(--color-muted);
     font-size: 12px;
     font-weight: 600;
     text-overflow: ellipsis;
@@ -213,7 +203,7 @@
 }
 .delivery-chart-date {
     position: absolute;
-    top: calc(50% + 17px);
+    top: calc(50% + 13px);
     transform: translateX(-50%);
     color: var(--color-td-strong);
     font-size: 12px;
@@ -221,11 +211,11 @@
 }
 .delivery-due-marker {
     position: absolute;
-    top: calc(50% - 5px);
-    width: 10px;
-    height: 10px;
+    top: calc(50% - 4px);
+    width: 8px;
+    height: 8px;
     transform: translateX(-50%) rotate(45deg);
-    background: var(--bom-ink);
+    background: var(--color-muted);
 }
 .delivery-due-before,
 .delivery-due-after {
@@ -238,14 +228,14 @@
     top: calc(50% - 5px);
 }
 .delivery-due-before {
-    border-right: 6px solid var(--bom-ink);
+    border-right: 6px solid var(--color-muted);
 }
 .delivery-due-after {
-    border-left: 6px solid var(--bom-ink);
+    border-left: 6px solid var(--color-muted);
 }
 .delivery-outside-label {
     position: absolute;
-    top: calc(50% + 17px);
+    top: calc(50% + 13px);
     font-size: 12px;
     color: var(--color-td-strong);
 }
@@ -259,7 +249,7 @@
 /* 容器按实际可用宽度适配侧栏与窗口，窄屏保留全部数量和明确交期。 */
 @container delivery (max-width: 1100px) {
     .delivery-grid {
-        grid-template-columns: 140px 96px 64px minmax(0, 1fr);
+        grid-template-columns: 140px 108px 64px minmax(0, 1fr);
     }
 }
 

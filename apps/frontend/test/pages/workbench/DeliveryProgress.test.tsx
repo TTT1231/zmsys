@@ -57,18 +57,57 @@ it("直接展示短标签、数量、缺口和逾期，同 BOM 自动同色且�
     expect(within(rows[0]).queryByRole("button")).not.toBeInTheDocument();
 });
 
-it("缩放与键盘平移只改变时间线，数量和可见订单不变，复位回到当前窗口", () => {
+it("缩放与键盘平移只改变时间线，数量和可见订单不变，定位今天回到四周窗口", () => {
     render(<DeliveryProgress data={snapshot} />);
     const quantity = screen.getByRole("img", { name: /备货 70%/ }).getAttribute("aria-label");
     fireEvent.click(screen.getByRole("button", { name: "放大时间线" }));
-    expect(screen.queryByText("10/01 — 10/15")).not.toBeInTheDocument();
+    expect(screen.queryByText("10/05 — 11/01")).not.toBeInTheDocument();
     const body = screen.getByRole("rowgroup", { name: /拖动平移/ });
     fireEvent.keyDown(body, { key: "ArrowRight" });
     expect(screen.getByRole("img", { name: /备货 70%/ })).toHaveAttribute("aria-label", quantity);
     expect(screen.getByText("SO1")).toBeInTheDocument();
     expect(screen.getByText("SO2")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "复位" }));
-    expect(screen.getByText("10/01 — 10/15")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "定位今天" }));
+    expect(screen.getByText("10/05 — 11/01")).toBeInTheDocument();
+});
+
+it("完整跨度显示早期订单与逾期交期，时间范围切换不改变共享库存分配", () => {
+    const data: WorkbenchData = {
+        ...snapshot,
+        orders: [
+            { ...snapshot.orders[0], date: "2026-09-01", due: "2026-09-30" },
+            { ...snapshot.orders[1], date: "2026-10-02", due: "2026-11-15" },
+        ],
+    };
+    render(<DeliveryProgress data={data} />);
+    const quantity = screen.getByRole("img", { name: /备货 70%/ }).getAttribute("aria-label");
+    expect(screen.getByText("← 09/30")).toBeInTheDocument();
+    expect(screen.getByText("11/15 →")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "完整跨度" }));
+    expect(screen.getByText("08/30 — 11/17")).toBeInTheDocument();
+    expect(screen.queryByText("← 09/30")).not.toBeInTheDocument();
+    expect(screen.queryByText("11/15 →")).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /备货 70%/ })).toHaveAttribute("aria-label", quantity);
+    fireEvent.click(screen.getByRole("button", { name: "定位今天" }));
+    expect(screen.getByText("10/05 — 11/01")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /备货 70%/ })).toHaveAttribute("aria-label", quantity);
+});
+
+it("待交数量独立显示千位分隔，发货数量变化只影响左侧数量进度", () => {
+    const data: WorkbenchData = {
+        ...snapshot,
+        products: [{ ...snapshot.products[0], stock: 10000 }],
+        orders: [{ ...snapshot.orders[0], date: "2026-10-07", due: "2026-10-14", qty: 12000, shipped: 2000 }],
+    };
+    const { rerender } = render(<DeliveryProgress data={data} />);
+    expect(screen.getByText("10,000")).toBeInTheDocument();
+    const timeline = screen.getByRole("img", { name: /时间条表示下单至交期/ });
+    const dates = timeline.getAttribute("aria-label");
+    expect(dates).not.toMatch(/已发|可发|缺口/);
+    rerender(<DeliveryProgress data={{ ...data, orders: [{ ...data.orders[0], shipped: 5000 }] }} />);
+    expect(screen.getByText("7,000")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /时间条表示下单至交期/ })).toHaveAttribute("aria-label", dates);
+    expect(screen.getByRole("img", { name: /待交货 7000.*已发 41%/ })).toBeInTheDocument();
 });
 
 it("刷新数据及时替换进度，发完后退出视图，没有待交时展示空状态", () => {
@@ -109,17 +148,17 @@ it("鼠标拖动和 Ctrl 滚轮只作用于右侧甘特图，左侧文字区域�
     pointer(body, "pointermove", 100);
     pointer(body, "pointerup", 100);
     expect(capture).not.toHaveBeenCalled();
-    expect(screen.getByText("10/01 — 10/15")).toBeInTheDocument();
+    expect(screen.getByText("10/05 — 11/01")).toBeInTheDocument();
     const leftWheel = new WheelEvent("wheel", { bubbles: true, cancelable: true, ctrlKey: true, deltaY: -100 });
     fireEvent(left, leftWheel);
     expect(leftWheel.defaultPrevented).toBe(false);
-    expect(screen.getByText("10/01 — 10/15")).toBeInTheDocument();
+    expect(screen.getByText("10/05 — 11/01")).toBeInTheDocument();
 
     pointer(timeline, "pointerdown", 550);
     pointer(body, "pointermove", 450);
     pointer(body, "pointerup", 450);
     expect(capture).toHaveBeenCalledOnce();
-    expect(screen.getByText("10/06 — 10/20")).toBeInTheDocument();
+    expect(screen.getByText("10/14 — 11/11")).toBeInTheDocument();
     const chartWheel = new WheelEvent("wheel", {
         bubbles: true,
         cancelable: true,
@@ -129,5 +168,5 @@ it("鼠标拖动和 Ctrl 滚轮只作用于右侧甘特图，左侧文字区域�
     });
     fireEvent(timeline, chartWheel);
     expect(chartWheel.defaultPrevented).toBe(true);
-    expect(screen.queryByText("10/06 — 10/20")).not.toBeInTheDocument();
+    expect(screen.queryByText("10/14 — 11/11")).not.toBeInTheDocument();
 });

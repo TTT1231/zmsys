@@ -163,39 +163,31 @@ export interface DeliveryViewport {
     days: number;
 }
 
-/** 首屏尽量完整显示待交订单与今天，避免逾期订单一进来就落在窗外。 */
-export function initialDeliveryViewport(orders: Pick<DeliveryOrder, "date" | "due">[], asOf: string): DeliveryViewport {
+/** 首屏聚焦今天附近四周：少量回看，将主要空间留给即将到期的订单。 */
+export function initialDeliveryViewport(): DeliveryViewport {
+    return { offset: -3, days: 28 };
+}
+
+/** 完整跨度覆盖全量待交订单和今天；不能因缩放上限把早期订单裁掉。 */
+export function fullDeliveryViewport(orders: Pick<DeliveryOrder, "date" | "due">[], asOf: string): DeliveryViewport {
     let first = 0;
     let last = 0;
     for (const order of orders) {
         first = Math.min(first, calendarDays(asOf, order.date), calendarDays(asOf, order.due));
         last = Math.max(last, calendarDays(asOf, order.date), calendarDays(asOf, order.due));
     }
-    if (first >= -7 && last <= 7) return { offset: -7, days: 15 };
-    const days = Math.min(90, Math.max(15, last - first + 5));
+    const days = Math.max(28, last - first + 5);
     return { offset: Math.max(first - 2, last + 3 - days), days };
 }
 
-/** 数量分段依附完整订单区间，再裁切到视窗；平移不会重新计算数量占比。 */
-export function deliveryTimeSegments(
-    order: Pick<DeliveryOrder, "date" | "due" | "qty" | "shipped" | "available">,
-    start: string,
-    days: number,
-    offset = 0,
-) {
-    const span = deliveryTimeSpan(order, start, days, offset);
-    const rawStart = ((calendarDays(start, order.date) - offset + 0.5) / days) * 100;
-    const duration = Math.max(0, (calendarDays(order.date, order.due) / days) * 100);
-    const shippedEnd = rawStart + duration * (order.qty > 0 ? order.shipped / order.qty : 0);
-    const availableEnd = shippedEnd + duration * (order.qty > 0 ? order.available / order.qty : 0);
-    const width = (from: number, to: number) =>
-        span.width > 0 ? (Math.max(0, Math.min(100, to) - Math.max(0, from)) / span.width) * 100 : 0;
-    return { ...span, shippedWidth: width(rawStart, shippedEnd), availableWidth: width(shippedEnd, availableEnd) };
-}
-
 /** 以指针所在日期为缩放锚点，缩放后保持该日期的位置，避免丢失方向。 */
-export function zoomDeliveryViewport(view: DeliveryViewport, factor: number, anchor: number): DeliveryViewport {
-    const days = Math.max(5, Math.min(90, view.days * factor));
+export function zoomDeliveryViewport(
+    view: DeliveryViewport,
+    factor: number,
+    anchor: number,
+    maxDays = 90,
+): DeliveryViewport {
+    const days = Math.max(5, Math.min(maxDays, view.days * factor));
     const ratio = Math.max(0, Math.min(1, anchor));
     return { offset: view.offset + (view.days - days) * ratio, days };
 }
