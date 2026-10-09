@@ -62,10 +62,6 @@ export function runRestore(input: {
     });
 }
 
-export function fetchRestoreJob(jobId: string): Promise<RestoreJob> {
-    return requestClient.get<RestoreJob>(`/system/restore/jobs/${jobId}`);
-}
-
 /** 断线后凭客户端自存的 requestKey 查询（404 = 当前未查到记录，不代表终态） */
 export function fetchRestoreJobByKey(requestKey: string): Promise<RestoreJob> {
     return requestClient.get<RestoreJob>(`/system/restore/jobs/key/${encodeURIComponent(requestKey)}`);

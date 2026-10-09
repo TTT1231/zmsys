@@ -227,7 +227,7 @@ export function MobileBottomNav({ onOpenDrawer }: { onOpenDrawer: () => void }) 
 
 /* 顶栏：偏好设置 / 主题切换 / 全局刷新 / 全屏 / 用户菜单（真实登录用户）。
     variant="full"（通栏顶栏）：含品牌 logo；showMenu 时以水平组菜单替代面包屑（桌面）。
-    内容最大化时高度过渡到 0（不卸载以保留收起/展开动画），内容裁掉且不可交互 */
+    内容最大化时高度瞬变归零（不参与过渡、不卸载），内容裁掉且不可交互 */
 export function Topbar({
     title,
     group,

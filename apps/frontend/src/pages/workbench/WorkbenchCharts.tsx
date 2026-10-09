@@ -1,4 +1,4 @@
-/* 品类进度、归档雷达与客户排行使用 ECharts，点击图形或明细入口可继续查看具体数字。 */
+/* 品类进度、归档饼图与客户排行使用 ECharts，点击图形或明细入口可继续查看具体数字。 */
 import { useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 import { EChart } from "@/components/charts/EChart";

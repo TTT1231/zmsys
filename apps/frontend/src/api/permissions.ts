@@ -1,10 +1,6 @@
 import type { RoleGrant, RoleId, GrantMap } from "@/data/permissions";
-import type { GrantLogEntry, RoleDef } from "./types";
+import type { GrantLogEntry } from "./types";
 import { requestClient } from "@/http";
-
-export function fetchRoles(): Promise<RoleDef[]> {
-    return requestClient.get<RoleDef[]>("/roles");
-}
 
 /** 全量角色授权（权限矩阵 / 角色编辑页聚合读取） */
 export function fetchGrants(): Promise<GrantMap> {

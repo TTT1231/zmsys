@@ -11,7 +11,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [status, setStatus] = useState<AuthStatus>(() => (getToken() ? "loading" : "guest"));
     const [user, setUser] = useState<WbUser | null>(null);
     const [grant, setGrant] = useState<RoleGrant>(EMPTY_GRANT);
-    const [globalSearch, setGlobalSearch] = useState("");
 
     const applyProfile = useCallback((profile: ProfileResult) => {
         setUser(profile.user);
@@ -70,15 +69,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
             status,
             user,
             role,
-            globalSearch,
-            setGlobalSearch,
             grant,
             can,
             login,
             logout,
             refreshProfile,
         }),
-        [status, user, role, globalSearch, grant, can, login, logout, refreshProfile],
+        [status, user, role, grant, can, login, logout, refreshProfile],
     );
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

@@ -30,13 +30,13 @@ export const addMonths = (isoDate: string, n: number) => {
     return toIso(targetFirst);
 };
 
-/** 当前时间 HH:mm（mock 台账/日志写入用） */
+/** 当前时间 HH:mm（仅测试使用） */
 export const nowTime = () => {
     const date = new Date();
     return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
 
-/** 当前日期时间 MM-dd HH:mm（最近登录等展示用） */
+/** 当前日期时间 MM-dd HH:mm（仅测试使用） */
 export const nowStamp = () => `${todayIso().slice(5)} ${nowTime()}`;
 
 /** 带时区的 ISO 日期时间转本地展示 yyyy-MM-dd HH:mm */

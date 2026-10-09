@@ -10,7 +10,7 @@ interface BomPickerProps {
     selected?: Bom;
     onSelect: (bom: Bom) => void;
     error?: string;
-    /** 行尾补充信息（如入库选择器展示当前库存） */
+    /** 行尾补充信息（可选） */
     rowExtra?: (bom: Bom) => string | undefined;
 }
 

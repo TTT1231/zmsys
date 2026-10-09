@@ -39,20 +39,13 @@ class RequestClient {
     public download: FileDownloader["download"];
 
     public readonly instance: AxiosInstance;
-    // 是否正在刷新token
     public isRefreshing = false;
     public postSSE: SSE["postSSE"];
-    // 刷新token队列
     public refreshTokenQueue: ((token: string) => void)[] = [];
     public requestSSE: SSE["requestSSE"];
     public upload: FileUploader["upload"];
 
-    /**
-     * 构造函数，用于创建Axios实例
-     * @param options - Axios请求配置，可选
-     */
     constructor(options: RequestClientOptions = {}) {
-        // 合并默认配置和传入的配置
         const defaultConfig: RequestClientOptions = {
             headers: {
                 "Content-Type": "application/json;charset=utf-8",
@@ -67,68 +60,43 @@ class RequestClient {
 
         bindMethods(this);
 
-        // 实例化拦截器管理器
         const interceptorManager = new InterceptorManager(this.instance);
         this.addRequestInterceptor = interceptorManager.addRequestInterceptor.bind(interceptorManager);
         this.addResponseInterceptor = interceptorManager.addResponseInterceptor.bind(interceptorManager);
 
-        // 实例化文件上传器
         const fileUploader = new FileUploader(this);
         this.upload = fileUploader.upload.bind(fileUploader);
-        // 实例化文件下载器
         const fileDownloader = new FileDownloader(this);
         this.download = fileDownloader.download.bind(fileDownloader);
-        // 实例化SSE模块
         const sse = new SSE(this);
         this.postSSE = sse.postSSE.bind(sse);
         this.requestSSE = sse.requestSSE.bind(sse);
     }
 
-    /**
-     * DELETE请求方法
-     */
     public delete<T = any>(url: string, config?: RequestClientConfig): Promise<T> {
         return this.request<T>(url, { ...config, method: "DELETE" });
     }
 
-    /**
-     * GET请求方法
-     */
     public get<T = any>(url: string, config?: RequestClientConfig): Promise<T> {
         return this.request<T>(url, { ...config, method: "GET" });
     }
 
-    /**
-     * 获取基础URL
-     */
     public getBaseUrl() {
         return this.instance.defaults.baseURL;
     }
 
-    /**
-     * POST请求方法
-     */
     public post<T = any>(url: string, data?: any, config?: RequestClientConfig): Promise<T> {
         return this.request<T>(url, { ...config, data, method: "POST" });
     }
 
-    /**
-     * PUT请求方法
-     */
     public put<T = any>(url: string, data?: any, config?: RequestClientConfig): Promise<T> {
         return this.request<T>(url, { ...config, data, method: "PUT" });
     }
 
-    /**
-     * PATCH请求方法
-     */
     public patch<T = any>(url: string, data?: any, config?: RequestClientConfig): Promise<T> {
         return this.request<T>(url, { ...config, data, method: "PATCH" });
     }
 
-    /**
-     * 通用的请求方法
-     */
     public async request<T>(url: string, config: RequestClientConfig): Promise<T> {
         const response: AxiosResponse<T> = await this.instance({
             url,

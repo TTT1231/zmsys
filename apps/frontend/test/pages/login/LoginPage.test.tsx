@@ -213,7 +213,7 @@ describe("LoginPage", () => {
         await user.click(screen.getByRole("button", { name: "获取重置方式" }));
         expect(notificationSpy).toHaveBeenCalledWith({
             title: "请联系管理员重置密码",
-            message: "账号 ops_user 的密码需由系统管理员在「用户管理」中重置后生效",
+            message: "账号 ops_user 的密码需由系统管理员在「用户与权限」中重置后生效",
         });
 
         await user.click(screen.getByRole("button", { name: "返回登录" }));

@@ -21,7 +21,7 @@ interface MenuRailProps {
     /** variant="panel" 时点击分组图标 */
     onSelectGroup?: (group: string) => void;
     variant?: "panel" | "popup";
-    /** 点击菜单项后回调（关闭移动端抽屉） */
+    /** 点击菜单项后回调（可选） */
     onNavigate?: () => void;
 }
 

@@ -222,7 +222,7 @@ export function CustomerDetailModal({
     const derived = useMemo(() => deriveOrders(snap), [snap]);
     if (!customer) return null;
     const orders = snap.orders.filter(order => order.customerCode === customer.code);
-    // 待交付口径与订单列表一致：已取消/已归档订单剩余按 0，不再计入
+    // 待交付口径与订单列表一致：已归档订单剩余按 0，不再计入
     const pendingQty = orders.reduce((sum, order) => sum + remainingOf(order), 0);
     const byDateDesc = [...orders].sort((a, b) => b.orderDate.localeCompare(a.orderDate));
     const timeline = expanded ? byDateDesc : byDateDesc.slice(0, 3);

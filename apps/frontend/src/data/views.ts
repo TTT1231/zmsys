@@ -1,7 +1,6 @@
 /* 派生视图（纯函数）：输入聚合快照，输出工作台/列表页所需行。
  * 服务端不出统计端点，全部在前端基于快照计算（与旧 store.ts 的派生函数同口径）。 */
 import type { Bom, Order, OrderStatus, ReadyToShipRow, Snapshot } from "@/api";
-// 注意：本文件被 node --test 直跑，运行时值导入保留相对路径 + .ts 扩展名
 import { todayIso } from "../lib/date.ts";
 
 /** 加载中/无数据时的空快照，页面可直接对视图函数传值 */
@@ -52,6 +51,7 @@ function statusOf(order: Order, maxShip: number): OrderStatus {
     return { label: "待备货", key: "pending" };
 }
 
+/** 仅测试使用（页面用 orderStatusOfMax 或 deriveOrders 预计算） */
 export function orderStatusOf(snap: Snapshot, order: Order): OrderStatus {
     return statusOf(order, maxShipOf(snap, order.orderNo));
 }

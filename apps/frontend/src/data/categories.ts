@@ -1,6 +1,5 @@
-/* 开发期 BOM 物料目录种子：真实后端以 material_group/material_item 表 +
- * GET /bom-categories 为权威来源。mock 用本文件播种接口；前端不得把这里的值
- * 当成绕过服务端校验的依据。
+/* 后端 /bom-categories 为权威来源；本文件种子与工具仅测试使用
+ * （backend-contract.test.ts 以此为后端目录契约对照资产），生产代码不引用。
  * - 编码规则：品类前缀 + 序号（宽度见 seqWidth，默认 3 位），如 XK2001（旋转XK2）、KWO001（老微动）、KW001（新微动）、KQ001（琴键开关）。
  * - 目录为“分区 → 分组 → 物料”树：分区纯展示；分组带 key 与单选/多选语义；
  *   qty 分组（如琴键开关的扣板/连锁片/静片/动片）选中项可携带 1-99 数量；
@@ -581,7 +580,7 @@ export const bomSpecOfItems = (items: Array<{ groupName: string; name: string }>
     items.map(item => `${item.groupName}：${item.name}`).join(" · ");
 
 /* 生成下一个 BOM 编码：品类前缀 + 序号（按品类过滤后在品类内自增，宽度取 seqWidth）。
- * 品类由调用方传入（页面用接口下发的 bomCategories），本文件不再回查种子常量。 */
+ * 仅测试使用；生产编码由后端生成。 */
 export function nextBomCode(category: CategoryDef, existing: Array<{ code: string; name: string }>) {
     const prefix = category.codePrefix;
     // 先按品类过滤再解析 3 位以上序号：跨品类前缀相近（KW/KWO）与跨 999 边界（KW1000+）都不会误读

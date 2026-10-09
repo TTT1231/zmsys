@@ -72,7 +72,7 @@ export function LoginPage() {
     const accountError = validated && !account.trim() ? "请输入账号" : "";
     const passwordError = validated && !password ? "请输入密码" : "";
     const captchaError = validated && !captchaPassed ? "请拖动滑块完成验证" : "";
-    /* 忘记密码：系统无自助重置通道（重置由管理员在「用户管理」执行），提交后给出指引 */
+    /* 忘记密码：系统无自助重置通道（重置由管理员在「用户与权限」执行），提交后给出指引 */
     const [forgetAccount, setForgetAccount] = useState("");
     const [forgetValidated, setForgetValidated] = useState(false);
     const forgetAccountError = forgetValidated && !forgetAccount.trim() ? "请输入账号" : "";
@@ -111,7 +111,7 @@ export function LoginPage() {
         if (!forgetAccount.trim()) return;
         notify({
             title: "请联系管理员重置密码",
-            message: `账号 ${forgetAccount.trim()} 的密码需由系统管理员在「用户管理」中重置后生效`,
+            message: `账号 ${forgetAccount.trim()} 的密码需由系统管理员在「用户与权限」中重置后生效`,
         });
     };
 

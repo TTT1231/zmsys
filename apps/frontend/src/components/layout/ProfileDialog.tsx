@@ -45,7 +45,7 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
         }
     };
 
-    /* 状态点：绿色=启用（与用户管理页 Badge 同一 status token）；停用为中性灰（登录态下几乎不可见，兜底展示） */
+    /* 状态点：绿色=启用（与用户与权限页 Badge 同一 status token）；停用为中性灰（登录态下几乎不可见，兜底展示） */
     const activeNode = (
         <span className={`inline-flex items-center gap-1.5 ${user?.active ? "text-success" : "text-muted"}`}>
             <span

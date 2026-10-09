@@ -26,8 +26,6 @@ interface AppState {
     user: WbUser | null;
     /** 登录用户的角色（侧边栏/工作台标题等既有用法保持不变） */
     role: Role;
-    globalSearch: string;
-    setGlobalSearch: (value: string) => void;
     /** 当前角色的授权（含菜单与操作权限码），由 /auth/profile 下发 */
     grant: RoleGrant;
     /** 权限码判断：can("outbound:ship") */
@@ -43,8 +41,6 @@ export const AppContext = createContext<AppState>({
     status: "guest",
     user: null,
     role: "admin",
-    globalSearch: "",
-    setGlobalSearch: () => {},
     grant: EMPTY_GRANT,
     can: () => false,
     login: async () => ({ user: {} as WbUser, grant: EMPTY_GRANT }),

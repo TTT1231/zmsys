@@ -68,7 +68,6 @@ export function AppLayout() {
 
     // 工作台与其他菜单一样按授权守卫（menu:workbench 可被收回），未授权路由一律展示无权限页
     const activeMenu = MENU_CATALOG.find(menu => menu.to && location.pathname.startsWith(menu.to));
-    const breadcrumbMenu = MENU_CATALOG.find(menu => menu.to && location.pathname.startsWith(menu.to));
     const accessDenied = Boolean(activeMenu && !grant.menus.includes(activeMenu.key));
     // 授权未就绪（loading/guest）时不按空 grant 判无权限、不动标题：
     // title effect 在 early return 之前，加载期 grant 恒空会闪"没有访问权限"
@@ -92,8 +91,8 @@ export function AppLayout() {
     };
     const topbarProps = {
         title,
-        group: breadcrumbMenu?.group,
-        icon: breadcrumbMenu?.icon ?? (location.pathname.startsWith("/search") ? "search" : "info"),
+        group: activeMenu?.group,
+        icon: activeMenu?.icon ?? (location.pathname.startsWith("/search") ? "search" : "info"),
         routeKey: location.pathname,
         collapsed,
         onToggleCollapse: () => setCollapsed(value => !value),

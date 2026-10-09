@@ -59,7 +59,7 @@ export function OutboundModal({
 
     const stock = snap.stock;
     const orders = snap.orders;
-    // 候选 = 还有待交数量的订单（已取消/已发完的不算，可发量可能为 0，等入库后可发）；
+    // 候选 = 还有待交数量的订单（已归档/已发完的不算，可发量可能为 0，等入库后可发）；
     // 客户选项也从这里派生，不走客户档案（仓管无客户档案权限，订单上的客户信息全员可见）
     const candidateOrders = useMemo(() => orders.filter(order => remainingOf(order) > 0), [orders]);
     const [customerCode, setCustomerCode] = useState(() => {
