@@ -8,6 +8,14 @@ import type { RelationsQueryDto } from "./relations-query.dto";
 import { RELATION_TYPE_KEYS } from "./relations-query.dto";
 
 const personSelect = { id: true, name: true, roleCode: true } as const;
+// 整图不截断：上限只阻止过大的查询，成功返回的统计和关联仍完整。
+const RELATION_LIMITS = { orders: 1_000, boms: 1_000, ledgers: 1_000, nodes: 1_500 } as const;
+const assertWithinLimit = (count: number, limit: number, label: string) => {
+    if (count > limit)
+        throw new BadRequestException(
+            `业务关系数据较多（${label}超过 ${limit.toLocaleString("zh-CN")} ${label === "关联节点" ? "个" : "条"}），请缩短业务日期范围，或按订单、BOM、客户编号查询`,
+        );
+};
 const roleNames: Record<string, string> = {
     super: "超级管理员",
     admin: "管理员",
@@ -56,6 +64,7 @@ export class RelationsService {
                     : {}),
             },
             orderBy: { orderNo: "asc" },
+            take: RELATION_LIMITS.orders + 1,
             select: {
                 id: true,
                 orderNo: true,
@@ -71,6 +80,8 @@ export class RelationsService {
                 bom: { select: { id: true, bomCode: true, unit: true, creator: { select: personSelect } } },
             },
         });
+        // 候选订单参与所有状态计数，不可只截取当前状态后继续聚合。
+        assertWithinLimit(orders.length, RELATION_LIMITS.orders, "候选订单");
         const shippedRows = orders.length
             ? await db.$queryRaw<{ order_id: bigint; outbound_qty: bigint | number }[]>`
             SELECT order_id, outbound_qty FROM v_order_outbound_qty
@@ -116,10 +127,13 @@ export class RelationsService {
                     },
                 },
                 orderBy: { bomCode: "asc" },
+                take: RELATION_LIMITS.boms + 1,
                 select: { id: true, bomCode: true, unit: true, creator: { select: personSelect } },
             });
+            assertWithinLimit(inboundBoms.length, RELATION_LIMITS.boms, "BOM");
             inboundBoms.forEach(b => boms.set(b.id, b));
         }
+        assertWithinLimit(boms.size, RELATION_LIMITS.boms, "BOM");
         if (!boms.size) return data;
         const stockRows = await db.$queryRaw<{ bom_code: string; stock_qty: bigint | number }[]>`
             SELECT b.bom_code, v.stock_qty FROM v_bom_stock AS v
@@ -137,6 +151,7 @@ export class RelationsService {
                     ...(bounded ? { businessDate: dates } : {}),
                 },
                 orderBy: { entryNo: "asc" },
+                take: RELATION_LIMITS.ledgers + 1,
                 select: {
                     id: true,
                     entryNo: true,
@@ -154,6 +169,7 @@ export class RelationsService {
                     ...(bounded ? { businessDate: dates } : {}),
                 },
                 orderBy: { shipmentNo: "asc" },
+                take: RELATION_LIMITS.ledgers + 1,
                 select: {
                     id: true,
                     shipmentNo: true,
@@ -165,6 +181,8 @@ export class RelationsService {
                 },
             }),
         ]);
+        assertWithinLimit(inbounds.length, RELATION_LIMITS.ledgers, "入库单");
+        assertWithinLimit(outbounds.length, RELATION_LIMITS.ledgers, "出库单");
         const nodes = new Map<string, RelationNode>();
         const key = (type: RelationType, id: bigint) => `${type}:${id}`;
         const node = (
@@ -176,6 +194,7 @@ export class RelationsService {
             voided = false,
         ) => {
             const k = key(type, id);
+            if (!nodes.has(k)) assertWithinLimit(nodes.size + 1, RELATION_LIMITS.nodes, "关联节点");
             nodes.set(k, { id: k, type, name, properties, facts, ...(voided ? { voided: true } : {}) });
             return k;
         };

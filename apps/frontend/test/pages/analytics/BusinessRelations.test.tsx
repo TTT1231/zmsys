@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { BusinessRelations } from "@/pages/analytics/BusinessRelations";
 import { RELATION_TYPES, type RelationsData } from "@/data/relations";
 import { todayIso, addDays } from "@/lib/date";
+import { ApiError } from "@/http/errors";
 
 const mocks = vi.hoisted(() => ({ fetch: vi.fn(), chart: vi.fn() }));
 vi.mock("@/api/workbench", () => ({ fetchWorkbenchRelations: mocks.fetch }));
@@ -78,26 +79,30 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-it("默认近30天，直接把服务端 nodes/edges 交给图表；状态和类型筛选进入请求", async () => {
+it("默认近30天，状态进入请求，类型隐藏只过滤本地节点和边", async () => {
     mount();
     await screen.findByRole("button", { name: "重新布局" });
     await waitFor(() => expect(mocks.chart.mock.calls.at(-1)?.slice(1, 3)).toEqual([data.nodes, data.edges]));
-    expect(mocks.fetch).toHaveBeenCalledWith("open", { start: addDays(todayIso(), -29), end: todayIso() }, allTypes);
+    expect(mocks.fetch).toHaveBeenCalledWith("open", { start: addDays(todayIso(), -29), end: todayIso() }, allTypes, {
+        signal: expect.any(AbortSignal),
+        bomCode: "",
+    });
     fireEvent.click(screen.getByRole("button", { name: /^已完成/ }));
-    await waitFor(() => expect(mocks.fetch).toHaveBeenLastCalledWith("completed", expect.any(Object), allTypes));
-    fireEvent.click(within(screen.getByRole("group", { name: "节点类型" })).getByRole("button", { name: /^人员/ }));
     await waitFor(() =>
-        expect(mocks.fetch).toHaveBeenLastCalledWith(
-            "completed",
-            expect.any(Object),
-            allTypes.filter(t => t !== "person"),
-        ),
+        expect(mocks.fetch).toHaveBeenLastCalledWith("completed", expect.any(Object), allTypes, expect.any(Object)),
     );
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "查找节点" })).toBeEnabled());
+    const requests = mocks.fetch.mock.calls.length;
+    fireEvent.click(within(screen.getByRole("group", { name: "节点类型" })).getByRole("button", { name: /^BOM/ }));
+    await waitFor(() => expect(mocks.chart.mock.calls.at(-1)?.slice(1, 3)).toEqual([[data.nodes[1]], []]));
+    expect(mocks.fetch).toHaveBeenCalledTimes(requests);
 });
 
 it("日期先编辑后提交，逆序日期禁止提交，全部时间清除边界", async () => {
     mount();
     await waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(1));
+    expect(screen.queryByLabelText("业务开始日期")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "业务日期" }), { target: { value: "custom" } });
     fireEvent.change(screen.getByLabelText("业务开始日期"), { target: { value: "2026-10-20" } });
     fireEvent.change(screen.getByLabelText("业务结束日期"), { target: { value: "2026-10-10" } });
     expect(screen.getByRole("button", { name: "筛选" })).toBeDisabled();
@@ -105,17 +110,28 @@ it("日期先编辑后提交，逆序日期禁止提交，全部时间清除边�
     fireEvent.change(screen.getByLabelText("业务开始日期"), { target: { value: "2026-10-01" } });
     fireEvent.click(screen.getByRole("button", { name: "筛选" }));
     await waitFor(() =>
-        expect(mocks.fetch).toHaveBeenLastCalledWith("open", { start: "2026-10-01", end: "2026-10-10" }, allTypes),
+        expect(mocks.fetch).toHaveBeenLastCalledWith(
+            "open",
+            { start: "2026-10-01", end: "2026-10-10" },
+            allTypes,
+            expect.any(Object),
+        ),
     );
-    fireEvent.click(screen.getByRole("button", { name: "全部时间" }));
-    await waitFor(() => expect(mocks.fetch).toHaveBeenLastCalledWith("open", { start: "", end: "" }, allTypes));
+    fireEvent.change(screen.getByRole("combobox", { name: "业务日期" }), { target: { value: "all" } });
+    await waitFor(() =>
+        expect(mocks.fetch).toHaveBeenLastCalledWith("open", { start: "", end: "" }, allTypes, expect.any(Object)),
+    );
+    expect(screen.queryByLabelText("业务开始日期")).not.toBeInTheDocument();
 });
 
 it("选择节点可查看服务端详情并沿真实关系切换，Escape 关闭", async () => {
     mount();
-    const selector = await screen.findByRole("combobox", { name: "选择节点" });
+    const selector = await screen.findByRole("combobox", { name: "查找节点" });
     await waitFor(() => expect(selector).toBeEnabled());
-    fireEvent.change(selector, { target: { value: "order:2" } });
+    fireEvent.focus(selector);
+    fireEvent.change(selector, { target: { value: "SO001" } });
+    fireEvent.keyDown(selector, { key: "ArrowDown" });
+    fireEvent.keyDown(selector, { key: "Enter" });
     let details = screen.getByRole("complementary", { name: "节点信息" });
     expect(within(details).getByText("100 个")).toBeInTheDocument();
     fireEvent.click(within(details).getByRole("button", { name: /KW001.*订购/ }));
@@ -126,10 +142,40 @@ it("选择节点可查看服务端详情并沿真实关系切换，Escape 关闭
 });
 
 it("请求失败显示重试，成功后可恢复关系图", async () => {
-    mocks.fetch.mockRejectedValueOnce(new Error("network unavailable"));
+    mocks.fetch.mockRejectedValue(new ApiError("业务关系数据较多，请缩短业务日期范围", 400));
     mount();
     expect(await screen.findByRole("alert")).toHaveTextContent("暂时无法加载关系图");
+    expect(screen.getByRole("alert")).toHaveTextContent("请缩短业务日期范围");
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    mocks.fetch.mockResolvedValue(data);
     fireEvent.click(screen.getByRole("button", { name: "重试" }));
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
-    expect(screen.getByRole("combobox", { name: "选择节点" })).toBeEnabled();
+    expect(screen.getByRole("combobox", { name: "查找节点" })).toBeEnabled();
+});
+
+it("快速切换状态取消前一个请求，缓存返回时不重复加载", async () => {
+    mount();
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "查找节点" })).toBeEnabled());
+    mocks.fetch.mockImplementation(() => new Promise(() => {}));
+    fireEvent.click(screen.getByRole("button", { name: /^已完成/ }));
+    await waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(2));
+    const signal = mocks.fetch.mock.calls[1][3].signal as AbortSignal;
+    fireEvent.click(screen.getByRole("button", { name: /^进行中/ }));
+    await waitFor(() => expect(signal.aborted).toBe(true));
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("combobox", { name: "查找节点" })).toBeEnabled();
+});
+
+it("BOM编号提交后进入请求，输入时不加载", async () => {
+    mount();
+    await waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(1));
+    fireEvent.change(screen.getByLabelText("BOM编号"), { target: { value: " KW001 " } });
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "筛选" }));
+    await waitFor(() =>
+        expect(mocks.fetch).toHaveBeenLastCalledWith("open", expect.any(Object), allTypes, {
+            signal: expect.any(AbortSignal),
+            bomCode: "KW001",
+        }),
+    );
 });

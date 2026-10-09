@@ -1,11 +1,12 @@
 import { useMemo, useRef, useState, type CSSProperties } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { fetchWorkbenchRelations } from "@/api/workbench";
 import { Button } from "@/components/ui/Button";
-import { PageLoading } from "@/components/ui/PageLoading";
 import { addDays, monthStartOf, todayIso } from "@/lib/date";
 import { RELATION_TYPES, type RelationsData, type RelationStatus, type RelationType } from "@/data/relations";
 import { useRelationChart } from "./useRelationChart";
+import { RelationNodeSearch } from "./RelationNodeSearch";
+import { isApiError } from "@/http/errors";
 import "./business-relations.css";
 
 const EMPTY: RelationsData = {
@@ -26,29 +27,49 @@ const STATUSES: { key: RelationStatus; label: string; title: string }[] = [
     { key: "all", label: "全部", title: "全部销售订单及仅有入库的 BOM" },
 ];
 const colorStyle = (type: RelationType): CSSProperties => ({ backgroundColor: `var(--relation-${type})` });
+const ALL_TYPES = RELATION_TYPES.map(t => t.key);
+type Period = "recent" | "month" | "all" | "custom";
 
 export function BusinessRelations() {
     const [status, setStatus] = useState<RelationStatus>("open");
     const [range, setRange] = useState(() => ({ start: addDays(todayIso(), -29), end: todayIso() }));
     const [draftRange, setDraftRange] = useState(range);
+    const [period, setPeriod] = useState<Period>("recent");
+    const [bomCode, setBomCode] = useState("");
+    const [draftBomCode, setDraftBomCode] = useState("");
+    const [relatedLimit, setRelatedLimit] = useState(40);
     const validRange = !draftRange.start || !draftRange.end || draftRange.start <= draftRange.end;
     const [enabled, setEnabled] = useState(() => new Set(RELATION_TYPES.map(t => t.key)));
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    const types = useMemo(() => RELATION_TYPES.filter(t => enabled.has(t.key)).map(t => t.key), [enabled]);
     const query = useQuery({
-        queryKey: ["workbench", "relations", status, range, types],
-        queryFn: () => fetchWorkbenchRelations(status, range, types),
+        queryKey: ["workbench", "relations", status, range, bomCode],
+        queryFn: ({ signal }) => fetchWorkbenchRelations(status, range, ALL_TYPES, { signal, bomCode }),
+        placeholderData: keepPreviousData,
+        staleTime: 30_000,
+        gcTime: 60_000,
+        refetchOnWindowFocus: false,
+        retry: (failureCount, error) =>
+            (!isApiError(error) || error.code < 400 || error.code >= 500) && failureCount < 1,
     });
-    const data = query.data ?? EMPTY;
+    const source = query.data ?? EMPTY;
+    const data = useMemo(() => {
+        const nodes = source.nodes.filter(n => enabled.has(n.type));
+        const ids = new Set(nodes.map(n => n.id));
+        return { ...source, nodes, edges: source.edges.filter(e => ids.has(e.source) && ids.has(e.target)) };
+    }, [source, enabled]);
     const nodeMap = useMemo(() => new Map(data.nodes.map(n => [n.id, n])), [data]);
-    const selected = data.nodes.find(n => n.id === selectedId);
-    const chart = useRelationChart(containerRef, data.nodes, data.edges, selected?.id ?? null, setSelectedId);
+    const selected = nodeMap.get(selectedId ?? "");
+    const selectNode = (id: string | null) => {
+        setSelectedId(id);
+        setRelatedLimit(40);
+    };
+    const chart = useRelationChart(containerRef, data.nodes, data.edges, selected?.id ?? null, selectNode);
     const related = selected ? data.edges.filter(e => e.source === selected.id || e.target === selected.id) : [];
     const applyRange = (next: { start: string; end: string }) => {
         setDraftRange(next);
         setRange(next);
-        setSelectedId(null);
+        selectNode(null);
     };
 
     return (
@@ -59,34 +80,31 @@ export function BusinessRelations() {
                 if (e.key === "Escape") setSelectedId(null);
             }}
         >
-            <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
+            <header className="relation-header border-b border-line px-5">
                 <h1 id="relations-title" className="text-17 font-semibold text-ink">
                     业务关系图
                 </h1>
-                <div className="flex flex-wrap items-center gap-2">
-                    <div
-                        className="flex max-w-full flex-wrap rounded-btn bg-soft p-1"
-                        role="group"
-                        aria-label="订单状态范围"
-                    >
+                <div className="relation-header-actions">
+                    <div className="relation-status-tabs" role="group" aria-label="订单状态范围">
                         {STATUSES.map(item => (
-                            <Button
+                            <button
+                                type="button"
                                 key={item.key}
-                                variant="ghost"
-                                size="sm"
                                 aria-pressed={status === item.key}
                                 title={item.title}
-                                className={`gap-1 px-1.5 text-12 whitespace-nowrap sm:px-2.5 ${status === item.key ? "bg-surface text-primary-strong shadow-sm" : ""}`}
+                                className="relation-status-tab"
                                 onClick={() => {
-                                    setSelectedId(null);
+                                    selectNode(null);
                                     setStatus(item.key);
                                 }}
                             >
                                 {item.label}
-                                <span className="rounded-md bg-primary-soft px-1.5 text-11 text-primary-strong tnum">
-                                    {data.counts[item.key]}
+                                <span className="text-12 text-muted tnum">
+                                    {query.isPending || query.isPlaceholderData || query.isError
+                                        ? "—"
+                                        : data.counts[item.key]}
                                 </span>
-                            </Button>
+                            </button>
                         ))}
                     </div>
                     <Button
@@ -94,69 +112,98 @@ export function BusinessRelations() {
                         size="sm"
                         icon="refresh"
                         onClick={chart.reset}
-                        disabled={query.isLoading || !data.nodes.length}
+                        disabled={query.isFetching || query.isError || !data.nodes.length}
                     >
                         重新布局
                     </Button>
                 </div>
             </header>
             <form
-                className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-3"
+                className="relation-filters border-b border-line px-5 py-3"
                 onSubmit={e => {
                     e.preventDefault();
-                    if (validRange) applyRange(draftRange);
+                    if (validRange) {
+                        applyRange(draftRange);
+                        setBomCode(draftBomCode.trim());
+                    }
                 }}
             >
-                <span className="text-12 text-muted">业务日期</span>
-                <div className="flex flex-wrap items-center gap-1">
-                    {[
-                        { label: "全部时间", start: "", end: "" },
-                        { label: "近30天", start: addDays(todayIso(), -29), end: todayIso() },
-                        { label: "本月", start: monthStartOf(todayIso()), end: todayIso() },
-                    ].map(item => (
-                        <Button
-                            key={item.label}
-                            variant="ghost"
-                            size="sm"
-                            className={`px-2 text-12 ${range.start === item.start && range.end === item.end ? "bg-primary-soft text-primary-strong" : ""}`}
-                            aria-pressed={range.start === item.start && range.end === item.end}
-                            onClick={() => applyRange({ start: item.start, end: item.end })}
-                        >
-                            {item.label}
-                        </Button>
-                    ))}
-                </div>
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <label className="flex items-center gap-2 text-12 text-muted">
-                        从
-                        <input
-                            type="date"
-                            aria-label="业务开始日期"
-                            className="relation-date rounded-input border border-line bg-surface px-2 text-12 text-ink"
-                            value={draftRange.start}
-                            onChange={e => setDraftRange(current => ({ ...current, start: e.target.value }))}
-                        />
-                    </label>
-                    <label className="flex items-center gap-2 text-12 text-muted">
-                        至
-                        <input
-                            type="date"
-                            aria-label="业务结束日期"
-                            className="relation-date rounded-input border border-line bg-surface px-2 text-12 text-ink"
-                            value={draftRange.end}
-                            onChange={e => setDraftRange(current => ({ ...current, end: e.target.value }))}
-                        />
-                    </label>
-                    <Button type="submit" variant="secondary" size="sm" className="px-3 text-12" disabled={!validRange}>
-                        筛选
-                    </Button>
-                </div>
+                <label className="relation-filter-field">
+                    <span>业务日期</span>
+                    <select
+                        className="relation-period rounded-md border border-line bg-surface px-2 text-13 text-ink"
+                        value={period}
+                        onChange={e => {
+                            const next = e.target.value as Period;
+                            setPeriod(next);
+                            if (next === "custom") return;
+                            const end = next === "all" ? "" : todayIso();
+                            const start =
+                                next === "recent" ? addDays(end, -29) : next === "month" ? monthStartOf(end) : "";
+                            applyRange({ start, end });
+                        }}
+                        aria-describedby="relation-date-note"
+                    >
+                        <option value="recent">近30天</option>
+                        <option value="month">本月</option>
+                        <option value="all">全部时间</option>
+                        <option value="custom">自定义日期</option>
+                    </select>
+                </label>
+                {period === "custom" && (
+                    <div className="relation-custom-dates">
+                        <label className="flex items-center gap-2 text-12 text-muted">
+                            从
+                            <input
+                                type="date"
+                                aria-label="业务开始日期"
+                                className="relation-date rounded-md border border-line bg-surface px-2 text-13 text-ink"
+                                value={draftRange.start}
+                                onChange={e => setDraftRange(current => ({ ...current, start: e.target.value }))}
+                            />
+                        </label>
+                        <label className="flex items-center gap-2 text-12 text-muted">
+                            至
+                            <input
+                                type="date"
+                                aria-label="业务结束日期"
+                                className="relation-date rounded-md border border-line bg-surface px-2 text-13 text-ink"
+                                value={draftRange.end}
+                                onChange={e => setDraftRange(current => ({ ...current, end: e.target.value }))}
+                            />
+                        </label>
+                    </div>
+                )}
+                <label className="relation-filter-field">
+                    <span>BOM编号</span>
+                    <input
+                        className="relation-bom-filter rounded-md border border-line bg-surface px-2 text-13 text-ink"
+                        placeholder="全部BOM"
+                        maxLength={32}
+                        value={draftBomCode}
+                        onChange={e => setDraftBomCode(e.target.value)}
+                    />
+                </label>
+                <Button
+                    type="submit"
+                    variant="secondary"
+                    size="sm"
+                    className="min-h-9 rounded-md px-3 text-13"
+                    disabled={!validRange}
+                >
+                    筛选
+                </Button>
                 {!validRange && (
                     <p className="text-12 text-danger" role="alert">
                         开始日期不能晚于结束日期
                     </p>
                 )}
-                <p className="w-full text-11 text-muted">按业务日期筛选订单和出入库；保留期间出库引用的历史订单。</p>
+                <p id="relation-date-note" className="sr-only">
+                    按订单和出入库的业务日期筛选，保留期间出库引用的历史订单。
+                </p>
+                <span className="relation-range-summary text-12 text-muted">
+                    {query.isFetching ? "正在更新…" : `${data.nodes.length} 个节点 · ${data.edges.length} 条关系`}
+                </span>
             </form>
             <div className="relation-stage">
                 <div
@@ -164,15 +211,26 @@ export function BusinessRelations() {
                     className="relation-canvas"
                     tabIndex={0}
                     role="img"
-                    aria-label="订单、客户、BOM、入库、出库和人员关系图。点击节点查看详情，拖动节点或画布，滚轮缩放。可用下方选择器选中节点，在画布使用方向键移动节点、加减键缩放、Home 适应画布、Escape 关闭详情。"
+                    aria-label="订单、客户、BOM、入库、出库和人员关系图。点击节点查看详情，拖动节点或画布，滚轮缩放。可用下方查找节点选中节点，在画布使用方向键移动节点、加减键缩放、Home 适应画布、Escape 关闭详情。"
                 />
-                {query.isLoading ? (
-                    <div className="relation-message">
-                        <PageLoading className="min-h-80" />
+                {query.isLoading || query.isPlaceholderData ? (
+                    <div className="relation-message" role="status">
+                        <p className="text-13 text-muted">正在加载业务关系…</p>
                     </div>
                 ) : query.isError ? (
                     <div className="relation-message" role="alert">
                         <p className="text-14 text-muted">暂时无法加载关系图</p>
+                        <p className="max-w-110 px-5 text-center text-13 text-muted">{query.error.message}</p>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                                setPeriod("recent");
+                                applyRange({ start: addDays(todayIso(), -29), end: todayIso() });
+                            }}
+                        >
+                            查看近30天
+                        </Button>
                         <Button variant="secondary" size="sm" onClick={() => void query.refetch()}>
                             重试
                         </Button>
@@ -198,7 +256,9 @@ export function BusinessRelations() {
                     </div>
                 ) : (
                     <>
-                        <p className="relation-hint text-11 text-muted">拖动节点或画布 · 滚轮缩放 · 点击查看关联</p>
+                        <p className="relation-hint text-12 text-muted">
+                            {data.nodes.length > 80 ? "节点较多，可查找节点查看具体关联" : "点击节点查看关联"}
+                        </p>
                         <div
                             className="relation-tools rounded-btn border border-line bg-surface shadow-card"
                             aria-label="画布控制"
@@ -226,14 +286,14 @@ export function BusinessRelations() {
                         </div>
                     </>
                 )}
-                {selected && (
+                {selected && !query.isError && !query.isPlaceholderData && (
                     <aside
                         className="relation-details rounded-card border border-line bg-surface shadow-card"
                         aria-label="节点信息"
                     >
                         <div className="flex items-center justify-between gap-2">
                             <span className="flex items-center gap-2 text-12 text-muted">
-                                <i className="relation-dot" style={colorStyle(selected.type)} />
+                                <i aria-hidden="true" className="relation-dot" style={colorStyle(selected.type)} />
                                 {RELATION_TYPES.find(t => t.key === selected.type)?.name}
                             </span>
                             <Button
@@ -241,7 +301,7 @@ export function BusinessRelations() {
                                 icon="close"
                                 className="size-8"
                                 aria-label="关闭节点信息"
-                                onClick={() => setSelectedId(null)}
+                                onClick={() => selectNode(null)}
                             />
                         </div>
                         <h2 className="mt-1 mb-4 text-17 font-semibold wrap-anywhere text-ink">{selected.name}</h2>
@@ -255,7 +315,7 @@ export function BusinessRelations() {
                         </dl>
                         {related.length > 0 && (
                             <div className="mt-4 flex flex-col gap-1 border-t border-line pt-2">
-                                {related.map((edge, i) => {
+                                {related.slice(0, relatedLimit).map((edge, i) => {
                                     const other = nodeMap.get(edge.source === selected.id ? edge.target : edge.source)!;
                                     return (
                                         <Button
@@ -263,7 +323,7 @@ export function BusinessRelations() {
                                             variant="ghost"
                                             size="sm"
                                             className="justify-between gap-3 px-1 text-left text-12"
-                                            onClick={() => setSelectedId(other.id)}
+                                            onClick={() => selectNode(other.id)}
                                         >
                                             <span className="min-w-0 truncate">{other.name}</span>
                                             <span className="shrink-0 text-11 text-muted">
@@ -272,6 +332,15 @@ export function BusinessRelations() {
                                         </Button>
                                     );
                                 })}
+                                {related.length > relatedLimit && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setRelatedLimit(limit => limit + 40)}
+                                    >
+                                        继续显示关联（剩余 {related.length - relatedLimit}）
+                                    </Button>
+                                )}
                             </div>
                         )}
                     </aside>
@@ -292,40 +361,27 @@ export function BusinessRelations() {
                                     else next.add(type.key);
                                     return next;
                                 });
-                                setSelectedId(null);
+                                selectNode(null);
                             }}
                         >
-                            <i className="relation-dot" style={colorStyle(type.key)} />
+                            <i aria-hidden="true" className="relation-dot" style={colorStyle(type.key)} />
                             <span>{type.name}</span>
                             <span className="text-11 text-muted tnum">{data.typeCounts[type.key]}</span>
                         </button>
                     ))}
                 </div>
-                <label className="flex min-w-0 items-center gap-2 text-12 text-muted">
-                    选择节点
-                    <select
-                        className="relation-select rounded-input border border-line bg-surface px-2 text-12 text-ink"
-                        value={selected?.id ?? ""}
-                        onChange={e => setSelectedId(e.target.value || null)}
-                        disabled={!data.nodes.length || query.isLoading}
-                    >
-                        <option value="">查看节点详情</option>
-                        {RELATION_TYPES.map(t => (
-                            <optgroup key={t.key} label={t.name}>
-                                {data.nodes
-                                    .filter(n => n.type === t.key)
-                                    .map(n => (
-                                        <option key={n.id} value={n.id}>
-                                            {n.name}
-                                        </option>
-                                    ))}
-                            </optgroup>
-                        ))}
-                    </select>
-                </label>
+                <RelationNodeSearch
+                    nodes={data.nodes}
+                    selectedId={selected?.id ?? null}
+                    onSelect={selectNode}
+                    disabled={!data.nodes.length || query.isFetching || query.isError}
+                />
                 <span className="sr-only" role="status">
-                    {STATUSES.find(item => item.key === status)?.label}订单 {data.counts[status]} 笔，
-                    {data.nodes.length} 个节点，{data.edges.length} 条关系。{selected ? `已选择 ${selected.name}` : ""}
+                    {query.isPending || query.isPlaceholderData
+                        ? "正在加载业务关系图"
+                        : query.isError
+                          ? `业务关系图加载失败：${query.error.message}`
+                          : `${STATUSES.find(item => item.key === status)?.label}订单 ${data.counts[status]} 笔，${data.nodes.length} 个节点，${data.edges.length} 条关系。${selected ? `已选择 ${selected.name}` : ""}`}
                 </span>
             </footer>
         </section>

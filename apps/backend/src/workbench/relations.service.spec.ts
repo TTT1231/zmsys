@@ -220,6 +220,100 @@ describe("分析页业务关系聚合", () => {
         expect(db.salesOrderTable.findMany).not.toHaveBeenCalled();
     });
 
+    it("候选订单过量时提前拒绝，不返回被截断的状态计数", async () => {
+        db.salesOrderTable.findMany.mockResolvedValue(Array.from({ length: 1_001 }, (_, i) => order(BigInt(i + 101))));
+        await expect(service.getRelations({ status: "completed", types: [] })).rejects.toThrow("候选订单超过 1,000 条");
+        expect(db.salesOrderTable.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 1_001 }));
+        expect(db.$queryRaw).not.toHaveBeenCalled();
+        expect(db.inboundLedger.findMany).not.toHaveBeenCalled();
+    });
+
+    it("仅有入库的历史 BOM 过量时拒绝，避免继续读库存与流水", async () => {
+        db.salesOrderTable.findMany.mockResolvedValue([]);
+        db.bomTable.findMany.mockResolvedValue(
+            Array.from({ length: 1_001 }, (_, i) => ({ ...boms[0], id: BigInt(i + 10), bomCode: `BOM${i}` })),
+        );
+        await expect(service.getRelations({ status: "all" })).rejects.toThrow("BOM超过 1,000 条");
+        expect(db.bomTable.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 1_001 }));
+        expect(db.$queryRaw).not.toHaveBeenCalled();
+        expect(db.inboundLedger.findMany).not.toHaveBeenCalled();
+    });
+
+    it.each(["inbound", "outbound"] as const)("%s 历史流水过量时拒绝，要求缩小范围", async type => {
+        if (type === "inbound")
+            db.inboundLedger.findMany.mockResolvedValue(
+                Array.from({ length: 1_001 }, (_, i) => ({ ...inbound, id: BigInt(i + 40), entryNo: `IN${i}` })),
+            );
+        else
+            db.outboundShipment.findMany.mockResolvedValue(
+                Array.from({ length: 1_001 }, (_, i) => ({ ...outbound, id: BigInt(i + 50), shipmentNo: `OUT${i}` })),
+            );
+        await expect(service.getRelations({ status: "open" })).rejects.toThrow(
+            `${type === "inbound" ? "入库单" : "出库单"}超过 1,000 条`,
+        );
+        expect(db.inboundLedger.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 1_001 }));
+        expect(db.outboundShipment.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 1_001 }));
+    });
+
+    it("订单 BOM 与仅有入库的 BOM 合并后也遵守上限", async () => {
+        db.bomTable.findMany.mockResolvedValue(
+            Array.from({ length: 1_000 }, (_, i) => ({ ...boms[0], id: BigInt(i + 100), bomCode: `BOM${i}` })),
+        );
+        await expect(service.getRelations({ status: "all" })).rejects.toThrow("BOM超过 1,000 条");
+        // 只读取过候选订单的净额，尚未读取超量 BOM 的库存/流水。
+        expect(db.$queryRaw).toHaveBeenCalledTimes(1);
+        expect(db.inboundLedger.findMany).not.toHaveBeenCalled();
+    });
+
+    it("单类查询未过量但整图过量时拒绝，不输出缺少关联的半张图", async () => {
+        db.inboundLedger.findMany.mockResolvedValue(
+            Array.from({ length: 800 }, (_, i) => ({ ...inbound, id: BigInt(i + 40), entryNo: `IN${i}` })),
+        );
+        db.outboundShipment.findMany.mockResolvedValue(
+            Array.from({ length: 800 }, (_, i) => ({ ...outbound, id: BigInt(i + 50), shipmentNo: `OUT${i}` })),
+        );
+        await expect(service.getRelations({ status: "open" })).rejects.toThrow("关联节点超过 1,500 个");
+    });
+
+    it("恰好 1,500 个唯一节点仍返回完整图，再多一个则拒绝", async () => {
+        db.inboundLedger.findMany.mockResolvedValue(
+            Array.from({ length: 997 }, (_, i) => ({ ...inbound, id: BigInt(i + 40), entryNo: `IN${i}` })),
+        );
+        const shipments = Array.from({ length: 497 }, (_, i) => ({
+            ...outbound,
+            id: BigInt(i + 50),
+            shipmentNo: `OUT${i}`,
+        }));
+        db.outboundShipment.findMany.mockResolvedValue(shipments);
+        const data = await service.getRelations({ status: "open" });
+        expect(data.nodes).toHaveLength(1_500);
+        expect(data.typeCounts.person).toBe(3);
+        db.outboundShipment.findMany.mockResolvedValue([
+            ...shipments,
+            { ...outbound, id: 10_000n, shipmentNo: "OUT-MORE" },
+        ]);
+        await expect(service.getRelations({ status: "open" })).rejects.toThrow("关联节点超过 1,500 个");
+    });
+
+    it("较多流水的完整图按实体 ID 去重，所有边和 facts 引用均有上下文", async () => {
+        db.inboundLedger.findMany.mockResolvedValue(
+            Array.from({ length: 1_000 }, (_, i) => ({ ...inbound, id: BigInt(i + 40), entryNo: `IN${i}` })),
+        );
+        db.outboundShipment.findMany.mockResolvedValue([]);
+        const data = await service.getRelations({ status: "open" });
+        const ids = new Set(data.nodes.map(n => n.id));
+        expect(data.typeCounts.inbound).toBe(1_000);
+        expect(ids.size).toBe(data.nodes.length);
+        expect(data.typeCounts.person).toBe(3);
+        expect(data.edges.every(e => ids.has(e.source) && ids.has(e.target))).toBe(true);
+        for (const n of data.nodes) {
+            for (const [property, value] of Object.entries(n.facts))
+                if (property.endsWith("Id") && typeof value === "string") expect(ids.has(value)).toBe(true);
+        }
+        expect(data.summary.orderCount).toBe(1);
+        expect(data.counts).toEqual({ open: 1, completed: 2, archived: 2, all: 4 });
+    });
+
     it("DTO 校验状态、类型和真实日期，支持 CSV 类型组合和空组合", async () => {
         const dto = plainToInstance(RelationsQueryDto, {
             status: "completed",

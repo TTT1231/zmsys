@@ -21,11 +21,75 @@
 .relation-stage {
     position: relative;
     isolation: isolate;
-    background: radial-gradient(
-        ellipse at center,
-        color-mix(in srgb, var(--relation-bom) 4%, transparent),
-        transparent 70%
-    );
+    background: var(--color-surface);
+}
+.relation-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 20px;
+    min-height: 64px;
+}
+.relation-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 20px;
+}
+.relation-status-tabs {
+    display: flex;
+    align-self: stretch;
+    gap: 16px;
+}
+.relation-status-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 48px;
+    border-bottom: 2px solid transparent;
+    color: var(--color-muted);
+    font-size: 13px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.relation-status-tab[aria-pressed="true"] {
+    border-bottom-color: var(--color-primary);
+    color: var(--color-primary-strong);
+    font-weight: 600;
+}
+.relation-status-tab:hover {
+    color: var(--color-ink);
+}
+.relation-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 16px;
+}
+.relation-filter-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--color-muted);
+}
+.relation-period {
+    width: 116px;
+    height: 36px;
+}
+.relation-bom-filter {
+    width: 140px;
+    height: 36px;
+}
+.relation-custom-dates {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.relation-range-summary {
+    margin-left: auto;
 }
 .relation-canvas {
     width: 100%;
@@ -101,17 +165,31 @@
 .relation-legend:hover {
     color: var(--color-primary-strong);
 }
-.relation-select {
-    width: 180px;
-    max-width: 100%;
-    min-width: 0;
-    height: 32px;
-}
 .relation-date {
-    width: 120px;
+    width: 116px;
     height: 36px;
 }
 @container (max-width: 500px) {
+    .relation-header {
+        padding-top: 16px;
+    }
+    .relation-header-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+    .relation-status-tabs {
+        flex: 1;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    .relation-header-actions > button {
+        margin-left: auto;
+        margin-bottom: 8px;
+    }
+    .relation-range-summary {
+        width: 100%;
+        margin-left: 0;
+    }
     .relation-canvas {
         height: 480px;
     }

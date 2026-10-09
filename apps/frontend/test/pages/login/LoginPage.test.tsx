@@ -7,6 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
 
+import type { ProfileResult } from "@/api";
 import { ApiError } from "@/http";
 import { LoginPage, REMEMBER_KEY } from "@/pages/login/LoginPage";
 
@@ -24,6 +25,19 @@ vi.mock("@/components/ui/toastContexts", () => ({
     useToast: () => toastSpy,
     useNotification: () => notificationSpy,
 }));
+
+const loginProfile = (name: string): ProfileResult => ({
+    user: {
+        version: 1,
+        name,
+        account: "sys_admin",
+        role: "admin",
+        active: true,
+        last: "10-09 09:00",
+        createdAt: "2026-10-01T09:00:00+08:00",
+    },
+    grant: { version: 1, menus: ["workbench"], actions: {} },
+});
 
 function renderLoginPage() {
     return render(
@@ -96,10 +110,10 @@ describe("LoginPage", () => {
     });
 
     it("disables the form and exposes a distinct progress label while logging in", async () => {
-        let resolveLogin: (() => void) | undefined;
+        let resolveLogin: ((profile: ProfileResult) => void) | undefined;
         loginSpy.mockImplementationOnce(
             () =>
-                new Promise<void>(resolve => {
+                new Promise<ProfileResult>(resolve => {
                     resolveLogin = resolve;
                 }),
         );
@@ -114,7 +128,7 @@ describe("LoginPage", () => {
         expect(screen.getByLabelText("账号")).toBeDisabled();
         expect(screen.getByLabelText("密码")).toBeDisabled();
 
-        resolveLogin?.();
+        resolveLogin?.(loginProfile(""));
         await waitFor(() => expect(loginSpy).toHaveBeenCalledWith("sys_admin", "123456"));
         await waitFor(() => expect(screen.getByRole("button", { name: "登录" })).not.toBeDisabled());
         expect(notificationSpy).toHaveBeenCalledWith({ title: "登录成功", message: "欢迎回来" });
@@ -123,7 +137,7 @@ describe("LoginPage", () => {
     });
 
     it("welcomes the signed-in user through the notification channel", async () => {
-        loginSpy.mockResolvedValueOnce({ name: "系统管理员" });
+        loginSpy.mockResolvedValueOnce(loginProfile("系统管理员"));
         const user = userEvent.setup();
         renderLoginPage();
         await fillCredentials(user);
