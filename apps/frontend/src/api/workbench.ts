@@ -11,8 +11,16 @@ export function fetchWorkbenchRelations(
     status: RelationStatus,
     range: { start: string; end: string },
     types: RelationType[],
+    options?: { signal?: AbortSignal; bomCode?: string },
 ): Promise<RelationsData> {
     return requestClient.get<RelationsData>("/workbench/relations", {
-        params: { status, types: types.join(","), start: range.start || undefined, end: range.end || undefined },
+        signal: options?.signal,
+        params: {
+            status,
+            types: types.join(","),
+            start: range.start || undefined,
+            end: range.end || undefined,
+            bomCode: options?.bomCode || undefined,
+        },
     });
 }
