@@ -1,5 +1,5 @@
 /**
- * 应用内备份/恢复 e2e（实施计划 §验证）：真实 HTTP 管线 + 真实测试库（*_test）。
+ * 应用内备份/恢复 e2e：真实 HTTP 管线 + 真实测试库（*_test）。
  * 覆盖：权限边界、备份格式与 checksum、merge 幂等/豁免列/分歧回滚/唯一键冲突/CHECK 违反、
  * 预检拒绝矩阵、requestKey 去重、replace（api_idempotency 清理 + token_version 抬升 +
  * 旧 JWT 失效）、维护态 503 与白名单、NOT_FOUND 查询语义、op_log 审计。

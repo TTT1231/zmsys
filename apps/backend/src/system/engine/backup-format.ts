@@ -1,5 +1,5 @@
 /**
- * 备份文件格式 v1（实施计划 §1）：一行一语句，仅数据不含 DDL。
+ * 备份文件格式 v1（db-scheme.md §10.1）：一行一语句，仅数据不含 DDL。
  *
  *   -- zmsys-backup v1
  *   -- meta: {"format":"zmsys-backup",...}

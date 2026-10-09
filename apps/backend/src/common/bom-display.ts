@@ -83,11 +83,6 @@ export function toBomItemViews(snapshot: BomItemsSnapshot): BomItemView[] {
     }));
 }
 
-/** 规格摘要视图（不含 position，GET /boms 明细行） */
-export function bomItemViewsOf(items: readonly BomItemSnapshotInput[]): BomItemView[] {
-    return toBomItemViews(bomItemsSnapshotOf(items));
-}
-
 /**
  * 订单冻结快照的规格摘要（系统日志 change-details 的「规格构成」展示）：
  * 取快照的 spec 字符串；存量快照缺失的 spec 已由迁移 20260947000000 一次性

@@ -1,11 +1,11 @@
 /**
- * 恢复 CLI 薄入口（实施计划 CLI 节）：`node dist/system/restore-cli.js`
+ * 恢复 CLI 薄入口（db-scheme.md §10.5）：`node dist/system/restore-cli.js`
  * 在 backend 镜像的临时命令容器（或本地演练）内执行，不启动 HTTP、不运行默认 CMD。
  *
  * - 先做进程 UTC 初始化（process-tz），复用同一恢复引擎/校验/恢复锁；数据库凭据
  *   取自部署环境（compose 注入的 DB_*），不依赖 dotenv；
  * - stdin 专用于备份字节（远程模式由外层 SSH 流入并写入自管临时文件），不作为 shell 执行；
- * - 参数白名单校验：--mode merge|replace、--request-key、--yes、--print-target、
+ * - 参数白名单校验：--mode merge|replace、--request-key、--print-target、
  *   --reset-password <account>、--fault <point>（演练专用）；
  * - 停写前提由外层保证（backend 已停）：入口只负责恢复锁与 requestKey 去重；
  * - --reset-password 不要求重跑恢复：停写后取得恢复锁，新密码经 stdin 单行传入
@@ -60,7 +60,6 @@ const nextCliId = (): bigint => {
 interface CliOptions {
     mode: RestoreMode;
     requestKey: string | undefined;
-    yes: boolean;
     printTarget: boolean;
     resetPassword: string | undefined;
     fault: string | undefined;
@@ -75,7 +74,7 @@ const parseOptions = (): CliOptions => {
     }
     const requestKey = argValue("request-key");
     if (requestKey !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$/.test(requestKey)) {
-        throw new Error("--request-key 须为 8-64 位字母数字与 ._-= 字符");
+        throw new Error("--request-key 须为 8-64 位：首字符为字母或数字，其余为字母数字与 ._-");
     }
     const fault = argValue("fault");
     if (fault !== undefined && !FAULT_POINTS.includes(fault)) {
@@ -84,7 +83,6 @@ const parseOptions = (): CliOptions => {
     return {
         mode,
         requestKey,
-        yes: hasFlag("yes"),
         printTarget: hasFlag("print-target"),
         resetPassword: argValue("reset-password"),
         fault,

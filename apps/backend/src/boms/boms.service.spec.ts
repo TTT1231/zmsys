@@ -380,7 +380,7 @@ const createStore = (store: Store) => {
                 store.bomItems = store.bomItems.filter(item => item.bomId !== where.bomId);
             }),
         },
-        // 删除 BOM 的引用计数面：订单（含已取消）与入库/调整流水（db-scheme §5.2）
+        // 删除 BOM 的引用计数面：订单（含已归档）与入库/调整流水（db-scheme §5.2）
         salesOrderTable: {
             count: vi.fn(
                 async ({ where }: { where: { bomId: bigint } }) =>

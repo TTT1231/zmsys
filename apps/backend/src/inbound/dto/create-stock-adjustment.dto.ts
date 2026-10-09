@@ -1,5 +1,5 @@
 import { Transform } from "class-transformer";
-import { IsInt, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+import { IsInt, NotEquals, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 import { IsDateColumn } from "../../common/dto/is-date-column";
 
 /** openapi CreateStockAdjustmentInput：跨日库存调整只追加、不可改删 */
@@ -9,8 +9,9 @@ export class CreateStockAdjustmentDto {
     @MaxLength(32, { message: "BOM 编码最长 32 个字符" })
     bomCode!: string;
 
-    /** 非零有符号整数（正负皆可）；非零约束在 service 校验 */
+    /** 非零有符号整数（正负皆可），0 由本 DTO 校验拦截 */
     @IsInt()
+    @NotEquals(0, { message: "调整数量不能为 0" })
     qtyDelta!: number;
 
     @IsDateColumn("调整日期")

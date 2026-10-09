@@ -5,7 +5,8 @@ import { WorkbenchService } from "./workbench.service";
 import { RelationsService } from "./relations.service";
 import { RelationsQueryDto } from "./relations-query.dto";
 
-/** 工作台经营总览：菜单级权限 `menu:workbench`，与授权里的「工作台」开关一致。 */
+/** 工作台：总览路由要求 `menu:workbench`（与授权「工作台」开关一致）；
+ * relations 关系图要求 `menu:analytics` 与 `menu:workbench` 同时持有（AND）。 */
 @Controller("workbench")
 export class WorkbenchController {
     constructor(

@@ -99,7 +99,6 @@ describe("分析页业务关系聚合", () => {
     it("默认仅未完成未归档；同名人员按真实 ID 区分，入库不伪造订单关系", async () => {
         const data = await service.getRelations(new RelationsQueryDto());
         expect(db.$transaction).toHaveBeenCalledWith(expect.any(Function), {
-            isolationLevel: "RepeatableRead",
             timeout: 15_000,
         });
         expect(data.counts).toEqual({ open: 1, completed: 2, archived: 2, all: 4 });

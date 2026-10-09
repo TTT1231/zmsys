@@ -77,7 +77,6 @@ export class UsersService {
                 idempotencyKey,
                 digest: { method: "POST", body: dto },
             },
-            // 事务回调必须可重入:bcrypt 在事务外计算,回调内只含数据库写入
             async (tx: Tx) => {
                 const existing = await tx.sysUser.findUnique({ where: { account: dto.account } });
                 if (existing) {

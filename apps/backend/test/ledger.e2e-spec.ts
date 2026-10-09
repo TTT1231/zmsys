@@ -489,6 +489,16 @@ describe("成品出入库 (e2e)", () => {
         );
         expect(denied.statusCode).toBe(403);
 
+        // 零值调整在 DTO 层即 400，不进入业务事务
+        const zero = await post(
+            "/api/stock-adjustments",
+            superToken,
+            { bomCode: BOM_CODE, qtyDelta: 0, date: today(), reason: "零值调整" },
+            `e2e-led-${RUN}-adj-zero`,
+        );
+        expect(zero.statusCode).toBe(400);
+        expect(zero.json().message).toContain("调整数量不能为 0");
+
         const negative = await post(
             "/api/stock-adjustments",
             superToken,

@@ -27,7 +27,7 @@ import type { UpdateOrderDto } from "./dto/update-order.dto";
 import type { ArchiveOrderDto } from "./dto/archive-order.dto";
 import type { UnarchiveOrderDto } from "./dto/unarchive-order.dto";
 
-/** api_idempotency 的 operation_key；归档/删除按订单号独立域，与前端 mock 同粒度 */
+/** api_idempotency 的 operation_key（按 账号+操作 维度幂等）；归档/删除按订单号独立域 */
 const CREATE_OPERATION_KEY = "orders:create";
 const archiveOperationKeyOf = (orderNo: string): string => `orders:archive:${orderNo}`;
 const unarchiveOperationKeyOf = (orderNo: string): string => `orders:unarchive:${orderNo}`;

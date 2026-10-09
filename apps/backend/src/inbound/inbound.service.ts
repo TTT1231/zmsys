@@ -20,7 +20,7 @@ import type { CreateInboundDto } from "./dto/create-inbound.dto";
 import type { UpdateInboundDto } from "./dto/update-inbound.dto";
 import type { CreateStockAdjustmentDto } from "./dto/create-stock-adjustment.dto";
 
-/** api_idempotency 的 operation_key，与前端 mock 同粒度 */
+/** api_idempotency 的 operation_key（按 账号+操作 维度幂等）；作废/删除按单号独立域 */
 const CREATE_OPERATION_KEY = "inbound:create";
 const ADJUST_OPERATION_KEY = "stock-adjustments:create";
 const voidOperationKeyOf = (no: string): string => `inbound:void:${no}`;
@@ -351,8 +351,8 @@ export class InboundService {
 
     /**
      * 新增跨日库存调整（受保护权限 inbound:adjust，幂等）：历史入库禁止原地修改，
-     * 出错只能追加调整单；qty_delta 非零有符号，负向调整后库存不得小于 0；
-     * 关联原入库单时 BOM 必须一致。
+     * 出错只能追加调整单；qty_delta 非零有符号（非零由 DTO 校验），负向调整后
+     * 库存不得小于 0；关联原入库单时 BOM 必须一致。
      */
     async createStockAdjustment(
         dto: CreateStockAdjustmentDto,

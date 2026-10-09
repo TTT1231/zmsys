@@ -31,9 +31,9 @@ export class RelationsService {
     async getRelations(query: Partial<RelationsQueryDto>): Promise<RelationsData> {
         if (query.start && query.end && query.start > query.end)
             throw new BadRequestException("开始日期不能晚于结束日期");
-        // 一次请求内的单据、净额、库存使用同一个读快照，供界面与 agent 对账。
+        // 同一事务内顺序读取（READ COMMITTED，各语句独立快照；Prisma itx 的
+        // isolationLevel 选项被 adapter 静默忽略，勿再加）
         return this.prisma.$transaction(tx => this.aggregate(tx, query), {
-            isolationLevel: "RepeatableRead",
             timeout: 15_000,
         });
     }

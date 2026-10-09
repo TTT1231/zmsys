@@ -291,7 +291,7 @@ model BizSequence {
 }
 
 /// BOM 品类目录：1–9999 为内置参考数据保留 id（种子 1001-1006）；
-/// child_categories 标记该品类建档必须选择列表内品类的某个 BOM 作为子件（如跌倒开关嵌入微动开关）
+/// child_categories 传子品类 key，建档时将该子品类完整物料目录并入校验，不引用 BOM
 model BomCategory {
   id          BigInt   @id
   categoryKey String   @unique(map: "uk_bom_category_key") @map("category_key") @db.VarChar(40)
@@ -354,8 +354,10 @@ model MaterialItem {
   @@map("material_item")
 }
 
-/// BOM 物料：(category_id, spec_hash) 业务去重；spec_hash 为选中物料 id 集合
-/// （BigInt 十进制规范化、去重、数值升序 JSON 数组）的 SHA-256。
+/// BOM 物料：(category_id, spec_hash) 业务去重；spec_hash 为三元素 JSON 数组
+/// [categoryId, [[id, quantity], ...], remark]（构成按 BigInt 十进制、去重、id
+/// 数值升序规范化，备注为 trim 后原文）的 SHA-256；同集合不同数量或不同备注
+/// 视为不同 BOM。
 /// 跌倒开关等品类通过 child_categories 标记合并子品类目录，物料统一走勾选，不引用 BOM。
 model BomTable {
   id          BigInt   @id

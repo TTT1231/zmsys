@@ -75,7 +75,7 @@ export interface TransactionRunnerOptions {
  * 事务回调必须可重入且不得包含邮件、网络请求等外部副作用——重试可能使回调执行多次，
  * 只有数据库写入随回滚一起撤销。
  *
- * 隔离级别 READ COMMITTED 由 create-pool 在连接层统一设置（sessionVariables）。
+ * 隔离级别 READ COMMITTED 由 create-pool 在连接层统一设置（initSql）。
  * 不走 $transaction 的 isolationLevel 选项：实测 @prisma/adapter-mariadb 静默忽略
  * 该选项，事务仍以服务器默认 REPEATABLE READ 运行。选 READ COMMITTED 的原因：
  * 幂等占位查询（普通读）总是先于业务行锁发生，RR 的事务级快照会让行锁之后的

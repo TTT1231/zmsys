@@ -1,7 +1,7 @@
 import type { RoleCode } from "../constants";
 
-/** RoleGrant / WbUser 为 auth 与 roles 共用的契约类型，已迁至 access-control 共享层 */
-export type { RoleGrant, WbUser } from "../access-control/types";
+/** RoleGrant 为 auth 与 roles 共用的契约类型，已迁至 access-control 共享层 */
+export type { RoleGrant } from "../access-control/types";
 
 /** GET /roles 条目 */
 export interface RoleDef {

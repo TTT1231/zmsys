@@ -80,11 +80,6 @@ interface CheckRow {
     CHECK_CLAUSE: string;
 }
 
-export interface IntrospectionContext {
-    /** information_schema 排除的 schema 前缀（DataGrip 等工具的副本表） */
-    database: string;
-}
-
 const BACKTICK = (name: string): string => `\`${name}\``;
 
 const identifierList = (names: readonly string[]): string => names.map(BACKTICK).join(", ");

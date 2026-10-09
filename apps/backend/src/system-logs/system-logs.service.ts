@@ -100,7 +100,7 @@ const EMPTY_ARM = Prisma.sql`SELECT NULL AS id, NULL AS created_at, NULL AS acto
 
 /**
  * 系统日志聚合查询（契约 system-logs:view，仅 super）：四来源 UNION ALL——
- * op_log（13 种业务动作；db_backup/db_restore 为系统审计，不进入业务时间线；
+ * op_log（14 种业务动作；db_backup/db_restore 为系统审计，不进入业务时间线；
  * customer 域唯一卡片源，离岗批量移交亦写 op_log）、
  * sales_order_change_log（仅 UPDATE；CREATE/ARCHIVE 由 op_log 出，天然去重；
  * 订单物理清理时同事务先删日志，FK 保证无孤儿行，直接 INNER JOIN）、
@@ -108,7 +108,7 @@ const EMPTY_ARM = Prisma.sql`SELECT NULL AS id, NULL AS created_at, NULL AS acto
  * 即日志，adjust 动作）。分批为 (occurredAt, id) 复合游标——并发事务中 createdAt
  * 与雪花 id 顺序可能倒置，时间线按操作时间排列是语义需求。关键词匹配操作人
  * 姓名/目标编号/目标名称三项；名称命中依赖快照存在，存量 create_order/ship 等
- * 旧日志无名称快照，按名称搜不到属预期降级（db-scheme.md §8），不做回填。
+ * 旧格式日志的名称快照已由 scripts/backfill-oplog-legacy.ts 一次性回填。
  */
 @Injectable()
 export class SystemLogsService {

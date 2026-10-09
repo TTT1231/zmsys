@@ -268,7 +268,7 @@ describe("CustomersService.listCustomers", () => {
         expect(list[1].cooperation).toBe("待跟进");
     });
 
-    it("取消订单不计入合作状态（仅活动订单派生）", async () => {
+    it("已归档订单不计入合作状态（仅活动订单派生）", async () => {
         const store: Store = {
             users: new Map(),
             customers: [mkCustomer(900n, 200n)],

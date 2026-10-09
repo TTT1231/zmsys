@@ -65,7 +65,7 @@ export class LedgerPurgeService implements OnApplicationBootstrap, OnApplication
 
     /** 定时入口：按保留期计算截止时刻；调度错误记录后不中断后续调度 */
     private async runScheduledPurge(): Promise<void> {
-        // 恢复维护期间不启动新批次（实施计划 §4：另等 purgeActive=false）
+        // 恢复维护期间不启动新批次（db-scheme.md §10.4：另等 purgeActive=false）
         if (this.maintenance.isActive()) {
             return;
         }

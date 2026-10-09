@@ -26,7 +26,7 @@ export class JwtAuthGuard extends AuthGuard("jwt") {
         if (err !== null && err !== undefined) {
             // 策略抛出的异常原样透传：凭据失效（UnauthorizedException）仍是 401，
             // 数据库异常等基础设施错误交全局过滤器按 5xx 处理——误报 401 会让客户端
-            // 清掉待核实的恢复 requestKey 并误判恢复失败（实施计划 §6）。
+            // 清掉待核实的恢复 requestKey 并误判恢复失败（db-scheme.md §10.3）。
             throw err;
         }
         if (!user) {

@@ -47,7 +47,6 @@ const datePartOf = (pattern: "yyMMdd" | "yyyyMMdd", businessDate: string): strin
  * 业务取号（db-scheme.md §1.3）：统一走 biz_sequence 行——事务内
  * INSERT IGNORE 初始化 + SELECT ... FOR UPDATE 行锁 + 递增取号。
  * 禁止“查询最大编码 + 1”；最终编码仍有唯一索引兜底。
- * BOM 按品类取号依赖品类表结构，随 BOM 业务模块接入，此处不预写。
  */
 @Injectable()
 export class BusinessSequenceService {

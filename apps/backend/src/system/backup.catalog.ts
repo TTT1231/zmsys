@@ -1,5 +1,5 @@
 /**
- * 备份分组目录（单一来源，实施计划 §2）：
+ * 备份分组目录（单一来源，db-scheme.md §10.1）：
  * - 每组声明 tables 与 dependsOn；完整备份 = 目录全集（动态计算，不硬编码清单）；
  * - 后端 run/restore 自行闭包展开；前端 BackupPage 的 applyLinkage 是本表的镜像；
  * - 运行态表 sys_permission / api_idempotency / sys_restore_job 永不入备份

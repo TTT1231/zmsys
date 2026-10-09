@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { PrismaClient } from "../generated/prisma/client";
@@ -10,11 +10,12 @@ import type { AppConfig } from "../configuration";
  * 连接池由本服务持有；UTC 时区约定见 create-pool.ts。
  * DI 容器实际注入的是 $extends 后的扩展实例（软删过滤 + updatedAt 统一注入，
  * 见 prisma-extensions.ts）：扩展返回新 client 对象替换构造产物，业务代码与
- * $transaction 事务内的 tx 均走扩展；Nest 生命周期钩子补绑到扩展对象上，
- * 保证 $connect 与 mariadb 池回收仍被调用。
+ * $transaction 事务内的 tx 均走扩展。生命周期钩子以补绑箭头形式挂在 $extends
+ * 产物上——Proxy 的自有属性优先于原型链，写成类方法反而不会被 Nest 调用；
+ * $connect 与 mariadb 池回收因此仍被保证。
  */
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService extends PrismaClient {
     private readonly pool: ReturnType<typeof createMariadbPool>;
 
     constructor(configService: ConfigService<AppConfig>) {
@@ -40,15 +41,5 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
             await this.pool.end();
         };
         return extended;
-    }
-
-    async onModuleInit(): Promise<void> {
-        await this.$connect();
-    }
-
-    /** $disconnect 只收 Prisma 侧；外置 mariadb 池必须显式 end，否则进程无法退出 */
-    async onModuleDestroy(): Promise<void> {
-        await this.$disconnect();
-        await this.pool.end();
     }
 }

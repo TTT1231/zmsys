@@ -1,5 +1,5 @@
 /**
- * 恢复引擎（实施计划 §3；纯模块：node:* + SqlExecutor，merge/replace 两模式同一实现）。
+ * 恢复引擎（db-scheme.md §10.2；纯模块：node:* + SqlExecutor，merge/replace 两模式同一实现）。
  *
  * 提交语义：
  * - 成功凭证（sys_restore_job SUCCEEDED 行）与恢复数据**同事务**写入；

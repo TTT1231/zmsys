@@ -35,7 +35,7 @@ export function configureApp(app: NestFastifyApplication, corsOrigins: string[] 
         // Fastify 插件为链式注册，统一在 ready()/listen() 时结算，无需在此等待
         void app.register(cors, { origin: corsOrigins, credentials: true });
     }
-    // 恢复文件上传：512MiB/1 文件，字段大小另限（实施计划 §6）
+    // 恢复文件上传：512MiB/1 文件，字段大小另限（db-scheme.md §10.1）
     void app.register(multipart, {
         limits: {
             fileSize: MAX_UPLOAD_BYTES,

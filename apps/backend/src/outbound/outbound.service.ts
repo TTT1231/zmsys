@@ -16,7 +16,7 @@ import type { OutboundShipment } from "../generated/prisma/client";
 import type { OutboundRow } from "./types";
 import type { CreateOutboundDto } from "./dto/create-outbound.dto";
 
-/** api_idempotency 的 operation_key，与前端 mock 同粒度 */
+/** api_idempotency 的 operation_key（按 账号+操作 维度幂等）；作废/删除按单号独立域 */
 const CREATE_OPERATION_KEY = "outbound:create";
 const voidOperationKeyOf = (no: string): string => `outbound:void:${no}`;
 const deleteOperationKeyOf = (no: string): string => `outbound:delete:${no}`;

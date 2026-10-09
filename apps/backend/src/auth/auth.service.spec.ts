@@ -57,7 +57,7 @@ describe("AuthService.login", () => {
             role: "super",
             active: true,
         });
-        // JWT 载荷包含 sub（id 字符串）与 ver（token_version）
+        // 展示对象的 version 映射自 rowVersion（activeUser.rowVersion 为 1）
         expect(result.user.version).toBe(1);
     });
 

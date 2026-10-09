@@ -1,5 +1,5 @@
 /**
- * 备份写侧（实施计划 §5）：单连接显式 REPEATABLE READ + CONSISTENT SNAPSHOT →
+ * 备份写侧（db-scheme.md §10.1）：单连接显式 REPEATABLE READ + CONSISTENT SNAPSHOT →
  * COUNT 进 meta → 依赖顺序 queryStream → Readable 背压 → 按需 gzip(6)。
  *
  * - 表序：information_schema FK 拓扑（topologicalTableOrder）；自引用表

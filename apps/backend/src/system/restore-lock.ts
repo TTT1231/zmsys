@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type mariadb from "mariadb";
 
 /**
- * 数据库专属恢复锁名（实施计划 §4）：锁名含库名摘要、总长 ≤64 字符。
+ * 数据库专属恢复锁名（db-scheme.md §10.3）：锁名含库名摘要、总长 ≤64 字符。
  * 应用内（SystemService）与 CLI（restore-cli / restore-database --local）共用，
  * 保证两条通道互斥、启动门禁可判定旧恢复会话是否结束。
  */
