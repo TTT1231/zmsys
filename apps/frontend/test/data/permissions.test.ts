@@ -116,6 +116,14 @@ describe("menuTagFor", () => {
     it("returns empty string when menu has no granted actions", () => {
         expect(menuTagFor("orders", { version: 1, menus: ["orders"], actions: { orders: [] } })).toBe("");
     });
+
+    it("labels protected system entries with the unified super-only tag", () => {
+        // 系统组统一「超管专属」口径：不套用只读/全部权限归并（矩阵超管列同款口径）
+        expect(menuTagFor("permissions", grantOf("super"))).toBe("超管专属");
+        expect(menuTagFor("system-logs", grantOf("super"))).toBe("超管专属");
+        expect(menuTagFor("system-backup", grantOf("super"))).toBe("超管专属");
+        expect(menuTagFor("system-restore", grantOf("super"))).toBe("超管专属");
+    });
 });
 
 describe("buildNavSections", () => {

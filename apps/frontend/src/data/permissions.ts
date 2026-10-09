@@ -131,13 +131,13 @@ export const ACTION_CATALOG = {
     ],
     bom: [
         { id: "view", label: "查看" },
-        { id: "create", label: "新建 BOM" },
-        { id: "delete", label: "删除 BOM", protected: true },
+        { id: "create", label: "新建BOM" },
+        { id: "delete", label: "删除BOM", protected: true },
     ],
     inbound: [
         { id: "view", label: "查看台账" },
         { id: "register", label: "检验入库" },
-        { id: "edit", label: "当天修正/作废" },
+        { id: "edit", label: "当天修正或作废" },
         { id: "delete", label: "删除入库记录" },
         { id: "adjust", label: "跨日库存调整", protected: true },
         { id: "void-any-day", label: "跨天作废入库", protected: true },
@@ -302,8 +302,11 @@ const ACTION_SHORT: Record<string, string> = {
 /** 侧边栏 / 预览用的权限摘要标签 */
 export function menuTagFor(menuKey: string, grant: RoleGrant): string {
     if (menuKey === "workbench") return "专属视图";
-    // 系统组动作全部受保护（无 view 基线），不适用「只读/全部权限」口径
-    if (ONLY_FOR_ACTION_GROUPS.has(menuKey)) return "超管专属";
+    // 超管专属入口（备份/恢复/系统日志/用户与权限）统一「超管专属」口径，
+    // 不套用「只读/全部权限」的通用归并——这些权限不能授给普通角色
+    if (ONLY_FOR_ACTION_GROUPS.has(menuKey) || MENU_CATALOG.find(menu => menu.key === menuKey)?.protected) {
+        return "超管专属";
+    }
     const actions = actionsOf(menuKey);
     if (!actions) return "";
     const chosen = grant.actions[menuKey] ?? [];

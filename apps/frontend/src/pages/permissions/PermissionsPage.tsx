@@ -867,7 +867,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
 
                 <div className="flex flex-col gap-6 p-5">
                     <div>
-                        <div className="mb-2 flex items-center justify-between">
+                        <div className="mb-1 flex items-center justify-between">
                             <h3 className="text-14 font-semibold text-ink">菜单权限</h3>
                             <label
                                 className={`flex items-center gap-1.5 text-13 font-medium text-primary-strong ${locked ? "pointer-events-none opacity-50" : ""}`}
@@ -883,121 +883,164 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                 全选
                             </label>
                         </div>
+                        <p className="mb-2.5 text-12 leading-5 text-subtle">
+                            标有「仅超管」的灰色菜单为受保护入口（如备份、恢复、系统日志），仅超级管理员持有，
+                            不能授权给其他角色。
+                        </p>
                         <div className="rounded-xl border border-line bg-panel px-3 py-2">
-                            {MENU_CATALOG.filter(menu => !menu.onlyFor && !menu.protected).map(menu => (
-                                <div key={menu.key}>
-                                    <label
-                                        className={`flex min-h-10 cursor-pointer items-center gap-2.5 rounded-lg px-2 hover:bg-row-hover ${locked ? "pointer-events-none opacity-50" : ""}`}
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            className="accent-primary"
-                                            checked={effective.menus.includes(menu.key)}
-                                            onChange={event => toggleMenu(menu.key, event.target.checked)}
-                                        />
-                                        <Icon name={menu.icon} size={17} className="shrink-0 text-muted" />
-                                        <span className="text-14 text-ink">{menu.label}</span>
-                                    </label>
-                                    {menu.children && (
-                                        <div className="ml-6.5 border-l border-dashed border-line pl-1.5">
-                                            {menu.children.map(child => (
-                                                <label
-                                                    key={child.key}
-                                                    className={`flex min-h-9 cursor-pointer items-center gap-2.5 rounded-lg px-2 hover:bg-row-hover ${locked ? "pointer-events-none opacity-50" : ""}`}
-                                                >
-                                                    <input
-                                                        type="checkbox"
-                                                        className="accent-primary"
-                                                        checked={effective.menus.includes(child.key)}
-                                                        onChange={event => toggleMenu(child.key, event.target.checked)}
-                                                    />
-                                                    <span className="text-13 text-td">└ {child.label}</span>
-                                                </label>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                            {/* 说明型 onlyFor 项（无路由，如仓管「变更记录」）不占权限码，不参与展示；
+                                受保护 / super 专属菜单灰显举证，不可勾选 */}
+                            {MENU_CATALOG.filter(menu => !(menu.onlyFor && !menu.to)).map(menu => {
+                                const superOnly = menu.protected || !!menu.onlyFor?.includes("super");
+                                return (
+                                    <div key={menu.key}>
+                                        {superOnly ? (
+                                            <div
+                                                className="flex min-h-10 cursor-not-allowed items-center gap-2.5 rounded-lg px-2 opacity-60"
+                                                title="受保护菜单：仅超级管理员持有，不可授权"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    className="accent-primary"
+                                                    checked={effective.menus.includes(menu.key)}
+                                                    disabled
+                                                />
+                                                <Icon name={menu.icon} size={17} className="shrink-0 text-muted" />
+                                                <span className="text-14 text-ink">{menu.label}</span>
+                                                <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-line bg-soft px-2 py-px text-11 text-muted">
+                                                    <Icon name="shield" size={11} />
+                                                    仅超管
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <label
+                                                className={`flex min-h-10 cursor-pointer items-center gap-2.5 rounded-lg px-2 hover:bg-row-hover ${locked ? "pointer-events-none opacity-50" : ""}`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    className="accent-primary"
+                                                    checked={effective.menus.includes(menu.key)}
+                                                    onChange={event => toggleMenu(menu.key, event.target.checked)}
+                                                />
+                                                <Icon name={menu.icon} size={17} className="shrink-0 text-muted" />
+                                                <span className="text-14 text-ink">{menu.label}</span>
+                                            </label>
+                                        )}
+                                        {menu.children && (
+                                            <div className="ml-6.5 border-l border-dashed border-line pl-1.5">
+                                                {menu.children.map(child =>
+                                                    superOnly ? (
+                                                        <div
+                                                            key={child.key}
+                                                            className="flex min-h-9 cursor-not-allowed items-center gap-2.5 rounded-lg px-2 opacity-60"
+                                                            title="受保护菜单：仅超级管理员持有，不可授权"
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                className="accent-primary"
+                                                                checked={effective.menus.includes(child.key)}
+                                                                disabled
+                                                            />
+                                                            <span className="text-13 text-td">└ {child.label}</span>
+                                                        </div>
+                                                    ) : (
+                                                        <label
+                                                            key={child.key}
+                                                            className={`flex min-h-9 cursor-pointer items-center gap-2.5 rounded-lg px-2 hover:bg-row-hover ${locked ? "pointer-events-none opacity-50" : ""}`}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                className="accent-primary"
+                                                                checked={effective.menus.includes(child.key)}
+                                                                onChange={event =>
+                                                                    toggleMenu(child.key, event.target.checked)
+                                                                }
+                                                            />
+                                                            <span className="text-13 text-td">└ {child.label}</span>
+                                                        </label>
+                                                    ),
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
 
                     <div>
                         <h3 className="mb-1 text-14 font-semibold text-ink">操作权限（按钮 / 动作级）</h3>
                         <p className="mb-2.5 text-12 leading-5 text-subtle">
-                            灰色不可勾选项为受保护权限（如删除订单、删除 BOM），仅超级管理员持有， 不能授权给其他角色。
+                            灰色不可勾选项为受保护权限（如删除订单、执行备份、执行恢复），仅超级管理员持有，
+                            不能授权给其他角色。
                         </p>
                         <div className="rounded-xl border border-line bg-panel px-4 py-1">
-                            {Object.entries(ACTION_CATALOG)
-                                .filter(([menuKey]) => !ONLY_FOR_ACTION_GROUPS.has(menuKey))
-                                .map(([menuKey, actions]) => {
-                                    const menuOn = effective.menus.includes(menuKey);
-                                    const chosen = effective.actions[menuKey] ?? [];
-                                    return (
-                                        <div
-                                            key={menuKey}
-                                            className={`border-b border-dashed border-line py-3 last:border-b-0 ${menuOn && !locked ? "" : "pointer-events-none opacity-45"}`}
-                                        >
-                                            <div className="mb-2 flex items-center gap-2">
-                                                <Icon
-                                                    name={
-                                                        MENU_CATALOG.find(menu => menu.key === menuKey)?.icon ?? "grid"
-                                                    }
-                                                    size={15}
-                                                    className="text-muted"
-                                                />
-                                                <span className="text-14 font-semibold text-ink">
-                                                    {MENU_CATALOG.find(menu => menu.key === menuKey)?.label ?? menuKey}
-                                                </span>
-                                                {!menuOn && <span className="text-12 text-subtle">（菜单未授权）</span>}
-                                            </div>
-                                            <div className="flex flex-wrap gap-2">
-                                                {actions.map(action => {
-                                                    const checked = chosen.includes(action.id);
-                                                    const isProtected = "protected" in action && action.protected;
-                                                    return (
-                                                        <label
-                                                            key={action.id}
-                                                            title={
-                                                                isProtected
-                                                                    ? "受保护权限：仅超级管理员持有，不可授权"
-                                                                    : undefined
-                                                            }
-                                                            className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 text-13 transition ${
-                                                                isProtected
-                                                                    ? "cursor-not-allowed border-line bg-soft text-subtle opacity-60"
-                                                                    : "cursor-pointer " +
-                                                                      (checked
-                                                                          ? "border-primary-border bg-primary-soft font-semibold text-primary-strong"
-                                                                          : "border-line bg-surface text-td")
-                                                            }`}
-                                                        >
-                                                            <input
-                                                                type="checkbox"
-                                                                className="sr-only"
-                                                                checked={checked}
-                                                                disabled={isProtected}
-                                                                onChange={event =>
-                                                                    toggleAction(
-                                                                        menuKey,
-                                                                        action.id,
-                                                                        event.target.checked,
-                                                                    )
-                                                                }
-                                                            />
-                                                            <span
-                                                                className={`h-1.5 w-1.5 rounded-full ${checked ? "bg-primary" : "bg-line-strong"}`}
-                                                            />
-                                                            {action.label}
-                                                            {isProtected && (
-                                                                <span className="sr-only">（仅超级管理员）</span>
-                                                            )}
-                                                        </label>
-                                                    );
-                                                })}
-                                            </div>
+                            {Object.entries(ACTION_CATALOG).map(([menuKey, actions]) => {
+                                const menuDef = MENU_CATALOG.find(menu => menu.key === menuKey);
+                                // 系统组（备份/恢复/系统日志/用户与权限）灰显举证：动作全部受保护，不可勾选
+                                const superOnly = !!menuDef?.protected || ONLY_FOR_ACTION_GROUPS.has(menuKey);
+                                const menuOn = effective.menus.includes(menuKey);
+                                const chosen = effective.actions[menuKey] ?? [];
+                                return (
+                                    <div
+                                        key={menuKey}
+                                        className={`border-b border-dashed border-line py-3 last:border-b-0 ${menuOn && !superOnly && !locked ? "" : "pointer-events-none opacity-45"}`}
+                                    >
+                                        <div className="mb-2 flex items-center gap-2">
+                                            <Icon name={menuDef?.icon ?? "grid"} size={15} className="text-muted" />
+                                            <span className="text-14 font-semibold text-ink">
+                                                {menuDef?.label ?? menuKey}
+                                            </span>
+                                            {superOnly ? (
+                                                <span className="text-12 text-subtle">（仅超级管理员）</span>
+                                            ) : (
+                                                !menuOn && <span className="text-12 text-subtle">（菜单未授权）</span>
+                                            )}
                                         </div>
-                                    );
-                                })}
+                                        <div className="flex flex-wrap gap-2">
+                                            {actions.map(action => {
+                                                const checked = chosen.includes(action.id);
+                                                const isProtected = "protected" in action && action.protected;
+                                                return (
+                                                    <label
+                                                        key={action.id}
+                                                        title={
+                                                            isProtected
+                                                                ? "受保护权限：仅超级管理员持有，不可授权"
+                                                                : undefined
+                                                        }
+                                                        className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 text-13 transition ${
+                                                            isProtected
+                                                                ? "cursor-not-allowed border-line bg-soft text-subtle opacity-60"
+                                                                : "cursor-pointer " +
+                                                                  (checked
+                                                                      ? "border-primary-border bg-primary-soft font-semibold text-primary-strong"
+                                                                      : "border-line bg-surface text-td")
+                                                        }`}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            className="sr-only"
+                                                            checked={checked}
+                                                            disabled={isProtected}
+                                                            onChange={event =>
+                                                                toggleAction(menuKey, action.id, event.target.checked)
+                                                            }
+                                                        />
+                                                        <span
+                                                            className={`h-1.5 w-1.5 rounded-full ${checked ? "bg-primary" : "bg-line-strong"}`}
+                                                        />
+                                                        {action.label}
+                                                        {isProtected && (
+                                                            <span className="sr-only">（仅超级管理员）</span>
+                                                        )}
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
 
@@ -1064,11 +1107,27 @@ function MatrixTab() {
                                 </th>
                                 {ROLES.map(role => {
                                     const grant = grants[role.id];
-                                    // 系统接口按受保护动作校验；普通角色即使出现脏菜单授权行也无访问权。
-                                    if (
-                                        (menu.group === "系统" && role.id !== "super") ||
-                                        !grant.menus.includes(menu.key)
-                                    ) {
+                                    // 系统组为超管专属入口：超管列统一「超管专属」举证口径（与侧边栏
+                                    // 标签、编辑器灰显一致）；普通角色即使出现脏菜单授权行也无访问权，
+                                    // 系统接口一律按受保护动作校验。
+                                    if (menu.group === "系统") {
+                                        return role.id === "super" ? (
+                                            <td
+                                                key={role.id}
+                                                className="border border-line px-3 py-2 text-center text-13 font-semibold text-success"
+                                            >
+                                                超管专属
+                                            </td>
+                                        ) : (
+                                            <td
+                                                key={role.id}
+                                                className="border border-line px-3 py-2 text-center text-placeholder"
+                                            >
+                                                —
+                                            </td>
+                                        );
+                                    }
+                                    if (!grant.menus.includes(menu.key)) {
                                         return (
                                             <td
                                                 key={role.id}
