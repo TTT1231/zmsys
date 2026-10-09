@@ -41,10 +41,10 @@ pnpm dev:backend              # 后端
 pnpm typecheck                # 全量类型检查（前端+后端）
 pnpm lint                     # 全量 oxlint（type-aware）
 pnpm lint --fix               # 自动修复（包装器会跑两遍，收敛重叠修复）
-pnpm test                     # test（递归各包）
+pnpm test                     # test（turbo 任务图并行跑各包，不缓存）
 pnpm test:db:reset            # 重置 e2e 测试库（DROP/CREATE + 迁移 + seed，仅 *_test 库）
 pnpm test:e2e                 # 重置测试库 + 后端 e2e
-pnpm smoke                    # 后端冒烟（前置：build backend + 测试库已 reset）
+pnpm smoke                    # 后端冒烟（后端产物自动经 turbo 构建；前置：测试库已 reset）
 pnpm backup-database          # 备份生产库并校验（dump 拉回本地 + 还原比对对象/行数）
 pnpm restore-database         # [cli紧急恢复](./docs/db-scheme.md#10-应用内数据库备份恢复仅超管)
 pnpm restore-drill            # 恢复演练（双轨 + 故障注入，仅 *_test 库）

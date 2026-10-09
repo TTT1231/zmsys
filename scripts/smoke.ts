@@ -1,15 +1,15 @@
 /**
  * 自动化冒烟：spawn 真实进程（编译产物 dist/main.js）→ 等健康就绪 → 登录 →
  * profile → ready 探活 → 发停止信号 → 断言优雅退出（退出码 + Prisma/池关闭日志）。
- * 全程连 *_test 专用库（护栏同 e2e）。前置：pnpm exec turbo run build --filter=zmsysbackend、
- * 测试库已 reset。Windows 不支持向子进程投递真实信号，停止阶段降级为仅断言进程退出；
+ * 全程连 *_test 专用库（护栏同 e2e）。前置：测试库已 reset。后端产物由脚本
+ * 开头经 turbo 自动构建——与 deploy:prod 共用 production 缓存槽，代码未变时秒级。
+ * Windows 不支持向子进程投递真实信号，停止阶段降级为仅断言进程退出；
  * Linux（CI）下完整验证 SIGINT 优雅停机。
  */
 import { config } from "dotenv";
 import "../apps/backend/src/process-tz.js";
 import { loadDbEnv } from "../apps/backend/src/configuration/raw-env.js";
-import { spawn, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { execSync, spawn, spawnSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -55,9 +55,15 @@ const waitFor = async (label: string, check: () => Promise<boolean>, timeoutMs: 
 };
 
 const main = async (): Promise<void> => {
-    if (!existsSync(ENTRY)) {
-        throw new Error("缺少编译产物 dist/main.js，请先执行 pnpm exec turbo run build --filter=zmsysbackend");
-    }
+    console.log("[0] 构建后端产物（turbo 缓存命中时秒级）");
+    // execSync 经 shell 解析（Windows 的 pnpm 是 .cmd shim）；NODE_ENV=production
+    // 对齐 deploy:prod 的缓存槽（turbo globalEnv 含 NODE_ENV），冒烟的就是与
+    // 生产同形态的编译产物
+    execSync("pnpm exec turbo run build --filter=zmsysbackend", {
+        cwd: repoRoot,
+        stdio: "inherit",
+        env: { ...process.env, NODE_ENV: "production" },
+    });
 
     const output: string[] = [];
     const child = spawn(process.execPath, [ENTRY], {

@@ -12,6 +12,11 @@
             "cache": false,
             "persistent": true
         },
+        "test": {
+            // 测试结果不做缓存复用：openapi-coverage 等对环境/gitignored 文件敏感，
+            // 命中缓存回放过期结果会掩盖环境相关的失败
+            "cache": false
+        },
         "typecheck": {
             "dependsOn": ["^typecheck"]
         }
