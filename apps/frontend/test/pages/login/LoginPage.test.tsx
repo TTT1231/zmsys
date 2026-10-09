@@ -25,6 +25,10 @@ vi.mock("@/components/ui/toastContexts", () => ({
     useNotification: () => notificationSpy,
 }));
 
+/* login 现返回完整 ProfileResult（user + grant）：欢迎语取 user.name、落地页取 grant，
+   mock 必须给全，否则页面读取 profile.user 直接抛错走失败分支 */
+const PROFILE = { user: { name: "系统管理员" }, grant: { version: 0, menus: [], actions: {} } };
+
 function renderLoginPage() {
     return render(
         <MemoryRouter initialEntries={["/login"]}>
@@ -96,10 +100,10 @@ describe("LoginPage", () => {
     });
 
     it("disables the form and exposes a distinct progress label while logging in", async () => {
-        let resolveLogin: (() => void) | undefined;
+        let resolveLogin: ((value: typeof PROFILE) => void) | undefined;
         loginSpy.mockImplementationOnce(
             () =>
-                new Promise<void>(resolve => {
+                new Promise(resolve => {
                     resolveLogin = resolve;
                 }),
         );
@@ -114,16 +118,16 @@ describe("LoginPage", () => {
         expect(screen.getByLabelText("账号")).toBeDisabled();
         expect(screen.getByLabelText("密码")).toBeDisabled();
 
-        resolveLogin?.();
+        resolveLogin?.(PROFILE);
         await waitFor(() => expect(loginSpy).toHaveBeenCalledWith("sys_admin", "123456"));
         await waitFor(() => expect(screen.getByRole("button", { name: "登录" })).not.toBeDisabled());
-        expect(notificationSpy).toHaveBeenCalledWith({ title: "登录成功", message: "欢迎回来" });
+        expect(notificationSpy).toHaveBeenCalledWith({ title: "登录成功", message: "欢迎回来，系统管理员" });
         expect(toastSpy.success).not.toHaveBeenCalled();
         expect(toastSpy.error).not.toHaveBeenCalled();
     });
 
     it("welcomes the signed-in user through the notification channel", async () => {
-        loginSpy.mockResolvedValueOnce({ name: "系统管理员" });
+        loginSpy.mockResolvedValueOnce(PROFILE);
         const user = userEvent.setup();
         renderLoginPage();
         await fillCredentials(user);

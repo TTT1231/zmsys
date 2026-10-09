@@ -10,3 +10,8 @@ export function cn(...inputs: ClassValue[]) {
 export function bytesToHex(bytes: Uint8Array): string {
     return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
 }
+
+/** 刷新页面（wrapper：jsdom 的 location.reload 不可重定义，测试经此打桩） */
+export function reloadPage(): void {
+    window.location.reload();
+}

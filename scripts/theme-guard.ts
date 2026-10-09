@@ -22,7 +22,6 @@ const PALETTE_CLASS =
 const ALLOWED_FILES = new Set([
     "apps/frontend/src/pages/error/ErrorPage.tsx",
     "apps/frontend/src/pages/login/LoginPage.tsx",
-    "apps/frontend/src/components/VersionCheck.tsx",
     "apps/frontend/src/pages/workbench/WorkbenchTrend.tsx",
 ]);
 

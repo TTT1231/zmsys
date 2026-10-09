@@ -18,8 +18,8 @@ const queryClient = new QueryClient({
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
         <QueryClientProvider client={queryClient}>
-            {/* 版本检测：挂在会话树外（后端不可达时同样生效），且必须位于应用树之前——
-                横幅留在文档流顶部才能推下整个应用并在滚动时吸顶 */}
+            {/* 版本强制更新：挂在会话树外（后端不可达时同样生效）；遮罩 portal 到 body，
+                与应用树的相对位置无布局影响 */}
             <VersionCheck />
             <AppProvider>
                 <PreferencesProvider>

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-/* VersionCheck：构建标识解析（属性顺序无关/缺失/空值）、轮询发现新版本弹窗、
-   取消与 ESC 转常驻横幅、版本一致与网络失败不打扰、DEV 环境不启动检测 */
+/* VersionCheck：构建标识解析（属性顺序无关/缺失/空值）、轮询发现新版本弹强制更新
+   遮罩（不可关闭）、点击立即刷新 reload、版本一致与网络失败不打扰、
+   触发后跳过后续检测、DEV 环境不启动检测 */
 import "@testing-library/jest-dom/vitest";
 
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -8,6 +9,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { extractBuildId } from "@/lib/build-id";
 import { VersionCheck } from "@/components/VersionCheck";
+
+const { reloadMock } = vi.hoisted(() => ({ reloadMock: vi.fn() }));
+
+/* reloadPage 打桩：jsdom 的 location.reload 是不可重定义的自有属性，只能从模块层 mock */
+vi.mock("@/lib/utils", async importOriginal => ({
+    ...(await importOriginal<typeof import("@/lib/utils")>()),
+    reloadPage: reloadMock,
+}));
 
 const POLL_MS = 5 * 60_000;
 
@@ -21,10 +30,9 @@ function setLocalBuildId(content: string) {
 
 /* fetch 返回线上 index.html 文本（纯对象 mock，不依赖 Response 实现） */
 function mockIndexHtml(html: string) {
-    vi.stubGlobal(
-        "fetch",
-        vi.fn(() => Promise.resolve({ ok: true, text: () => Promise.resolve(html) })),
-    );
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, text: () => Promise.resolve(html) }));
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
 }
 
 beforeEach(() => {
@@ -58,38 +66,52 @@ describe("extractBuildId", () => {
 });
 
 describe("VersionCheck", () => {
-    it("prompts a modal after polling detects a new build", async () => {
+    it("blocks the page with an unclosable overlay once polling detects a new build", async () => {
         mockIndexHtml('<meta name="app-build-id" content="remote-new">');
         render(<VersionCheck />);
         await act(async () => {
             await vi.advanceTimersByTimeAsync(POLL_MS);
         });
-        expect(screen.getByRole("dialog")).toHaveTextContent("新版本可用");
-        expect(screen.getByRole("dialog")).toHaveTextContent("点击刷新以获取最新版本");
-        expect(screen.getByRole("button", { name: "刷新" })).toHaveFocus();
+        expect(screen.getByRole("dialog")).toHaveTextContent("系统已更新");
+        expect(screen.getByRole("dialog")).toHaveTextContent("请刷新页面继续使用");
+        // 强制更新没有取消入口：唯一按钮就是立即刷新，且自动聚焦可回车触发
+        expect(screen.getByRole("button", { name: "立即刷新" })).toHaveFocus();
+        expect(screen.queryByRole("button", { name: "取消" })).not.toBeInTheDocument();
     });
 
-    it("keeps a persistent banner after cancelling the modal", async () => {
+    it("reloads the page when the refresh button is clicked", async () => {
         mockIndexHtml('<meta name="app-build-id" content="remote-new">');
         render(<VersionCheck />);
         await act(async () => {
             await vi.advanceTimersByTimeAsync(POLL_MS);
         });
-        fireEvent.click(screen.getByRole("button", { name: "取消" }));
-        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-        expect(screen.getByText("新版本可用")).toBeInTheDocument();
-        expect(screen.getByText("点击刷新以获取最新版本")).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "立即刷新" }));
+        expect(reloadMock).toHaveBeenCalledTimes(1);
     });
 
-    it("cancels via Escape and shows the banner too", async () => {
+    it("cannot be dismissed via Escape or Tab", async () => {
         mockIndexHtml('<meta name="app-build-id" content="remote-new">');
         render(<VersionCheck />);
         await act(async () => {
             await vi.advanceTimersByTimeAsync(POLL_MS);
         });
         fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
-        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-        expect(screen.getByText("点击刷新以获取最新版本")).toBeInTheDocument();
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
+        fireEvent.keyDown(screen.getByRole("dialog"), { key: "Tab" });
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
+    });
+
+    it("skips subsequent checks once the overlay is up", async () => {
+        const fetchMock = mockIndexHtml('<meta name="app-build-id" content="remote-new">');
+        render(<VersionCheck />);
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(POLL_MS);
+        });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(POLL_MS * 2);
+        });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it("stays silent when the build matches or the request fails", async () => {
