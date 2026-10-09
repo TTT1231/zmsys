@@ -554,7 +554,7 @@ INSERT INTO material_item (id, group_id, name, sort_order) VALUES
     (3780, 2720, '有CB外壳', 1),
     (3781, 2720, '无CB外壳', 2);
 
--- 新微动（1003 / KW / 4）：PA66塑料 / 五金件 两分区，分区内按部件类型单选组。
+-- 新微动（1003 / KW / 3）：PA66塑料 / 五金件 两分区，分区内按部件类型单选组。
 INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, multi, sort_order) VALUES
     (2101, 1003, NULL, 'SECTION', 'PA66塑料', NULL, NULL, 1),
     (2111, 1003, 2101, 'GROUP', '底座', 'base', 0, 1),
@@ -615,7 +615,7 @@ INSERT INTO material_item (id, group_id, name, sort_order) VALUES
     (3136, 2121, '铜', 1),
     (3137, 2121, '银', 2);
 
--- 老微动（1004 / KW16 / 3）
+-- 老微动（1004 / KWO / 3）
 INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, multi, sort_order) VALUES
     (2201, 1004, NULL, 'SECTION', 'PA66塑料', NULL, NULL, 1),
     (2211, 1004, 2201, 'GROUP', '底座', 'base', 0, 1),
@@ -664,23 +664,23 @@ INSERT INTO material_item (id, group_id, name, sort_order) VALUES
 -- 旋转XK3 拆焊线工艺（child_categories 指向焊线/插线）：插线目录（下）挂 xk3-plug(1009)，
 -- 焊线目录挂 xk3-wire(1008)：外壳/底座各一种，杆子圆轴/扁轴4.8，
 -- 静片（多选）/动片/弹簧（多选）/3.0mm电镀钢球。
-INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, multi, sort_order) VALUES
-    (2401, 1009, NULL, 'GROUP', 'PC塑料外壳', 'pc-shell', 0, 1),
-    (2402, 1009, NULL, 'GROUP', 'PC塑料底座', 'pc-base', 0, 2),
-    (2403, 1009, NULL, 'GROUP', 'PA66塑料杆子', 'pa66-lever', 0, 3),
-    (2404, 1009, NULL, 'SECTION', '五金件', NULL, NULL, 4),
-    (2411, 1009, 2404, 'GROUP', '小静片', 'small-static-plate', 0, 1),
-    (2412, 1009, 2404, 'GROUP', '半圆静片', 'half-round-static-plate', 0, 2),
-    (2413, 1009, 2404, 'GROUP', '动片', 'moving-plate', 0, 3),
-    (2414, 1009, 2404, 'GROUP', '带圈动片', 'ring-moving-plate', 0, 4),
-    (2415, 1009, 2404, 'GROUP', '钢球', 'steel-ball', 0, 5),
-    (2416, 1009, 2404, 'GROUP', '卡线片', 'wire-clip', 0, 6),
-    (2417, 1009, 2404, 'GROUP', '弹簧', 'spring', 1, 7),
-    (2711, 1008, NULL, 'SECTION', 'PC塑料', NULL, NULL, 1),
+INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, multi, qty, sort_order) VALUES
+    (2401, 1009, NULL, 'GROUP', 'PC塑料外壳', 'pc-shell', 0, 0, 1),
+    (2402, 1009, NULL, 'GROUP', 'PC塑料底座', 'pc-base', 0, 0, 2),
+    (2403, 1009, NULL, 'GROUP', 'PA66塑料杆子', 'pa66-lever', 0, 0, 3),
+    (2404, 1009, NULL, 'SECTION', '五金件', NULL, NULL, NULL, 4),
+    (2411, 1009, 2404, 'GROUP', '小静片', 'small-static-plate', 0, 0, 1),
+    (2412, 1009, 2404, 'GROUP', '半圆静片', 'half-round-static-plate', 0, 0, 2),
+    (2413, 1009, 2404, 'GROUP', '动片', 'moving-plate', 0, 0, 3),
+    (2414, 1009, 2404, 'GROUP', '带圈动片', 'ring-moving-plate', 0, 0, 4),
+    (2415, 1009, 2404, 'GROUP', '钢球', 'steel-ball', 0, 0, 5),
+    (2416, 1009, 2404, 'GROUP', '卡线片', 'wire-clip', 0, 0, 6),
+    (2417, 1009, 2404, 'GROUP', '弹簧', 'spring', 1, 0, 7),
+    (2711, 1008, NULL, 'SECTION', 'PC塑料', NULL, NULL, NULL, 1),
     (2712, 1008, 2711, 'GROUP', '外壳', 'shell', 0, 0, 1),
     (2713, 1008, 2711, 'GROUP', '底座', 'base', 0, 0, 2),
     (2714, 1008, NULL, 'GROUP', 'PA66塑料杆子', 'pa66-lever', 0, 0, 2),
-    (2715, 1008, NULL, 'SECTION', '五金件', NULL, NULL, 3),
+    (2715, 1008, NULL, 'SECTION', '五金件', NULL, NULL, NULL, 3),
     (2716, 1008, 2715, 'GROUP', '静片', 'static-plate', 1, 0, 1),
     (2717, 1008, 2715, 'GROUP', '动片', 'moving-plate', 0, 0, 2),
     (2718, 1008, 2715, 'GROUP', '弹簧', 'spring', 1, 0, 3),
@@ -783,7 +783,7 @@ INSERT INTO material_item (id, group_id, name, sort_order) VALUES
     (3522, 2516, '铜', 1),
     (3523, 2516, '银', 2);
 
--- 跌倒开关（1006 / DD / 3）：四个根单选组；建档另须选一个微动开关 BOM 作子件（child_categories 标记）。
+-- 跌倒开关（1006 / KD / 3）：四个根单选组；建档时经 child_categories 并入新/老微动子品类的完整物料目录（不引用已建 BOM）。
 INSERT INTO material_group (id, category_id, parent_id, kind, name, group_key, multi, sort_order) VALUES
     (2601, 1006, NULL, 'GROUP', '跌倒盖', 'tipover-cover', 0, 1),
     (2602, 1006, NULL, 'GROUP', '跌倒底', 'tipover-base', 0, 2),
@@ -868,11 +868,11 @@ CREATE TABLE custom_table (
     name VARCHAR(160) NOT NULL,
     contact_person VARCHAR(64) NOT NULL,
     contact_phone VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-    province VARCHAR(64) NOT NULL,
-    city VARCHAR(64) NOT NULL,
+    province VARCHAR(64) NULL,
+    city VARCHAR(64) NULL,
     district VARCHAR(64) NULL,
     town VARCHAR(96) NULL,
-    address VARCHAR(300) NOT NULL,
+    address VARCHAR(300) NULL,
     owner_id BIGINT NOT NULL,
     pay_terms VARCHAR(160) NOT NULL DEFAULT '',
     row_version BIGINT UNSIGNED NOT NULL DEFAULT 1,

@@ -85,19 +85,20 @@
 
 ### 3.2 `sys_user`
 
-| 字段            | 语义与约束                                               |
-| --------------- | -------------------------------------------------------- |
-| `id`            | Snowflake 主键                                           |
-| `account`       | 唯一、不可修改，3–64 位字母/数字/下划线                  |
-| `password_hash` | Argon2id/bcrypt 等强哈希，最长 255；绝不保存或返回明文   |
-| `name`          | 1–20 个 Unicode 字符                                     |
-| `role_code`     | 外键到 `sys_role.code`                                   |
-| `status`        | 1 启用、0 停用                                           |
-| `token_version` | JWT 失效版本；停用、角色变更、改密、管理员重置密码时递增 |
-| `row_version`   | 用户资料与状态的乐观锁版本                               |
-| `last_login_at` | 可空，成功登录后更新                                     |
-| `created_at`    | 创建时间，UTC `DATETIME(3)`，新建用户时写入              |
-| `updated_at`    | 可空，最近一次资料/状态/密码变更时间，变更时刷新         |
+| 字段                  | 语义与约束                                                |
+| --------------------- | --------------------------------------------------------- |
+| `id`                  | Snowflake 主键                                            |
+| `account`             | 唯一、不可修改，3–64 位字母/数字/下划线                  |
+| `password_hash`       | Argon2id/bcrypt 等强哈希，最长 255；绝不保存或返回明文    |
+| `name`                | 1–20 个 Unicode 字符                                     |
+| `role_code`           | 外键到 `sys_role.code`                                    |
+| `status`              | 1 启用、0 停用                                            |
+| `token_version`       | JWT 失效版本；停用、角色变更、改密、管理员重置密码时递增  |
+| `row_version`         | 用户资料与状态的乐观锁版本                                |
+| `password_changed_at` | 可空，最近一次密码修改时间（自助改密与 §10.5 救援改密时更新）   |
+| `last_login_at`       | 可空，成功登录后更新                                      |
+| `created_at`          | 创建时间，UTC `DATETIME(3)`，新建用户时写入               |
+| `updated_at`          | 非空，最近一次资料/状态/密码变更时间，Prisma 层变更时刷新 |
 
 规则：
 
@@ -113,7 +114,7 @@
 - 菜单码格式：`menu:<menuKey>`，如 `menu:orders`。
 - 动作码格式：`<menuKey>:<actionId>`，如 `outbound:ship`。
 - 勾选动作必须同时拥有其父菜单和对应 `view` 动作；保存时由服务端规范化并复核。
-- `(role_code, permission_code)` 为 `sys_grant` 主键。`permissions:view/manage`、客户批量移交、订单删除、订单归档、订单归档回退、BOM 删除、`menu:system-logs`、`system-logs:view`、`system-backup:run` 与 `system-restore:run` 属于受保护权限，只允许 `super`。
+- `(role_code, permission_code)` 为 `sys_grant` 主键。`permissions:view/manage`、`menu:permissions`、`menu:permissions-accounts`、`menu:permissions-roles`、`menu:permissions-matrix`、客户批量移交、订单删除、订单归档、订单归档回退、BOM 删除、跨日库存调整 `inbound:adjust`、跨天作废入库 `inbound:void-any-day`、`menu:system-logs`、`system-logs:view`、`system-backup:run` 与 `system-restore:run` 属于受保护权限，只允许 `super`。
 - `menu:system-backup` / `menu:system-restore` 在目录中为非受保护菜单码，但不播普通角色授权，前端也不提供勾选。备份目录、恢复预检/任务查询与实际执行端点均检查对应受保护的 `:run` 动作，单独持有菜单码不能调用这些接口；系统日志端点检查 `system-logs:view`。默认角色分布及权限矩阵显示口径见 [角色与权限](business/roles.md)。
 - 建表脚本直接播种四个普通角色的默认授权。初始行使用 `grant_source=BOOTSTRAP` 且 `granted_by=NULL`；此后所有界面修改必须使用 `grant_source=USER` 和真实操作人。`super` 不依赖授权行，服务端固定视为全量权限。归档订单菜单 `menu:archived-orders` 为普通菜单，四个普通角色默认可见（数据来自既有 `orders:view`，归档动作本身仍仅 `super`）。分析页菜单 `menu:analytics`（交付甘特图自工作台二级视图迁出）同为普通可授权菜单，但不播普通角色 BOOTSTRAP 行——默认仅超管可见，需要时由超管在界面勾选授予；交付数据取自 `GET /workbench/overview`（校验 `menu:workbench`）；业务关系图与 agent 共用只读 `GET /workbench/relations`（同时校验 `menu:analytics`、`menu:workbench`），按日期/订单状态/实体类型或业务编号聚合必要业务关系及人员姓名/角色，不暴露用户管理或联系方式。授予分析页的角色须同时保留工作台菜单。
 
@@ -262,7 +263,7 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 - 入库当天修改由 `inbound_change_log` 形成审计链；库存调整和出库冲销由追加事件本身形成记录；负责人移交和订单变更分别使用专表记录。`op_log` 快照自包含（含操作人姓名/角色快照），业务行被清理后仍可独立还原"删除时刻的单据终态 + 作废原因"。
 - 所有日志、库存调整和出库数量事件不提供人工 UPDATE/DELETE；入库只允许业务服务执行带当天窗口（或跨天作废权限）、版本和日志约束的 UPDATE，以及删除接口对 `VOIDED` 行的 `deleted_at` 标记 UPDATE。订单与出入库单由用户软删除，维护任务在保留期后清理；BOM 无引用时可由超级管理员物理删除，所有删除动作均在 `op_log` 留快照。
 - 操作日志保留 `operator_id`，同时保存操作发生时的姓名和角色快照，避免用户改名/改角色后历史展示变化。
-- **系统日志聚合端点（`GET /system-logs`，受保护权限 `system-logs:view` 仅 super）**：四来源 UNION ALL——`op_log`（13 种业务动作，含离岗批量移交补写的 `update_customer`；备份/恢复的 `db_backup`、`db_restore` 虽写在同表，但不属于此业务时间线；`customer_owner_history` 仍作归属变更业务表保留但不进聚合）、`sales_order_change_log`（仅 UPDATE，CREATE/ARCHIVE 由 op_log 出，天然去重；订单物理清理时同事务先删日志，FK 保证无孤儿行）、`inbound_change_log`（仅 UPDATE）、`stock_adjustment`（adjust 动作，domain 归 inbound）。分批为 `(occurredAt, id)` 复合游标（业务先取 now 后生成雪花 id，并发事务中两者顺序可能倒置）。
+- **系统日志聚合端点（`GET /system-logs`，受保护权限 `system-logs:view` 仅 super）**：四来源 UNION ALL——`op_log`（14 种业务动作，含回退归档订单与离岗批量移交补写的 `update_customer`；备份/恢复的 `db_backup`、`db_restore` 虽写在同表，但不属于此业务时间线；`customer_owner_history` 仍作归属变更业务表保留但不进聚合）、`sales_order_change_log`（仅 UPDATE，CREATE/ARCHIVE 由 op_log 出，天然去重；订单物理清理时同事务先删日志，FK 保证无孤儿行）、`inbound_change_log`（仅 UPDATE）、`stock_adjustment`（adjust 动作，domain 归 inbound）。分批为 `(occurredAt, id)` 复合游标（业务先取 now 后生成雪花 id，并发事务中两者顺序可能倒置）。
 - 历史身份漂移口径：op_log 来源展示操作时姓名/角色**快照**；change_log/调整来源的操作人 join `sys_user` 展示**当前**姓名与角色，随改名/改角色漂移属可接受（不加快照列，避免过度设计）。
 - 关键词按操作人姓名、目标编号、目标名称三项 LIKE。名称命中依赖快照存在——存量 `create_order`/`ship` 等旧日志无名称快照，按名称搜不到属预期降级（按编号/操作人仍可命中），不做历史回填；新事件（2026-09 起）写入时携带名称快照。
 - 系统日志对上述业务动作是当前留存策略下的全量覆盖：订单/入库的编辑明细日志随订单物理清理而消失，属有限留存而非永久历史审计。`sys_grant_log`/`sys_user_change_log`（权限域已有专页）、`outbound_state_log`（ship/void 已由 op_log 覆盖）及系统备份/恢复审计动作不进聚合。

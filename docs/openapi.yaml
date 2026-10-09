@@ -49,6 +49,8 @@ tags:
       description: 应用内数据库备份/恢复（仅超管；含恢复任务查询）
     - name: system-logs
       description: 系统日志时间线聚合（仅超级管理员）
+    - name: health
+      description: 存活/就绪探针（无鉴权，供编排系统与冒烟脚本）
 
 paths:
     /auth/login:
@@ -335,7 +337,7 @@ paths:
             tags: [boms]
             operationId: listBomCategories
             summary: 后端权威 BOM 品类与物料目录
-            description: 权限 `bom:view`。返回 7 品类及分区/分组/可选物料树；跌倒开关品类额外下发 childCategories 标记（须从列表品类中选一个已建 BOM 作为子件）；前端不得自行决定有效品类、目录结构或编码前缀。
+            description: 权限 `bom:view`。返回 9 行品类（7 个启用品类 + xk3-wire/xk3-plug 两个停用目录容器，status=false 下发供合并目录）及分区/分组/可选物料树；跌倒开关、旋转XK3 品类额外下发 childCategories 标记（建档时传子品类 key，该子品类完整物料目录并入校验，不引用任何已建 BOM）；前端不得自行决定有效品类、目录结构或编码前缀。
             responses:
                 "200":
                     description: 成功
@@ -361,7 +363,7 @@ paths:
             tags: [boms]
             operationId: createBom
             summary: 新建唯一 BOM（品类 + 选中物料集合）
-            description: 权限 `bom:create`。服务端按品类目录校验（ids 非空、去重、归属且品类/分区/分组/物料启用、单选组最多 1 项）；品类标记 childCategories 时 childCategory 必填（如跌倒开关选微动开关类型），该子品类的完整物料目录并入校验范围。规范化物料集合（BigInt 十进制、去重、数值升序 JSON）的 SHA-256 命中相同品类即 409 并返回已有 bomCode，输入顺序与重复 id 不影响指纹。同幂等键同请求摘要重放原成功响应，同键异内容 409。
+            description: 权限 `bom:create`。服务端按品类目录校验（ids 非空、去重、归属且品类/分区/分组/物料启用、单选组最多 1 项）；品类标记 childCategories 时 childCategory 必填（如跌倒开关选微动开关类型），该子品类的完整物料目录并入校验范围。判重指纹为 `[品类 id, [[物料 id, 数量]...], 备注]` 三元素 JSON（物料 id BigInt 十进制规范化、去重、按 id 数值升序，数字不加引号、备注为 trim 后原文）的 SHA-256，命中相同品类即 409 并返回已有 bomCode，输入顺序与重复 id 不影响指纹。同幂等键同请求摘要重放原成功响应，同键异内容 409。
             parameters:
                 - $ref: "#/components/parameters/IdempotencyKey"
             requestBody:
@@ -400,7 +402,7 @@ paths:
             tags: [boms]
             operationId: listBomStocks
             summary: BOM 当前库存余量聚合
-            description: 权限 `bom:view`。口径同 v_bom_stock：有效入库 + 库存调整 − 未作废出库；仅返回存在流水的 bomCode，无流水者由前端按 0 展示。
+            description: 权限 `bom:view`。口径同 v_bom_stock：有效入库 + 库存调整 − 未软删出库单的全部台账事件（作废单正向+冲销行等额相抵）；仅返回存在流水的 bomCode，无流水者由前端按 0 展示。
             responses:
                 "200":
                     description: 成功
@@ -414,7 +416,7 @@ paths:
             tags: [boms]
             operationId: getBomStockLedger
             summary: BOM 出入库流水与逐笔结余
-            description: 权限 `bom:view`。仅展示当前有效的入库（ACTIVE）、库存调整及出库（REGISTERED），按业务日升序计算逐笔结余；已作废单不显示，其审计历史在出入库台账和日志中保留。`stockQty` 与末笔 `balance` 及 v_bom_stock 恒等。BOM 不存在返回 404；存在但无有效流水返回空 flows 与 stockQty 0。
+            description: 权限 `bom:view`。入库仅展示有效（ACTIVE）单，库存调整全部展示；出库展示未软删单的全部事件，作废单的正向与冲销行成对出现（冲销行备注展示作废原因），按业务日升序计算逐笔结余。`stockQty` 与末笔 `balance` 及 v_bom_stock 恒等。BOM 不存在返回 404；存在但无有效流水返回空 flows 与 stockQty 0。
             parameters:
                 - $ref: "#/components/parameters/BomCode"
             responses:
@@ -828,7 +830,7 @@ paths:
             description: |
                 同时需要 menu:analytics 和 menu:workbench（super 直通），沿用 Bearer JWT。
                 返回可直接渲染的 nodes/edges；nodes.facts 为 agent 可计算的原始字段，properties 为中文展示字段。
-                单据、有效出库净额与当前库存由同一个 Repeatable Read 只读事务快照读取。
+                单据、有效出库净额与当前库存在同一只读事务内顺序读取（READ COMMITTED，各语句独立快照）。
                 日期含首尾：订单按 orderDate，出入库按 businessDate；范围内出库引用的历史订单也保留。
                 status=all 时还纳入范围内仅有入库、没有订单的 BOM；指定 orderNo/customerCode 时不混入无关 BOM。
                 completed 表示累计有效出库 >= 订单数量，含已交满归档单；archived 表示归档，可能尚未交满，两组可重叠。
@@ -902,7 +904,7 @@ paths:
             summary: 系统日志时间线（分批追加）
             description: |
                 受保护权限 `system-logs:view`，仅 super。聚合四来源为统一业务事件流：op_log
-                （订单创建/归档/删除、客户创建/编辑/负责人移交（含离岗批量移交）、BOM
+                （订单创建/归档/归档回退/删除、客户创建/编辑/负责人移交（含离岗批量移交）、BOM
                 创建/删除、入库创建/作废/删除、出库登记发货/作废/删除）、
                 sales_order_change_log（仅 UPDATE 的编辑明细）、inbound_change_log（仅
                 UPDATE 的当天修正）、stock_adjustment（库存调整，domain=inbound、
@@ -1153,6 +1155,43 @@ paths:
                 "403": { $ref: "#/components/responses/Forbidden" }
                 "404": { description: 当前未查到记录（原请求可能仍在上传或预检；可凭同 key 重提） }
 
+    /health/live:
+        get:
+            tags: [health]
+            operationId: healthLive
+            summary: 存活探针
+            description: |
+                @Public，无权限要求。进程活着即 200（不触数据库）；
+                恢复维护期只读白名单放行本端点。
+            security: []
+            responses:
+                "200":
+                    description: 进程存活
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/HealthEnvelope" }
+
+    /health/ready:
+        get:
+            tags: [health]
+            operationId: healthReady
+            summary: 就绪探针
+            description: |
+                @Public，无权限要求。数据库探活（SELECT 1）成功返回 200；
+                失败返回 503 与错误信封（数据库不可用）。
+            security: []
+            responses:
+                "200":
+                    description: 数据库可用
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/HealthEnvelope" }
+                "503":
+                    description: 数据库不可用
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
 components:
     securitySchemes:
         bearerAuth:
@@ -1176,7 +1215,8 @@ components:
             name: code
             in: path
             required: true
-            schema: { type: string, pattern: "^ZM[A-Z0-9]{2,6}[0-9]{3,}$" }
+            description: 品类前缀 + 至少 3 位序号，前缀 XK2/XK3/KW/KWO/AQ/KD/KQ/XK3W/XK3P，如 XK2001、KW001、KWO001、AQ001、KD001、KQ001
+            schema: { type: string, pattern: "^(XK3W|XK3P|XK2|XK3|KWO|KW|AQ|KD|KQ)[0-9]{3,}$" }
         CustomerCode:
             name: code
             in: path
@@ -1292,7 +1332,7 @@ components:
                 updatedAt:
                     type: string
                     format: date-time
-                    description: 最近一次资料/状态/密码变更时间；从未变更为 NULL
+                    description: 最近一次资料/状态/密码变更时间；恒有值（Prisma 层变更时刷新）
 
         LoginInput:
             type: object
@@ -1540,10 +1580,13 @@ components:
                 name: { type: string }
                 codePrefix: { type: string }
                 seqWidth: { type: integer, minimum: 3, maximum: 8 }
+                status:
+                    type: boolean
+                    description: 仅停用品类返回 false（仅作分组的目录容器品类，被启用品类 childCategories 引用，随接口下发供合并目录，不在建档下拉出现）；启用品类无此字段
                 childCategories:
                     type: array
                     items: { type: string }
-                    description: 标记该品类建档必须从列表品类中选择一个已建 BOM 作为子件（如跌倒开关嵌入微动开关）；普通品类无此字段
+                    description: 标记该品类建档必须传子品类 key（如跌倒开关的微动开关类型、旋转XK3 的焊线工艺），建档时将该子品类完整物料目录并入校验（不引用任何已建 BOM）；普通品类无此字段
                 groups: { type: array, items: { $ref: "#/components/schemas/BomCatalogNode" } }
 
         BomItemView:
@@ -2124,3 +2167,13 @@ components:
                 bomCode: { type: string }
                 inbound: { type: integer, minimum: 0, description: 有效检验入库合计 }
                 outbound: { type: integer, description: 出库净额（含作废冲销，跨日冲销当天可能为负） }
+        HealthStatus:
+            type: object
+            required: [status]
+            properties:
+                status: { type: string, const: ok, description: 存活/就绪状态 }
+        HealthEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/HealthStatus" }, message: { const: ok } }
