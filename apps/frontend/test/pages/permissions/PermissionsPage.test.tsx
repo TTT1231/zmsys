@@ -96,7 +96,8 @@ it("系统组矩阵不把普通角色的脏菜单授权显示为可访问", () =
         const row = screen.getByRole("row", { name: /系统权限验证/ });
         const cells = within(row).getAllByRole("cell");
         expect(cells).toHaveLength(5);
-        expect(cells[0]).toHaveTextContent("可见");
+        // 系统组超管列统一「超管专属」举证口径，与脏授权无关
+        expect(cells[0]).toHaveTextContent("超管专属");
         expect(cells[4]).toHaveTextContent("—");
     } finally {
         MENU_CATALOG.pop();
