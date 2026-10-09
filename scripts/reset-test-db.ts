@@ -1,6 +1,6 @@
 /**
  * 重置 e2e 专用测试库：DROP → CREATE → 全量迁移 → seed。
- * 安全护栏：库名必须以 _test 结尾，且仅允许 localhost / CI service。
+ * 安全护栏：库名必须以 _test 结尾，且仅允许本机（localhost/127.0.0.1）。
  */
 import { config } from "dotenv";
 import "../apps/backend/src/process-tz.js";
@@ -28,7 +28,7 @@ if (!DB.endsWith("_test")) {
     throw new Error(`拒绝重置非测试库：${DB}`);
 }
 if (!["localhost", "127.0.0.1"].includes(HOST)) {
-    throw new Error(`测试库重置仅允许 localhost 或 CI service，当前 host=${HOST}`);
+    throw new Error(`测试库重置仅允许 localhost / 127.0.0.1，当前 host=${HOST}`);
 }
 
 // prisma:deploy / prisma:seed 是 backend 包脚本，须固定在其 cwd 下执行

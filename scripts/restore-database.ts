@@ -1,5 +1,5 @@
 /**
- * 恢复 CLI 外壳（实施计划 CLI 节）。
+ * 恢复 CLI 外壳（db-scheme.md §10.5）。
  *
  * 用法：
  *   pnpm restore-database --local [--replace] [--yes] [--request-key <key>] <备份文件>
@@ -32,7 +32,7 @@ config({ path: join(repoRoot, ".env") });
 
 const ARGS = process.argv.slice(2);
 /** 带值选项白名单：其后紧随的位置参数是选项值而非文件名 */
-const VALUE_OPTIONS = new Set(["--mode", "--request-key", "--reset-password", "--fault"]);
+const VALUE_OPTIONS = new Set(["--request-key", "--reset-password"]);
 const argValue = (name: string): string | undefined => {
     const index = ARGS.indexOf(`--${name}`);
     if (index === -1) return undefined;
@@ -125,7 +125,7 @@ const main = async (): Promise<void> => {
         throw new Error(`备份文件不存在：${filePath}`);
     }
     if (!/^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$/.test(requestKey)) {
-        throw new Error("--request-key 须为 8-64 位字母数字与 ._-= 字符");
+        throw new Error("--request-key 须为 8-64 位：字母或数字开头，后续为字母数字与 . _ -");
     }
     console.log(`目标：${isLocal ? "本地" : "远程"} · 模式：${mode} · requestKey：${requestKey} · 文件：${filePath}`);
     // 远程模式的确认（含目标库校验信息）在 runRemoteEntry 内完成，避免双重询问

@@ -1,5 +1,5 @@
 /**
- * 应用内备份/恢复 · 真实冒烟验收（实施计划 §验证 手动/演练项的自动化）。
+ * 应用内备份/恢复 · 真实冒烟验收（手动/演练项的自动化）。
  *
  * 前置（本脚本不代做）：
  *   1. zmdb_test 已恢复生产备份（去 DEFINER）并应用全部迁移（含 20260942000000）；
@@ -19,7 +19,6 @@ import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { gunzipSync } from "node:zlib";
 import { rm, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -167,7 +166,7 @@ async function main(): Promise<void> {
         const backupPath = join(tmpdir(), `zmsys-smoke-${randomUUID().slice(0, 8)}.sql.gz`);
         await writeFile(backupPath, gzBody);
         const prodCounts = await sql<Array<Record<string, number | bigint>>>(
-            "SELECT (SELECT COUNT(*) FROM sys_user) u,(SELECT COUNT(*) FROM custom_table) c,(SELECT COUNT(*) FROM sales_order_table) o,(SELECT COUNT(*) FROM bom_table) b,(SELECT COUNT(*) FROM inbound_ledger) i,(SELECT COUNT(*) FROM outbound_shipment) s,(SELECT COUNT(*) FROM op_log) l",
+            "SELECT (SELECT COUNT(*) FROM sys_user) u,(SELECT COUNT(*) FROM custom_table) c,(SELECT COUNT(*) FROM sales_order_table) o,(SELECT COUNT(*) FROM inbound_ledger) i,(SELECT COUNT(*) FROM op_log) l",
         );
         const row = prodCounts[0]!;
         const inMeta = (table: string): number => meta.tables.find(item => item.name === table)?.rowCount ?? -1;
@@ -363,8 +362,7 @@ async function main(): Promise<void> {
         console.log("\n冒烟全部通过 ✓（真实生产体量数据 + 真实 HTTP + 真实 CLI）");
     } finally {
         child.kill();
-        const code = await exited;
-        if (existsSync(join(backendDir, "dist"))) void code;
+        await exited;
     }
 }
 

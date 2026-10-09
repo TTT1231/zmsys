@@ -1,9 +1,9 @@
 /**
- * 恢复演练（实施计划 §演练，双轨 + 故障注入，仅对 *_test 库）：
+ * 恢复演练（db-scheme.md §10.5，双轨 + 故障注入，仅对 *_test 库）：
  *
  * replace 轨：源库造自引用父子/三层（子 id < 父 id）→ 备份 → reset+seed → 目标库造
  * 幂等记录与待删行 → replace → 断言自引用插回/幂等清空/业务字段还原/token_version
- * 抬升/凭证 SUCCEEDED/取号不撞；补空表场景。
+ * 抬升/凭证 SUCCEEDED/取号不撞。
  *
  * merge 轨：基线（reset+seed 后重新备份）→ 删 2 行 op_log 补插 / 调低 biz_sequence
  * GREATEST 抬升 / 改名分歧整体回滚。
@@ -22,7 +22,7 @@ import { deriveTestDatabase, loadDbEnv } from "../apps/backend/src/configuration
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -214,9 +214,6 @@ const verifyWithLock = async (
 };
 
 const main = async (): Promise<void> => {
-    const work = join(tmpdir(), "zmsys-drill");
-    await mkdir(work, { recursive: true });
-
     console.log("== replace 轨 ==");
     resetDb();
     // ① 源库造自引用三层（孙 id < 祖 id）：material_group parent 链 + bom 品类引用
@@ -387,7 +384,6 @@ const main = async (): Promise<void> => {
     console.log("  ✓ ④ 回滚中重启 → 等待旧会话 → 确认未提交 → 同 key 重跑成功");
 
     // 清理演练产物
-    await rm(work, { recursive: true, force: true });
     await rm(replaceBackupPath, { force: true });
     await rm(mergeBackupPath, { force: true });
     console.log("\n演练全部通过：replace 轨 / merge 轨 / 四项故障注入 ✓");

@@ -1,6 +1,6 @@
 /**
  * 自动化冒烟：spawn 真实进程（编译产物 dist/main.js）→ 等健康就绪 → 登录 →
- * profile → ready 探活 → 发停止信号 → 断言优雅退出（退出码 + Prisma/池关闭日志）。
+ * profile → ready 探活 → 发停止信号 → 断言进程 15s 内退出（Prisma/池关闭日志仅拼入报错信息，不做断言）。
  * 全程连 *_test 专用库（护栏同 e2e）。前置：测试库已 reset。后端产物由脚本
  * 开头经 turbo 自动构建——与 deploy:prod 共用 production 缓存槽，代码未变时秒级。
  * Windows 不支持向子进程投递真实信号，停止阶段降级为仅断言进程退出；

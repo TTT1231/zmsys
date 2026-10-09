@@ -17,7 +17,7 @@
  *      admin-manage_mysql-data 数据 cp -a 到 zmsys-mysql-data，旧卷保留可回滚）→
  *      docker compose build && up -d → 健康检查（/api/health/live）
  *
- * ssh 连接频率受限：全程仅 2 次连接（上传/执行各 1 次），间隔 20s；
+ * ssh 连接频率受限：全程仅 2 次连接（上传/执行各 1 次），间隔 10s；
  * 各步骤幂等，撞限流报错后稍等重跑 pnpm deploy:prod 即可续跑。
  *
  * 数据安全：MySQL 数据在 zmsys-mysql-data 卷，重建容器/镜像不影响；
