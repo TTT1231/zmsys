@@ -5,7 +5,6 @@ import type { Tx } from "../prisma/transaction.runner";
 import { SnowflakeGenerator } from "../common/snowflake";
 import { IdempotencyService } from "../idempotency/idempotency.service";
 import { maskPhone } from "../common/phone";
-import { formatDateColumn } from "../common/datetime";
 import { beijingDayKey } from "../common/beijing-day";
 import { CUSTOMER_OWNER_ROLE_CODES, isEligibleCustomerOwner } from "../constants";
 import { assertVersionMatches, lockRowForWrite, lockRowByKey } from "../domain/concurrency";
@@ -32,8 +31,11 @@ function addCalendarMonths(utcMidnight: Date, months: number): Date {
     return result;
 }
 
-/** 客户行 + 负责人关联（owner 为响应映射必需的 join 结果） */
-type CustomerRow = CustomTable & { owner: Pick<SysUser, "id" | "name" | "account"> };
+/** 客户行 + 负责人/创建人关联（响应映射必需的 join 结果） */
+type CustomerRow = CustomTable & {
+    owner: Pick<SysUser, "id" | "name" | "account">;
+    creator: Pick<SysUser, "id" | "name" | "account">;
+};
 
 @Injectable()
 export class CustomersService {
@@ -54,7 +56,10 @@ export class CustomersService {
         const [rows, cooperatingIds] = await Promise.all([
             this.prisma.customTable.findMany({
                 orderBy: { customerCode: "asc" },
-                include: { owner: { select: { id: true, name: true, account: true } } },
+                include: {
+                    owner: { select: { id: true, name: true, account: true } },
+                    creator: { select: { id: true, name: true, account: true } },
+                },
             }),
             this.cooperatingCustomerIds(this.prisma),
         ]);
@@ -129,6 +134,7 @@ export class CustomersService {
                         updatedBy: BigInt(actor.id),
                         createdAt: now,
                     },
+                    include: { creator: { select: { id: true, name: true, account: true } } },
                 });
                 await recordOpLog(tx, this.snowflake, actor, {
                     action: "create_customer",
@@ -183,7 +189,10 @@ export class CustomersService {
                     updatedBy: BigInt(actor.id),
                     rowVersion: { increment: 1 },
                 },
-                include: { owner: { select: { id: true, name: true, account: true } } },
+                include: {
+                    owner: { select: { id: true, name: true, account: true } },
+                    creator: { select: { id: true, name: true, account: true } },
+                },
             });
 
             if (ownerId !== current.ownerId) {
@@ -287,13 +296,16 @@ export class CustomersService {
             inner =>
                 inner.customTable.findUnique({
                     where: { customerCode: code },
-                    include: { owner: { select: { id: true, name: true, account: true } } },
+                    include: {
+                        owner: { select: { id: true, name: true, account: true } },
+                        creator: { select: { id: true, name: true, account: true } },
+                    },
                 }),
             "客户不存在",
         );
     }
 
-    /** 契约 Customer 映射：version 序列化为 number，日期列 yyyy-MM-dd，手机号掩码 */
+    /** 契约 Customer 映射：version 序列化为 number，建档时刻 ISO 8601，手机号掩码 */
     private toCustomer(row: CustomerRow, cooperating: boolean): Customer {
         return {
             version: Number(row.rowVersion),
@@ -309,8 +321,10 @@ export class CustomersService {
             cooperation: cooperating ? "合作中" : "待跟进",
             owner: row.owner.name,
             ownerAccount: row.owner.account,
+            createdBy: row.creator.name,
             payTerms: row.payTerms,
-            created: formatDateColumn(row.createdAt),
+            // 建档时刻（ISO 8601 带时区）：前端 formatDateTime 展示到分钟（与 BOM 建档口径一致）
+            created: row.createdAt.toISOString(),
         };
     }
 }

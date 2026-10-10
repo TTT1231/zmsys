@@ -107,6 +107,8 @@ describe("客户档案 (e2e)", () => {
         expect(created).toMatchObject({
             cooperation: "待跟进",
             ownerAccount: salesAccount,
+            // 创建人为操作者（superToken = guojun）
+            createdBy: "郭均",
             payTerms: "月结 30 天",
             version: 1,
         });

@@ -22,8 +22,9 @@ const customer: Customer = {
     cooperation: "合作中",
     owner: "销售甲",
     ownerAccount: "sales01",
+    createdBy: "郭均",
     payTerms: "月结 30 天",
-    created: "2026-08-01",
+    created: "2026-08-01T09:30:00.000Z",
 };
 const snapshot = {
     ...detailSnapshot,

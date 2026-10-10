@@ -1491,7 +1491,7 @@ components:
 
         Customer:
             type: object
-            required: [version, code, name, contact, phone, province, city, district, town, address, cooperation, owner, ownerAccount, payTerms, created]
+            required: [version, code, name, contact, phone, province, city, district, town, address, cooperation, owner, ownerAccount, createdBy, payTerms, created]
             properties:
                 version: { type: integer, minimum: 1 }
                 code: { type: string }
@@ -1506,8 +1506,9 @@ components:
                 cooperation: { type: string, enum: [合作中, 待跟进] }
                 owner: { type: string }
                 ownerAccount: { type: string }
+                createdBy: { type: string, description: 创建人姓名（created_by，建档后不变） }
                 payTerms: { type: string }
-                created: { type: string, format: date }
+                created: { type: string, format: date-time, description: 建档时刻（ISO 8601 带时区） }
 
         CreateCustomerInput:
             type: object
