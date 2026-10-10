@@ -248,6 +248,9 @@ export function SystemLogsPage() {
     const [tab, setTab] = useState<DomainKey>("all");
     const [keyword, setKeyword] = useState("");
     const [action, setAction] = useState("all");
+    // 操作人为用户账号（姓名可重名）；候选来自聚合快照 users（本页仅 super 可达，
+    // 其快照必含 users），含已停用账号——历史操作仍需可按人追溯
+    const [operator, setOperator] = useState("all");
     // 默认最近 7 天（审计日志业界惯例：GitHub 默认近 3 个月，无人只默认当天）
     const [range, setRange] = useState<"today" | "7d" | "30d" | "custom">("7d");
     // custom 延迟生效：草稿仅在点「应用范围」或 Enter 时并入 applied
@@ -267,12 +270,13 @@ export function SystemLogsPage() {
         () => ({
             ...(tab !== "all" ? { domain: tab as SystemLogDomain } : {}),
             ...(action !== "all" ? { action: action as SystemLogAction } : {}),
+            ...(operator !== "all" ? { operator } : {}),
             range,
             ...(range === "custom" && applied ? { from: applied.from, to: applied.to } : {}),
             ...(debouncedKeyword.trim() ? { keyword: debouncedKeyword.trim() } : {}),
             limit: 20,
         }),
-        [tab, action, range, applied, debouncedKeyword],
+        [tab, action, operator, range, applied, debouncedKeyword],
     );
     const {
         data,
@@ -300,6 +304,7 @@ export function SystemLogsPage() {
         setTab("all");
         setKeyword("");
         setAction("all");
+        setOperator("all");
         setRange("7d");
         setDraftFrom("");
         setDraftTo("");
@@ -360,6 +365,19 @@ export function SystemLogsPage() {
                         {ACTION_OPTIONS.map(option => (
                             <option key={option.value} value={option.value}>
                                 {option.label}
+                            </option>
+                        ))}
+                    </select>
+                    <select
+                        value={operator}
+                        onChange={event => setOperator(event.target.value)}
+                        aria-label="操作人"
+                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
+                    >
+                        <option value="all">全部操作人</option>
+                        {snap.users.map(user => (
+                            <option key={user.account} value={user.account}>
+                                {`${user.name}（${user.account}）${user.active ? "" : "· 已停用"}`}
                             </option>
                         ))}
                     </select>

@@ -920,6 +920,10 @@ paths:
                 快照存在——存量 create_order/ship 等旧日志无名称快照，按名称搜不到属
                 预期降级；按编号/操作人仍可命中，不做历史回填。时间范围按北京日界：
                 today 为今天，7d/30d 均含今天共 N 个自然日，custom 含起止日期。
+
+                操作人筛选（operator）按用户账号精确匹配（姓名可重名故不用姓名）：
+                账号先解析为用户 id，四个来源表均按 operator_id 过滤，跨 op_log /
+                change_log / stock_adjustment 一致生效；账号不存在返回 400。
             parameters:
                 - name: domain
                   in: query
@@ -931,6 +935,10 @@ paths:
                   schema:
                       type: string
                       enum: [create, edit, transfer, archive, unarchive, delete, void, ship, adjust]
+                - name: operator
+                  in: query
+                  required: false
+                  schema: { type: string, maxLength: 64, description: 操作人账号（精确匹配，四来源统一按 operator_id 过滤） }
                 - name: range
                   in: query
                   required: false

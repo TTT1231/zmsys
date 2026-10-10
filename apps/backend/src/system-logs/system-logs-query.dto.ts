@@ -15,6 +15,12 @@ export class SystemLogsQueryDto {
     @IsIn(["create", "edit", "transfer", "archive", "unarchive", "delete", "void", "ship", "adjust"])
     action?: SystemLogAction;
 
+    /** 操作人筛选（用户账号，精确匹配；姓名可重名故用账号）；缺省全部 */
+    @IsOptional()
+    @Type(() => String)
+    @Length(1, 64)
+    operator?: string;
+
     /** 时间范围：今天 / 最近 7 天 / 最近 30 天（均含今天，北京日界）/ 自定义 */
     @IsOptional()
     @IsIn(["today", "7d", "30d", "custom"])

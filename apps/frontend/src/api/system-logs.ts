@@ -6,6 +6,7 @@ export function fetchSystemLogs(query: SystemLogQuery): Promise<SystemLogPage> {
     const params = new URLSearchParams();
     if (query.domain) params.set("domain", query.domain);
     if (query.action) params.set("action", query.action);
+    if (query.operator) params.set("operator", query.operator);
     params.set("range", query.range);
     if (query.range === "custom") {
         if (query.from) params.set("from", query.from);

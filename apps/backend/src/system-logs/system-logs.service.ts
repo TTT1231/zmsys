@@ -109,6 +109,8 @@ const EMPTY_ARM = Prisma.sql`SELECT NULL AS id, NULL AS created_at, NULL AS acto
  * 与雪花 id 顺序可能倒置，时间线按操作时间排列是语义需求。关键词匹配操作人
  * 姓名/目标编号/目标名称三项；名称命中依赖快照存在，存量 create_order/ship 等
  * 旧格式日志的名称快照已由 scripts/backfill-oplog-legacy.ts 一次性回填。
+ * 操作人筛选按账号精确匹配（姓名可重名）：账号先解析为用户 id，四臂来源表
+ * 都有 operator_id 列，统一按 id 过滤（账号不存在 400）。
  */
 @Injectable()
 export class SystemLogsService {
@@ -121,18 +123,20 @@ export class SystemLogsService {
             throw new BadRequestException("beforeAt 须为合法 ISO 时刻");
         }
         const cursorId = query.beforeId !== undefined ? BigInt(query.beforeId) : null;
+        // 操作人账号解析一次，四臂共用（来源表都存 operator_id，按 id 精确过滤）
+        const operatorId = await this.operatorIdOf(query);
         // 多取 1 条判断是否还有下一批；游标取本批末条
         const take = query.limit + 1;
 
         const rows = await this.prisma.$queryRaw<LogSourceRow[]>(Prisma.sql`
             SELECT * FROM (
-                ${this.opLogArm(query, window, cursorAt, cursorId)}
+                ${this.opLogArm(query, window, cursorAt, cursorId, operatorId)}
                 UNION ALL
-                ${this.orderChangeArm(query, window, cursorAt, cursorId)}
+                ${this.orderChangeArm(query, window, cursorAt, cursorId, operatorId)}
                 UNION ALL
-                ${this.inboundChangeArm(query, window, cursorAt, cursorId)}
+                ${this.inboundChangeArm(query, window, cursorAt, cursorId, operatorId)}
                 UNION ALL
-                ${this.adjustmentArm(query, window, cursorAt, cursorId)}
+                ${this.adjustmentArm(query, window, cursorAt, cursorId, operatorId)}
             ) AS unified
             ORDER BY unified.created_at DESC, unified.id DESC
             LIMIT ${take}
@@ -182,12 +186,28 @@ export class SystemLogsService {
         return base;
     }
 
+    /** 账号 → 用户 id；不存在（下拉数据过期等）按参数错误处理 */
+    private async operatorIdOf(query: SystemLogsQueryDto): Promise<bigint | null> {
+        if (query.operator === undefined) {
+            return null;
+        }
+        const user = await this.prisma.sysUser.findUnique({
+            where: { account: query.operator },
+            select: { id: true },
+        });
+        if (!user) {
+            throw new BadRequestException("操作人不存在");
+        }
+        return user.id;
+    }
+
     /** 臂一：op_log 业务动作（update_customer 按 ownerChanged 拆分 transfer/edit） */
     private opLogArm(
         query: SystemLogsQueryDto,
         window: { start: Date; end: Date },
         cursorAt: Date | null,
         cursorId: bigint | null,
+        operatorId: bigint | null,
     ): Prisma.Sql {
         const domainExpr = Prisma.raw(
             `CASE ${Object.entries(OP_LOG_DOMAIN)
@@ -226,6 +246,9 @@ export class SystemLogsService {
                 Prisma.sql` AND (o.operator_name_snapshot LIKE ${like} ESCAPE '\\\\' OR CONVERT(o.target_code USING utf8mb4) LIKE ${like} ESCAPE '\\\\' OR ${nameExpr} LIKE ${like} ESCAPE '\\\\')`,
             );
         }
+        if (operatorId !== null) {
+            filters.push(this.operatorFilter("o", operatorId));
+        }
         return Prisma.sql`
             SELECT o.id, o.created_at, o.operator_name_snapshot AS actor_name,
                    o.operator_role_snapshot AS actor_role, ${domainExpr} AS domain,
@@ -256,6 +279,7 @@ export class SystemLogsService {
         window: { start: Date; end: Date },
         cursorAt: Date | null,
         cursorId: bigint | null,
+        operatorId: bigint | null,
     ): Prisma.Sql {
         if (!this.armMatches(query, "order", "edit")) {
             return EMPTY_ARM;
@@ -270,7 +294,7 @@ export class SystemLogsService {
             FROM sales_order_change_log AS c
             JOIN sales_order_table AS o ON o.id = c.order_id
             JOIN sys_user AS u ON u.id = c.operator_id
-            WHERE c.event_type = 'UPDATE' AND ${this.rangeFilters("c", window, cursorAt, cursorId)}${keyword}`;
+            WHERE c.event_type = 'UPDATE' AND ${this.rangeFilters("c", window, cursorAt, cursorId)}${keyword}${this.operatorFilter("c", operatorId)}`;
     }
 
     /** 臂三：入库当天修正（change_log 仅 UPDATE；BOM 品类名补 target_name） */
@@ -279,6 +303,7 @@ export class SystemLogsService {
         window: { start: Date; end: Date },
         cursorAt: Date | null,
         cursorId: bigint | null,
+        operatorId: bigint | null,
     ): Prisma.Sql {
         if (!this.armMatches(query, "inbound", "edit")) {
             return EMPTY_ARM;
@@ -295,7 +320,7 @@ export class SystemLogsService {
             LEFT JOIN bom_table AS b ON b.id = i.bom_id
             LEFT JOIN bom_category AS bc ON bc.id = b.category_id
             JOIN sys_user AS u ON u.id = c.operator_id
-            WHERE c.event_type = 'UPDATE' AND ${this.rangeFilters("c", window, cursorAt, cursorId)}${keyword}`;
+            WHERE c.event_type = 'UPDATE' AND ${this.rangeFilters("c", window, cursorAt, cursorId)}${keyword}${this.operatorFilter("c", operatorId)}`;
     }
 
     /** 臂四：库存调整（追加表即日志，adjust 动作；domain 归 inbound） */
@@ -304,6 +329,7 @@ export class SystemLogsService {
         window: { start: Date; end: Date },
         cursorAt: Date | null,
         cursorId: bigint | null,
+        operatorId: bigint | null,
     ): Prisma.Sql {
         if (!this.armMatches(query, "inbound", "adjust")) {
             return EMPTY_ARM;
@@ -320,7 +346,7 @@ export class SystemLogsService {
             LEFT JOIN bom_category AS bc ON bc.id = b.category_id
             LEFT JOIN inbound_ledger AS ri ON ri.id = a.related_inbound_id
             JOIN sys_user AS u ON u.id = a.operator_id
-            WHERE ${this.rangeFilters("a", window, cursorAt, cursorId)}${keyword}`;
+            WHERE ${this.rangeFilters("a", window, cursorAt, cursorId)}${keyword}${this.operatorFilter("a", operatorId)}`;
     }
 
     /** 筛选是否命中该臂的 (domain, action) 组合；不命中即整臂短路 */
@@ -341,6 +367,14 @@ export class SystemLogsService {
         const code = Prisma.raw(`CONVERT(${codeColumn} USING utf8mb4)`);
         const name = Prisma.raw(`CONVERT(${nameColumn} USING utf8mb4)`);
         return Prisma.sql` AND (u.name LIKE ${like} ESCAPE '\\\\' OR ${code} LIKE ${like} ESCAPE '\\\\' OR ${name} LIKE ${like} ESCAPE '\\\\')`;
+    }
+
+    /** 操作人条件（各臂来源表都有 operator_id，列名统一；alias 为代码内字面量） */
+    private operatorFilter(alias: string, operatorId: bigint | null): Prisma.Sql {
+        if (operatorId === null) {
+            return Prisma.sql``;
+        }
+        return Prisma.sql` AND ${Prisma.raw(`${alias}.operator_id`)} = ${operatorId}`;
     }
 
     /** 来源行 → 契约事件（changes 按来源分派：op_log detail / change_log diff / 调整行） */
