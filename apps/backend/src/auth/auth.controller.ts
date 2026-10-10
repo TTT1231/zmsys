@@ -31,7 +31,9 @@ export class AuthController {
 
     @AuthenticatedOnly()
     @Get("profile")
-    async getProfile(@CurrentUser() user: AuthUser): Promise<{ user: WbUser; grant: RoleGrant }> {
+    async getProfile(
+        @CurrentUser() user: AuthUser,
+    ): Promise<{ user: WbUser; grant: RoleGrant; protectedCodes: string[] }> {
         return this.authService.getProfile(user);
     }
 

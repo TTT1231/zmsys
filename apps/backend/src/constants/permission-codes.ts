@@ -2,6 +2,8 @@
  * 权限码常量目录，与 sys_permission 播种数据一一对应。
  * 格式约定（db-scheme.md §3.3）：菜单码 `menu:<menuKey>`，动作码 `<menuKey>:<actionId>`。
  * 新增权限码必须先加进迁移播种，再在此登记。
+ * 受保护 = 默认仅 super 持有；super 可经 PATCH /permissions/catalog/:code/protected
+ * 运行时解锁后授予其他角色，重新加锁自动收回（db-scheme.md §3.3/§3.6）。
  */
 export const PERMISSIONS = {
     // ---- 菜单 ----
@@ -14,7 +16,7 @@ export const PERMISSIONS = {
     MENU_STOCK: "menu:stock",
     MENU_ARCHIVED_ORDERS: "menu:archived-orders",
     MENU_ANALYTICS: "menu:analytics", // 可授权菜单，默认仅超管（不播普通角色授权行）
-    // 受保护菜单（仅 super）
+    // 受保护菜单（默认仅 super，超管可运行时解锁下放）
     MENU_PERMISSIONS: "menu:permissions",
     MENU_PERMISSIONS_ACCOUNTS: "menu:permissions-accounts",
     MENU_PERMISSIONS_ROLES: "menu:permissions-roles",
@@ -54,16 +56,16 @@ export const PERMISSIONS = {
     OUTBOUND_VOID: "outbound:void",
     OUTBOUND_DELETE: "outbound:delete", // 默认授仓管，超管可按需授予其他角色
 
-    // ---- 用户与权限（受保护，仅 super）----
+    // ---- 用户与权限（受保护，默认仅 super）----
     PERMISSIONS_VIEW: "permissions:view",
     PERMISSIONS_MANAGE: "permissions:manage",
 
-    // ---- 系统（备份/恢复，受保护，仅 super）----
+    // ---- 系统（备份/恢复菜单码与执行动作均受保护，默认仅 super）----
     MENU_SYSTEM_BACKUP: "menu:system-backup",
     MENU_SYSTEM_RESTORE: "menu:system-restore",
     SYSTEM_BACKUP_RUN: "system-backup:run", // 受保护
     SYSTEM_RESTORE_RUN: "system-restore:run", // 受保护
-    // ---- 系统日志（受保护，仅 super）----
+    // ---- 系统日志（受保护，默认仅 super）----
     SYSTEM_LOGS_VIEW: "system-logs:view",
 } as const;
 

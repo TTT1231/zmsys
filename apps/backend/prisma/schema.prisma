@@ -238,6 +238,23 @@ model SysGrantLog {
   @@map("sys_grant_log")
 }
 
+/// 权限保护开关日志：解锁/加锁各写一行；加锁时 cleaned_grants 记录同事务清理的授权行数。
+/// 与 sys_grant_log 分表：后者只记角色授权整组保存，本表只记目录级保护状态翻转
+model SysPermissionChangeLog {
+  id              BigInt   @id
+  operatorId      BigInt   @map("operator_id")
+  permissionCode  String   @map("permission_code") @db.VarChar(80)
+  beforeProtected Boolean  @map("before_protected")
+  afterProtected  Boolean  @map("after_protected")
+  cleanedGrants   Int      @default(0) @map("cleaned_grants") @db.UnsignedInt
+  reason          String   @default("") @db.VarChar(500)
+  createdAt       DateTime @map("created_at") @db.DateTime(3)
+
+  @@index([permissionCode, createdAt(sort: Desc)])
+  @@index([operatorId, createdAt(sort: Desc)])
+  @@map("sys_permission_change_log")
+}
+
 /// 用户变更日志：快照不得包含密码哈希（数据库 CHECK 兜底）
 model SysUserChangeLog {
   id            BigInt              @id

@@ -7,6 +7,9 @@ export const AUTH_ONLY_KEY = "authenticatedOnly";
 /** Guard 元数据键：端点要求的权限码与 403 提示文案 */
 export const PERMISSIONS_KEY = "requiredPermissions";
 
+/** Guard 元数据键：端点仅限 super 角色本身（不走权限码——权限码可被解锁后授予他人） */
+export const SUPER_ONLY_KEY = "superOnly";
+
 /** 固定五个内置角色，与 sys_role 播种顺序一致 */
 export const ROLE_CODES = ["super", "admin", "warehouse", "sales", "staff"] as const;
 export type RoleCode = (typeof ROLE_CODES)[number];

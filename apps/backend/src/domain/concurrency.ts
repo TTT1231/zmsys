@@ -25,6 +25,7 @@ export type LockableTable = (typeof LOCKABLE_TABLES)[number];
 const LOCKABLE_KEY_COLUMNS = {
     sys_user: "account",
     sys_role: "code",
+    sys_permission: "code",
     custom_table: "customer_code",
     bom_table: "bom_code",
     sales_order_table: "order_no",

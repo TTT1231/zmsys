@@ -43,12 +43,14 @@ tags:
       description: 系统用户与离岗移交
     - name: roles
       description: 固定角色、实时授权与授权日志
+    - name: permissions
+      description: 权限目录与受保护开关（读 permissions:view；切换仅 super 角色）
     - name: workbench
       description: 工作台经营总览聚合
     - name: system
-      description: 应用内数据库备份/恢复（仅超管；含恢复任务查询）
+      description: 应用内数据库备份/恢复（默认仅超管，可解锁下放；含恢复任务查询）
     - name: system-logs
-      description: 系统日志时间线聚合（仅超级管理员）
+      description: 系统日志时间线聚合（默认仅超级管理员，可解锁下放）
     - name: health
       description: 存活/就绪探针（无鉴权，供编排系统与冒烟脚本）
 
@@ -103,7 +105,7 @@ paths:
             tags: [auth]
             operationId: getProfile
             summary: 当前用户与实时角色授权
-            description: 姓名、角色、状态等资料为管理员域，本人只读；修改姓名走用户管理接口 PUT /users/{account}。
+            description: 姓名、角色、状态等资料为管理员域，本人只读；修改姓名走用户管理接口 PUT /users/{account}。protectedCodes 为当前受保护权限码（运行时真源，解锁/加锁后随刷新变化），供侧边栏「超管专属」标签等展示口径使用。
             responses:
                 "200":
                     description: 成功
@@ -176,7 +178,7 @@ paths:
             tags: [orders]
             operationId: archiveOrder
             summary: 归档订单（终态）
-            description: 受保护权限 `orders:archive`，仅 super。收尾已完成或部分发货的订单使其退出活跃视图：归档后订单从销售订单页移入归档订单页，仅供查询，不可修改/删除，剩余欠量（若有）不再安排交付。一件未发的订单不可归档（手误单走删除）；存在未作废出库单时归档直接放行，已发数量保留。归档期间冻结依赖链：该订单的出库单不可作废/删除（审计依据），被引用 BOM 不可删除；归档后仅归档操作人本人可经 unarchiveOrder 回退。归档人、归档时间与备注（选填）随行落库并写 change_log ARCHIVE 事件与 op_log 供审计。幂等（Idempotency-Key）。
+            description: 受保护权限 `orders:archive`，默认仅 super（super 可解锁后授予其他角色）。收尾已完成或部分发货的订单使其退出活跃视图：归档后订单从销售订单页移入归档订单页，仅供查询，不可修改/删除，剩余欠量（若有）不再安排交付。一件未发的订单不可归档（手误单走删除）；存在未作废出库单时归档直接放行，已发数量保留。归档期间冻结依赖链：该订单的出库单不可作废/删除（审计依据），被引用 BOM 不可删除；归档后仅归档操作人本人可经 unarchiveOrder 回退。归档人、归档时间与备注（选填）随行落库并写 change_log ARCHIVE 事件与 op_log 供审计。幂等（Idempotency-Key）。
             parameters:
                 - $ref: "#/components/parameters/OrderNo"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -201,7 +203,7 @@ paths:
             tags: [orders]
             operationId: unarchiveOrder
             summary: 回退归档订单
-            description: 受保护权限 `orders:unarchive`，仅 super，且仅归档操作人本人（服务端按 `archived_by` 判等，超管同样受限；非归档人 403）。把误归档的订单退回 ACTIVE：订单返回销售订单页，恢复编辑/发货/删除，出库单恢复可作废/删除，可发量重新纳入该订单；归档三要素（archived_at/archived_by/archive_reason）随回退清空（DB CHECK 强制），归档与回退语境由 ARCHIVE/UNARCHIVE 变更日志快照保留。回退备注（选填）随行落库；写 change_log UNARCHIVE 事件与 op_log（unarchive_order）供审计。再次归档时新归档人接替回退权。幂等（Idempotency-Key）。
+            description: 受保护权限 `orders:unarchive`，默认仅 super（super 可解锁后授予其他角色），且仅归档操作人本人（服务端按 `archived_by` 判等，超管同样受限；非归档人 403）。把误归档的订单退回 ACTIVE：订单返回销售订单页，恢复编辑/发货/删除，出库单恢复可作废/删除，可发量重新纳入该订单；归档三要素（archived_at/archived_by/archive_reason）随回退清空（DB CHECK 强制），归档与回退语境由 ARCHIVE/UNARCHIVE 变更日志快照保留。回退备注（选填）随行落库；写 change_log UNARCHIVE 事件与 op_log（unarchive_order）供审计。再次归档时新归档人接替回退权。幂等（Idempotency-Key）。
             parameters:
                 - $ref: "#/components/parameters/OrderNo"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -226,7 +228,7 @@ paths:
             tags: [orders]
             operationId: deleteOrder
             summary: 删除净发货为零且无可见出库单的销售订单
-            description: 受保护权限 `orders:delete`，仅 super。累计已发必须为 0，且关联出库单均已作废并软删除；仍可见的已作废出库单也会阻止删除。成功后订单打 `deleted_at` 标记并立即退出列表和待交统计，`op_log` 保存删除前快照；7 天后且关联出库单已物理清理时，维护任务清理订单及其变更日志。删除与出库登记竞争同一订单锁。
+            description: 受保护权限 `orders:delete`，默认仅 super（super 可解锁后授予其他角色）。累计已发必须为 0，且关联出库单均已作废并软删除；仍可见的已作废出库单也会阻止删除。成功后订单打 `deleted_at` 标记并立即退出列表和待交统计，`op_log` 保存删除前快照；7 天后且关联出库单已物理清理时，维护任务清理订单及其变更日志。删除与出库登记竞争同一订单锁。
             parameters:
                 - $ref: "#/components/parameters/OrderNo"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -386,7 +388,7 @@ paths:
             tags: [boms]
             operationId: deleteBom
             summary: 删除未被引用的 BOM
-            description: 受保护权限 `bom:delete`，仅 super。用于清理手误建档：不得被任何销售订单引用（含已归档订单），且不得存在入库或库存调整流水，否则返回 409。删除为物理移除：明细行与 BOM 行同事务删除，`op_log` 记录 delete_bom 事件与删除前档案快照；删除后档案不再出现在列表中。删除与订单新建、入库登记竞争同一 BOM 行锁，先提交者生效。BOM 建档后不可修改，无乐观锁版本，请求体为空。
+            description: 受保护权限 `bom:delete`，默认仅 super（super 可解锁后授予其他角色）。用于清理手误建档：不得被任何销售订单引用（含已归档订单），且不得存在入库或库存调整流水，否则返回 409。删除为物理移除：明细行与 BOM 行同事务删除，`op_log` 记录 delete_bom 事件与删除前档案快照；删除后档案不再出现在列表中。删除与订单新建、入库登记竞争同一 BOM 行锁，先提交者生效。BOM 建档后不可修改，无乐观锁版本，请求体为空。
             parameters:
                 - $ref: "#/components/parameters/BomCode"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -492,7 +494,7 @@ paths:
             tags: [inbound]
             operationId: voidInbound
             summary: 作废入库（当天窗口；持跨天权限可作废任意天数）
-            description: 权限 `inbound:edit`，默认 warehouse/super。created_at 落在北京当天的记录可作废；受保护权限 `inbound:void-any-day`（仅 super）可跨天作废。不是物理删除；作废后不计库存并写 before/after 审计日志与 op_log(void_inbound)；库存非负校验对跨天作废同样生效。
+            description: 权限 `inbound:edit`，默认 warehouse/super。created_at 落在北京当天的记录可作废；受保护权限 `inbound:void-any-day`（默认仅 super，可解锁下放）可跨天作废。不是物理删除；作废后不计库存并写 before/after 审计日志与 op_log(void_inbound)；库存非负校验对跨天作废同样生效。
             parameters:
                 - $ref: "#/components/parameters/InboundNo"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -550,7 +552,7 @@ paths:
             tags: [inbound]
             operationId: createStockAdjustment
             summary: 新增跨日库存调整
-            description: 受保护权限 `inbound:adjust`，仅 super。只能追加；负向调整后库存不得小于 0。
+            description: 受保护权限 `inbound:adjust`，默认仅 super（super 可解锁后授予其他角色）。只能追加；负向调整后库存不得小于 0。
             parameters:
                 - $ref: "#/components/parameters/IdempotencyKey"
             requestBody:
@@ -654,7 +656,7 @@ paths:
             tags: [users]
             operationId: listUsers
             summary: 用户列表
-            description: 受保护权限 `permissions:view`，仅 super。
+            description: 受保护权限 `permissions:view`，默认仅 super（super 可解锁后授予其他角色）。
             responses:
                 "200":
                     description: 成功
@@ -666,7 +668,7 @@ paths:
             tags: [users]
             operationId: createUser
             summary: 新增普通用户
-            description: 受保护权限 `permissions:manage`，仅 super。初始密码为 123456 的强哈希；不得通过接口新增 super。
+            description: 受保护权限 `permissions:manage`，默认仅 super（super 可解锁后授予其他角色）。初始密码为 123456 的强哈希；不得通过接口新增 super。
             parameters:
                 - $ref: "#/components/parameters/IdempotencyKey"
             requestBody:
@@ -689,7 +691,7 @@ paths:
             tags: [users]
             operationId: updateUser
             summary: 编辑用户姓名或角色
-            description: 受保护权限 `permissions:manage`，仅 super。account 不可改；销售转岗且仍负责客户时，必须原子批量移交给另一名启用销售。
+            description: 受保护权限 `permissions:manage`，默认仅 super（super 可解锁后授予其他角色）。account 不可改；销售转岗且仍负责客户时，必须原子批量移交给另一名启用销售。
             parameters:
                 - $ref: "#/components/parameters/Account"
             requestBody:
@@ -713,7 +715,7 @@ paths:
             tags: [users]
             operationId: setUserStatus
             summary: 启用或停用用户
-            description: 受保护权限 `permissions:manage`，仅 super。super 不可停用；停用销售且仍负责客户时必须在同一事务移交。
+            description: 受保护权限 `permissions:manage`，默认仅 super（super 可解锁后授予其他角色）。super 不可停用；停用销售且仍负责客户时必须在同一事务移交。
             parameters:
                 - $ref: "#/components/parameters/Account"
             requestBody:
@@ -737,7 +739,7 @@ paths:
             tags: [users]
             operationId: resetUserPassword
             summary: 重置用户密码为初始密码
-            description: 受保护权限 `permissions:manage`，仅 super。重置为初始密码 123456；递增 token_version 使该用户旧会话立即失效。super 不可重置。
+            description: 受保护权限 `permissions:manage`，默认仅 super（super 可解锁后授予其他角色）。重置为初始密码 123456；递增 token_version 使该用户旧会话立即失效。super 不可重置。
             parameters:
                 - $ref: "#/components/parameters/Account"
             requestBody:
@@ -761,7 +763,7 @@ paths:
             tags: [roles]
             operationId: listRoles
             summary: 固定角色目录
-            description: 受保护权限 `permissions:view`，仅 super。
+            description: 受保护权限 `permissions:view`，默认仅 super（super 可解锁后授予其他角色）。
             responses:
                 "200":
                     description: 成功
@@ -775,7 +777,7 @@ paths:
             tags: [roles]
             operationId: listRoleGrants
             summary: 全量角色授权
-            description: 受保护权限 `permissions:view`，仅 super。
+            description: 受保护权限 `permissions:view`，默认仅 super（super 可解锁后授予其他角色）。
             responses:
                 "200":
                     description: 成功
@@ -789,7 +791,7 @@ paths:
             tags: [roles]
             operationId: listRoleGrantLogs
             summary: 授权变更日志
-            description: 受保护权限 `permissions:view`，仅 super。
+            description: 受保护权限 `permissions:view`，默认仅 super（super 可解锁后授予其他角色）。
             responses:
                 "200":
                     description: 成功
@@ -803,7 +805,7 @@ paths:
             tags: [roles]
             operationId: updateRoleGrant
             summary: 原子替换单个角色授权
-            description: 受保护权限 `permissions:manage`，仅 super。内置 super 授权不可改；动作必须同时包含父菜单与 view；受保护动作不可授予其他角色。
+            description: 受保护权限 `permissions:manage`，默认仅 super（super 可解锁后授予其他角色）。内置 super 授权不可改；动作必须同时包含父菜单与 view；仍受保护的码不可授予其他角色（解锁后可）。
             parameters:
                 - $ref: "#/components/parameters/RoleIdParam"
             requestBody:
@@ -821,6 +823,57 @@ paths:
                 "403": { $ref: "#/components/responses/Forbidden" }
                 "404": { $ref: "#/components/responses/NotFound" }
                 "409": { $ref: "#/components/responses/Conflict" }
+
+    /permissions/catalog:
+        get:
+            tags: [permissions]
+            operationId: listPermissionCatalog
+            summary: 权限目录与运行时受保护状态
+            description: 受保护权限 `permissions:view`，默认仅 super（解锁后持码角色同权可读）。返回全量权限目录及各码当前 protected 状态，供「角色与权限」编辑器灰显与「受保护权限」管理使用。
+            responses:
+                "200":
+                    description: 目录按 code 升序。
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/PermissionCatalogListEnvelope" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+
+    /permissions/catalog/log:
+        get:
+            tags: [permissions]
+            operationId: listPermissionProtectionLogs
+            summary: 保护开关审计日志
+            description: 受保护权限 `permissions:view`，默认仅 super（解锁后持码角色同权可读）。解锁/加锁各写一行（含操作人、加锁清理的授权行数与客户端原因），最新在前。
+            responses:
+                "200":
+                    description: 审计条目列表。
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/ProtectionLogListEnvelope" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+
+    /permissions/catalog/{code}/protected:
+        patch:
+            tags: [permissions]
+            operationId: setPermissionProtection
+            summary: 切换权限码受保护状态（仅 super 角色）
+            description: 仅 super 角色本身可调用（@SuperOnly，按角色直判、不校验权限码——任何权限码解锁后都可授予他人，不能用于守门）。false=解锁，随后可在 PUT /roles/{roleId}/grants 授予其他角色；true=重新加锁，同事务清理该码全部授权行并递增所有角色 grant_version（JwtStrategy 权限缓存失效，已登录角色立即失去该权限）。重复翻转返回 400。
+            parameters:
+                - $ref: "#/components/parameters/PermissionCode"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/SetPermissionProtectionInput" }
+            responses:
+                "200":
+                    description: 切换后的目录条目。
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/PermissionCatalogEntryEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
 
     /workbench/relations:
         get:
@@ -903,7 +956,7 @@ paths:
             operationId: listSystemLogs
             summary: 系统日志时间线（分批追加）
             description: |
-                受保护权限 `system-logs:view`，仅 super。聚合四来源为统一业务事件流：op_log
+                受保护权限 `system-logs:view`，默认仅 super（super 可解锁后授予其他角色）。聚合四来源为统一业务事件流：op_log
                 （订单创建/归档/归档回退/删除、客户创建/编辑/负责人移交（含离岗批量移交）、BOM
                 创建/删除、入库创建/作废/删除、出库登记发货/作废/删除）、
                 sales_order_change_log（仅 UPDATE 的编辑明细）、inbound_change_log（仅
@@ -975,7 +1028,7 @@ paths:
             operationId: getBackupCatalog
             summary: 备份分组目录
             description: |
-                受保护权限 `system-backup:run`，仅 super；单独持有备份菜单码无权访问。
+                受保护权限 `system-backup:run`，默认仅 super（可解锁下放）；单独持有备份菜单码无权访问。
                 返回业务域分组（key/label/tables/dependsOn）与全部分组键。完整备份＝
                 目录全集（动态计算）；恢复维护期间放行（只读白名单）。
             responses:
@@ -1007,7 +1060,7 @@ paths:
             operationId: runBackup
             summary: 执行备份并流式下载
             description: |
-                受保护权限 `system-backup:run`，仅 super。
+                受保护权限 `system-backup:run`，默认仅 super（super 可解锁后授予其他角色）。
                 按分组闭包导出数据快照（zmsys-backup v1 格式，仅数据不含 DDL），
                 以 application/sql 或 application/gzip 附件流式返回。响应头
                 content-disposition 携带文件名。先写「发起备份」op_log(db_backup)
@@ -1043,7 +1096,7 @@ paths:
             operationId: previewRestore
             summary: 恢复文件预检
             description: |
-                受保护权限 `system-restore:run`，仅 super；单独持有恢复菜单码无权访问。
+                受保护权限 `system-restore:run`，默认仅 super（可解锁下放）；单独持有恢复菜单码无权访问。
                 上传统一格式备份文件（512MiB 上限，gzip 按魔数识别），完整校验
                 checksum/文法/schema 指纹/迁移基线后返回 meta 与 canReplace。
                 只读不落任何业务数据。
@@ -1073,7 +1126,7 @@ paths:
             operationId: runRestore
             summary: 提交恢复任务（异步）
             description: |
-                受保护权限 `system-restore:run`，仅 super。
+                受保护权限 `system-restore:run`，默认仅 super（super 可解锁后授予其他角色）。
                 multipart 字段须置于文件之前：mode=merge|replace、ack（merge 须 RESTORE /
                 replace 须 REPLACE）、requestKey（8-64 位提交身份）。requestKey 为幂等身份：
                 同 key 同文件同模式重提返回 200 原终态；异文件/模式 409。受理返回 202 后
@@ -1115,7 +1168,7 @@ paths:
             tags: [system]
             operationId: getRestoreJob
             summary: 按 jobId 查询恢复任务
-            description: 受保护权限 `system-restore:run`，仅 super；维护期可查询。
+            description: 受保护权限 `system-restore:run`，默认仅 super（可解锁下放）；维护期可查询。
             parameters:
                 - name: id
                   in: path
@@ -1137,7 +1190,7 @@ paths:
             operationId: getRestoreJobByKey
             summary: 凭 requestKey 查询恢复任务（维护期放行）
             description: |
-                受保护权限 `system-restore:run`，仅 super；单独持有恢复菜单码无权访问。
+                受保护权限 `system-restore:run`，默认仅 super（可解锁下放）；单独持有恢复菜单码无权访问。
                 断线/刷新/重登录后凭客户端自存的 requestKey 查询。恢复维护期间该端点
                 放行（只读白名单）。返回 UNKNOWN 表示提交结果核实中（保持维护，禁止重跑）。
             parameters:
@@ -1242,6 +1295,12 @@ components:
             in: path
             required: true
             schema: { $ref: "#/components/schemas/RoleId" }
+        PermissionCode:
+            name: code
+            in: path
+            required: true
+            description: 权限码，如 `menu:system-logs`、`orders:delete`（含冒号，URL 编码传入）
+            schema: { type: string, pattern: "^[a-z0-9-]+(:[a-z0-9-]+)?$" }
 
     responses:
         SuccessWithoutData:
@@ -1359,10 +1418,15 @@ components:
 
         ProfileResult:
             type: object
-            required: [user, grant]
+            required: [user, grant, protectedCodes]
             properties:
                 user: { $ref: "#/components/schemas/WbUser" }
                 grant: { $ref: "#/components/schemas/RoleGrant" }
+                protectedCodes:
+                    type: array
+                    uniqueItems: true
+                    items: { type: string }
+                    description: 当前受保护权限码（运行时真源）；字典兜底值见前端 data/permissions.ts
 
         RoleDef:
             type: object
@@ -1404,6 +1468,25 @@ components:
                 time: { type: string }
                 user: { type: string }
                 text: { type: string }
+
+        PermissionCatalogEntry:
+            type: object
+            required: [code, kind, menuKey, label, protected]
+            properties:
+                code: { type: string }
+                kind: { type: string, enum: [MENU, ACTION] }
+                menuKey: { type: string }
+                actionId: { type: [string, "null"], description: 仅 ACTION 条目携带 }
+                label: { type: string }
+                protected: { type: boolean, description: true=受保护（默认仅 super）；运行时可由 super 切换 }
+
+        SetPermissionProtectionInput:
+            type: object
+            additionalProperties: false
+            required: [protected]
+            properties:
+                protected: { type: boolean, description: true=加锁（默认仅超管）；false=解锁（可授予其他角色） }
+                reason: { type: string, maxLength: 500, description: 变更原因，记入保护开关日志 }
 
         Order:
             type: object
@@ -1921,6 +2004,21 @@ components:
                 - type: object
                   properties: { code: { const: 0 }, data: { type: object, additionalProperties: { $ref: "#/components/schemas/RoleGrant" } }, message: { const: ok } }
         GrantLogListEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { type: array, items: { $ref: "#/components/schemas/GrantLogEntry" } }, message: { const: ok } }
+        PermissionCatalogListEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { type: array, items: { $ref: "#/components/schemas/PermissionCatalogEntry" } }, message: { const: ok } }
+        PermissionCatalogEntryEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/PermissionCatalogEntry" }, message: { const: ok } }
+        ProtectionLogListEnvelope:
             allOf:
                 - $ref: "#/components/schemas/Envelope"
                 - type: object

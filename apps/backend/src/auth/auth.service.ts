@@ -57,7 +57,7 @@ export class AuthService {
         return { accessToken, user: toWbUser(user, now) };
     }
 
-    async getProfile(user: AuthUser): Promise<{ user: WbUser; grant: RoleGrant }> {
+    async getProfile(user: AuthUser): Promise<{ user: WbUser; grant: RoleGrant; protectedCodes: string[] }> {
         // validate 已回查过一次；此处再读一次拿最新的 last_login_at 与 row_version
         const current = await this.prisma.sysUser.findUnique({
             where: { id: BigInt(user.id) },
@@ -65,8 +65,17 @@ export class AuthService {
         if (!current || !current.status) {
             throw new UnauthorizedException("登录已过期，请重新登录");
         }
-        const grant = await this.accessControl.getGrant(current.roleCode as WbUser["role"]);
-        return { user: toWbUser(current), grant };
+        const [grant, protectedRows] = await Promise.all([
+            this.accessControl.getGrant(current.roleCode as WbUser["role"]),
+            // 受保护码目录：侧边栏「超管专属」标签等展示口径的运行时真源
+            // （解锁/加锁后随 refreshProfile 刷新；目录查询端点受 permissions:view 保护，普通角色拿不到）
+            this.prisma.sysPermission.findMany({
+                where: { isProtected: true },
+                select: { code: true },
+                orderBy: { code: "asc" },
+            }),
+        ]);
+        return { user: toWbUser(current), grant, protectedCodes: protectedRows.map(row => row.code) };
     }
 
     /**
