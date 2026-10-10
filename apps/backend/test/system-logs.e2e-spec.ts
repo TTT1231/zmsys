@@ -1,7 +1,8 @@
 /**
  * 系统日志聚合端点集成测试：真实 HTTP 管线 + 真实测试库。
- * 覆盖权限（仅 super）、四来源动作映射、domain/action 筛选、关键词（操作人/
- * 编号/名称）、时间范围（today/custom 校验）与复合游标分批一致性。
+ * 覆盖权限（仅 super）、四来源动作映射、domain/action 筛选、操作人筛选（账号
+ * 跨来源精确过滤）、关键词（操作人/编号/名称）、时间范围（today/custom 校验）
+ * 与复合游标分批一致性。
  * 断言用 keyword 收敛到本套件 RUN 标识数据（测试库为共享库，其他套件同日造数）。
  * 运行前置：pnpm test:db:reset。
  */
@@ -597,6 +598,36 @@ describe("系统日志 (e2e)", () => {
         for (const item of items as Array<Record<string, unknown>>) {
             expect((item.actor as { name: string }).name).toBe("郭均");
         }
+    });
+
+    it("操作人筛选：按账号跨来源精确过滤（op_log/change_log/调整臂）；未知账号 400", async () => {
+        // 超管账号：订单三事件同时命中 op_log 臂（create/archive）与 change_log 臂（edit）
+        const superPage = await logs(superToken, `?operator=guojun&keyword=${orderNo}&limit=100`);
+        expect(superPage.statusCode).toBe(200);
+        expect(entriesOf(superPage).map(item => item.action)).toEqual(["archive", "edit", "create"]);
+        for (const item of entriesOf(superPage)) {
+            expect(item.actor).toEqual({ name: "郭均", role: "super" });
+        }
+
+        // 仓管账号：出库三事件（ship×2 + void×1）全部命中且操作人恒为 wh01
+        const wh = await logs(superToken, `?operator=${accountOf("wh01")}&domain=outbound&keyword=${RUN}&limit=100`);
+        expect(wh.statusCode).toBe(200);
+        const whItems = entriesOf(wh);
+        expect(whItems.map(item => item.action).sort()).toEqual(["ship", "ship", "void"]);
+        for (const item of whItems) {
+            expect(item.actor).toEqual({ name: "日志联调wh01", role: "warehouse" });
+        }
+
+        // 调整臂：本套件调整由超管操作——guojun 命中、wh01 不命中
+        const adjustBySuper = await logs(superToken, `?operator=guojun&domain=inbound&limit=100`);
+        expect(
+            entriesOf(adjustBySuper).some(item => item.action === "adjust" && item.reason === `e2e 日志调整 ${RUN}`),
+        ).toBe(true);
+        const adjustByWh = await logs(superToken, `?operator=${accountOf("wh01")}&domain=inbound&limit=100`);
+        expect(entriesOf(adjustByWh).filter(item => item.reason === `e2e 日志调整 ${RUN}`)).toEqual([]);
+
+        const unknown = await logs(superToken, `?operator=nobody_${RUN}`);
+        expect(unknown.statusCode).toBe(400);
     });
 
     it("action 筛选：transfer 仅移交事件", async () => {

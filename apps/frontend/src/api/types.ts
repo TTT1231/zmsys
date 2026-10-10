@@ -222,6 +222,8 @@ export interface SystemLogPage {
 export interface SystemLogQuery {
     domain?: SystemLogDomain;
     action?: SystemLogAction;
+    /** 操作人筛选（用户账号；姓名可重名，账号唯一） */
+    operator?: string;
     range: "today" | "7d" | "30d" | "custom";
     from?: string;
     to?: string;
