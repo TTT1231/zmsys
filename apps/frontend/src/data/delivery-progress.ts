@@ -103,7 +103,7 @@ export function bomColors(codes: Iterable<string>) {
     return colors;
 }
 
-/** 全量有效欠单按交期分配共享库存；时间窗口只改变绘图，不改变库存分配。 */
+/** 全量有效欠单逐单对照共享库存（桶模型，不排队不预留）；时间窗口只改变绘图。 */
 export function deliveryProgress(data: WorkbenchData) {
     const products = new Map(data.products.map(product => [product.code, product]));
     const stock = new Map(data.products.map(product => [product.code, Math.max(0, product.stock)]));
@@ -118,7 +118,6 @@ export function deliveryProgress(data: WorkbenchData) {
         const shipped = Math.min(qty, Math.max(0, order.shipped));
         const remaining = qty - shipped;
         const available = Math.min(remaining, stock.get(order.bomCode) ?? 0);
-        stock.set(order.bomCode, (stock.get(order.bomCode) ?? 0) - available);
         const gap = remaining - available;
         const ready = shipped + available;
         const product = products.get(order.bomCode);

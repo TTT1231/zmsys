@@ -201,7 +201,7 @@ paths:
             tags: [orders]
             operationId: unarchiveOrder
             summary: 回退归档订单
-            description: 受保护权限 `orders:unarchive`，仅 super，且仅归档操作人本人（服务端按 `archived_by` 判等，超管同样受限；非归档人 403）。把误归档的订单退回 ACTIVE：订单返回销售订单页，恢复编辑/发货/删除，出库单恢复可作废/删除，可发量分配重新纳入该订单；归档三要素（archived_at/archived_by/archive_reason）随回退清空（DB CHECK 强制），归档与回退语境由 ARCHIVE/UNARCHIVE 变更日志快照保留。回退备注（选填）随行落库；写 change_log UNARCHIVE 事件与 op_log（unarchive_order）供审计。再次归档时新归档人接替回退权。幂等（Idempotency-Key）。
+            description: 受保护权限 `orders:unarchive`，仅 super，且仅归档操作人本人（服务端按 `archived_by` 判等，超管同样受限；非归档人 403）。把误归档的订单退回 ACTIVE：订单返回销售订单页，恢复编辑/发货/删除，出库单恢复可作废/删除，可发量重新纳入该订单；归档三要素（archived_at/archived_by/archive_reason）随回退清空（DB CHECK 强制），归档与回退语境由 ARCHIVE/UNARCHIVE 变更日志快照保留。回退备注（选填）随行落库；写 change_log UNARCHIVE 事件与 op_log（unarchive_order）供审计。再次归档时新归档人接替回退权。幂等（Idempotency-Key）。
             parameters:
                 - $ref: "#/components/parameters/OrderNo"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -226,7 +226,7 @@ paths:
             tags: [orders]
             operationId: deleteOrder
             summary: 删除净发货为零且无可见出库单的销售订单
-            description: 受保护权限 `orders:delete`，仅 super。累计已发必须为 0，且关联出库单均已作废并软删除；仍可见的已作废出库单也会阻止删除。成功后订单打 `deleted_at` 标记并立即退出列表和可发量分配，`op_log` 保存删除前快照；7 天后且关联出库单已物理清理时，维护任务清理订单及其变更日志。删除与出库登记竞争同一订单锁。
+            description: 受保护权限 `orders:delete`，仅 super。累计已发必须为 0，且关联出库单均已作废并软删除；仍可见的已作废出库单也会阻止删除。成功后订单打 `deleted_at` 标记并立即退出列表和待交统计，`op_log` 保存删除前快照；7 天后且关联出库单已物理清理时，维护任务清理订单及其变更日志。删除与出库登记竞争同一订单锁。
             parameters:
                 - $ref: "#/components/parameters/OrderNo"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -585,7 +585,7 @@ paths:
             tags: [outbound]
             operationId: createOutbound
             summary: 登记发货
-            description: 权限 `outbound:ship`，默认 warehouse/super。事务锁 BOM 和订单并重新计算可发量；创建 REGISTERED 单头及正向数量事件。
+            description: 权限 `outbound:ship`，默认 warehouse/super。事务锁 BOM 和订单并重新计算可发量（桶模型：可发量 = min(当前库存, 订单剩余待交)，不按交期排队预留，先登记发货者先得）；创建 REGISTERED 单头及正向数量事件。
             parameters:
                 - $ref: "#/components/parameters/IdempotencyKey"
             requestBody:

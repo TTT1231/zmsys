@@ -370,7 +370,7 @@ export function DeliveryProgress({ data }: { data: WorkbenchData }) {
                                                 <span>{order.bomCode}</span>
                                                 <span
                                                     className="inline-flex items-baseline gap-1 font-normal not-italic text-td-strong tnum"
-                                                    title="BOM 当前总库存；可发量按交期分配"
+                                                    title="BOM 当前总库存；可发量为本单口径 min(库存, 剩余待交)，不排队预留"
                                                 >
                                                     <span>库存</span>
                                                     <strong className="text-14 font-bold text-primary-strong">

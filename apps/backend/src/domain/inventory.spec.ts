@@ -23,7 +23,7 @@ describe("getStockQty（v_bom_stock）", () => {
     });
 });
 
-describe("computeShippableQty（§6.2 分配）", () => {
+describe("computeShippableQty（§6.2 桶模型）", () => {
     const bomId = 1n;
 
     it("库存充足：目标订单可发量为其剩余欠量", async () => {
@@ -31,26 +31,39 @@ describe("computeShippableQty（§6.2 分配）", () => {
             { id: 10n, qty: 30, outbound_qty: 10n },
             { id: 20n, qty: 50, outbound_qty: 0n },
         ]);
-        // 前序订单占用 20 后剩 80，目标剩余 50
+        // 桶模型：其他订单的剩余量不占用库存，目标剩余 50、库存 100
         await expect(computeShippableQty(tx, { bomId, targetOrderId: 20n, requestedQty: 50 })).resolves.toBe(50);
     });
 
-    it("库存不足：按序分配后剩余多少给多少，请求超出即 409", async () => {
+    it("桶模型核心：其他订单剩余不挤占目标可发量，库存够就能发", async () => {
         const { tx } = createTx(25, [
-            { id: 10n, qty: 30, outbound_qty: 0n }, // 占用 30？库存仅 25 → 分配后池为 -5（截 0）
-            { id: 20n, qty: 50, outbound_qty: 0n },
-        ]);
-        await expect(computeShippableQty(tx, { bomId, targetOrderId: 20n, requestedQty: 1 })).rejects.toThrow(
-            ConflictException,
-        );
-    });
-
-    it("库存恰够前序订单：目标订单可发 0，任何正数请求 409", async () => {
-        const { tx } = createTx(30, [
             { id: 10n, qty: 30, outbound_qty: 0n },
             { id: 20n, qty: 50, outbound_qty: 0n },
         ]);
+        // 旧排队模型此场景前序订单吃满池子；桶模型下目标可发 = min(25, 50) = 25
+        await expect(computeShippableQty(tx, { bomId, targetOrderId: 20n, requestedQty: 25 })).resolves.toBe(25);
+    });
+
+    it("库存不足：可发量为库存，请求超出即 409", async () => {
+        const { tx } = createTx(25, [
+            { id: 10n, qty: 30, outbound_qty: 0n },
+            { id: 20n, qty: 50, outbound_qty: 0n },
+        ]);
+        await expect(computeShippableQty(tx, { bomId, targetOrderId: 20n, requestedQty: 26 })).rejects.toThrow(
+            "库存可发量不足",
+        );
+    });
+
+    it("库存为 0：任何正数请求 409", async () => {
+        const { tx } = createTx(0, [{ id: 20n, qty: 50, outbound_qty: 0n }]);
         await expect(computeShippableQty(tx, { bomId, targetOrderId: 20n, requestedQty: 1 })).rejects.toThrow(
+            "库存可发量不足",
+        );
+    });
+
+    it("请求量超过本单剩余待交：409（不得超订单数量）", async () => {
+        const { tx } = createTx(100, [{ id: 10n, qty: 30, outbound_qty: 10n }]);
+        await expect(computeShippableQty(tx, { bomId, targetOrderId: 10n, requestedQty: 21 })).rejects.toThrow(
             "库存可发量不足",
         );
     });

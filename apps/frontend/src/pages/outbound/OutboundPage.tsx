@@ -94,7 +94,7 @@ export function OutboundModal({
     );
 
     const selectedOrder = orders.find(order => order.orderNo === orderNo);
-    /* P2 一次分配：可发量/状态/BOM 档案共用一次派生，替代每次渲染两趟互相独立的全量分配 */
+    /* P2 一次派生：可发量/状态/BOM 档案共用一次派生，替代每次渲染两趟互相独立的全量派生 */
     const derived = useMemo(() => deriveOrders(snap), [snap]);
     const selectedBom = selectedOrder ? derived.bomIndex.get(selectedOrder.bomCode) : undefined;
     const remaining = selectedOrder ? remainingOf(selectedOrder) : 0;

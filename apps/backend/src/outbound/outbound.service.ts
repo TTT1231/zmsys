@@ -68,8 +68,8 @@ export class OutboundService {
 
     /**
      * 登记发货（契约 outbound:ship，幂等）：事务锁 BOM 与订单并按 §6.2 重算可发量
-     * （活动订单按交货日期升序共享库存池，超额 409）；创建 REGISTERED 单头与
-     * 正向数量事件，库存与订单累计已发立即生效；同事务写 op_log。
+     * （桶模型：可发量 = min(当前库存, 订单剩余待交)，超额 409）；创建 REGISTERED
+     * 单头与正向数量事件，库存与订单累计已发立即生效；同事务写 op_log。
      */
     async createOutbound(
         dto: CreateOutboundDto,

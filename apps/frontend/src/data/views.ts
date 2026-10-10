@@ -34,15 +34,15 @@ export function stockOf(snap: Pick<Snapshot, "stock">, bomCode: string): number 
 }
 
 export function remainingOf(order: Order): number {
-    // 非活跃（已归档）订单剩余量按 0 处理：欠量关闭，不参与待交与可发量分配
+    // 非活跃（已归档）订单剩余量按 0 处理：欠量关闭，不参与待交与可发量
     if (order.lifecycleStatus !== "active") return 0;
     return Math.max(0, order.qty - order.outbound);
 }
 
-/* 状态判定核心：可发量（按交期分配，同"本次最多可发"口径）对比剩余待交。
+/* 状态判定核心：可发量（桶模型，同"本次最多可发"口径）对比剩余待交。
  * 可发量盖不住整单剩余 → 部分可发货；已发过货且剩余可整单覆盖（或暂无可发）→ 部分发货。
  * 归档单无专属状态：归档 = 结案标记，状态徽章直接复用交付进度口径（已完成/
- * 部分发货）——归档单不参与分配（remainingOf=0），自然落入对应分支。 */
+ * 部分发货）——归档单不参与可发（remainingOf=0），自然落入对应分支。 */
 function statusOf(order: Order, maxShip: number): OrderStatus {
     if (order.outbound >= order.qty) return { label: "已完成", key: "done" };
     if (maxShip > 0 && maxShip < remainingOf(order)) return { label: "部分可发货", key: "partReady" };
@@ -61,7 +61,7 @@ export function orderStatusOfMax(order: Order, maxShip: number): OrderStatus {
     return statusOf(order, maxShip);
 }
 
-/* 一次分配的派生结果：可发量表 + 订单/BOM 索引，统计、筛选与行组件共用
+/* 一次派生的结果：可发量量表 + 订单/BOM 索引，统计、筛选与行组件共用
  * （替代逐单 maxShipOf 的 N 次全量 readyToShip：N² → 一次 O(N·logN)） */
 export interface DerivedOrders {
     rows: ReadyToShipRow[];
@@ -78,19 +78,17 @@ export function deriveOrders(snap: Snapshot): DerivedOrders {
     return { rows, byOrderNo, bomIndex };
 }
 
-/* 待发货明细：按交期顺序在共享库存池上做可发量分配（同一 BOM 库存不重复承诺）；
+/* 待发货明细：每单可发量 = min(该 BOM 当前库存, 本单剩余待交)（桶模型，不排队
+ * 不预留——同 BOM 各单看到同一份库存，先登记发货者先得）；
  * bomIndex 可由调用方传入复用（deriveOrders 已建好，避免重复构建） */
 export function readyToShip(snap: Snapshot, bomIndex = bomIndexOf(snap)): ReadyToShipRow[] {
-    const left = new Map(Object.entries(snap.stock));
     const today = todayIso();
     return snap.orders
         .filter(order => remainingOf(order) > 0)
         .sort((a, b) => a.deliverDate.localeCompare(b.deliverDate) || a.orderNo.localeCompare(b.orderNo))
         .map(order => {
-            const available = left.get(order.bomCode) ?? 0;
             const remaining = remainingOf(order);
-            const maxShip = Math.max(0, Math.min(remaining, available));
-            if (maxShip > 0) left.set(order.bomCode, available - maxShip);
+            const maxShip = Math.max(0, Math.min(remaining, stockOf(snap, order.bomCode)));
             return {
                 orderNo: order.orderNo,
                 customer: order.customer,
@@ -108,7 +106,7 @@ export function readyToShip(snap: Snapshot, bomIndex = bomIndexOf(snap)): ReadyT
 }
 
 export function maxShipOf(snap: Snapshot, orderNo: string): number {
-    // 单点查询短路：已归档/交满订单不参与分配，可发量结构上恒为 0，免跑全量派生
+    // 单点查询短路：已归档/交满订单无可发量，结构上恒为 0，免跑全量派生
     const order = snap.orders.find(item => item.orderNo === orderNo);
     if (!order || remainingOf(order) <= 0) return 0;
     return readyToShip(snap).find(row => row.orderNo === orderNo)?.maxShip ?? 0;

@@ -218,7 +218,7 @@ export function CustomerDetailModal({
         setOrderNo(null);
         setExpanded(false);
     }
-    /* P2 一次分配：时间线逐行状态查预计算索引，不再逐行全量派生（组件自建，调用方无需传） */
+    /* P2 一次派生：时间线逐行状态查预计算索引，不再逐行全量派生（组件自建，调用方无需传） */
     const derived = useMemo(() => deriveOrders(snap), [snap]);
     if (!customer) return null;
     const orders = snap.orders.filter(order => order.customerCode === customer.code);

@@ -61,7 +61,7 @@ export function ArchivedOrdersPage() {
     /* 只展示归档单；排序默认按归档时间倒序（近期的在前） */
     const archived = useMemo(() => snap.orders.filter(order => order.lifecycleStatus === "archived"), [snap.orders]);
 
-    /* P2 一次分配：状态筛选/行渲染/卡片与详情弹窗共用页面级派生（归档单 remainingOf=0
+    /* P2 一次派生：状态筛选/行渲染/卡片与详情弹窗共用页面级派生（归档单 remainingOf=0
      * 不在分配行内，byOrderNo 未命中 → 可发 0，状态回落交付进度口径，与逐单派生完全一致） */
     const derived = useMemo(() => deriveOrders(snap), [snap]);
 

@@ -79,7 +79,7 @@ export function OrderTaskCard({
     onEdit,
 }: {
     order: Order;
-    /** 页面级一次分配结果（P2）：传入时卡片复用预计算可发量/索引，不再逐卡全量派生 */
+    /** 页面级一次派生结果（P2）：传入时卡片复用预计算可发量/索引，不再逐卡全量派生 */
     derived?: DerivedOrders;
     onDetail: () => void;
     onShip?: () => void;

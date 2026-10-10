@@ -162,8 +162,8 @@ describe("orderStatusOf", () => {
         expect(readyToShip(fixture).map(row => row.orderNo)).toEqual(["ZM260315001"]);
     });
 
-    it("only sees stock left after earlier deliver dates' reservation", () => {
-        // 库存 10 全部被更早交期的 ZM-A 预留：ZM-B 账面有货但可发 0
+    it("sees the shared stock bucket regardless of earlier deliver dates", () => {
+        // 桶模型：库存 10 不被更早交期的 ZM-A 预留，ZM-B 照常可发 min(5, 10) = 5
         const fixture = snap({
             stock: { ZMXK001: 10 },
             orders: [
@@ -171,12 +171,12 @@ describe("orderStatusOf", () => {
                 order({ orderNo: "ZM-B", qty: 5, deliverDate: "2026-03-19" }),
             ],
         });
-        expect(orderStatusOf(fixture, fixture.orders[1])).toEqual({ label: "待备货", key: "pending" });
+        expect(orderStatusOf(fixture, fixture.orders[1])).toEqual({ label: "可发货", key: "ready" });
     });
 });
 
 describe("readyToShip", () => {
-    it("allocates one shared stock pool in deliver-date order without double promise", () => {
+    it("shares one stock bucket per BOM without queueing or double-counting display", () => {
         const fixture = snap({
             stock: { ZMXK001: 15 },
             orders: [
@@ -186,9 +186,9 @@ describe("readyToShip", () => {
         });
         const rows = readyToShip(fixture);
         expect(rows.map(row => row.orderNo)).toEqual(["ZM-A", "ZM-B"]);
+        // 各单独立对照同一份库存：都能看到 15，可发各为 min(剩余, 15) = 10
         expect(rows[0].maxShip).toBe(10);
-        expect(rows[1].maxShip).toBe(5);
-        // 行内 stock 展示的是分配前的池子总量
+        expect(rows[1].maxShip).toBe(10);
         expect(rows[1].stock).toBe(15);
     });
 

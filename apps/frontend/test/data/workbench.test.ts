@@ -1,4 +1,4 @@
-/* 覆盖归档订单口径、BOM 库存隔离、交期分配、客户排名和趋势补零。 */
+/* 覆盖归档订单口径、BOM 库存隔离、桶模型可发口径、客户排名和趋势补零。 */
 import { describe, expect, it } from "vitest";
 import {
     archivedCategoryStats,
@@ -57,23 +57,28 @@ describe("工作台统计", () => {
         expect(selected.categories[0].gap).toBe(30);
         expect(summarizeWorkbench(snapshot, all).categories[0].gap).toBe(30);
     });
-    it("按交期消耗共享库存，逾期即使不缺货也保留，未来7天外不提醒", () => {
+    it("各单独立对照共享库存（桶模型），逾期即使不缺货也保留，未来7天外不提醒", () => {
         const snapshot = data([
-            order({ no: "later", due: "2026-09-19", qty: 50, shipped: 0 }),
+            order({ no: "later", due: "2026-09-19", qty: 60, shipped: 0 }),
             order({ no: "early", due: "2026-09-11", qty: 40, shipped: 0 }),
             order({ no: "outside", due: "2026-09-20", qty: 100, shipped: 0 }),
             order({ no: "archived", archived: true, due: "2026-09-10" }),
         ]);
+        // B1 库存 50：early 可发 40 无缺口；later 独立对照同一份 50，缺口 10；
+        // outside 缺口 50 但在 7 天提醒窗之外，不提醒
         expect(workbenchRisks(snapshot).map(row => [row.no, row.kind, row.gap])).toEqual([
             ["early", "overdue", 0],
-            ["later", "upcoming", 40],
+            ["later", "upcoming", 10],
         ]);
     });
-    it("今天到期算近期，同交期以订单号决定分配顺序", () => {
+    it("今天到期算近期，桶模型下各单独立对照同一库存", () => {
         const result = workbenchRisks(
-            data([order({ no: "B", qty: 40, shipped: 0 }), order({ no: "A", qty: 40, shipped: 0 })]),
+            data([order({ no: "B", qty: 60, shipped: 0 }), order({ no: "A", qty: 60, shipped: 0 })]),
         );
-        expect(result.map(row => [row.no, row.kind, row.gap])).toEqual([["B", "upcoming", 30]]);
+        expect(result.map(row => [row.no, row.kind, row.gap])).toEqual([
+            ["A", "upcoming", 10],
+            ["B", "upcoming", 10],
+        ]);
     });
     it("按客户编码合并，支持两种排名且只返回前20名", () => {
         const orders = Array.from({ length: 24 }, (_, index) =>

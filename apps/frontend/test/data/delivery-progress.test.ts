@@ -47,19 +47,20 @@ describe("交付进度", () => {
             daysLeft: 0,
         });
     });
-    it("全量按交期再按订单号分配共享库存，既不重复分配也不跨 BOM 抵扣", () => {
+    it("各单独立对照共享库存（桶模型），缺口为本单口径且不跨 BOM 抵扣", () => {
         const snapshot = data([
-            order({ no: "later", due: "2026-11-01", qty: 50, shipped: 0 }),
-            order({ no: "B", qty: 40, shipped: 0 }),
+            order({ no: "later", due: "2026-11-01", qty: 80, shipped: 0 }),
+            order({ no: "B", qty: 60, shipped: 0 }),
             order({ no: "A", qty: 40, shipped: 0 }),
             order({ no: "other", bomCode: "B2", qty: 80, shipped: 0 }),
         ]);
         const result = deliveryProgress(snapshot);
+        // B1 库存 50：每单独立对照，可发 = min(剩余, 50)；B2 库存另算
         expect(result.map(row => [row.no, row.available, row.gap])).toEqual([
             ["A", 40, 0],
-            ["B", 10, 30],
+            ["B", 50, 10],
             ["other", 80, 0],
-            ["later", 0, 50],
+            ["later", 50, 30],
         ]);
         expect(result.filter(row => row.bomCode === "B1").every(row => row.sharedCount === 3)).toBe(true);
         expect(deliveryProgress({ ...snapshot, orders: [...snapshot.orders].reverse() })).toEqual(result);

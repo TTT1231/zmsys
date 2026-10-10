@@ -126,8 +126,8 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>) => {
                 const qty = store.stock.get(bomId);
                 return qty === undefined ? [] : [{ stock_qty: BigInt(qty) }];
             }
-            if (text.includes("deliver_date")) {
-                // computeShippableQty 的活动订单聚合（§6.2 分配算法的输入）
+            if (text.includes("sales_order_table")) {
+                // computeShippableQty 的活动订单聚合（§6.2 桶模型的输入）
                 return store.orders
                     .filter(order => order.lifecycleStatus === "ACTIVE")
                     .map(order => ({

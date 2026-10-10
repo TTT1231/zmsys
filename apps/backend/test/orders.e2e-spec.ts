@@ -423,8 +423,8 @@ describe("销售订单 (e2e)", () => {
         const bom2 = await prisma.bomTable.findUnique({ where: { bomCode: BOM2_CODE } });
 
         // 一件未发：整单改客户+BOM+数量+交期+备注，外键与名称/规格快照按新目标重冻。
-        // 交期晚于 system-logs 套件的订单（2027-07-15）：共享 BOM 的可发量按交期升序
-        // 分配，本单切换 BOM 前的暂驻需求排在其后，不挤占其 beforeAll 发货
+        // 交期晚于 system-logs 套件的订单（2027-07-15）：桶模型下可发量只看本单剩余
+        // 与当前库存，本单切换 BOM 前的暂驻需求不挤占其 beforeAll 发货
         const created = await createOrder(
             superToken,
             orderInput(customerCode, { deliverDate: "2027-12-31" }),

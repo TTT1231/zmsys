@@ -3,9 +3,9 @@ import type { Prisma } from "../generated/prisma/client";
 import type { Tx } from "../prisma/transaction.runner";
 
 /**
- * 库存与可发量（db-scheme.md §6.2）：同一 BOM 的库存由全部活动订单共享，
- * 计算与落库必须处于同一事务且已持有该 BOM 行锁；不得信任前端传入的
- * 库存、累计已发或客户名称。
+ * 库存与可发量（db-scheme.md §6.2）：同一 BOM 的库存是共享桶，先登记发货者先得，
+ * 不按交期在订单间预留；计算与落库必须处于同一事务且已持有该 BOM 行锁；
+ * 不得信任前端传入的库存、累计已发或客户名称。
  */
 
 /** 可执行原生视图查询的最小客户端：PrismaService（列表页）与事务 Tx（锁内）均满足 */
@@ -59,9 +59,9 @@ interface ActiveOrderRow {
 }
 
 /**
- * §6.2 出库可发量分配：活动订单按交货截止日期升序、同日按订单号升序，
- * 从库存池依次分配（每单最多 `qty − 有效出库净额`），返回目标订单本次
- * 最多可发数量；请求量超出分配额抛 409（客户端刷新后重试）。
+ * §6.2 出库可发量（桶模型）：可发量 = min(BOM 当前库存, 订单剩余待交)。
+ * 库存不按交期在订单间预留——先登记发货者先得，超卖/负库存由 BOM 行锁 +
+ * 事务内重读库存挡住；请求量超出可发量抛 409（客户端刷新后重试）。
  * 目标订单不在活动列表（不存在/已取消）同样 409。
  */
 export async function computeShippableQty(
@@ -80,19 +80,16 @@ export async function computeShippableQty(
         FROM sales_order_table AS o
         LEFT JOIN v_order_outbound_qty AS v ON v.order_id = o.id
         WHERE o.bom_id = ${params.bomId} AND o.lifecycle_status = 'ACTIVE' AND o.deleted_at IS NULL
-        ORDER BY o.deliver_date ASC, o.order_no ASC
     `;
-    let pool = await getStockQty(tx, params.bomId);
-    for (const order of orders) {
-        const remaining = Math.max(Number(order.qty) - Number(order.outbound_qty), 0);
-        if (order.id === params.targetOrderId) {
-            const allowance = Math.min(pool, remaining);
-            if (params.requestedQty > allowance) {
-                throw new ConflictException("库存可发量不足，请刷新后重试");
-            }
-            return allowance;
-        }
-        pool -= remaining;
+    const target = orders.find(order => order.id === params.targetOrderId);
+    if (!target) {
+        throw new ConflictException("目标订单不存在或已取消");
     }
-    throw new ConflictException("目标订单不存在或已取消");
+    const remaining = Math.max(Number(target.qty) - Number(target.outbound_qty), 0);
+    const stock = await getStockQty(tx, params.bomId);
+    const allowance = Math.min(stock, remaining);
+    if (params.requestedQty > allowance) {
+        throw new ConflictException("库存可发量不足，请刷新后重试");
+    }
+    return allowance;
 }

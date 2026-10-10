@@ -104,9 +104,8 @@ export function workbenchRisks(data: WorkbenchData) {
         .filter(order => openQty(order) > 0)
         .sort((a, b) => a.due.localeCompare(b.due) || a.no.localeCompare(b.no))
         .map(order => {
-            const available = Math.max(0, stock.get(order.bomCode) ?? 0);
-            const allocated = Math.min(available, openQty(order));
-            stock.set(order.bomCode, available - allocated);
+            // 桶模型：各单独立对照同一份库存，缺口 = 剩余待交 − min(库存, 剩余待交)
+            const allocated = Math.min(Math.max(0, stock.get(order.bomCode) ?? 0), openQty(order));
             return {
                 ...order,
                 remaining: openQty(order),

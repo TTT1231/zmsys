@@ -675,7 +675,7 @@ export function OrderDetailModal({
     onEdit,
 }: {
     order: Order | null;
-    /** 页面级一次分配结果（P2）：传入时弹窗复用预计算可发量/索引，不再单点全量派生 */
+    /** 页面级一次派生结果（P2）：传入时弹窗复用预计算可发量/索引，不再单点全量派生 */
     derived?: DerivedOrders;
     onClose: () => void;
     onShip?: () => void;
@@ -908,7 +908,7 @@ export function OrdersPage() {
     // “客户/备注”列点客户名打开客户档案详情；存编码渲染时回捞，刷新后数据保持同步
     const [customerDetailCode, setCustomerDetailCode] = useState<string | null>(null);
 
-    /* P2 一次分配：全部订单可发量/状态与 BOM 索引单次派生，统计、筛选与行组件共用；
+    /* P2 一次派生：全部订单可发量/状态与 BOM 索引单次派生，统计、筛选与行组件共用；
      * 逾期随业务日期变化——today 不参与计算，仅作跨天后的缓存失效键 */
     const today = todayIso();
     const derived = useMemo(() => {
@@ -930,7 +930,7 @@ export function OrdersPage() {
         const kw = keyword.trim().toLowerCase();
         return orders.filter(order => {
             if (taskFilter === "pending" && remainingOf(order) <= 0) return false;
-            // 可发量/状态读一次分配的预计算行；不在分配行内（已交满）按可发 0 判状态
+            // 可发量/状态读一次派生的预计算行；不在分配行内（已交满）按可发 0 判状态
             const row = derived.byOrderNo.get(order.orderNo);
             if (taskFilter === "ready" && (row?.maxShip ?? 0) <= 0) return false;
             if (statusFilter !== "全部状态" && (row?.status ?? orderStatusOfMax(order, 0)).label !== statusFilter)

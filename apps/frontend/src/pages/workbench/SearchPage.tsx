@@ -26,7 +26,7 @@ export function SearchPage() {
     const [ship, setShip] = useState<string | null>(null);
     const keyword = query.trim().toLowerCase();
 
-    /* P2 一次分配：结果卡片/详情弹窗与订单过滤共用页面级派生（BOM 索引替代逐单线性查找） */
+    /* P2 一次派生：结果卡片/详情弹窗与订单过滤共用页面级派生（BOM 索引替代逐单线性查找） */
     const derived = useMemo(() => deriveOrders(snap), [snap]);
 
     // 类目按菜单授权过滤：客户档案等未授权模块不出现在搜索结果
