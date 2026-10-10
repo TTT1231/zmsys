@@ -20,7 +20,14 @@ export const BACKUP_GROUPS: readonly BackupGroupDef[] = [
     {
         key: "users",
         label: "用户与权限",
-        tables: ["sys_role", "sys_user", "sys_grant", "sys_grant_log", "sys_user_change_log"],
+        tables: [
+            "sys_role",
+            "sys_user",
+            "sys_grant",
+            "sys_grant_log",
+            "sys_user_change_log",
+            "sys_permission_change_log",
+        ],
         dependsOn: [],
     },
     {

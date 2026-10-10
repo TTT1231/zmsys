@@ -18,10 +18,10 @@ import { UserMenu } from "./UserMenu";
 import { useFullscreen } from "./useFullscreen";
 import { useThemeToggle } from "./useThemeToggle";
 
-/* 侧边栏导航：由「登录用户角色 + 授权」生成（见 data/permissions.ts） */
+/* 侧边栏导航：由「登录用户角色 + 授权 + 运行时受保护码」生成（见 data/permissions.ts） */
 function useNavSections(): NavSection[] {
-    const { role, grant } = useApp();
-    return buildNavSections(role, grant);
+    const { role, grant, protectedCodes } = useApp();
+    return buildNavSections(role, grant, protectedCodes);
 }
 
 /* 品牌 logo 块：侧栏（展开/收起）与通栏顶栏共用 */

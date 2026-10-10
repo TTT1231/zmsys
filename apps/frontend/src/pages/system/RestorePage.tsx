@@ -359,7 +359,7 @@ export function RestorePage() {
     const elapsedSeconds = pending ? Math.max(0, Math.floor((now - Date.parse(pending.submittedAt)) / 1000)) : 0;
 
     if (!can("system-restore:run")) {
-        return <div className="p-6 text-14 text-subtle">仅超级管理员可访问数据库恢复。</div>;
+        return <div className="p-6 text-14 text-subtle">当前角色无数据库恢复权限。</div>;
     }
 
     // —— 已有待核实提交：向导进入第 4 步展示任务进度，不展示提交表单 ——

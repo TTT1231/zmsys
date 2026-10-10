@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import type { ProfileResult, WbUser } from "@/api";
 import { fetchProfile, login as loginRequest, logout as logoutRequest } from "@/api";
 import { getToken } from "@/lib/token";
-import { can as checkPerm, type PermCode, type RoleGrant } from "@/data/permissions";
+import { can as checkPerm, DEFAULT_PROTECTED_CODES, type PermCode, type RoleGrant } from "@/data/permissions";
 import { AppContext, EMPTY_GRANT, type AuthStatus, type Role } from "./useApp";
 
 /* 此文件只导出 AppProvider 组件;useApp/ROLE_META 等非组件导出在 ./useApp.ts */
@@ -11,10 +11,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [status, setStatus] = useState<AuthStatus>(() => (getToken() ? "loading" : "guest"));
     const [user, setUser] = useState<WbUser | null>(null);
     const [grant, setGrant] = useState<RoleGrant>(EMPTY_GRANT);
+    const [protectedCodes, setProtectedCodes] = useState<ReadonlySet<string>>(DEFAULT_PROTECTED_CODES);
 
     const applyProfile = useCallback((profile: ProfileResult) => {
         setUser(profile.user);
         setGrant(profile.grant);
+        setProtectedCodes(new Set(profile.protectedCodes ?? DEFAULT_PROTECTED_CODES));
         setStatus("authenticated");
     }, []);
 
@@ -52,6 +54,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         } finally {
             setUser(null);
             setGrant(EMPTY_GRANT);
+            setProtectedCodes(DEFAULT_PROTECTED_CODES);
             setStatus("guest");
         }
     }, []);
@@ -70,12 +73,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
             user,
             role,
             grant,
+            protectedCodes,
             can,
             login,
             logout,
             refreshProfile,
         }),
-        [status, user, role, grant, can, login, logout, refreshProfile],
+        [status, user, role, grant, protectedCodes, can, login, logout, refreshProfile],
     );
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

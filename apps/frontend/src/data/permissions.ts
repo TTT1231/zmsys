@@ -18,9 +18,10 @@ export interface MenuNode {
     note?: string;
     /** 角色别名的菜单名，如仓管的订单页叫「待发货订单」 */
     labelByRole?: Partial<Record<RoleId, string>>;
-    /** 仅对特定角色展示的固定项（不参与授权勾选）；带 to 的仍可导航 */
+    /** 仅对特定角色展示的固定说明项（无路由、不占权限码，如仓管「变更记录」） */
     onlyFor?: RoleId[];
-    /** 受保护菜单只能由超级管理员持有（服务端 protected=1 不播授权行），不参与授权勾选 */
+    /** 受保护菜单（默认仅超管，超管可在界面解锁下放）；字典值仅作 profile 未下发
+     *  protectedCodes 前的兜底，运行时以后端下发的集合为准 */
     protected?: boolean;
     children?: Array<{ key: string; label: string }>;
 }
@@ -28,7 +29,7 @@ export interface MenuNode {
 export interface ActionDef {
     id: string;
     label: string;
-    /** 受保护动作只能由超级管理员持有，不能授权给其他角色 */
+    /** 受保护动作（默认仅超管）；运行时以后端 protectedCodes 为准，字典值仅兜底 */
     protected?: boolean;
 }
 
@@ -72,7 +73,7 @@ export const MENU_CATALOG: MenuNode[] = [
         onlyFor: ["warehouse"],
         note: "审计记录：业务创建、订单变更、入库修正、库存调整、出库作废及负责人移交均保留操作人与时间，不可删除、不可篡改。",
     },
-    /* 系统组：用户与权限、数据库备份与恢复、系统日志；均仅超级管理员可见 */
+    /* 系统组：用户与权限、数据库备份与恢复、系统日志；受保护菜单，默认仅超管（可解锁下放） */
     {
         key: "permissions",
         label: "用户与权限",
@@ -92,7 +93,7 @@ export const MENU_CATALOG: MenuNode[] = [
         icon: "database",
         group: "系统",
         to: "/system/backup",
-        onlyFor: ["super"],
+        protected: true,
     },
     {
         key: "system-restore",
@@ -100,7 +101,7 @@ export const MENU_CATALOG: MenuNode[] = [
         icon: "restore",
         group: "系统",
         to: "/system/restore",
-        onlyFor: ["super"],
+        protected: true,
     },
     {
         key: "system-logs",
@@ -152,19 +153,11 @@ export const ACTION_CATALOG = {
         { id: "view", label: "查看", protected: true },
         { id: "manage", label: "用户与角色管理", protected: true },
     ],
-    /* 系统组动作（受保护，仅 super）：不参与普通角色的授权编辑，此处登记仅为
-     * 固定权限码字面量与前端 can() 判断 */
+    /* 系统组动作（受保护，默认仅 super）：登记固定权限码字面量与前端 can() 判断 */
     "system-backup": [{ id: "run", label: "执行备份", protected: true }],
     "system-restore": [{ id: "run", label: "执行恢复", protected: true }],
     "system-logs": [{ id: "view", label: "查看", protected: true }],
 } as const satisfies Record<string, readonly ActionDef[]>;
-
-/* 仅限特定角色的动作组（组级 onlyFor）：不出现在权限编辑器，也不进入
- * 普通角色的默认授权——受保护动作本就只有 super 能持有 */
-export const ONLY_FOR_ACTION_GROUPS: ReadonlyMap<string, readonly RoleId[]> = new Map([
-    ["system-backup", ["super"]],
-    ["system-restore", ["super"]],
-]);
 
 /** 权限码字面量联合（"outbound:ship" 等），拼错编译期报错 */
 export type PermCode = {
@@ -175,6 +168,18 @@ export type PermCode = {
 export function actionsOf(menu: string): readonly ActionDef[] | undefined {
     return (ACTION_CATALOG as Record<string, readonly ActionDef[]>)[menu];
 }
+
+/** 兜底受保护码集合（= 迁移播种的默认受保护态）：profile 未下发 protectedCodes 前
+ *  的展示口径（侧边栏标签 / 编辑器灰显 / 矩阵）；运行时真源是 /auth/profile 的集合，
+ *  超管解锁/加锁后随 refreshProfile 刷新 */
+export const DEFAULT_PROTECTED_CODES: ReadonlySet<string> = new Set([
+    ...MENU_CATALOG.flatMap(menu =>
+        menu.protected ? [`menu:${menu.key}`, ...(menu.children ?? []).map(child => `menu:${child.key}`)] : [],
+    ),
+    ...(Object.entries(ACTION_CATALOG) as Array<[string, readonly ActionDef[]]>).flatMap(([menu, actions]) =>
+        actions.filter(action => action.protected).map(action => `${menu}:${action.id}`),
+    ),
+]);
 
 export const ROLES: Array<{ id: RoleId; name: string; locked?: boolean }> = [
     { id: "super", name: "超级管理员", locked: true },
@@ -200,7 +205,8 @@ export function buildDefaultGrants(): GrantMap {
     return {
         super: {
             version: 1,
-            // 说明型 onlyFor 项（无路由）不占权限码；系统组备份/恢复菜单 super 实际持有
+            // 说明型 onlyFor 项（无路由）不占权限码；受保护菜单（备份/恢复/系统日志/
+            // 用户与权限）super 实际持有——服务端固定全量，不依赖 sys_grant 行
             menus: MENU_CATALOG.flatMap(menu =>
                 menu.onlyFor && !menu.to ? [] : [menu.key, ...(menu.children ?? []).map(child => child.key)],
             ),
@@ -300,11 +306,15 @@ const ACTION_SHORT: Record<string, string> = {
 };
 
 /** 侧边栏 / 预览用的权限摘要标签 */
-export function menuTagFor(menuKey: string, grant: RoleGrant): string {
+export function menuTagFor(
+    menuKey: string,
+    grant: RoleGrant,
+    protectedCodes: ReadonlySet<string> = DEFAULT_PROTECTED_CODES,
+): string {
     if (menuKey === "workbench") return "专属视图";
-    // 超管专属入口（备份/恢复/系统日志/用户与权限）统一「超管专属」口径，
-    // 不套用「只读/全部权限」的通用归并——这些权限不能授给普通角色
-    if (ONLY_FOR_ACTION_GROUPS.has(menuKey) || MENU_CATALOG.find(menu => menu.key === menuKey)?.protected) {
+    // 受保护入口（默认仅超管）统一「超管专属」口径，不套用「只读/全部权限」的
+    // 通用归并；超管解锁后按各角色授权正常派生标签
+    if (protectedCodes.has(`menu:${menuKey}`)) {
         return "超管专属";
     }
     const actions = actionsOf(menuKey);
@@ -334,28 +344,22 @@ export interface NavSection {
     items: NavItem[];
 }
 
-/** 按角色 + 授权生成侧边栏二级导航（一级分组 + 二级页面，含仓管固定说明项「变更记录」
- * 与 super 专属的系统组可导航入口） */
-export function buildNavSections(role: RoleId, grant: RoleGrant): NavSection[] {
+/** 按角色 + 授权生成侧边栏二级导航（一级分组 + 二级页面，含仓管固定说明项「变更记录」；
+ *  带路由入口一律按授权派生——系统组受保护菜单默认仅超管可见，解锁下放后随授权出现） */
+export function buildNavSections(
+    role: RoleId,
+    grant: RoleGrant,
+    protectedCodes: ReadonlySet<string> = DEFAULT_PROTECTED_CODES,
+): NavSection[] {
     const sections: NavSection[] = [];
     for (const { group, icon } of NAV_GROUPS) {
         const items: NavItem[] = [];
         for (const menu of MENU_CATALOG) {
             if (menu.group !== group) continue;
             if (menu.onlyFor) {
+                // 仅剩无路由的固定说明项（仓管「变更记录」）
                 if (menu.onlyFor.includes(role)) {
-                    if (menu.to) {
-                        // 带路由的 onlyFor 项（系统组备份/恢复）：super 可导航
-                        items.push({
-                            label: menu.label,
-                            icon: menu.icon,
-                            to: menu.to,
-                            end: menu.end,
-                            tag: menuTagFor(menu.key, grant),
-                        });
-                    } else {
-                        items.push({ label: menu.label, icon: menu.icon, note: menu.note, tag: "说明" });
-                    }
+                    items.push({ label: menu.label, icon: menu.icon, note: menu.note, tag: "说明" });
                 }
                 continue;
             }
@@ -365,7 +369,7 @@ export function buildNavSections(role: RoleId, grant: RoleGrant): NavSection[] {
                 icon: menu.icon,
                 to: menu.key === "workbench" ? "/workbench" : menu.to,
                 end: menu.key === "workbench" ? true : menu.end,
-                tag: menuTagFor(menu.key, grant),
+                tag: menuTagFor(menu.key, grant, protectedCodes),
             });
         }
         if (items.length) sections.push({ group, icon, items });
