@@ -37,7 +37,9 @@ const argValue = (name: string): string | undefined => {
     const index = ARGS.indexOf(`--${name}`);
     if (index === -1) return undefined;
     const value = ARGS[index + 1];
-    if (value === undefined || value.startsWith("--")) return undefined;
+    if (value === undefined || value.startsWith("--")) {
+        throw new Error(`--${name} 缺少参数值：--${name} 后须紧跟值（当前其后是 ${value ?? "参数末尾"}）`);
+    }
     return value;
 };
 const hasFlag = (name: string): boolean => ARGS.includes(`--${name}`);
