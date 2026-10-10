@@ -175,7 +175,7 @@ describe("changesOfOpLog", () => {
         ]);
     });
 
-    it("void_inbound：before/after diff，状态映射有效/已作废", () => {
+    it("void_inbound：BOM 编码/数量随行（未变字段也要展示），状态 diff 映射有效/已作废", () => {
         expect(
             changesOfOpLog("void_inbound", {
                 before: {
@@ -198,7 +198,11 @@ describe("changesOfOpLog", () => {
                 },
                 reason: "登记数量有误",
             }),
-        ).toEqual([{ key: "status", label: "状态", before: "有效", after: "已作废" }]);
+        ).toEqual([
+            { key: "bomCode", label: "BOM 编码", before: null, after: "ZMKW0001" },
+            { key: "qty", label: "入库数量", before: null, after: "100 个" },
+            { key: "status", label: "状态", before: "有效", after: "已作废" },
+        ]);
     });
 
     it("ship：客户随行，发货数量/订单号与备注", () => {

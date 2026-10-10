@@ -204,7 +204,14 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
         }
         case "void_inbound": {
             const snapshot = (detail ?? {}) as InboundVoidEventDetail;
-            return diffByFields(asJson(snapshot.before), asJson(snapshot.after), INBOUND_FIELDS);
+            // 作废只改 status，纯 diff 会滤掉未变的 bomCode/qty——卡片看不到作废的是
+            // 哪个 BOM；补关键事实行（before=null 展示口径，同 archive_order），再附状态 diff
+            const facts = asJson(snapshot.before) ?? asJson(snapshot.after);
+            const context: SystemLogChange[] = [
+                { key: "bomCode", label: "BOM 编码", before: null, after: asText(facts?.bomCode) },
+                { key: "qty", label: "入库数量", before: null, after: qtyText(facts?.qty) },
+            ].filter(change => change.after !== null);
+            return [...context, ...diffByFields(asJson(snapshot.before), asJson(snapshot.after), INBOUND_FIELDS)];
         }
         case "ship": {
             const snapshot = (detail ?? {}) as ShipEventDetail;
