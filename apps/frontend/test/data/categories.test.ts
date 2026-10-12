@@ -9,7 +9,7 @@ const of = (name: string, ...codes: string[]) => codes.map(code => ({ code, name
 const cat = (name: string) => categoryOf(name)!;
 
 describe("categoryOf", () => {
-    it("系统共 9 个品类：7 个建档品类 + 旋转XK3 的焊线/插线两个工艺变体（目录容器，不在建档下拉）", () => {
+    it("系统共 11 个品类：7 个建档品类 + 旋转XK3 焊线/插线与跌倒开关 新微动跌倒/老微动跌倒 四个变体目录容器（不在建档下拉）", () => {
         expect(BOM_CATEGORIES.filter(category => category.status !== false).map(category => category.key)).toEqual([
             "rotary-switch",
             "rotary-xk3",
@@ -22,6 +22,8 @@ describe("categoryOf", () => {
         expect(BOM_CATEGORIES.filter(category => category.status === false).map(category => category.key)).toEqual([
             "xk3-wire",
             "xk3-plug",
+            "kd-new-micro",
+            "kd-old-micro",
         ]);
         expect(BOM_CATEGORIES.map(category => category.key)).toEqual([
             "rotary-switch",
@@ -32,6 +34,8 @@ describe("categoryOf", () => {
             "old-micro-switch",
             "safety-switch",
             "tipover-switch",
+            "kd-new-micro",
+            "kd-old-micro",
             "piano-key-switch",
         ]);
         expect(cat("旋转XK2").codePrefix).toBe("XK2");
@@ -39,7 +43,7 @@ describe("categoryOf", () => {
         expect(categoryOf("旋转XK3")!.codePrefix).toBe("XK3");
         expect(categoryOf("安全开关")!.codePrefix).toBe("AQ");
         expect(categoryOf("跌倒开关")!.codePrefix).toBe("KD");
-        expect(categoryOf("跌倒开关")!.childCategories).toEqual(["new-micro-switch", "old-micro-switch"]);
+        expect(categoryOf("跌倒开关")!.childCategories).toEqual(["kd-new-micro", "kd-old-micro"]);
         expect(categoryOf("新微动")!.childCategories).toBeUndefined();
         expect(categoryOf("XK3")).toBeUndefined();
         expect(categoryOf("不存在")).toBeUndefined();

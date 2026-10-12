@@ -44,12 +44,19 @@ const pickXk2 = async (user: ReturnType<typeof userEvent.setup>) => {
     await user.click(screen.getByRole("button", { name: /旋转XK2/ }));
 };
 
-it("品类列表含目录容器与被引用提示；选择后展示快照树", async () => {
+it("品类列表：目录容器嵌套在引用它的主品类下（不展示死前缀），点选后展示快照树", async () => {
     const user = userEvent.setup();
     render(<BomStructurePage />);
-    // 焊线/插线两条目录容器（status=false），且被旋转XK3 引用
-    expect(screen.getAllByText("目录容器")).toHaveLength(2);
-    expect(screen.getAllByText(/被 旋转XK3 引用/)).toHaveLength(2);
+    // 四条目录容器（status=false）：焊线/插线挂在旋转XK3 下、新微动跌倒/老微动跌倒挂在跌倒开关下，
+    // 不再与建档品类平铺，也不再展示「被 X 引用」提示与容器死前缀
+    expect(screen.getAllByText("目录容器")).toHaveLength(4);
+    expect(screen.queryByText(/被 .* 引用/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/前缀 XK3W/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/前缀 KDN/)).not.toBeInTheDocument();
+    // 容器可点选维护：选中焊线展示其快照树
+    await user.click(screen.getByRole("button", { name: /焊线/ }));
+    expect(screen.getByText("PC塑料", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("静片", { exact: true })).toBeInTheDocument();
     await pickXk2(user);
     expect(screen.getByText("型号", { exact: true })).toBeInTheDocument();
     expect(screen.getByText("触点", { exact: true })).toBeInTheDocument();

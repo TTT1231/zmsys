@@ -32,16 +32,21 @@ export function BomStructurePage() {
     const [creating, setCreating] = useState(false);
 
     const category = categories?.find(row => row.key === selectedKey) ?? null;
-    /* 被引用提示：目录容器（焊线/插线）被哪些主品类的 childCategories 合并使用 */
-    const usageOf = useMemo(() => {
-        const usage = new Map<string, string[]>();
+    /* 变体容器归属：child_categories 指向的停用目录容器（焊线/插线、新微动跌倒/老微动跌倒）
+     * 嵌套到引用它的主品类下展示——容器是主品类的变体目录，不再与产品品类平铺混淆 */
+    const variantsOf = useMemo(() => {
+        const variants = new Map<string, BomCategory[]>();
         for (const row of categories ?? []) {
-            for (const childKey of row.childCategories ?? []) {
-                usage.set(childKey, [...(usage.get(childKey) ?? []), row.name]);
+            const children = (row.childCategories ?? [])
+                .map(key => categories?.find(item => item.key === key))
+                .filter((item): item is BomCategory => !!item && item.status === false);
+            if (children.length > 0) {
+                variants.set(row.key, children);
             }
         }
-        return usage;
+        return variants;
     }, [categories]);
+    const nestedKeys = useMemo(() => new Set([...variantsOf.values()].flat().map(row => row.key)), [variantsOf]);
 
     /* 所见即所存：服务端快照 + 草稿 ops 按序投影（与后端 projectStructure 同构） */
     const snapshotTree = useMemo(() => (category ? viewTreeOf(category.groups) : []), [category]);
@@ -132,35 +137,53 @@ export function BomStructurePage() {
 
             <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
                 <aside className="space-y-1">
-                    {(categories ?? []).map((row: BomCategory) => {
-                        const used = usageOf.get(row.key);
-                        return (
-                            <button
-                                key={row.key}
-                                type="button"
-                                onClick={() => pickCategory(row.key)}
-                                className={cn(
-                                    "w-full rounded-panel border px-3 py-2 text-left transition",
-                                    row.key === selectedKey
-                                        ? "border-ink/30 bg-soft"
-                                        : "border-line bg-surface hover:bg-soft/60",
-                                )}
-                            >
-                                <span className="flex items-center gap-2">
-                                    <span className="text-14 font-medium text-ink">{row.name}</span>
-                                    {row.status === false && (
-                                        <span className="rounded-full bg-soft px-2 py-0.5 text-11 text-muted">
-                                            目录容器
-                                        </span>
+                    {(categories ?? [])
+                        .filter(row => !nestedKeys.has(row.key))
+                        .map((row: BomCategory) => (
+                            <div key={row.key} className="space-y-1">
+                                <button
+                                    type="button"
+                                    onClick={() => pickCategory(row.key)}
+                                    className={cn(
+                                        "w-full rounded-panel border px-3 py-2 text-left transition",
+                                        row.key === selectedKey
+                                            ? "border-ink/30 bg-soft"
+                                            : "border-line bg-surface hover:bg-soft/60",
                                     )}
-                                </span>
-                                <span className="mt-0.5 block text-12 text-placeholder">
-                                    前缀 {row.codePrefix} · 版本 {row.rowVersion}
-                                    {used && used.length > 0 ? ` · 被 ${used.join("、")} 引用` : ""}
-                                </span>
-                            </button>
-                        );
-                    })}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <span className="text-14 font-medium text-ink">{row.name}</span>
+                                    </span>
+                                    <span className="mt-0.5 block text-12 text-placeholder">
+                                        前缀 {row.codePrefix} · 版本 {row.rowVersion}
+                                    </span>
+                                </button>
+                                {(variantsOf.get(row.key) ?? []).map(variant => (
+                                    <button
+                                        key={variant.key}
+                                        type="button"
+                                        onClick={() => pickCategory(variant.key)}
+                                        className={cn(
+                                            "ml-3 w-[calc(100%-0.75rem)] rounded-panel border border-dashed px-3 py-1.5 text-left transition",
+                                            variant.key === selectedKey
+                                                ? "border-ink/30 bg-soft"
+                                                : "border-line bg-surface hover:bg-soft/60",
+                                        )}
+                                    >
+                                        <span className="flex items-center gap-2">
+                                            <span className="text-13 font-medium text-ink">{variant.name}</span>
+                                            <span className="rounded-full bg-soft px-2 py-0.5 text-11 text-muted">
+                                                目录容器
+                                            </span>
+                                        </span>
+                                        {/* 容器前缀仅防撞号、永不取号，不展示 */}
+                                        <span className="mt-0.5 block text-12 text-placeholder">
+                                            版本 {variant.rowVersion}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        ))}
                 </aside>
 
                 <section className="rounded-panel border border-line bg-surface px-4 py-4 shadow-card">

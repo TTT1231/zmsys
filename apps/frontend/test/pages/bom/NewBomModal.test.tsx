@@ -363,8 +363,8 @@ it("跌倒开关：品类子选微动类型后合并树展示，提交携带 chi
     expect(screen.getAllByRole("alert").some(a => a.textContent?.includes("请选择微动开关类型"))).toBe(true);
     expect(mutate).not.toHaveBeenCalled();
 
-    // 选新微动 → 合并树：跌倒物料 + "微动开关"大类（可折叠）+ 微动分区/分组
-    await user.click(screen.getByRole("radio", { name: "新微动" }));
+    // 选新微动跌倒（私有容器）→ 合并树：跌倒物料 + "微动开关"大类（可折叠）+ 微动分区/分组
+    await user.click(screen.getByRole("radio", { name: "新微动跌倒" }));
     expect(screen.getByRole("button", { name: "跌倒盖" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "微动开关类型" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "PA66塑料" })).toBeInTheDocument();
@@ -391,14 +391,14 @@ it("跌倒开关：品类子选微动类型后合并树展示，提交携带 chi
     expect(mutate).toHaveBeenCalledWith(
         expect.objectContaining({
             name: "跌倒开关",
-            childCategory: "new-micro-switch",
-            materialItemIds: expect.arrayContaining(["3601", "3604", "3605", "3606", "3101", "3112"]),
+            childCategory: "kd-new-micro",
+            materialItemIds: expect.arrayContaining(["3601", "3604", "3605", "3606", "3782", "3793"]),
         }),
         expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
 
-    // 切换到老微动 → 树切换、选择清空
-    await user.click(screen.getByRole("radio", { name: "老微动" }));
+    // 切换到老微动跌倒 → 树切换、选择清空
+    await user.click(screen.getByRole("radio", { name: "老微动跌倒" }));
     await user.click(screen.getByRole("button", { name: "确认切换" }));
     expect(screen.getByRole("button", { name: "跌倒盖" })).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "带CB" })).toBeInTheDocument();

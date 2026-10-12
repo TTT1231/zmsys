@@ -42,6 +42,14 @@ export function bomComposition(bom: Pick<Bom, "name" | "items">, categories: Bom
             new Set(category.groups.flatMap(group => group.items.map(item => item.id))),
         ]),
     );
+    /* 解耦兜底：跌倒开关已改指向私有容器（kd-new-micro/kd-old-micro），历史 KD 档的
+     * 微动物料 id 仍属于微动产品品类——不在子品类里命中时按全量目录识别归属，
+     * 分节与系列展示不回退为「系列待确认」。 */
+    const idOwnerOf = new Map<string, string>(
+        categories.flatMap(category =>
+            category.groups.flatMap(group => group.items.map(item => [item.id, category.key] as const)),
+        ),
+    );
     const body: Bom["items"] = [];
     const buckets = new Map<string, Bom["items"]>();
     for (const item of bom.items ?? []) {
@@ -54,7 +62,7 @@ export function bomComposition(bom: Pick<Bom, "name" | "items">, categories: Bom
             body.push(item);
             continue;
         }
-        const key = matches.length === 1 ? matches[0].key : "unknown";
+        const key = matches.length === 1 ? matches[0].key : (idOwnerOf.get(item.materialId) ?? "unknown");
         buckets.set(key, [...(buckets.get(key) ?? []), item]);
     }
     /* 旋转XK3 主品类无自有目录（物料全在焊线工艺子品类），不输出空的本体节 */
@@ -63,7 +71,8 @@ export function bomComposition(bom: Pick<Bom, "name" | "items">, categories: Bom
     const seriesNames: string[] = [];
     const sectionPrefix = kind.section ? `${kind.section} · ` : "";
     for (const [key, items] of buckets) {
-        const name = children.find(category => category.key === key)?.name;
+        /* 全量目录取名：兼容解耦兜底命中的微动产品品类（不在 children 里） */
+        const name = categories.find(category => category.key === key)?.name;
         if (name) seriesNames.push(name);
         sections.push({
             key,

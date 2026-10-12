@@ -86,7 +86,7 @@ describe("BOM/成品档案 (e2e)", () => {
         const list = await app.inject({ method: "GET", url: "/api/bom-categories", headers: authHeaders(superToken) });
         expect(list.statusCode).toBe(200);
         const categories = list.json().data;
-        expect(categories).toHaveLength(9);
+        expect(categories).toHaveLength(11);
         expect(categories.map((category: { key: string }) => category.key)).toEqual([
             "rotary-switch",
             "rotary-xk3",
@@ -97,15 +97,26 @@ describe("BOM/成品档案 (e2e)", () => {
             "piano-key-switch",
             "xk3-wire",
             "xk3-plug",
+            "kd-new-micro",
+            "kd-old-micro",
         ]);
-        // 焊线/插线为目录容器品类：随接口下发（合并树用）但标记停用，建档下拉不显示
+        // 焊线/插线/新微动跌倒/老微动跌倒为目录容器品类：随接口下发（合并树用）
+        // 但标记停用，建档下拉不显示
         expect(categories.find((category: { key: string }) => category.key === "xk3-wire")).toMatchObject({
             status: false,
         });
         expect(categories.find((category: { key: string }) => category.key === "xk3-plug")).toMatchObject({
             status: false,
         });
-        expect(categories.filter((category: { status?: boolean }) => category.status === false)).toHaveLength(2);
+        expect(categories.find((category: { key: string }) => category.key === "kd-new-micro")).toMatchObject({
+            status: false,
+            name: "新微动跌倒",
+        });
+        expect(categories.find((category: { key: string }) => category.key === "kd-old-micro")).toMatchObject({
+            status: false,
+            name: "老微动跌倒",
+        });
+        expect(categories.filter((category: { status?: boolean }) => category.status === false)).toHaveLength(4);
         // 目录整树乐观锁版本恒下发（结构维护保存携带期望值比对，db-scheme.md §5.4）
         for (const category of categories) {
             expect(category.rowVersion).toBe(1);
@@ -126,7 +137,7 @@ describe("BOM/成品档案 (e2e)", () => {
         expect(categories[5]).toMatchObject({
             name: "跌倒开关",
             codePrefix: "KD",
-            childCategories: ["new-micro-switch", "old-micro-switch"],
+            childCategories: ["kd-new-micro", "kd-old-micro"],
         });
         expect(categories[0]).not.toHaveProperty("childCategories");
 
@@ -479,7 +490,7 @@ describe("BOM/成品档案 (e2e)", () => {
         expect(bom!.spec).toBe(specBefore);
     });
 
-    it("跌倒开关：品类子选合并目录——跌倒物料 + 微动物料统一勾选建档", async () => {
+    it("跌倒开关：品类子选合并目录——跌倒物料 + 微动物料统一勾选建档（容器自持，不引用微动产品品类）", async () => {
         const [cover, base, ball, rocker] = await Promise.all([
             itemIdOf("tipover-switch", "跌倒盖", "跌倒盖KW16 / 有CB字"),
             itemIdOf("tipover-switch", "跌倒底", "跌倒底"),
@@ -488,11 +499,11 @@ describe("BOM/成品档案 (e2e)", () => {
         ]);
         const tipoverIds = [cover, base, ball, rocker];
         const microIds = await Promise.all([
-            itemIdOf("new-micro-switch", "底座", "二脚底座有CB（无挡脚）"),
-            itemIdOf("new-micro-switch", "盖子", "盖子"),
-            itemIdOf("new-micro-switch", "按钮", "8.5mm"),
-            itemIdOf("new-micro-switch", "支架", "6.3支架：铜镀银"),
-            itemIdOf("new-micro-switch", "静片", "6.3静片：铜镀银"),
+            itemIdOf("kd-new-micro", "底座", "二脚底座有CB（无挡脚）"),
+            itemIdOf("kd-new-micro", "盖子", "盖子"),
+            itemIdOf("kd-new-micro", "按钮", "8.5mm"),
+            itemIdOf("kd-new-micro", "支架", "6.3支架：铜镀银"),
+            itemIdOf("kd-new-micro", "静片", "6.3静片：铜镀银"),
         ]);
 
         // 未带 childCategory → 400
@@ -511,9 +522,29 @@ describe("BOM/成品档案 (e2e)", () => {
         expect(wrong.statusCode).toBe(400);
         expect(wrong.json().message).toBe("微动开关类型不在本品类允许范围内");
 
-        // 合法建档：跌倒物料 + 新微动物料（childCategory = new-micro-switch）
+        // 解耦回归：微动产品品类不再是跌倒开关的合法子选（20261012110000 起指向私有容器）
+        const coupled = await createBom(
+            { name: "跌倒开关", materialItemIds: tipoverIds, childCategory: "new-micro-switch" },
+            `e2e-bom-${RUN}-tipover-coupled`,
+        );
+        expect(coupled.statusCode).toBe(400);
+        expect(coupled.json().message).toBe("微动开关类型不在本品类允许范围内");
+
+        // 微动产品品类的物料不再并入跌倒开关目录（容器物料 id 独立）→ 400
+        const productMicro = await itemIdOf("new-micro-switch", "底座", "二脚底座有CB（无挡脚）");
+        const foreignMicro = await createBom(
+            {
+                name: "跌倒开关",
+                materialItemIds: [...tipoverIds, productMicro],
+                childCategory: "kd-new-micro",
+            },
+            `e2e-bom-${RUN}-tipover-product-micro`,
+        );
+        expect(foreignMicro.statusCode).toBe(400);
+
+        // 合法建档：跌倒物料 + 新微动跌倒容器物料（childCategory = kd-new-micro）
         const created = await createBom(
-            { name: "跌倒开关", materialItemIds: [...tipoverIds, ...microIds], childCategory: "new-micro-switch" },
+            { name: "跌倒开关", materialItemIds: [...tipoverIds, ...microIds], childCategory: "kd-new-micro" },
             `e2e-bom-${RUN}-tipover-ok`,
         );
         expect(created.statusCode).toBe(200);
@@ -529,7 +560,7 @@ describe("BOM/成品档案 (e2e)", () => {
             {
                 name: "跌倒开关",
                 materialItemIds: [...tipoverIds, rotaryModel],
-                childCategory: "new-micro-switch",
+                childCategory: "kd-new-micro",
             },
             `e2e-bom-${RUN}-tipover-foreign`,
         );
@@ -537,22 +568,22 @@ describe("BOM/成品档案 (e2e)", () => {
 
         // 同物料集合 → 409
         const dup = await createBom(
-            { name: "跌倒开关", materialItemIds: [...tipoverIds, ...microIds], childCategory: "new-micro-switch" },
+            { name: "跌倒开关", materialItemIds: [...tipoverIds, ...microIds], childCategory: "kd-new-micro" },
             `e2e-bom-${RUN}-tipover-dup`,
         );
         expect(dup.statusCode).toBe(409);
         expect(dup.json().message).toBe(`BOM 已存在：${created.json().data.code}`);
 
-        // 换老微动子品类 + 老微动物料 → 不同档案
+        // 换老微动跌倒容器 + 老微动物料 → 不同档案
         const oldMicroIds = await Promise.all([
-            itemIdOf("old-micro-switch", "底座", "带CB"),
-            itemIdOf("old-micro-switch", "按钮", "8.9mm"),
+            itemIdOf("kd-old-micro", "底座", "带CB"),
+            itemIdOf("kd-old-micro", "按钮", "8.9mm"),
         ]);
         const second = await createBom(
             {
                 name: "跌倒开关",
                 materialItemIds: [...tipoverIds, ...oldMicroIds],
-                childCategory: "old-micro-switch",
+                childCategory: "kd-old-micro",
             },
             `e2e-bom-${RUN}-tipover-old`,
         );

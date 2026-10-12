@@ -73,3 +73,13 @@ it("停用（隐藏）子件物料仍按全量目录归属，不退化为系列�
     expect(result.series).toBe("新微动");
     expect(result.sections[1]!.title).toBe("微动开关 · 新微动");
 });
+
+/* 跌倒开关解耦（20261012110000）：子品类指向私有容器 kd-new-micro/kd-old-micro——
+ * 新建档的物料 id 在容器里直接命中，系列名为 新微动跌倒/老微动跌倒；
+ * 历史档的微动物料 id 属于微动产品品类，经上面的全量目录兜底识别。 */
+it("解耦后的新建档按私有容器归属：微动开关 · 新微动跌倒", () => {
+    const item = { ...oldMicro, materialId: "3782" };
+    const result = bomComposition({ name: "跌倒开关", items: [body, item] }, BOM_CATEGORIES);
+    expect(result.series).toBe("新微动跌倒");
+    expect(result.sections[1]!.title).toBe("微动开关 · 新微动跌倒");
+});
