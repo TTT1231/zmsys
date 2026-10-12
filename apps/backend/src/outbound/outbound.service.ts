@@ -262,12 +262,12 @@ export class OutboundService {
     }
 
     /**
-     * 删除已作废的出库单（契约 outbound:delete，幂等）：软删除——单头打 deleted_at
-     * 标记，列表不再返回；7 天后悔期后由 maintenance 定时物理清理（连带状态日志与
-     * NORMAL+CORRECTION 数量流水同删，零和冲销对不改变任何统计）。仅 VOIDED 可删
-     * （作废时已追加冲销、订单已发量已恢复）；不写状态日志、不递增 rowVersion——
-     * 删除是可见性管理非业务变更；op_log 记 delete_outbound 与删除前快照（含作废
-     * 原因，物理清理后审计仍可独立还原）。
+     * 删除已作废的出库单（契约 outbound:delete，幂等，物理删除）：删错直接重建，
+     * 无恢复诉求。仅 VOIDED 可删（作废时已追加冲销、订单已发量已恢复）；同事务
+     * 按外键顺序连带删除状态日志与 NORMAL+CORRECTION 数量流水（先删 CORRECTION
+     * 再删 NORMAL，correction_of_id 自引用外键顺序；零和冲销对不改变任何统计）
+     * 最后删单头；不写状态日志、不递增 rowVersion——删除非业务变更；op_log 记
+     * delete_outbound 与删除前快照（含作废原因，删除后审计仍可独立还原）。
      */
     async deleteOutbound(
         shipmentNo: string,
@@ -291,13 +291,16 @@ export class OutboundService {
                 if (current.state !== "VOIDED") {
                     throw new ConflictException("仅已作废的出库单可删除，请先作废");
                 }
-                // 含归档前已作废的单：删除后 7 天物理清理会断归档审计链，一律保留
+                // 含归档前已作废的单：删除即物理清理、立即断归档审计链，一律保留
                 await this.assertOrderNotArchived(tx, current, "不可删除");
 
-                await tx.outboundShipment.update({
-                    where: { id: current.id },
-                    data: { deletedAt: now },
+                await tx.outboundStateLog.deleteMany({ where: { shipmentId: current.id } });
+                // 先删 CORRECTION（子）再删 NORMAL（父）：correction_of_id 自引用外键顺序
+                await tx.outboundLedger.deleteMany({
+                    where: { shipmentId: current.id, correctionOfId: { not: null } },
                 });
+                await tx.outboundLedger.deleteMany({ where: { shipmentId: current.id } });
+                await tx.outboundShipment.delete({ where: { id: current.id } });
                 await recordOpLog(tx, this.snowflake, actor, {
                     action: "delete_outbound",
                     targetType: "outbound",
@@ -375,7 +378,7 @@ export class OutboundService {
 
     /**
      * 归档订单的出库单守卫：作废/删除都会破坏归档终态——作废会回退已发净额
-     * （"已发 3/5"变 0/5），删除在后悔期物理清理后断审计链。调用前订单行已被
+     * （"已发 3/5"变 0/5），删除即物理清理、立即断归档审计链。调用前订单行已被
      * lockShipmentForWrite 按锁序锁定，此处读到的状态无竞态。
      */
     private async assertOrderNotArchived(tx: Tx, shipment: ShipmentRow, action: string): Promise<void> {
@@ -392,7 +395,7 @@ export class OutboundService {
      * 按契约锁序锁定单头（db-scheme.md §2）：BOM → 订单 → 出库单头。
      * 先无锁读定位 orderId/bomId，再按固定顺序锁定，锁定读返回最新已提交行。
      * 出库单存在即冻结订单身份：orders.updateOrder 的整单编辑守卫（净出库 0 且
-     * 无未删出库单，visibleShipmentCountOf）保证有出库单的订单不可换 BOM——
+     * 无出库单，shipmentCountOf）保证有出库单的订单不可换 BOM——
      * 此处定位读的 bomId 不会漂移，无需 createOutbound 式的锁后比对。
      */
     private async lockShipmentForWrite(tx: Tx, shipmentNo: string): Promise<ShipmentRow> {

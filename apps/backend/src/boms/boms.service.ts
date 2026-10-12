@@ -138,7 +138,7 @@ export class BomsService {
     /**
      * BOM 出入库流水（契约 bom:view）：入库/调整/出库三台账与 v_bom_stock 同一
      * 口径合并（有效入库 + 全量调整 − 有效出库）；出库臂取 v_outbound_effective_event
-     * 的全部事件（未软删单，含作废单的正向与冲销行），结余与 v_bom_stock 恒等
+     * 的全部事件（全部单据，含作废单的正向与冲销行），结余与 v_bom_stock 恒等
      * 不依赖"作废必等额冲销"的隐式零和——未来部分冲销时作废单残值即实际出库，
      * 同样进入流水与结余。冲销行的备注展示作废原因（视图 remark 列）。
      * 业务日升序返回并逐笔累计结余；同日内按操作时间排序（单号字母序会把出库
@@ -334,7 +334,7 @@ export class BomsService {
      * 删除未被引用的 BOM（契约 bom:delete，幂等，仅超级管理员）：清理手误建档。
      * 锁 BOM 行——订单新建与入库登记同样先锁 BOM（§2 锁序），删除与它们竞争
      * 同一行锁，先提交者生效，引用校验因此无并发窗口。命中任一引用即 409：
-     * - sales_order_table：任意订单（含已归档与软删行，订单物理保留即视为引用）
+     * - sales_order_table：任意订单（含已归档单，归档永不物理清理即视为引用）
      * - inbound_ledger / stock_adjustment：出入库与调整流水（外键 RESTRICT 兜底）
      * 校验通过后同事务删除 bom_item（外键要求先清子行）与 bom_table 行，
      * op_log 记录 delete_bom 与删除前快照。BOM 建档后不可修改，无乐观锁版本。
@@ -355,16 +355,16 @@ export class BomsService {
                 }
                 await lockRowsById(tx, "bom_table", [bom.id]);
 
-                // 订单引用含软删行（物理清理前行仍在、FK 仍挡删），raw 计数不经软删过滤
+                // 订单引用计数与 fk_sales_order_bom RESTRICT 同口径：任意订单行
+                // （含已归档单）都算引用
                 const [orderCount] = await tx.$queryRaw<Array<{ cnt: bigint | number }>>`
                 SELECT COUNT(*) AS cnt FROM sales_order_table WHERE bom_id = ${bom.id}
             `;
                 if (Number(orderCount!.cnt) > 0) {
                     throw new ConflictException("BOM 已被销售订单引用，不可删除");
                 }
-                // 引用计数与 fk_inbound_bom 的 ON DELETE RESTRICT 同口径：软删行物理上
-                // 仍在库、外键仍会挡删，须看到已删行——raw 计数不经全局软删过滤
-                // （db-scheme.md §7.1 设计说明③），物理清理后自然放行
+                // 引用计数与 fk_inbound_bom 的 ON DELETE RESTRICT 同口径：任何入库
+                // 与调整流水都算引用（db-scheme.md §7.1 设计说明③）
                 const [ledgerCount] = await tx.$queryRaw<Array<{ cnt: bigint | number }>>`
                 SELECT (SELECT COUNT(*) FROM inbound_ledger WHERE bom_id = ${bom.id})
                      + (SELECT COUNT(*) FROM stock_adjustment WHERE bom_id = ${bom.id}) AS cnt

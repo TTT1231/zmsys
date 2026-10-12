@@ -49,7 +49,6 @@ const mkOrder = (overrides: Partial<OrderRow> = {}): OrderRow =>
         bomModelSnapshot: "",
         bomSpecSnapshot: BOM_SNAPSHOT,
         lifecycleStatus: "ACTIVE",
-        deletedAt: null,
         rowVersion: 1n,
         requestKey: "req-order",
         createdBy: 1n,
@@ -78,7 +77,6 @@ const mkShipment = (overrides: Partial<ShipmentRow> = {}): ShipmentRow =>
         voidedBy: null,
         voidReason: null,
         voidedAt: null,
-        deletedAt: null,
         rowVersion: 1n,
         requestKey: "req-ship",
         registeredBy: 1n,
@@ -150,16 +148,13 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>) => {
             ),
         },
         outboundShipment: {
-            // 全局软删注入(prisma-extensions.ts)在 mock 层的等价物:已删行视为不存在
             findUnique: vi.fn(
                 async ({ where }: { where: { shipmentNo?: string; id?: bigint } }) =>
-                    store.shipments.find(
-                        s =>
-                            (where.shipmentNo ? s.shipmentNo === where.shipmentNo : s.id === where.id) &&
-                            s.deletedAt === null,
+                    store.shipments.find(s =>
+                        where.shipmentNo ? s.shipmentNo === where.shipmentNo : s.id === where.id,
                     ) ?? null,
             ),
-            findMany: vi.fn(async () => store.shipments.filter(s => s.deletedAt === null)),
+            findMany: vi.fn(async () => store.shipments),
             create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
                 const created = mkShipment({
                     id: data.id as bigint,
@@ -183,6 +178,12 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>) => {
                 store.shipments[index] = applied;
                 return applied;
             }),
+            delete: vi.fn(async ({ where }: { where: { id: bigint } }) => {
+                const index = store.shipments.findIndex(s => s.id === where.id);
+                if (index >= 0) {
+                    store.shipments.splice(index, 1);
+                }
+            }),
         },
         outboundLedger: {
             findFirst: vi.fn(
@@ -190,6 +191,15 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>) => {
                     store.ledgers.find(l => l.shipmentId === where.shipmentId && l.entryType === where.entryType) ??
                     null,
             ),
+            // 删除路径同事务清理数量流水（先 CORRECTION 后 NORMAL 的两段调用按 where 过滤）
+            deleteMany: vi.fn(async ({ where }: { where: { shipmentId: bigint; correctionOfId?: unknown } }) => {
+                const correctionOnly = "correctionOfId" in where;
+                const before = store.ledgers.length;
+                store.ledgers = store.ledgers.filter(
+                    l => !(l.shipmentId === where.shipmentId && (!correctionOnly || l.correctionOfId !== null)),
+                );
+                return { count: before - store.ledgers.length };
+            }),
             create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
                 const created = {
                     id: 800n,
@@ -213,6 +223,13 @@ const mkService = (store: Store, beginOrReplay?: ReturnType<typeof vi.fn>) => {
             create: vi.fn(async ({ data }: { data: unknown }) => {
                 store.stateLogs.push(data);
                 return data;
+            }),
+            deleteMany: vi.fn(async ({ where }: { where: { shipmentId: bigint } }) => {
+                const before = store.stateLogs.length;
+                store.stateLogs = store.stateLogs.filter(
+                    entry => (entry as { shipmentId?: bigint }).shipmentId !== where.shipmentId,
+                );
+                return { count: before - store.stateLogs.length };
             }),
         },
         opLog: {
@@ -369,7 +386,7 @@ describe("OutboundService.voidOutbound", () => {
 });
 
 describe("OutboundService.deleteOutbound", () => {
-    it("非作废 409；已删除 404（与不存在同口径）；成功打标不动版本，op_log 快照含作废原因，列表不再返回", async () => {
+    it("非作废 409；删除后行不存在 404（重删同口径）；成功物理删除连带子行，op_log 快照含作废原因", async () => {
         const store = emptyStore();
         store.shipments.push(mkShipment()); // REGISTERED：必须先作废
         const { service } = mkService(store);
@@ -377,24 +394,31 @@ describe("OutboundService.deleteOutbound", () => {
             new ConflictException("仅已作废的出库单可删除，请先作废"),
         );
 
-        // 已删除行经全局软删过滤后与不存在同口径(404)，不再单列 409
-        store.shipments[0] = mkShipment({ state: "VOIDED", deletedAt: new Date() });
+        // 删除即物理移除：行不存在与删除后重删同为 404
+        store.shipments.splice(0, 1);
         await expect(service.deleteOutbound("CK26091301", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
             new NotFoundException("出库单不存在"),
         );
 
-        store.shipments[0] = mkShipment({
-            state: "VOIDED",
-            voidReason: "数量有误",
-            voidedBy: 1n,
-            voidedAt: new Date(),
-            rowVersion: 2n,
-        });
+        store.shipments.push(
+            mkShipment({
+                state: "VOIDED",
+                voidReason: "数量有误",
+                voidedBy: 1n,
+                voidedAt: new Date(),
+                rowVersion: 2n,
+            }),
+        );
+        // 数量流水与状态日志随单同删（作废单 NORMAL+CORRECTION 零和，删除不改变统计）
+        store.ledgers.push(
+            { id: 801n, shipmentId: 600n, correctionOfId: null } as OutboundLedger,
+            { id: 802n, shipmentId: 600n, correctionOfId: 801n } as OutboundLedger,
+        );
+        store.stateLogs.push({ shipmentId: 600n, from: "REGISTERED", to: "VOIDED" });
         await expect(service.deleteOutbound("CK26091301", { expectedVersion: 2 }, actor, ID_KEY)).resolves.toBeNull();
 
-        // 删除是可见性管理非业务变更：版本链止于 VOID，不递增 row_version、不写状态日志
-        expect(store.shipments[0]!.deletedAt).toBeInstanceOf(Date);
-        expect(store.shipments[0]!.rowVersion).toBe(2n);
+        expect(store.shipments).toHaveLength(0);
+        expect(store.ledgers).toHaveLength(0);
         expect(store.stateLogs).toHaveLength(0);
         expect(store.opLogs).toHaveLength(1);
         expect(store.opLogs[0]).toMatchObject({ action: "delete_outbound", targetCode: "CK26091301" });
@@ -405,11 +429,10 @@ describe("OutboundService.deleteOutbound", () => {
             state: "voided",
             voidReason: "数量有误",
         });
-        // 列表过滤已删除单
         expect(await service.listOutbound()).toHaveLength(0);
     });
 
-    it("所属订单已归档 409：含归档前已作废的单，删除后物理清理会断归档审计链", async () => {
+    it("所属订单已归档 409：含归档前已作废的单，删除即断归档审计链", async () => {
         const store = emptyStore();
         store.orders[0] = mkOrder({ lifecycleStatus: "ARCHIVED" });
         store.shipments.push(mkShipment({ state: "VOIDED", voidReason: "归档前作废", rowVersion: 2n }));
@@ -417,7 +440,8 @@ describe("OutboundService.deleteOutbound", () => {
         await expect(service.deleteOutbound("CK26091301", { expectedVersion: 2 }, actor, ID_KEY)).rejects.toThrow(
             new ConflictException("所属订单已归档，出库记录为审计依据，不可删除"),
         );
-        expect(store.shipments[0]!.deletedAt).toBeNull();
+        // 守卫拒绝后行仍在、未调用任何删除
+        expect(store.shipments).toHaveLength(1);
         expect(store.opLogs).toHaveLength(0);
     });
 });

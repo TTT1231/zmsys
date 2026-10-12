@@ -12,9 +12,9 @@ import type { AuthUser } from "../common/types/auth-user";
 import type { Order } from "./types";
 
 /** 销售订单（openapi orders tag）：归档为生命周期终态（仅归档操作人本人可回退）；
- * 净发货为零且关联出库单已删除的订单可由超级管理员软删除（专用端点 :orderNo/delete）；
- * 已完成/部分发货的订单由超级管理员归档（:orderNo/archive）退出活跃视图，
- * 误归档由归档人经 :orderNo/unarchive 回退回活跃视图 */
+ * 净发货为零且关联出库单已删除的订单可由超级管理员删除（专用端点 :orderNo/delete，
+ * 物理删除）；已完成/部分发货的订单由超级管理员归档（:orderNo/archive）退出活跃
+ * 视图，误归档由归档人经 :orderNo/unarchive 回退回活跃视图 */
 @Controller("orders")
 export class OrdersController {
     constructor(private readonly ordersService: OrdersService) {}

@@ -52,16 +52,13 @@ export class RelationsService {
     ): Promise<RelationsData> {
         const dates = { ...(start ? { gte: toDateColumn(start) } : {}), ...(end ? { lte: toDateColumn(end) } : {}) };
         const bounded = !!start || !!end;
-        // 显式软删条件也约束嵌套关联；作废但未删除的单据保留追溯关系。
+        // 已删除单据物理消失，不参与关系图；作废但未删除的单据保留追溯关系。
         const orders = await db.salesOrderTable.findMany({
             where: {
-                deletedAt: null,
                 ...(orderNo ? { orderNo } : {}),
                 ...(bomCode ? { bom: { bomCode } } : {}),
                 ...(customerCode ? { customer: { customerCode } } : {}),
-                ...(bounded
-                    ? { OR: [{ orderDate: dates }, { shipments: { some: { deletedAt: null, businessDate: dates } } }] }
-                    : {}),
+                ...(bounded ? { OR: [{ orderDate: dates }, { shipments: { some: { businessDate: dates } } }] } : {}),
             },
             orderBy: { orderNo: "asc" },
             take: RELATION_LIMITS.orders + 1,
@@ -120,10 +117,7 @@ export class RelationsService {
                 where: {
                     ...(bomCode ? { bomCode } : {}),
                     inboundEntries: {
-                        some: {
-                            deletedAt: null,
-                            ...(bounded ? { businessDate: dates } : {}),
-                        },
+                        some: bounded ? { businessDate: dates } : {},
                     },
                 },
                 orderBy: { bomCode: "asc" },
@@ -146,7 +140,6 @@ export class RelationsService {
         const [inbounds, outbounds] = await Promise.all([
             db.inboundLedger.findMany({
                 where: {
-                    deletedAt: null,
                     bomId: { in: [...boms.keys()] },
                     ...(bounded ? { businessDate: dates } : {}),
                 },
@@ -164,7 +157,6 @@ export class RelationsService {
             }),
             db.outboundShipment.findMany({
                 where: {
-                    deletedAt: null,
                     orderId: { in: [...orderById.keys()] },
                     ...(bounded ? { businessDate: dates } : {}),
                 },

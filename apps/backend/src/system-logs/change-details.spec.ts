@@ -91,7 +91,6 @@ describe("changesOfOpLog", () => {
                     ],
                     modelCode: "",
                 },
-                deletedAt: "2026-09-27T10:00:00.000Z",
             }),
         ).toEqual([
             { key: "customer", label: "客户", before: null, after: "锦泰科技" },

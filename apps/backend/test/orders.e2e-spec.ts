@@ -877,9 +877,8 @@ describe("销售订单 (e2e)", () => {
 
         const list = await app.inject({ method: "GET", url: "/api/orders", headers: authHeaders(superToken) });
         expect(list.json().data.some((item: { orderNo: string }) => item.orderNo === target.orderNo)).toBe(false);
-        expect(
-            (await prisma.salesOrderTable.findUnique({ where: { orderNo: target.orderNo } }))?.deletedAt,
-        ).not.toBeNull();
+        // 删除即物理清理：行不存在，变更日志同事务清空，op_log 快照是唯一残留
+        expect(await prisma.salesOrderTable.findUnique({ where: { orderNo: target.orderNo } })).toBeNull();
         const opLog = await prisma.opLog.findFirst({
             where: { action: "delete_order", targetCode: target.orderNo },
         });

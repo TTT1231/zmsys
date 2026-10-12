@@ -66,7 +66,6 @@ export type OrderDeleteEventDetail = OrderSnapshotCore & {
     customerCode: string;
     bomCode: string;
     bomRemark: string;
-    deletedAt: string;
 };
 
 /** 客户可编辑的 8 业务字段（update_customer detail 的 before/after 内嵌形态） */
@@ -133,7 +132,7 @@ export type ShipEventDetail = {
     customer: string;
 };
 
-/** 出库单头快照（outbound.shipmentSnapshot）：物理清理数量流水后仍能独立还原出库内容 */
+/** 出库单头快照（outbound.shipmentSnapshot）：数量流水随单删除后仍能独立还原出库内容 */
 export type ShipmentSnapshotCore = {
     no: string;
     orderNo: string;

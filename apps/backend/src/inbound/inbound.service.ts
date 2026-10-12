@@ -267,12 +267,13 @@ export class InboundService {
     }
 
     /**
-     * 删除已作废的入库（契约 inbound:delete，幂等）：软删除——行打 deleted_at 标记，
-     * 列表不再返回；7 天后悔期后由 maintenance 定时物理清理（连带变更日志同删）。
-     * 仅 VOIDED 可删（作废时库存已扣回，直接删 ACTIVE 单会破坏库存）；被库存调整单
-     * 引用的单 409（保证物理清理 FK 安全）；不写变更日志、不递增 rowVersion——删除
-     * 是可见性管理非业务变更，版本链止于 VOID；op_log 记 delete_inbound 与删除前
-     * 快照（含作废原因，物理清理后审计仍可独立还原）。
+     * 删除已作废的入库（契约 inbound:delete，幂等，物理删除）：删错直接重建，无恢复
+     * 诉求。仅 VOIDED 可删（作废时库存已扣回，直接删 ACTIVE 单会破坏库存）；被库存
+     * 调整单引用的单 409——stock_adjustment 不可变，引用中的入库单永不删除（永久
+     * 审计前提，亦是 fk_stock_adjustment_inbound 的 FK 安全前置）。同事务先删变更
+     * 日志子行再删行（外键要求先清子行）；不写变更日志、不递增 rowVersion——删除
+     * 非业务变更，版本链止于 VOID；op_log 记 delete_inbound 与删除前快照（含作废
+     * 原因，删除后审计仍可独立还原）。
      */
     async deleteInbound(
         entryNo: string,
@@ -301,10 +302,10 @@ export class InboundService {
                     throw new ConflictException("存在关联的库存调整单，不可删除");
                 }
 
-                await tx.inboundLedger.update({
-                    where: { id: current.id },
-                    data: { deletedAt: now },
-                });
+                // 作废原因须在变更日志删除前读取（子行随单同删，op_log 是唯一残留）
+                const voidReason = await this.lastVoidReasonOf(tx, current.id);
+                await tx.inboundChangeLog.deleteMany({ where: { inboundId: current.id } });
+                await tx.inboundLedger.delete({ where: { id: current.id } });
                 await recordOpLog(tx, this.snowflake, actor, {
                     action: "delete_inbound",
                     targetType: "inbound",
@@ -312,7 +313,7 @@ export class InboundService {
                     targetCode: entryNo,
                     detail: {
                         ...this.entrySnapshot(current),
-                        voidReason: await this.lastVoidReasonOf(tx, current.id),
+                        voidReason,
                         deletedBy: actor.name,
                     },
                     now,
@@ -370,7 +371,7 @@ export class InboundService {
                 const bom = await this.lockBomByCode(tx, dto.bomCode);
                 let relatedInboundId: bigint | null = null;
                 if (dto.relatedInboundNo) {
-                    // 已软删除的入库单不可再被新调整单关联——否则清理任务会因引用永久跳过该行
+                    // 已删除的入库单物理不存在——关联只能指向现存单（同 404 口径）
                     const related = await tx.inboundLedger.findFirst({
                         where: { entryNo: dto.relatedInboundNo },
                         select: { id: true, bomId: true },

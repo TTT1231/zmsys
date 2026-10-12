@@ -8,7 +8,7 @@ import type { AppConfig } from "../configuration";
 
 /**
  * 连接池由本服务持有；UTC 时区约定见 create-pool.ts。
- * DI 容器实际注入的是 $extends 后的扩展实例（软删过滤 + updatedAt 统一注入，
+ * DI 容器实际注入的是 $extends 后的扩展实例（updatedAt 统一注入，
  * 见 prisma-extensions.ts）：扩展返回新 client 对象替换构造产物，业务代码与
  * $transaction 事务内的 tx 均走扩展。生命周期钩子以补绑箭头形式挂在 $extends
  * 产物上——Proxy 的自有属性优先于原型链，写成类方法反而不会被 Nest 调用；

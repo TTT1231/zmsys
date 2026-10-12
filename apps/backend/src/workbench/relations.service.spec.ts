@@ -173,19 +173,18 @@ describe("分析页业务关系聚合", () => {
         expect(db.salesOrderTable.findMany).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: {
-                    deletedAt: null,
                     orderNo: "SO101",
                     bom: { bomCode: "KW001" },
                     customer: { customerCode: "CUS-0001" },
-                    OR: [{ orderDate: dates }, { shipments: { some: { deletedAt: null, businessDate: dates } } }],
+                    OR: [{ orderDate: dates }, { shipments: { some: { businessDate: dates } } }],
                 },
             }),
         );
         expect(db.inboundLedger.findMany).toHaveBeenCalledWith(
-            expect.objectContaining({ where: { deletedAt: null, bomId: { in: [10n] }, businessDate: dates } }),
+            expect.objectContaining({ where: { bomId: { in: [10n] }, businessDate: dates } }),
         );
         expect(db.outboundShipment.findMany).toHaveBeenCalledWith(
-            expect.objectContaining({ where: { deletedAt: null, orderId: { in: [101n] }, businessDate: dates } }),
+            expect.objectContaining({ where: { orderId: { in: [101n] }, businessDate: dates } }),
         );
         expect(data.nodes.find(n => n.id === "order:101")?.facts).toMatchObject({ date: "2026-09-10" });
         expect(data.nodes.find(n => n.id === "outbound:51")).toMatchObject({

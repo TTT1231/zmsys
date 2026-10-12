@@ -15,7 +15,7 @@ import { formatDateColumn, toDateColumn } from "../common/datetime";
 import { bomItemsSnapshotOf } from "../common/bom-display";
 import type { ExpectedVersionDto } from "../common/dto/expected-version.dto";
 import { assertVersionMatches, lockRowForWrite, lockRowsById } from "../domain/concurrency";
-import { outboundNetOf, outboundQtyByOrderMap, visibleShipmentCountOf } from "../domain/inventory";
+import { outboundNetOf, outboundQtyByOrderMap, shipmentCountOf } from "../domain/inventory";
 import { recordOpLog } from "../domain/op-log";
 import type { OrderSnapshotCore } from "../domain/snapshots";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
@@ -244,8 +244,8 @@ export class OrdersService {
                 if (outbound > 0) {
                     throw new ConflictException("订单已有出库记录，客户与 BOM 不可修改，仅可修改备注");
                 }
-                // 可见出库单（含已作废未删除）同理阻止：口径与删除一致（visibleShipmentCountOf）
-                if ((await visibleShipmentCountOf(tx, current.id)) > 0) {
+                // 出库单（含已作废未删除）同理阻止：口径与删除一致（shipmentCountOf）
+                if ((await shipmentCountOf(tx, current.id)) > 0) {
                     throw new ConflictException("请先作废并删除关联出库单，再修改客户与 BOM");
                 }
             }
@@ -503,8 +503,9 @@ export class OrdersService {
     }
 
     /**
-     * 删除净发货为零且没有可见出库单的订单：先软删除以保留仍在 7 天后悔期内的
-     * 出库单外键，待其物理清理后由维护任务清理订单与变更日志。
+     * 删除净发货为零且没有出库单的订单（物理删除）：删错直接重建单，无恢复诉求。
+     * 同事务先清变更日志子行再删订单行（外键要求先清子行）；删除事件与删除前
+     * 快照写 op_log 留痕，是删除后唯一的审计残留。
      */
     async deleteOrder(
         orderNo: string,
@@ -532,21 +533,20 @@ export class OrdersService {
                 if (outbound > 0) {
                     throw new ConflictException("订单已有发货记录，不可删除");
                 }
-                if ((await visibleShipmentCountOf(tx, current.id)) > 0) {
+                if ((await shipmentCountOf(tx, current.id)) > 0) {
                     throw new ConflictException("请先作废并删除关联出库单，再删除订单");
                 }
 
-                await tx.salesOrderTable.update({
-                    where: { id: current.id },
-                    data: { deletedAt: now, updatedBy: BigInt(actor.id) },
-                });
                 // op_log 快照：行内字段 + 关联编码（客户/BOM），审计可独立还原删除前形态；
-                // BOM 行此刻未删（删订单不动 BOM），补读建档备注一并冻结
+                // BOM 行此刻未删（删订单不动 BOM），补读建档备注一并冻结。
+                // 快照须在物理删除前构造（current 为锁定行内存态，子行日志一并先读后删）
                 const snapshot = this.orderSnapshot(current);
                 const bomRemark = await tx.bomTable.findUnique({
                     where: { id: current.bomId },
                     select: { remark: true },
                 });
+                await tx.salesOrderChangeLog.deleteMany({ where: { orderId: current.id } });
+                await tx.salesOrderTable.delete({ where: { id: current.id } });
                 await recordOpLog(tx, this.snowflake, actor, {
                     action: "delete_order",
                     targetType: "order",
@@ -558,7 +558,6 @@ export class OrdersService {
                         customerCode: current.customer.customerCode,
                         bomCode: current.bom.bomCode,
                         bomRemark: bomRemark?.remark ?? "",
-                        deletedAt: now.toISOString(),
                     },
                     now,
                 });
@@ -626,7 +625,7 @@ export class OrdersService {
                 include: { category: { select: { name: true } } },
             });
             if (!resolved) {
-                // 预检与锁定之间被软删（全局软删注入对已删行不可见）
+                // 预检与锁定之间被并发删除（行已不存在）
                 throw new NotFoundException("BOM 不存在");
             }
             nextBom = resolved;

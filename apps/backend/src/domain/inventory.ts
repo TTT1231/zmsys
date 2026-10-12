@@ -45,9 +45,10 @@ export async function outboundNetOf(tx: Tx, orderId: bigint): Promise<number> {
     return rows[0] ? Number(rows[0].outbound_qty) : 0;
 }
 
-/** 可见出库单头数（含已作废未删除；全局软删注入过滤已删行）：订单删除与整单身份
- *  （换客户/BOM）编辑共用的"无任何发货事实"口径之第二条件（第一条件为净额 0） */
-export async function visibleShipmentCountOf(tx: Tx, orderId: bigint): Promise<number> {
+/** 出库单头数（含已作废未删除；已删除单物理不存在）：订单删除与整单身份（换客户/
+ *  BOM）编辑共用的"无任何发货事实"口径之第二条件（第一条件为净额 0），亦是删除
+ *  订单行前 fk_outbound_order RESTRICT 的前置校验 */
+export async function shipmentCountOf(tx: Tx, orderId: bigint): Promise<number> {
     return tx.outboundShipment.count({ where: { orderId } });
 }
 
@@ -79,7 +80,7 @@ export async function computeShippableQty(
         SELECT o.id, o.qty, COALESCE(v.outbound_qty, 0) AS outbound_qty
         FROM sales_order_table AS o
         LEFT JOIN v_order_outbound_qty AS v ON v.order_id = o.id
-        WHERE o.bom_id = ${params.bomId} AND o.lifecycle_status = 'ACTIVE' AND o.deleted_at IS NULL
+        WHERE o.bom_id = ${params.bomId} AND o.lifecycle_status = 'ACTIVE'
     `;
     const target = orders.find(order => order.id === params.targetOrderId);
     if (!target) {

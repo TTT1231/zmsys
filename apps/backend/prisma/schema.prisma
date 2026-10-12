@@ -477,7 +477,6 @@ model SalesOrderTable {
   archivedAt          DateTime?                  @map("archived_at") @db.DateTime(3)
   archivedBy          BigInt?                    @map("archived_by")
   archiveReason       String?                    @map("archive_reason") @db.VarChar(500)
-  deletedAt           DateTime?                  @map("deleted_at") @db.DateTime(3)
   rowVersion          BigInt                     @default(1) @map("row_version") @db.UnsignedBigInt
   requestKey          String                     @unique(map: "uk_sales_order_request") @map("request_key") @db.VarChar(128)
   createdBy           BigInt                     @map("created_by")
@@ -494,7 +493,6 @@ model SalesOrderTable {
 
   @@index([bomId, lifecycleStatus, deliverDate, orderNo], map: "idx_sales_order_bom_queue")
   @@index([customerId, orderDate], map: "idx_sales_order_customer_date")
-  @@index([deletedAt], map: "idx_sales_order_deleted")
   @@map("sales_order_table")
 }
 
@@ -534,7 +532,6 @@ model InboundLedger {
   updatedBy     BigInt         @map("updated_by")
   createdAt     DateTime       @map("created_at") @db.DateTime(3)
   updatedAt     DateTime       @default(now()) @map("updated_at") @db.DateTime(3)
-  deletedAt     DateTime?      @map("deleted_at") @db.DateTime(3)
   bom               BomTable            @relation(fields: [bomId], references: [id])
   operator          SysUser             @relation("InboundOperator", fields: [operatorId], references: [id])
   updater           SysUser             @relation("InboundUpdater", fields: [updatedBy], references: [id])
@@ -542,7 +539,6 @@ model InboundLedger {
   relatedAdjustments StockAdjustment[]
 
   @@index([bomId, status, businessDate, id], map: "idx_inbound_bom_status_date")
-  @@index([deletedAt], map: "idx_inbound_deleted")
   @@map("inbound_ledger")
 }
 
@@ -602,7 +598,6 @@ model OutboundShipment {
   voidedBy           BigInt?              @map("voided_by")
   voidReason         String?              @map("void_reason") @db.VarChar(500)
   voidedAt           DateTime?            @map("voided_at") @db.DateTime(3)
-  deletedAt          DateTime?            @map("deleted_at") @db.DateTime(3)
   rowVersion         BigInt               @default(1) @map("row_version") @db.UnsignedBigInt
   requestKey         String               @unique(map: "uk_outbound_shipment_request") @map("request_key") @db.VarChar(128)
   registeredBy       BigInt               @map("registered_by")
@@ -616,7 +611,6 @@ model OutboundShipment {
 
   @@index([orderId, state, businessDate, id], map: "idx_outbound_shipment_order_state_date")
   @@index([state, registeredAt], map: "idx_outbound_shipment_state_time")
-  @@index([deletedAt], map: "idx_outbound_deleted")
   @@map("outbound_shipment")
 }
 
@@ -720,7 +714,7 @@ model SysRestoreJob {
 }
 
 /// 出库有效净额的事件级判据（迁移 20260946000000，SQL SECURITY INVOKER）：
-/// 未软删出库单的全部台账事件；不按 state 过滤（作废单净额 = NORMAL + 等额 CORRECTION，
+/// 全部出库单的台账事件；不按 state 过滤（作废单净额 = NORMAL + 等额 CORRECTION，
 /// 未来部分冲销时残值即实际出库）。v_order_outbound_qty / v_bom_stock 出库臂与
 /// 台账流水、工作台 movements 的出库事件统一从此取数
 view VOutboundEffectiveEvent {

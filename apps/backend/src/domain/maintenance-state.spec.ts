@@ -28,12 +28,9 @@ describe("MaintenanceState 代次与写计数", () => {
         expect(state.tryRegisterWrite(state.generation())).toBe(true);
     });
 
-    it("drain 等待在途写与 purgeActive", async () => {
+    it("drain 等待在途写（含后台任务写登记）排空", async () => {
         const state = new MaintenanceState();
         state.tryRegisterWrite(state.generation());
-        state.purgeActive = true;
-        await expect(state.drain(80)).resolves.toBe(false);
-        state.purgeActive = false;
         await expect(state.drain(80)).resolves.toBe(false);
         state.releaseWrite();
         await expect(state.drain(80)).resolves.toBe(true);

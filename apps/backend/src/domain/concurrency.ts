@@ -60,10 +60,10 @@ export async function lockRowByKey(tx: Tx, table: LockableKeyTable, value: strin
 }
 
 /**
- * 写前统一锁序列：按自然键锁定后重读，行不存在（含已软删——全局软删注入见
- * prisma-extensions.ts，已删行重读即为 null）抛 404。此前"锁 → 重读 → 404"
- * 在各服务手写、null 检查与文案临场决定，收口于此；锁序前置（如订单先 BOM
- * 后订单的多行锁）由调用方在调用前完成，read 回调携带各自的 include。
+ * 写前统一锁序列：按自然键锁定后重读，行不存在（含锁定前被并发删除）抛 404。
+ * 此前"锁 → 重读 → 404"在各服务手写、null 检查与文案临场决定，收口于此；
+ * 锁序前置（如订单先 BOM 后订单的多行锁）由调用方在调用前完成，read 回调
+ * 携带各自的 include。
  */
 export async function lockRowForWrite<T>(
     tx: Tx,
