@@ -406,7 +406,7 @@ paths:
             tags: [bom-structure]
             operationId: applyBomStructure
             summary: 维护既有品类的目录结构（新增/隐藏/恢复/排序/规则）
-            description: 受保护权限 `bom-structure:manage`，仅 super。携带期望版本 expectedRowVersion 做乐观锁（与品类当前 row_version 不一致即 409「品类结构已被他人修改」）；服务端锁定本品类及结构伙伴品类（正/反向 child_categories 引用，id 升序）后重读校验：全树层级/无环/唯一性、复合目录伙伴 groupKey 冲突、编码前缀不涉及。operations 为顺序应用的操作序列（七态，草稿节点用 tempId 关联），单次至多 200 条且必须产生实际变更。生效口径：结构变更只影响保存后新建的 BOM；已保存 BOM 及关联订单、出入库记录不会自动补充或修改（隐藏不影响旧档案，旧 BOM 需要增加物料时请另建 BOM）。本次隐藏的物料仍被既有 BOM 明细引用时响应附带 hiddenUsageCount 行数提示（不阻断）。同幂等键同请求摘要重放原成功响应，同键异内容 409。
+            description: 受保护权限 `bom-structure:manage`，默认仅 super（super 可解锁后授予其他角色）。携带期望版本 expectedRowVersion 做乐观锁（与品类当前 row_version 不一致即 409「品类结构已被他人修改」）；服务端锁定本品类及结构伙伴品类（正/反向 child_categories 引用，id 升序）后重读校验：全树层级/无环/唯一性、复合目录伙伴 groupKey 冲突、编码前缀不涉及。operations 为顺序应用的操作序列（七态，草稿节点用 tempId 关联），单次至多 200 条且必须产生实际变更。生效口径：结构变更只影响保存后新建的 BOM；已保存 BOM 及关联订单、出入库记录不会自动补充或修改（隐藏不影响旧档案，旧 BOM 需要增加物料时请另建 BOM）。本次隐藏的物料仍被既有 BOM 明细引用时响应附带 hiddenUsageCount 行数提示（不阻断）。同幂等键同请求摘要重放原成功响应，同键异内容 409。
             parameters:
                 - $ref: "#/components/parameters/IdempotencyKey"
             requestBody:
@@ -430,7 +430,7 @@ paths:
             tags: [bom-structure]
             operationId: createBomCategory
             summary: 新建简单品类（名称 + 编码前缀 + 整棵草稿树）
-            description: 受保护权限 `bom-structure:manage`，仅 super。事务内锁定 bom_category 全部既有行（id 升序）串行化创建：校验品类名/编码前缀唯一，且前缀不得与既有前缀构成「前缀 + 纯数字尾差」的数字延长关系（XK2 与 XK21 拒绝；KW/KWO、XK3/XK3W 字母尾差合法——序列 padStart 不截断，数字延长会拼出相同 BOM 编码）。categoryKey 与分组 groupKey 由后端生成（isModel 标记型号组，品类内至多一个）。仅支持简单品类（不携带 child_categories）；整棵草稿树一次保存，成功后才对建档可见。v1 不开放品类改名、改 key/前缀、复合关系编辑与品类级停用。
+            description: 受保护权限 `bom-structure:manage`，默认仅 super（super 可解锁后授予其他角色）。事务内锁定 bom_category 全部既有行（id 升序）串行化创建：校验品类名/编码前缀唯一，且前缀不得与既有前缀构成「前缀 + 纯数字尾差」的数字延长关系（XK2 与 XK21 拒绝；KW/KWO、XK3/XK3W 字母尾差合法——序列 padStart 不截断，数字延长会拼出相同 BOM 编码）。categoryKey 与分组 groupKey 由后端生成（isModel 标记型号组，品类内至多一个）。仅支持简单品类（不携带 child_categories）；整棵草稿树一次保存，成功后才对建档可见。v1 不开放品类改名、改 key/前缀、复合关系编辑与品类级停用。
             parameters:
                 - $ref: "#/components/parameters/IdempotencyKey"
             requestBody:
