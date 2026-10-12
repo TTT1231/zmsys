@@ -111,7 +111,8 @@ enum MaterialGroupKind {
 }
 
 /// op_log.action：业务里程碑动作（审计清单：订单创建/删除、客户创建/更新、BOM 创建/删除、
-/// 出入库创建/作废/删除、发货、归档/回退归档、数据库备份/恢复）；普通索引（update_customer 同目标可多条，防重由幂等层承担）
+/// BOM 品类创建/结构维护、出入库创建/作废/删除、发货、归档/回退归档、数据库备份/恢复）；
+/// 普通索引（update_customer 同目标可多条，防重由幂等层承担）
 enum OpLogAction {
   ship
   create_customer
@@ -129,6 +130,8 @@ enum OpLogAction {
   update_customer
   db_backup
   db_restore
+  create_bom_category
+  update_bom_structure
 }
 
 /// 固定角色目录；grant_version 是整组授权的乐观锁版本
@@ -307,7 +310,7 @@ model BizSequence {
   @@map("biz_sequence")
 }
 
-/// BOM 品类目录：1–9999 为内置参考数据保留 id（种子 1001-1006）；
+/// BOM 品类目录：1–9999 为内置参考数据保留 id（种子 1001-1009）；
 /// child_categories 传子品类 key，建档时将该子品类完整物料目录并入校验，不引用 BOM
 model BomCategory {
   id          BigInt   @id
@@ -328,7 +331,7 @@ model BomCategory {
 
 /// 物料目录节点：分区（SECTION，仅展示与折叠）或分组（GROUP，挂可选物料）；
 /// 分组 key 为稳定标识（如 model），qty=1 的分组勾选后可选数量（如扣板/静片），
-/// 目录修改只走迁移（db-scheme.md §5）
+/// 目录结构变更走迁移或超管在线维护（POST /bom-structure/*，db-scheme.md §5.4）
 model MaterialGroup {
   id        BigInt           @id
   categoryId BigInt          @map("category_id")

@@ -77,6 +77,7 @@ const multiQtyGroup = (
 export const BOM_CATEGORIES: CategoryDef[] = [
     {
         key: "rotary-switch",
+        rowVersion: 1,
         name: "旋转XK2",
         codePrefix: "XK2",
         groups: [
@@ -194,6 +195,7 @@ export const BOM_CATEGORIES: CategoryDef[] = [
     },
     {
         key: "rotary-xk3",
+        rowVersion: 1,
         name: "旋转XK3",
         codePrefix: "XK3",
         childCategories: ["xk3-wire", "xk3-plug"],
@@ -201,6 +203,7 @@ export const BOM_CATEGORIES: CategoryDef[] = [
     },
     {
         key: "xk3-wire",
+        rowVersion: 1,
         name: "焊线",
         codePrefix: "XK3W",
         status: false,
@@ -234,6 +237,7 @@ export const BOM_CATEGORIES: CategoryDef[] = [
     },
     {
         key: "xk3-plug",
+        rowVersion: 1,
         name: "插线",
         codePrefix: "XK3P",
         status: false,
@@ -291,6 +295,7 @@ export const BOM_CATEGORIES: CategoryDef[] = [
 
     {
         key: "new-micro-switch",
+        rowVersion: 1,
         name: "新微动",
         codePrefix: "KW",
         groups: [
@@ -364,6 +369,7 @@ export const BOM_CATEGORIES: CategoryDef[] = [
     },
     {
         key: "old-micro-switch",
+        rowVersion: 1,
         name: "老微动",
         codePrefix: "KWO",
         groups: [
@@ -412,6 +418,7 @@ export const BOM_CATEGORIES: CategoryDef[] = [
     },
     {
         key: "safety-switch",
+        rowVersion: 1,
         name: "安全开关",
         codePrefix: "AQ",
         groups: [
@@ -471,6 +478,7 @@ export const BOM_CATEGORIES: CategoryDef[] = [
     },
     {
         key: "tipover-switch",
+        rowVersion: 1,
         name: "跌倒开关",
         codePrefix: "KD",
         childCategories: ["new-micro-switch", "old-micro-switch"],
@@ -488,6 +496,7 @@ export const BOM_CATEGORIES: CategoryDef[] = [
 
     {
         key: "piano-key-switch",
+        rowVersion: 1,
         name: "琴键开关",
         codePrefix: "KQ",
         groups: [

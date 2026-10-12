@@ -71,6 +71,7 @@ it("多选组：组头全选/清空并呈半选态；分区只折叠不提供全
     catalogRef.current = [
         {
             key: "demo",
+            rowVersion: 1,
             name: "演示品类",
             codePrefix: "DM",
             groups: [
@@ -166,6 +167,7 @@ it("多选组折叠后显示已选数量", async () => {
     catalogRef.current = [
         {
             key: "demo",
+            rowVersion: 1,
             name: "演示品类",
             codePrefix: "DM",
             groups: [
@@ -224,6 +226,7 @@ it("数量分组：勾选后出现步进器，右框显示 ×N，提交携带 qu
     catalogRef.current = [
         {
             key: "piano",
+            rowVersion: 1,
             name: "琴键开关",
             codePrefix: "KQ",
             groups: [
@@ -421,4 +424,87 @@ it("初始即预留配置区；取消切换保留原品类和已选物料", asyn
     await user.click(screen.getByRole("button", { name: "保留当前配置" }));
     expect(screen.getByLabelText(/产品品类/)).toHaveValue("新微动");
     expect(itemCheckbox("二脚底座有CB（无挡脚）")).toBeChecked();
+});
+
+it("停用节点不进可选目录：隐藏分区整支消失不串块、隐藏分组/物料不渲染", async () => {
+    /* 全量目录下发（status:false 仅标记）：可选集按「自身∧祖先启用」过滤后分块——
+     * catalogBlocksOf 的「子组挂前一个块」组装不识别祖先状态，未过滤会串块 */
+    catalogRef.current = [
+        {
+            key: "demo-hidden",
+            rowVersion: 1,
+            name: "隐藏演示",
+            codePrefix: "HD",
+            groups: [
+                {
+                    id: "g0",
+                    parentId: null,
+                    kind: "group",
+                    name: "正常组",
+                    key: "normal",
+                    multi: false,
+                    qty: false,
+                    items: [{ id: "i1", name: "正常物料" }],
+                },
+                {
+                    id: "s1",
+                    parentId: null,
+                    kind: "section",
+                    name: "停用分区",
+                    key: null,
+                    multi: null,
+                    qty: null,
+                    status: false,
+                    items: [],
+                },
+                {
+                    id: "g1",
+                    parentId: "s1",
+                    kind: "group",
+                    name: "停用分区子组",
+                    key: "hidden-child",
+                    multi: false,
+                    qty: false,
+                    items: [{ id: "i2", name: "停用分区物料" }],
+                },
+                {
+                    id: "g2",
+                    parentId: null,
+                    kind: "group",
+                    name: "停用分组",
+                    key: "hidden-group",
+                    multi: false,
+                    qty: false,
+                    status: false,
+                    items: [{ id: "i3", name: "停用分组物料" }],
+                },
+                {
+                    id: "g3",
+                    parentId: null,
+                    kind: "group",
+                    name: "物料部分停用组",
+                    key: "partial",
+                    multi: true,
+                    qty: false,
+                    items: [
+                        { id: "i4", name: "启用物料" },
+                        { id: "i5", name: "停用物料", status: false },
+                    ],
+                },
+            ],
+        },
+    ];
+    const user = userEvent.setup();
+    render(<NewBomModal open onClose={vi.fn()} />);
+    await pickCategory(user, "隐藏演示");
+    expect(itemCheckbox("正常物料")).toBeInTheDocument();
+    expect(itemCheckbox("启用物料")).toBeInTheDocument();
+    // 隐藏分区整支消失（含其子组与物料），且子组不串进上一个块
+    expect(screen.queryByText("停用分区")).not.toBeInTheDocument();
+    expect(screen.queryByText("停用分区子组")).not.toBeInTheDocument();
+    expect(screen.queryByText("停用分区物料")).not.toBeInTheDocument();
+    // 隐藏分组与其物料、组内单个停用物料均不渲染
+    expect(screen.queryByText("停用分组")).not.toBeInTheDocument();
+    expect(screen.queryByText("停用分组物料")).not.toBeInTheDocument();
+    expect(screen.queryByText("停用物料")).not.toBeInTheDocument();
 });

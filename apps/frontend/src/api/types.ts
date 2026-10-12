@@ -31,7 +31,9 @@ export interface Order {
     archiveReason?: string;
 }
 
-/** 目录节点：分区（section）为纯展示树节点（不挂物料、不提供全选），分组（group）挂可选物料 */
+/** 目录节点：分区（section）为纯展示树节点（不挂物料、不提供全选），分组（group）挂可选物料。
+ * 目录接口全量下发（含停用节点/物料，status=false 标记）——停用项仅供管理页展示与
+ * 历史归属匹配（bomComposition），新建 BOM 的可选集按「自身∧祖先启用」过滤；启用省略 status。 */
 export interface BomCatalogNode {
     id: string;
     parentId: string | null;
@@ -43,8 +45,10 @@ export interface BomCatalogNode {
     multi: boolean | null;
     /** 分组数量语义：true 时选中项可携带 1-99 数量（如扣板/静片）；分区为 null */
     qty: boolean | null;
+    /** false = 节点已隐藏（不可再选，历史归属仍匹配）；启用省略 */
+    status?: boolean;
     /** 分区恒为空数组 */
-    items: Array<{ id: string; name: string }>;
+    items: Array<{ id: string; name: string; /** false = 物料已隐藏；启用省略 */ status?: boolean }>;
 }
 
 /** 后端权威 BOM 品类目录（分区/分组扁平树，parentId 关联，数组顺序即展示序）。
@@ -54,11 +58,77 @@ export interface BomCategory {
     key: string;
     name: string;
     codePrefix: string;
+    /** 品类目录整树乐观锁版本：结构维护保存携带期望值比对（超管「BOM 结构」页） */
+    rowVersion: number;
     seqWidth?: number;
     childCategories?: string[];
     /** false = 目录容器品类（旋转XK3 的焊线/插线变体）：仅随目录接口下发供合并树，不在建档下拉 */
     status?: boolean;
     groups: BomCatalogNode[];
+}
+
+/* ---- BOM 结构在线维护（仅超管，openapi bom-structure tag）---- */
+
+/** 结构操作七态（与后端 StructureOperation 同构）；targetId/groupId/parentId
+ *  兼容已存节点 id 与同批草稿 tempId，服务端按序投影并校验 */
+export type StructureOperation =
+    | { type: "add_section"; tempId: string; name: string }
+    | {
+          type: "add_group";
+          tempId: string;
+          name: string;
+          parentId: string | null;
+          multi: boolean;
+          qty: boolean;
+          isModel?: boolean;
+          items?: Array<{ tempId: string; name: string }>;
+      }
+    | { type: "add_item"; tempId: string; groupId: string; name: string }
+    | { type: "hide" | "restore"; targetType: "section" | "group" | "item"; targetId: string }
+    | { type: "reorder"; targetType: "section" | "group" | "item"; targetId: string; direction: "up" | "down" }
+    | { type: "set_rules"; groupId: string; multi: boolean; qty: boolean };
+
+export interface ApplyBomStructureInput {
+    categoryKey: string;
+    expectedRowVersion: number;
+    operations: StructureOperation[];
+}
+
+/** 保存响应：新版本号；隐藏物料被既有 BOM 引用时附带行数提示（不影响旧档案） */
+export interface BomStructureApplyResult {
+    rowVersion: number;
+    hiddenUsageCount?: number;
+}
+
+export interface DraftItemInput {
+    tempId: string;
+    name: string;
+}
+
+/** 新建品类草稿节点（平铺，tempId 关联分区父子与组内物料） */
+export interface DraftNodeInput {
+    kind: "SECTION" | "GROUP";
+    tempId: string;
+    name: string;
+    parentTempId?: string | null;
+    multi?: boolean;
+    qty?: boolean;
+    isModel?: boolean;
+    items?: DraftItemInput[];
+}
+
+export interface CreateBomCategoryInput {
+    name: string;
+    codePrefix: string;
+    seqWidth?: number;
+    groups: DraftNodeInput[];
+}
+
+export interface BomStructureCategoryCreated {
+    key: string;
+    name: string;
+    codePrefix: string;
+    rowVersion: number;
 }
 
 /** BOM 明细行（建档冻结快照，按 position 排序返回；目录后续变更不影响已建档案） */

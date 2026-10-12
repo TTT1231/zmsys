@@ -7,6 +7,8 @@
  * 或读侧目录漂移都会编译期报错。运行时保持逐键宽松判型（存量行可能为旧形态）。 */
 import { bomSpecOf } from "../common/bom-display";
 import type {
+    BomCategoryCreateEventDetail,
+    BomStructureUpdateEventDetail,
     CustomerEditableFields,
     EntrySnapshotCore,
     InboundVoidEventDetail,
@@ -16,6 +18,7 @@ import type {
     OrderSnapshotCore,
     ShipEventDetail,
     ShipmentSnapshotCore,
+    StructureChangeSummaryJson,
 } from "../domain/snapshots";
 import type { SystemLogChange } from "./types";
 
@@ -231,6 +234,77 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
                 { key: "qty", label: "出库数量", before: null, after: qtyText(snapshot.qty) },
                 { key: "orderNo", label: "订单号", before: null, after: asText(snapshot.orderNo) },
             ].filter(change => change.after !== null);
+        }
+        case "create_bom_category": {
+            const snapshot = (detail ?? {}) as BomCategoryCreateEventDetail;
+            return [
+                { key: "name", label: "品类名称", before: null, after: asText(snapshot.name) },
+                { key: "codePrefix", label: "编码前缀", before: null, after: asText(snapshot.codePrefix) },
+                {
+                    key: "structure",
+                    label: "目录结构",
+                    before: null,
+                    after: `${snapshot.sections} 分区 · ${snapshot.groups} 分组 · ${snapshot.items} 物料`,
+                },
+            ].filter(change => change.after !== null);
+        }
+        case "update_bom_structure": {
+            const snapshot = (detail ?? {}) as BomStructureUpdateEventDetail;
+            if (!detail || (snapshot.operations?.length !== undefined && snapshot.operations.length === 0)) {
+                return null;
+            }
+            const typeLabel: Record<StructureChangeSummaryJson["nodeType"], string> = {
+                section: "分区",
+                group: "分组",
+                item: "物料",
+            };
+            const describe = (entry: StructureChangeSummaryJson): string => {
+                if (entry.added) {
+                    return `${typeLabel[entry.nodeType]}「${entry.name}」新增`;
+                }
+                const parts: string[] = [];
+                const before = entry.before ?? {};
+                const after = entry.after ?? {};
+                if (before.status !== undefined || after.status !== undefined) {
+                    parts.push(after.status === false ? "隐藏" : "恢复显示");
+                }
+                if (before.multi !== undefined || before.qty !== undefined) {
+                    parts.push(
+                        `${before.multi ? "多选" : "单选"}${before.qty ? "+数量" : ""} → ${after.multi ? "多选" : "单选"}${after.qty ? "+数量" : ""}`,
+                    );
+                }
+                if (before.position !== undefined || after.position !== undefined) {
+                    parts.push(`第 ${before.position ?? "?"} 位 → 第 ${after.position ?? "?"} 位`);
+                }
+                if (parts.length === 0) {
+                    parts.push("调整");
+                }
+                return `${typeLabel[entry.nodeType]}「${entry.name}」${parts.join("，")}`;
+            };
+            const changes: SystemLogChange[] = [
+                { key: "category", label: "品类", before: null, after: asText(snapshot.name) },
+                {
+                    key: "version",
+                    label: "目录版本",
+                    before: snapshot.rowVersionBefore === undefined ? null : String(snapshot.rowVersionBefore),
+                    after: snapshot.rowVersionAfter === undefined ? null : String(snapshot.rowVersionAfter),
+                },
+                ...snapshot.operations.map((entry, index) => ({
+                    key: `op-${index}`,
+                    label: `变动 ${index + 1}`,
+                    before: null,
+                    after: describe(entry),
+                })),
+            ];
+            if (snapshot.hiddenUsage !== undefined && snapshot.hiddenUsage > 0) {
+                changes.push({
+                    key: "hiddenUsage",
+                    label: "隐藏物料引用",
+                    before: null,
+                    after: `仍被 ${snapshot.hiddenUsage} 行既有 BOM 明细引用（不影响旧档案）`,
+                });
+            }
+            return changes.filter(change => change.after !== null);
         }
         default:
             return null;

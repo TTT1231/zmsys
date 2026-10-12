@@ -262,6 +262,7 @@ function buildCatalog() {
         }));
         categories.push({
             key: `cat-${def.prefix}`,
+            rowVersion: 1,
             name: def.name,
             codePrefix: def.prefix,
             ...(def.children ? { childCategories: def.children } : {}),

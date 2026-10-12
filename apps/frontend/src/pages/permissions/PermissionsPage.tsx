@@ -1093,7 +1093,9 @@ function MatrixTab() {
     const { protectedCodes } = useApp();
     const { data } = useGrants();
     const grants = data ?? DEFAULT_GRANTS;
-    // 系统模块默认仅超管，也纳入矩阵作为授权举证；工作台是固定入口，不单独列模块。
+    // 系统模块与业务导航的受保护菜单（如 BOM 结构）虽仅超管可用，也纳入矩阵作为
+    // 授权举证；工作台是固定入口不单独列模块，onlyFor 说明型菜单（仓管的变更记录）
+    // 无路由不参与授权，维持排除。
     const modules = MENU_CATALOG.filter(menu => menu.group === "系统" || (!menu.onlyFor && menu.key !== "workbench"));
     return (
         <section className="overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
@@ -1120,10 +1122,11 @@ function MatrixTab() {
                                 </th>
                                 {ROLES.map(role => {
                                     const grant = grants[role.id];
-                                    // 仍受保护的系统组模块：超管列统一「超管专属」举证口径（与侧边栏
-                                    // 标签、编辑器灰显一致）；普通角色即使出现脏菜单授权行也无访问权。
+                                    // 当前仍受保护的模块（系统组，或业务导航受保护菜单如 BOM 结构）：
+                                    // 超管列统一「超管专属」举证口径（与侧边栏标签、编辑器灰显一致）；
+                                    // 普通角色即使出现脏菜单授权行也无访问权。判定取运行时受保护集，
                                     // 超管解锁后该行落入下方正常派生（按各角色实时授权）。
-                                    if (menu.group === "系统" && protectedCodes.has(`menu:${menu.key}`)) {
+                                    if (protectedCodes.has(`menu:${menu.key}`)) {
                                         return role.id === "super" ? (
                                             <td
                                                 key={role.id}

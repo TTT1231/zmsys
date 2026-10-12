@@ -28,6 +28,9 @@ export const CustomersPage = lazy(() =>
     import("./pages/customers/CustomersPage").then(m => ({ default: m.CustomersPage })),
 );
 export const BomPage = lazy(() => import("./pages/bom/BomPage").then(m => ({ default: m.BomPage })));
+export const BomStructurePage = lazy(() =>
+    import("./pages/bom-structure/BomStructurePage").then(m => ({ default: m.BomStructurePage })),
+);
 export const InboundPage = lazy(() => import("./pages/inbound/InboundPage").then(m => ({ default: m.InboundPage })));
 export const OutboundPage = lazy(() =>
     import("./pages/outbound/OutboundPage").then(m => ({ default: m.OutboundPage })),

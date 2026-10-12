@@ -42,6 +42,11 @@ export const PERMISSIONS = {
     BOM_CREATE: "bom:create",
     BOM_DELETE: "bom:delete", // 受保护
 
+    // ---- BOM 结构（受保护，仅 super）----
+    MENU_BOM_STRUCTURE: "menu:bom-structure",
+    BOM_STRUCTURE_VIEW: "bom-structure:view",
+    BOM_STRUCTURE_MANAGE: "bom-structure:manage",
+
     // ---- 入库 ----
     INBOUND_VIEW: "inbound:view",
     INBOUND_REGISTER: "inbound:register",

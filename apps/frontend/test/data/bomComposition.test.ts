@@ -53,3 +53,23 @@ it("旋转XK3 的未知历史物料进系列待确认节，同样不冠微动开
     expect(result.sections.map(section => section.title)).toEqual(["系列待确认"]);
     expect(result.series).toBe("系列待确认");
 });
+
+it("停用（隐藏）子件物料仍按全量目录归属，不退化为系列待确认", () => {
+    // 模拟超管隐藏新微动底座物料 3101：目录接口全量下发（status:false 仅标记），
+    // 历史 BOM 的分节归属仍识别为新微动——匹配集合为全量目录
+    const hiddenCatalog = BOM_CATEGORIES.map(category =>
+        category.key === "new-micro-switch"
+            ? {
+                  ...category,
+                  groups: category.groups.map(group => ({
+                      ...group,
+                      items: group.items.map(item => (item.id === "3101" ? { ...item, status: false } : item)),
+                  })),
+              }
+            : category,
+    );
+    const item = { ...oldMicro, materialId: "3101" };
+    const result = bomComposition({ name: "跌倒开关", items: [body, item] }, hiddenCatalog);
+    expect(result.series).toBe("新微动");
+    expect(result.sections[1]!.title).toBe("微动开关 · 新微动");
+});

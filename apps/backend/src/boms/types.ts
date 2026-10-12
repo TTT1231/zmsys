@@ -10,6 +10,9 @@ export interface BomCategory {
     key: string;
     name: string;
     codePrefix: string;
+    /** 品类目录整树乐观锁版本：任一分区/分组/物料/顺序/状态/规则变更在同事务 +1；
+     * 结构维护保存携带期望值比对（db-scheme.md §5.4） */
+    rowVersion: number;
     /** false = 目录容器品类（如旋转XK3 的焊线/插线变体）：仅随目录接口下发供
      * 合并树使用，不出现在建档品类下拉；缺省（启用品类）不下发该字段 */
     status?: boolean;

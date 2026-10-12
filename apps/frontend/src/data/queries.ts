@@ -21,7 +21,9 @@ import type {
 import { useApp } from "@/context/useApp";
 import {
     archiveOrder as archiveOrderReq,
+    applyBomStructure,
     createBom,
+    createBomCategory,
     createCustomer,
     createInbound,
     createOrder,
@@ -293,6 +295,38 @@ export const useDeleteBom = () => {
         mutationFn: deleteBom,
         onError: error => toast.error(error.message),
         onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: bomKeys.list });
+            queryClient.invalidateQueries({ queryKey: wbKeys.all });
+            queryClient.invalidateQueries({ queryKey: ["workbench"] });
+        },
+    });
+};
+
+/* ---- BOM 结构在线维护（仅超管）：目录变更影响建档可选集与快照内嵌目录，一并失效 ---- */
+
+export const useApplyBomStructure = () => {
+    const queryClient = useQueryClient();
+    const toast = useToast();
+    return useMutation({
+        mutationFn: applyBomStructure,
+        onError: error => toast.error(error.message),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: bomKeys.categories });
+            queryClient.invalidateQueries({ queryKey: bomKeys.list });
+            queryClient.invalidateQueries({ queryKey: wbKeys.all });
+            queryClient.invalidateQueries({ queryKey: ["workbench"] });
+        },
+    });
+};
+
+export const useCreateBomCategory = () => {
+    const queryClient = useQueryClient();
+    const toast = useToast();
+    return useMutation({
+        mutationFn: createBomCategory,
+        onError: error => toast.error(error.message),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: bomKeys.categories });
             queryClient.invalidateQueries({ queryKey: bomKeys.list });
             queryClient.invalidateQueries({ queryKey: wbKeys.all });
             queryClient.invalidateQueries({ queryKey: ["workbench"] });

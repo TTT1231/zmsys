@@ -78,6 +78,28 @@ function orderedCatalog(groups: CatalogNodeRow[]): Array<{ isSection: boolean; n
     return nodes;
 }
 
+/** 全量目录树序（读取契约用）：与 orderedCatalog 同一「顶级混排 + 分区子组紧随」
+ * 遍历，但不滤 status——停用分区/分组及其物料照常下发（带 status:false 标记），
+ * 供管理页展示与历史归属匹配；建档可选集仍由 loadCatalog（启用集）权威过滤。 */
+function orderedCatalogAll(groups: CatalogNodeRow[]): Array<{ isSection: boolean; node: CatalogNodeRow }> {
+    const nodes: Array<{ isSection: boolean; node: CatalogNodeRow }> = [];
+    const topLevel = groups.filter(group => group.parentId === null).sort(bySiblingOrder);
+    for (const node of topLevel) {
+        if (node.kind !== "SECTION") {
+            nodes.push({ isSection: false, node });
+            continue;
+        }
+        nodes.push({ isSection: true, node });
+        nodes.push(
+            ...groups
+                .filter(group => group.kind === "GROUP" && group.parentId === node.id)
+                .sort(bySiblingOrder)
+                .map(child => ({ isSection: false, node: child })),
+        );
+    }
+    return nodes;
+}
+
 @Injectable()
 export class BomsService {
     constructor(
@@ -87,20 +109,20 @@ export class BomsService {
         private readonly sequence: BusinessSequenceService,
     ) {}
 
-    /** 品类目录（契约 bom:view）：仅启用品类与启用目录节点，目录修改只走数据库迁移。
-     * 旋转变体（焊线/插线）等「目录容器品类」停用后不出现在建档下拉，但被启用
-     * 品类的 child_categories 引用，仍随本接口下发（status=false）供前端合并目录。 */
+    /** 品类目录（契约 bom:view）：品类集合 = 启用品类 + 被启用品类 child_categories
+     *  引用的目录容器；品类内节点/物料全量下发（停用带 status:false）供管理页展示
+     *  与历史归属匹配——新建 BOM 可选集由前端按「自身∧祖先启用」过滤，后端建档
+     *  校验以 loadCatalog（启用集）为权威。目录结构变更走迁移或超管在线维护（§5.4）。 */
     async listCategories(): Promise<BomCategory[]> {
         // 一次取全量品类，内存按启用位与 child 引用分流（免第二段容器品类查询）；
-        // items 只取展示所需列。输出集合与旧两段查询等价：启用品类 + 被启用品类
-        // 引用的容器品类（可能停用如焊线/插线，启用者去重）
+        // items 全量（含停用）只取展示所需列。输出集合与旧两段查询等价：
+        // 启用品类 + 被启用品类引用的容器品类（可能停用如焊线/插线，启用者去重）
         const all = await this.prisma.bomCategory.findMany({
             orderBy: { id: "asc" },
             include: {
                 groups: {
                     include: {
                         items: {
-                            where: { status: true },
                             select: { id: true, name: true, sortOrder: true, status: true },
                         },
                     },
@@ -223,7 +245,7 @@ export class BomsService {
                 digest: { method: "POST", body: dto },
             },
             async (tx: Tx, { idempotencyKey: key }) => {
-                const category = await this.lockCategoryByName(tx, dto.name);
+                const { main: category, childRows } = await this.lockCategoryTree(tx, dto.name);
                 const childCategories = childCategoriesOf(category.childCategories);
                 /* 子选叫法：旋转XK3 为焊线工艺（焊线/插线），其余复合品类（跌倒开关）为微动开关类型 */
                 const childLabel = category.categoryKey === "rotary-xk3" ? "焊线工艺" : "微动开关类型";
@@ -235,8 +257,8 @@ export class BomsService {
                     if (!childCategories.includes(dto.childCategory)) {
                         throw new BadRequestException(`${childLabel}不在本品类允许范围内`);
                     }
-                    childCategoryRow = await tx.bomCategory.findUnique({ where: { categoryKey: dto.childCategory } });
-                    // 目录容器品类（焊线/插线）停用仅表示不出现在建档下拉，仍可被引用合并目录
+                    // 锁后重读的子品类行：目录容器（焊线/插线）停用仅表示不出现在建档下拉，仍可被引用合并目录
+                    childCategoryRow = childRows.find(row => row.categoryKey === dto.childCategory) ?? null;
                     if (!childCategoryRow) {
                         throw new BadRequestException(`${childLabel}不存在或已停用`);
                     }
@@ -406,17 +428,35 @@ export class BomsService {
         );
     }
 
-    /** 定位启用品类并锁定其行：同品类建档串行化，判重与取号在锁内无并发窗口 */ private async lockCategoryByName(
+    /** 定位主品类及其 child_categories 全部子品类，统一行锁（id 升序）后重读返回：
+     *  同品类建档与目录在线维护（POST /bom-structure/apply）串行化，子选校验、判重与
+     *  取号都在锁内无并发窗口，也不会读到「一半旧结构、一半新结构」。子品类（目录容器，
+     *  如焊线/插线）停用仍可被引用合并目录，不做 status 校验（沿用既有语义）。 */
+    private async lockCategoryTree(
         tx: Tx,
         name: string,
-    ): Promise<BomCategoryRow> {
+    ): Promise<{ main: BomCategoryRow; childRows: BomCategoryRow[] }> {
         const located = await tx.bomCategory.findUnique({ where: { name } });
-        if (!located || !located.status) {
+        if (!located) {
             throw new NotFoundException("品类不存在");
         }
-        // 品类表不在 LOCKABLE_TABLES：建档锁品类是单点用法，保留就地 raw SQL
-        await tx.$queryRaw`SELECT id FROM bom_category WHERE id = ${located.id} FOR UPDATE`;
-        return located;
+        const childKeys = childCategoriesOf(located.childCategories);
+        await lockRowsById(tx, "bom_category", [
+            located.id,
+            ...(childKeys.length
+                ? await tx.bomCategory.findMany({ where: { categoryKey: { in: childKeys } }, select: { id: true } })
+                : []
+            ).map(row => row.id),
+        ]);
+        // 锁后重读：锁定读提交后的普通读见最新行；主品类停用即 404（与旧锁前口径同文案）
+        const main = await tx.bomCategory.findUnique({ where: { id: located.id } });
+        if (!main || !main.status) {
+            throw new NotFoundException("品类不存在");
+        }
+        const childRows = childKeys.length
+            ? await tx.bomCategory.findMany({ where: { categoryKey: { in: childKeys } } })
+            : [];
+        return { main, childRows };
     }
 
     /**
@@ -452,18 +492,20 @@ export class BomsService {
         return entries;
     }
 
-    /** 契约 BomCategory 映射：seqWidth 为 3 时省略；groups 为分区/分组扁平树（parentId 关联）；
-     * status=false 标记目录容器品类（被 child 引用但不在建档下拉展示） */
+    /** 契约 BomCategory 映射：seqWidth 为 3 时省略；groups 为分区/分组扁平树
+     * （parentId 关联，全量含停用节点）；status=false 标记目录容器品类（被 child
+     * 引用但不在建档下拉展示）；rowVersion 为目录整树乐观锁版本 */
     private toCategory(row: CategoryRowWithGroups): BomCategory {
         const childCategories = childCategoriesOf(row.childCategories);
         return {
             key: row.categoryKey,
             name: row.name,
             codePrefix: row.codePrefix,
+            rowVersion: Number(row.rowVersion),
             ...(row.status ? {} : { status: false }),
             ...(row.seqWidth !== 3 ? { seqWidth: row.seqWidth } : {}),
             ...(childCategories.length > 0 ? { childCategories } : {}),
-            groups: orderedCatalog(row.groups).map(({ node }) => this.toNode(node)),
+            groups: orderedCatalogAll(row.groups).map(({ node }) => this.toNode(node)),
         };
     }
 
@@ -477,9 +519,14 @@ export class BomsService {
             key: isGroup ? row.groupKey : null,
             multi: isGroup ? row.multi : null,
             qty: isGroup ? (row.qty ?? false) : null,
+            ...(row.status ? {} : { status: false }),
             // 组内物料与建档 position 同序（sortOrder 优先，id 兜底），保证展示序与冻结快照序一致
             items: isGroup
-                ? [...row.items].sort(bySiblingOrder).map(item => ({ id: item.id.toString(), name: item.name }))
+                ? [...row.items].sort(bySiblingOrder).map(item => ({
+                      id: item.id.toString(),
+                      name: item.name,
+                      ...(item.status ? {} : { status: false }),
+                  }))
                 : [],
         };
     }

@@ -123,6 +123,19 @@ const catalogBlocksOf = (category: { groups: BomCatalogNode[] }): CatalogBlock[]
     return blocks;
 };
 
+/* 可选目录：过滤停用节点/物料后的品类形态（可选 = 自身∧祖先启用）。目录接口全量
+ * 下发（停用项供管理页与历史归属匹配），此处必须先过滤再分块——catalogBlocksOf 的
+ * 「子组挂前一个块」组装不识别祖先状态，未过滤的停用分区子组会串进上一个块。 */
+const selectableCatalogOf = (category: BomCategory): BomCategory => {
+    const hiddenSections = new Set(category.groups.filter(group => group.status === false).map(group => group.id));
+    return {
+        ...category,
+        groups: category.groups
+            .filter(group => group.status !== false && !hiddenSections.has(group.parentId ?? ""))
+            .map(group => ({ ...group, items: group.items.filter(item => item.status !== false) })),
+    };
+};
+
 /* 删除 BOM 二次确认（仅超级管理员）：只服务"手误建档后无法清理"场景，
  * 入口仅对未被销售订单引用且无库存余量的档案显示；后端仍独立校验引用 */
 function DeleteBomModal({ bom, onClose }: { bom: Bom | null; onClose: () => void }) {
@@ -184,21 +197,25 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
     const childCategory = bomCategories?.find(item => item.key === childCategoryKey);
     /* 子选标签：旋转XK3 的变体是焊线工艺（焊线/插线），其余为跌倒开关的微动类型 */
     const childLabel = category?.key === "rotary-xk3" ? "焊线工艺" : "微动开关类型";
+    /* 可选目录（自身∧祖先启用，先过滤再分块/派生）：渲染、全选、数量集与提交集合
+     * 全部基于它；全量目录另用于管理页展示与历史归属匹配 */
+    const selectableMain = useMemo(() => (category ? selectableCatalogOf(category) : null), [category]);
+    const selectableChild = useMemo(() => (childCategory ? selectableCatalogOf(childCategory) : null), [childCategory]);
     /* 合并树：本品类目录 + 子品类目录（跌倒开关 = 跌倒盖/底/钢球/翘板 + 微动开关物料嵌套在"微动开关"大类下） */
-    const tipoverBlocks = useMemo(() => (category ? catalogBlocksOf(category) : []), [category]);
-    const childBlocks = useMemo(() => (childCategory ? catalogBlocksOf(childCategory) : []), [childCategory]);
+    const tipoverBlocks = useMemo(() => (selectableMain ? catalogBlocksOf(selectableMain) : []), [selectableMain]);
+    const childBlocks = useMemo(() => (selectableChild ? catalogBlocksOf(selectableChild) : []), [selectableChild]);
     const catalogRows = useMemo(() => {
         const rows = [
-            ...(category ? catalogRowsOf(category) : []),
-            ...(childCategory ? catalogRowsOf(childCategory) : []),
+            ...(selectableMain ? catalogRowsOf(selectableMain) : []),
+            ...(selectableChild ? catalogRowsOf(selectableChild) : []),
         ];
         return rows;
-    }, [category, childCategory]);
+    }, [selectableMain, selectableChild]);
     const selectedRows = useMemo(() => catalogRows.filter(row => selectedIds.has(row.id)), [catalogRows, selectedIds]);
     /* 数量分组（qty=true）的物料 id 集：这些行在建档时携带 1-99 数量 */
     const qtyItemIds = useMemo(() => {
         const ids = new Set<string>();
-        for (const catalog of [category, childCategory]) {
+        for (const catalog of [selectableMain, selectableChild]) {
             for (const node of catalog?.groups ?? []) {
                 if (node.kind === "group" && node.qty) {
                     node.items.forEach(item => ids.add(item.id));
@@ -206,7 +223,7 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
             }
         }
         return ids;
-    }, [category, childCategory]);
+    }, [selectableMain, selectableChild]);
     /* 右框按组分节：组名只出现一次，行内纯物料名（同名物料跨组时的消歧靠小节标题） */
     const selectedSections = useMemo(() => {
         const sections: Array<{ groupName: string; rows: typeof selectedRows }> = [];

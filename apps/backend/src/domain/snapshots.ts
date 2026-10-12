@@ -158,6 +158,39 @@ export type OutboundDeleteEventDetail = ShipmentSnapshotCore & {
     deletedBy: string;
 };
 
+/** 结构变动节点摘要（catalog-projector 的 StructureChangeSummary 的 JSON 契约：
+ *  只记差异字段，不复制整树；雪花 id 序列化为十进制串防 JSON 精度丢失） */
+export interface StructureChangeSummaryJson {
+    nodeType: "section" | "group" | "item";
+    nodeId: string;
+    name: string;
+    /** 新增节点（nodeId 为本次生成的雪花 id） */
+    added?: true;
+    before?: { multi?: boolean; qty?: boolean; status?: boolean; position?: number };
+    after?: { multi?: boolean; qty?: boolean; status?: boolean; position?: number };
+}
+
+/** create_bom_category：品类创建事实（名称/编码/整树规模） */
+export type BomCategoryCreateEventDetail = {
+    name: string;
+    categoryKey: string;
+    codePrefix: string;
+    seqWidth: number;
+    sections: number;
+    groups: number;
+    items: number;
+};
+
+/** update_bom_structure：结构维护——品类名、版本跃迁、变动节点前后值；hiddenUsage
+ *  为本次隐藏物料仍被既有 BOM 明细引用的总行数（提示不阻断） */
+export type BomStructureUpdateEventDetail = {
+    name: string;
+    rowVersionBefore: number;
+    rowVersionAfter: number;
+    operations: StructureChangeSummaryJson[];
+    hiddenUsage?: number;
+};
+
 /** 动作 → detail 形态映射；未登记的动作（create_bom/delete_bom 契约响应、
  *  db_backup/db_restore 系统审计）保持宽松 Prisma.InputJsonValue——读侧仅
  *  消费其稳定子集（name/spec/remark 等），新增动作应优先登记到此处 */
@@ -174,4 +207,6 @@ export type OpLogDetailOf = {
     ship: ShipEventDetail;
     void_outbound: OutboundVoidEventDetail;
     delete_outbound: OutboundDeleteEventDetail;
+    create_bom_category: BomCategoryCreateEventDetail;
+    update_bom_structure: BomStructureUpdateEventDetail;
 };

@@ -106,6 +106,16 @@ describe("BOM/成品档案 (e2e)", () => {
             status: false,
         });
         expect(categories.filter((category: { status?: boolean }) => category.status === false)).toHaveLength(2);
+        // 目录整树乐观锁版本恒下发（结构维护保存携带期望值比对，db-scheme.md §5.4）
+        for (const category of categories) {
+            expect(category.rowVersion).toBe(1);
+        }
+        // 种子节点/物料全部启用：status 字段省略（停用才带 status:false）
+        expect(
+            (categories[0].groups as Array<{ status?: boolean; items?: Array<{ status?: boolean }> }>).every(
+                group => group.status === undefined && (group.items ?? []).every(item => item.status === undefined),
+            ),
+        ).toBe(true);
         // seqWidth 为默认 3 时省略（新微动统一 3 位宽度后同样省略）
         expect(categories[0]).toMatchObject({ name: "旋转XK2", codePrefix: "XK2" });
         expect(categories[0]).not.toHaveProperty("seqWidth");
