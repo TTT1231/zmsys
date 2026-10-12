@@ -1,192 +1,127 @@
 import { describe, expect, it } from "vitest";
-import type { RelationEdge, RelationFacts, RelationNode, RelationType } from "@/data/relations";
 import {
+    buildRelationFamilies,
+    buildGlobalRelationGraph,
     buildRelationLayout,
-    relationLabelIds,
-    relationNodeVisual,
-    relationSymbolScale,
+    relationDragIds,
+    relationEdgePath,
+    RELATION_CARD,
 } from "@/pages/analytics/relationLayout";
+import { fitRelationView } from "@/pages/analytics/useRelationChart";
+import { edge, history, node } from "./relationFixtures";
 
-const node = (type: RelationType, id: string, bomId = "bom:1", orderId = "order:1"): RelationNode => {
-    let facts: RelationFacts;
-    switch (type) {
-        case "bom":
-            facts = { type, code: id, unit: "个", stock: 0, createdById: "person:1" };
-            break;
-        case "customer":
-            facts = { type, code: id, ownerId: "person:1" };
-            break;
-        case "person":
-            facts = { type, role: "sales" };
-            break;
-        case "inbound":
-            facts = {
-                type,
-                no: id,
-                date: "2026-10-01",
-                qty: 1,
-                voided: false,
-                unit: "个",
-                bomId,
-                operatorId: "person:1",
-            };
-            break;
-        case "outbound":
-            facts = {
-                type,
-                no: id,
-                date: "2026-10-01",
-                qty: 1,
-                voided: false,
-                unit: "个",
-                bomId,
-                orderId,
-                operatorId: "person:1",
-            };
-            break;
-        case "order":
-            facts = {
-                type,
-                no: id,
-                date: "2026-10-01",
-                due: "2026-10-09",
-                qty: 1,
-                shipped: 0,
-                unshippedQty: 1,
-                pendingQty: 1,
-                archived: false,
-                unit: "个",
-                bomId,
-                customerId: "customer:1",
-                createdById: "person:1",
-                archivedById: null,
-            };
-            break;
-    }
-    return { id, type, facts, name: id, properties: {} };
-};
-const edge = (source: string, target: string, kind: RelationEdge["kind"] = "business"): RelationEdge => ({
-    source,
-    target,
-    kind,
-    relation: "关联",
-});
-
-const history = (bomCount: number, ordersPerBom: number, receiptsPerBom: number, shipmentsPerOrder: number) => {
-    const nodes: RelationNode[] = [node("customer", "customer:shared"), node("person", "person:1")];
-    const edges: RelationEdge[] = [];
-    for (let b = 0; b < bomCount; b++) {
-        const bomId = `bom:${b}`;
-        nodes.push(node("bom", bomId));
-        edges.push(edge("person:1", bomId, "person"));
-        for (let i = 0; i < receiptsPerBom; i++) {
-            const id = `inbound:${b}:${i}`;
-            nodes.push(node("inbound", id, bomId));
-            edges.push(edge(id, bomId), edge("person:1", id, "person"));
-        }
-        for (let o = 0; o < ordersPerBom; o++) {
-            const orderId = `order:${b}:${o}`;
-            nodes.push(node("order", orderId, bomId));
-            edges.push(edge(orderId, bomId), edge("customer:shared", orderId), edge("person:1", orderId, "person"));
-            for (let s = 0; s < shipmentsPerOrder; s++) {
-                const id = `outbound:${b}:${o}:${s}`;
-                nodes.push(node("outbound", id, bomId, orderId));
-                edges.push(edge(orderId, id), edge("person:1", id, "person"));
-            }
-        }
-    }
-    return { nodes, edges };
-};
-
-describe("稳定业务关系布局", () => {
-    it("输入顺序、共享客户和人员不会让 BOM 家族互相合并或随机换位", () => {
-        const { nodes, edges } = history(4, 3, 4, 2);
-        const first = buildRelationLayout(nodes, edges);
-        const reordered = buildRelationLayout([...nodes].reverse(), [...edges].reverse());
-        expect(reordered).toEqual(first);
-        expect(buildRelationLayout(nodes, edges)).toEqual(first);
-        for (let b = 0; b < 4; b++) {
-            const order = first.get(`order:${b}:0`)!,
-                shipment = first.get(`outbound:${b}:0:0`)!;
-            expect(Math.hypot(order[0] - shipment[0], order[1] - shipment[1])).toBeLessThan(120);
-        }
+describe("型号业务树布局", () => {
+    it("缩为圆点后连线连接圆周，人员线也切换到圆点的上下端口", () => {
+        const business = relationEdgePath([0, 0], [232, 0], "business", true);
+        expect(business.startsWith("M 107 34")).toBe(true);
+        expect(business.endsWith("H 305")).toBe(true);
+        const person = relationEdgePath([0, 176], [232, 0], "person", true);
+        expect(person.startsWith("M 90 193")).toBe(true);
+        expect(person.endsWith("322 51")).toBe(true);
     });
-
-    it("千节点历史中每个实体只有一个有限坐标，节点间保留间距", () => {
+    it("全局折叠不丢外部依赖、角色与关联笔数，共享实体只保留一个节点", () => {
+        const data = history(30, 4, 8, 5);
+        const graph = buildGlobalRelationGraph(
+            data.nodes,
+            data.edges,
+            new Set(["bom", "customer", "person", "order", "inbound", "outbound"]),
+        );
+        expect(graph.nodes).toHaveLength(32);
+        expect(graph.points.size).toBe(32);
+        expect(graph.edges).toHaveLength(60);
+        expect(
+            graph.edges.find(edge => edge.source === "customer:shared" && edge.target === "family:bom:0")?.relation,
+        ).toBe("关联 ×4");
+        expect(graph.edges.find(edge => edge.source === "person:1" && edge.target === "family:bom:0")?.relation).toBe(
+            "关联 ×33",
+        );
+        const reversed = buildGlobalRelationGraph(
+            [...data.nodes].reverse(),
+            [...data.edges].reverse(),
+            new Set(["bom", "customer", "person", "order", "inbound", "outbound"]),
+        );
+        expect(reversed).toEqual(graph);
+    });
+    it("共享客户和人员保留真实实体，不合并不同BOM；输入顺序不影响型号和单据顺序", () => {
         const { nodes, edges } = history(30, 4, 8, 5);
-        expect(nodes.length).toBe(992);
-        const layout = buildRelationLayout(nodes, edges);
-        expect(layout.size).toBe(nodes.length);
-        const points = [...layout.values()];
-        expect(points.every(point => point.every(Number.isFinite))).toBe(true);
-        let minDistance = Infinity;
-        for (let i = 0; i < points.length; i++) {
-            for (let j = i + 1; j < points.length; j++)
-                // Check spatial separation, rather than a brittle snapshot of implementation coordinates.
-                minDistance = Math.min(
-                    minDistance,
-                    Math.hypot(points[i][0] - points[j][0], points[i][1] - points[j][1]),
-                );
-        }
-        expect(minDistance).toBeGreaterThanOrEqual(60);
+        const result = buildRelationFamilies(nodes, edges);
+        const reversed = buildRelationFamilies([...nodes].reverse(), [...edges].reverse());
+        expect(result.families).toHaveLength(30);
+        expect(
+            result.families.map(family => [
+                family.id,
+                family.orders,
+                family.inbounds,
+                family.outbounds,
+                family.customers,
+                family.people,
+            ]),
+        ).toEqual(
+            reversed.families.map(family => [
+                family.id,
+                family.orders,
+                family.inbounds,
+                family.outbounds,
+                family.customers,
+                family.people,
+            ]),
+        );
+        expect(result.byId.size).toBe(nodes.length);
+        expect(result.owners.get("customer:shared")?.size).toBe(30);
+        expect(result.families[0].people).toHaveLength(1);
     });
-
-    it("隐藏 BOM /订单类型后仍保留其真实家族；不存在的边不会引入节点", () => {
-        const { nodes, edges } = history(2, 2, 2, 3);
-        const filtered = nodes.filter(item => item.type !== "bom" && item.type !== "order");
-        const ids = new Set(filtered.map(item => item.id));
-        const filteredEdges = edges.filter(item => ids.has(item.source) && ids.has(item.target));
-        const layout = buildRelationLayout(filtered, [...filteredEdges, edge("missing", "person:1")]);
-        expect(layout.size).toBe(filtered.length);
-        expect([...layout.values()].every(point => point.every(Number.isFinite))).toBe(true);
+    it("按入库、BOM、订单、出库分列，兄弟节点不重叠，出库紧邻真实订单", () => {
+        const { nodes, edges } = history(1, 3, 6, 4);
+        const business = nodes.filter(item => item.type !== "customer" && item.type !== "person");
+        const layout = buildRelationLayout(business, edges);
+        expect(buildRelationLayout([...business].reverse(), [...edges].reverse())).toEqual(layout);
+        expect(layout.size).toBe(business.length);
+        for (const order of business.filter(item => item.type === "order")) {
+            const point = layout.get(order.id)!;
+            expect(point[0]).toBeGreaterThan(layout.get("bom:0")![0] + RELATION_CARD.width);
+            for (const shipment of business.filter(
+                item => item.facts.type === "outbound" && item.facts.orderId === order.id,
+            ))
+                expect(layout.get(shipment.id)![0]).toBeGreaterThan(point[0] + RELATION_CARD.width);
+        }
+        const columns = new Map<number, number[]>();
+        for (const [x, y] of layout.values()) {
+            const ys = columns.get(x) ?? [];
+            ys.push(y);
+            columns.set(x, ys);
+        }
+        for (const ys of columns.values()) {
+            ys.sort((a, b) => a - b);
+            for (let i = 1; i < ys.length; i++)
+                expect(ys[i] - ys[i - 1]).toBeGreaterThanOrEqual(RELATION_CARD.height + 20);
+        }
+    });
+    it("拖动BOM包含所属单据；订单只包含自己的出库，不牵动其他型号和人员", () => {
+        const { nodes } = history(2, 2, 2, 3);
+        const bom = relationDragIds(nodes, "bom:0");
+        expect(bom.size).toBe(11);
+        expect(bom.has("person:1")).toBe(false);
+        expect(bom.has("bom:1")).toBe(false);
+        expect(relationDragIds(nodes, "order:0:1")).toEqual(
+            new Set(["order:0:1", "outbound:0:1:0", "outbound:0:1:1", "outbound:0:1:2"]),
+        );
+        expect(relationDragIds(nodes, "missing").size).toBe(0);
+    });
+    it("隐藏父节点后单据仍有确定坐标，窄屏保留可读缩放下限", () => {
+        const { nodes, edges } = history(1, 2, 6, 3);
+        const leaves = nodes.filter(item => item.type === "inbound" || item.type === "outbound");
+        const layout = buildRelationLayout(leaves, edges);
+        expect(layout.size).toBe(leaves.length);
+        expect([...layout.values()].flat().every(Number.isFinite)).toBe(true);
+        expect(fitRelationView(layout, 375, 480).scale).toBeGreaterThanOrEqual(0.7);
         expect(buildRelationLayout([], [])).toEqual(new Map());
     });
-
-    it("密集图限制概览标签，选中共享人员也不会展开全部历史标签", () => {
-        const { nodes, edges } = history(30, 4, 8, 5);
-        const overview = relationLabelIds(nodes, edges, null);
-        const selected = relationLabelIds(nodes, edges, "person:1");
-        expect(overview.size).toBeLessThanOrEqual(24);
-        expect(selected.has("person:1")).toBe(true);
-        expect(selected.size).toBeLessThanOrEqual(61);
-        const orderSelection = relationLabelIds(nodes, edges, "order:0:0");
-        expect(orderSelection.has("order:0:0")).toBe(true);
-        expect(orderSelection.has("outbound:0:0:0")).toBe(true);
-    });
-
-    it("画布缩小时节点物理圆跟随 contain 比例缩小，屏幕标签也按可用面积降级", () => {
-        const { nodes, edges } = history(10, 3, 6, 2);
-        const layout = buildRelationLayout(nodes, edges, 3);
-        const desktop = relationSymbolScale(layout, 1300, 480, nodes.length);
-        const phone = relationSymbolScale(layout, 375, 480, nodes.length);
-        expect(phone).toBeLessThan(desktop);
-        const values = [...layout.values()],
-            x = values.map(point => point[0]),
-            y = values.map(point => point[1]);
-        const scale = Math.min(
-            (375 - 160) / (Math.max(...x) - Math.min(...x)),
-            (480 - 135) / (Math.max(...y) - Math.min(...y)),
-        );
-        // Even two maximum-size BOM circles fit well inside adjacent 72-unit cells at overview zoom.
-        expect(51 * phone).toBeLessThan(72 * scale);
-        const desktopLabels = relationLabelIds(nodes, edges, null, { width: 1300, height: 480 });
-        const phoneLabels = relationLabelIds(nodes, edges, null, { width: 375, height: 480 });
-        expect(phoneLabels.size).toBeLessThan(desktopLabels.size);
-        expect(phoneLabels.size).toBeLessThanOrEqual(10);
-    });
-
-    it("小流水节点保留可辨色块和细描边，安全下限不会超过画布间距上限", () => {
-        const ledger = relationNodeVisual(14, 0.1);
-        expect(ledger.symbolSize).toBeGreaterThan(14 * 0.1);
-        expect(ledger.symbolSize).toBeLessThanOrEqual(51 * 0.1);
-        expect(ledger.borderWidth).toBeLessThanOrEqual(0.4);
-        expect(ledger.borderWidth * 2).toBeLessThan(ledger.symbolSize / 3);
-        const normal = relationNodeVisual(14, 0.3);
-        expect(normal.symbolSize).toBeGreaterThanOrEqual(4);
-        const tiny = relationNodeVisual(14, 0.01);
-        expect(tiny.symbolSize).toBeLessThanOrEqual(51 * 0.01);
-        expect(tiny.borderWidth * 2).toBeLessThan(tiny.symbolSize / 3);
-        expect(relationNodeVisual(51, 1)).toEqual({ symbolSize: 51, borderWidth: 1.5 });
-        expect(relationNodeVisual(51, 1, true)).toEqual({ symbolSize: 51, borderWidth: 2 });
+    it("客户负责人通过真实客户关系加入上下文，无效边不会引入实体", () => {
+        const { nodes, edges } = history(1, 1, 0, 0);
+        nodes.push(node("person", "person:owner"));
+        edges.push(edge("person:owner", "customer:shared", "person"), edge("missing", "bom:0"));
+        const result = buildRelationFamilies(nodes, edges);
+        expect(result.families[0].people.map(item => item.id)).toContain("person:owner");
+        expect(result.byId.has("missing")).toBe(false);
     });
 });

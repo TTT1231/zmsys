@@ -8,14 +8,8 @@ import { RELATION_TYPES, type RelationsData } from "@/data/relations";
 import { todayIso, addDays } from "@/lib/date";
 import { ApiError } from "@/http/errors";
 
-const mocks = vi.hoisted(() => ({ fetch: vi.fn(), chart: vi.fn() }));
+const mocks = vi.hoisted(() => ({ fetch: vi.fn() }));
 vi.mock("@/api/workbench", () => ({ fetchWorkbenchRelations: mocks.fetch }));
-vi.mock("@/pages/analytics/useRelationChart", () => ({
-    useRelationChart: (...args: unknown[]) => {
-        mocks.chart(...args);
-        return { zoom: 1, fit: vi.fn(), reset: vi.fn(), zoomBy: vi.fn() };
-    },
-}));
 
 const data: RelationsData = {
     schemaVersion: 1,
@@ -76,13 +70,24 @@ const mount = () =>
 beforeEach(() => {
     vi.clearAllMocks();
     mocks.fetch.mockResolvedValue(data);
+    vi.stubGlobal(
+        "ResizeObserver",
+        class {
+            observe() {}
+            disconnect() {}
+        },
+    );
 });
-afterEach(cleanup);
+afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+});
 
 it("默认近30天，状态进入请求，类型隐藏只过滤本地节点和边", async () => {
     mount();
     await screen.findByRole("button", { name: "重新布局" });
-    await waitFor(() => expect(mocks.chart.mock.calls.at(-1)?.slice(1, 3)).toEqual([data.nodes, data.edges]));
+    expect(screen.getByRole("button", { name: /^BOM KW001/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^销售订单 SO001/ })).toBeInTheDocument();
     expect(mocks.fetch).toHaveBeenCalledWith("open", { start: addDays(todayIso(), -29), end: todayIso() }, allTypes, {
         signal: expect.any(AbortSignal),
         bomCode: "",
@@ -94,7 +99,8 @@ it("默认近30天，状态进入请求，类型隐藏只过滤本地节点和�
     await waitFor(() => expect(screen.getByRole("combobox", { name: "查找节点" })).toBeEnabled());
     const requests = mocks.fetch.mock.calls.length;
     fireEvent.click(within(screen.getByRole("group", { name: "节点类型" })).getByRole("button", { name: /^BOM/ }));
-    await waitFor(() => expect(mocks.chart.mock.calls.at(-1)?.slice(1, 3)).toEqual([[data.nodes[1]], []]));
+    await waitFor(() => expect(screen.queryByRole("button", { name: /^BOM KW001/ })).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /^销售订单 SO001/ })).toBeInTheDocument();
     expect(mocks.fetch).toHaveBeenCalledTimes(requests);
 });
 

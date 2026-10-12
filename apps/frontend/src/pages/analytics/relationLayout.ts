@@ -1,288 +1,308 @@
-import type { RelationEdge, RelationNode, RelationType } from "@/data/relations";
+import type { RelationEdge, RelationNode } from "@/data/relations";
 
 export type RelationPoint = [number, number];
-type PositionedGroup = { id: string; points: Map<string, RelationPoint>; width: number; height: number };
+export const RELATION_CARD = { width: 180, height: 68, row: 88, column: 232 };
+export const RELATION_PAGE = { inbound: 6, order: 3, outbound: 4 };
 
-const GAP = 72;
-const GROUP_GAP = 112;
-const compareId = (a: { id: string }, b: { id: string }) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+export interface RelationFamily {
+    id: string;
+    bom?: RelationNode;
+    nodes: RelationNode[];
+    inbounds: RelationNode[];
+    orders: RelationNode[];
+    outbounds: RelationNode[];
+    customers: RelationNode[];
+    people: RelationNode[];
+}
 
-/** Only business entities own a group. Shared customers/staff never join unrelated BOMs into one giant cluster. */
-const businessGroup = (node: RelationNode): string | null => {
-    switch (node.facts.type) {
-        case "bom":
-            return node.id;
-        case "order":
-        case "inbound":
-        case "outbound":
-            return node.facts.bomId;
-        default:
-            return null;
-    }
+export function relationOwner(node: RelationNode): string | null {
+    if (node.facts.type === "bom") return node.id;
+    return "bomId" in node.facts ? node.facts.bomId : null;
+}
+
+const compare = (a: RelationNode, b: RelationNode) => {
+    const aDate = "date" in a.facts ? a.facts.date : "";
+    const bDate = "date" in b.facts ? b.facts.date : "";
+    return (
+        aDate.localeCompare(bDate) ||
+        a.name.localeCompare(b.name, "zh-CN", { numeric: true }) ||
+        a.id.localeCompare(b.id)
+    );
 };
 
-/** Stable shelf packing: no iterative force simulation or pairwise collision scan. */
-const pack = (groups: PositionedGroup[], aspect: number, gap: number): PositionedGroup => {
-    const points = new Map<string, RelationPoint>();
-    if (!groups.length) return { id: "", points, width: GAP, height: GAP };
-    const area = groups.reduce((sum, group) => sum + (group.width + gap) * (group.height + gap), 0);
-    const ordered = [...groups].sort((a, b) => b.height - a.height || compareId(a, b));
-    const widest = Math.max(...groups.map(group => group.width));
-    const target = Math.sqrt(area * aspect);
-    const arrange = (rowWidth: number) => {
-        let x = 0,
-            y = 0,
-            rowHeight = 0,
-            width = 0;
-        const offsets: RelationPoint[] = [];
-        for (const group of ordered) {
-            if (x && x + group.width > rowWidth) {
-                y += rowHeight + gap;
-                x = 0;
-                rowHeight = 0;
-            }
-            offsets.push([x, y]);
-            width = Math.max(width, x + group.width);
-            rowHeight = Math.max(rowHeight, group.height);
-            x += group.width + gap;
+/** Shared customers/staff describe a family without creating cross-family lines or duplicate entities. */
+export function buildRelationFamilies(nodes: RelationNode[], edges: RelationEdge[]) {
+    const byId = new Map(nodes.map(node => [node.id, node]));
+    const families = new Map<string, RelationFamily>();
+    const owners = new Map<string, Set<string>>();
+    for (const node of nodes) {
+        const id = relationOwner(node);
+        if (!id) continue;
+        owners.set(node.id, new Set([id]));
+        let family = families.get(id);
+        if (!family) {
+            family = { id, nodes: [], inbounds: [], orders: [], outbounds: [], customers: [], people: [] };
+            families.set(id, family);
         }
-        const height = y + rowHeight;
-        return { offsets, width, height, score: Math.max(width / aspect, height) };
-    };
-    // A fixed number of candidates accommodates wide desktop canvases without unbounded bin packing.
-    const choices = [0.7, 0.85, 1, 1.2, 1.4, 1.7].map(factor => arrange(Math.max(widest, target * factor)));
-    const best = choices.reduce((a, b) => (b.score < a.score ? b : a));
-    ordered.forEach((group, index) => {
-        const offset = best.offsets[index];
-        for (const [id, point] of group.points) points.set(id, [point[0] + offset[0], point[1] + offset[1]]);
-    });
-    return { id: "", points, width: best.width, height: best.height };
-};
-
-const grid = (nodes: RelationNode[], columns: number): PositionedGroup => {
-    const width = Math.max(1, Math.min(nodes.length, columns));
-    return {
-        id: nodes[0]?.id ?? "",
-        points: new Map(
-            nodes.map((node, i) => [node.id, [(i % width) * GAP + GAP / 2, Math.floor(i / width) * GAP + GAP / 2]]),
-        ),
-        width: width * GAP,
-        height: Math.max(1, Math.ceil(nodes.length / width)) * GAP,
-    };
-};
-
-const orderFamily = (order: RelationNode, outbounds: RelationNode[]): PositionedGroup => {
-    if (!outbounds.length) return grid([order], 1);
-    const shipments = grid(outbounds, Math.ceil(Math.sqrt(outbounds.length)));
-    const points = new Map<string, RelationPoint>([[order.id, [GAP / 2, shipments.height / 2]]]);
-    for (const [id, point] of shipments.points) points.set(id, [point[0] + GAP, point[1]]);
-    return { id: order.id, points, width: shipments.width + GAP, height: shipments.height };
-};
-
-const neighborOrder = (nodes: RelationNode[], points: Map<string, RelationPoint>, adjacency: Map<string, string[]>) => {
-    const meanX = (id: string) => {
-        const neighbors = adjacency.get(id) ?? [];
-        let sum = 0,
-            count = 0;
-        for (const neighbor of neighbors) {
-            const point = points.get(neighbor);
-            if (point) {
-                sum += point[0];
-                count++;
-            }
-        }
-        return count ? sum / count : 0;
-    };
-    const centers = new Map(nodes.map(node => [node.id, meanX(node.id)]));
-    return [...nodes].sort((a, b) => centers.get(a.id)! - centers.get(b.id)! || compareId(a, b));
-};
-
-/**
- * BOM → order → shipment families retain short local edges. Inbounds sit beside their BOM;
- * customers and staff occupy separate tracks, ordered by the positions of their real neighbors.
- * All node placement is bounded by sorting plus linear passes through nodes/edges (O(n log n + e)).
- * The canvas only draws final coordinates, so opening and resetting the same graph is repeatable.
- */
-export function buildRelationLayout(nodes: RelationNode[], edges: RelationEdge[], aspectRatio = 1.7) {
-    const sorted = [...nodes].sort(compareId);
-    const aspect = Math.max(0.6, Math.min(5, aspectRatio));
-    const groups = new Map<string, RelationNode[]>();
-    const groupByNode = new Map<string, string>();
-    const adjacency = new Map<string, string[]>();
-    const ids = new Set(sorted.map(node => node.id));
-    for (const node of sorted) {
-        const group = businessGroup(node);
-        if (!group) continue;
-        groupByNode.set(node.id, group);
-        const members = groups.get(group) ?? [];
-        members.push(node);
-        groups.set(group, members);
+        family.nodes.push(node);
+        if (node.type === "bom") family.bom = node;
+        if (node.type === "inbound") family.inbounds.push(node);
+        if (node.type === "order") family.orders.push(node);
+        if (node.type === "outbound") family.outbounds.push(node);
     }
+    const context = new Map<string, Set<string>>();
     for (const edge of edges) {
-        if (!ids.has(edge.source) || !ids.has(edge.target)) continue;
-        const source = adjacency.get(edge.source) ?? [];
-        source.push(edge.target);
-        adjacency.set(edge.source, source);
-        const target = adjacency.get(edge.target) ?? [];
-        target.push(edge.source);
-        adjacency.set(edge.target, target);
+        for (const [entityId, businessId] of [
+            [edge.source, edge.target],
+            [edge.target, edge.source],
+        ]) {
+            const entity = byId.get(entityId),
+                business = byId.get(businessId);
+            if (!entity || !business || (entity.type !== "customer" && entity.type !== "person")) continue;
+            const owner = relationOwner(business);
+            if (!owner) continue;
+            const ids = context.get(owner) ?? new Set<string>();
+            ids.add(entityId);
+            context.set(owner, ids);
+            const related = owners.get(entityId) ?? new Set<string>();
+            related.add(owner);
+            owners.set(entityId, related);
+        }
     }
-    const shared: RelationNode[] = [];
-    for (const node of sorted) {
-        if (groupByNode.has(node.id)) continue;
-        const owners = new Set(
-            (adjacency.get(node.id) ?? []).map(id => groupByNode.get(id)).filter(id => id !== undefined),
-        );
-        const owner = owners.size === 1 ? owners.values().next().value : undefined;
-        if (owner) groups.get(owner)!.push(node);
-        else shared.push(node);
-    }
-
-    const blocks: PositionedGroup[] = [];
-    for (const [id, members] of [...groups].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
-        const orders = members.filter(node => node.type === "order");
-        const orderIds = new Set(orders.map(node => node.id));
-        const shipments = new Map<string, RelationNode[]>();
-        const loose: RelationNode[] = [];
-        for (const node of members) {
-            if (node.facts.type !== "outbound") continue;
-            if (!orderIds.has(node.facts.orderId)) loose.push(node);
-            else {
-                const siblings = shipments.get(node.facts.orderId) ?? [];
-                siblings.push(node);
-                shipments.set(node.facts.orderId, siblings);
+    // A customer's owner may have no direct business edge. Include that real one-hop context as well.
+    for (const edge of edges) {
+        for (const [personId, customerId] of [
+            [edge.source, edge.target],
+            [edge.target, edge.source],
+        ]) {
+            if (byId.get(personId)?.type !== "person" || byId.get(customerId)?.type !== "customer") continue;
+            for (const owner of owners.get(customerId) ?? []) {
+                context.get(owner)?.add(personId);
+                const related = owners.get(personId) ?? new Set<string>();
+                related.add(owner);
+                owners.set(personId, related);
             }
         }
-        const families = orders.map(order => orderFamily(order, shipments.get(order.id) ?? []));
-        if (loose.length) families.push(grid(loose, Math.ceil(Math.sqrt(loose.length))));
-        const business = pack(families, Math.min(2, aspect), GAP / 2);
-        const inbounds = members.filter(node => node.type === "inbound");
-        const receipts = grid(inbounds, Math.max(1, Math.ceil(Math.sqrt(inbounds.length))));
-        const hasBom = members.some(node => node.type === "bom");
-        const receiptsWidth = inbounds.length ? receipts.width + GAP / 2 : 0;
-        const spineWidth = hasBom ? GAP + GAP / 2 : 0;
-        const points = new Map<string, RelationPoint>();
-        let width = receiptsWidth + spineWidth + (families.length ? business.width : 0);
-        let height = Math.max(GAP, inbounds.length ? receipts.height : 0, families.length ? business.height : 0);
-        for (const node of members) {
-            if (node.type === "bom") points.set(node.id, [receiptsWidth + GAP / 2, height / 2]);
-        }
-        if (inbounds.length)
-            for (const [nodeId, point] of receipts.points)
-                points.set(nodeId, [point[0], point[1] + (height - receipts.height) / 2]);
-        for (const [nodeId, point] of business.points)
-            points.set(nodeId, [point[0] + receiptsWidth + spineWidth, point[1] + (height - business.height) / 2]);
-
-        const customers = neighborOrder(
-            members.filter(node => node.type === "customer"),
-            points,
-            adjacency,
-        );
-        const staff = neighborOrder(
-            members.filter(node => node.type === "person"),
-            points,
-            adjacency,
-        );
-        // A narrow family still reserves enough space for its local customer/staff tracks.
-        width = Math.max(width, Math.min(4, Math.max(customers.length, staff.length)) * GAP, GAP);
-        const columns = Math.max(1, Math.floor(width / GAP));
-        const customerTrack = grid(customers, columns);
-        const customerHeight = customers.length ? customerTrack.height + GAP / 2 : 0;
-        for (const point of points.values()) point[1] += customerHeight;
-        for (const [nodeId, point] of customerTrack.points)
-            points.set(nodeId, [point[0] + (width - customerTrack.width) / 2, point[1]]);
-        height += customerHeight;
-        const staffTrack = grid(staff, columns);
-        if (staff.length) {
-            for (const [nodeId, point] of staffTrack.points)
-                points.set(nodeId, [point[0] + (width - staffTrack.width) / 2, point[1] + height + GAP / 2]);
-            height += staffTrack.height + GAP / 2;
-        }
-        blocks.push({ id, points, width, height });
     }
-    const packed = pack(blocks, aspect, GROUP_GAP);
-    const sharedCustomers = neighborOrder(
-        shared.filter(node => node.type === "customer"),
-        packed.points,
-        adjacency,
+    for (const family of families.values()) {
+        for (const id of context.get(family.id) ?? []) {
+            const node = byId.get(id)!;
+            family.nodes.push(node);
+            (node.type === "customer" ? family.customers : family.people).push(node);
+        }
+        for (const list of [family.inbounds, family.orders, family.outbounds, family.customers, family.people])
+            list.sort(compare);
+    }
+    const sorted = [...families.values()].sort((a, b) =>
+        (a.bom?.name ?? a.id).localeCompare(b.bom?.name ?? b.id, "zh-CN", { numeric: true }),
     );
-    const sharedStaff = neighborOrder(
-        shared.filter(node => node.type === "person"),
-        packed.points,
-        adjacency,
-    );
-    const sharedCount = Math.max(sharedCustomers.length, sharedStaff.length);
-    const width = Math.max(packed.width, Math.min(12, Math.ceil(Math.sqrt(sharedCount * aspect))) * GAP);
-    const columns = Math.max(1, Math.floor(width / GAP));
-    const customers = grid(sharedCustomers, columns);
-    const top = sharedCustomers.length ? customers.height + GROUP_GAP : 0;
+    return { families: sorted, owners, byId };
+}
+
+/** Four readable columns; an expanded order reserves space for its actual shipments. O(n log n + e). */
+export function buildRelationLayout(nodes: RelationNode[], _edges: RelationEdge[]) {
     const points = new Map<string, RelationPoint>();
-    for (const [id, point] of packed.points) points.set(id, [point[0] + (width - packed.width) / 2, point[1] + top]);
-    for (const [id, point] of customers.points) points.set(id, [point[0] + (width - customers.width) / 2, point[1]]);
-    const staff = grid(sharedStaff, columns);
-    for (const [id, point] of staff.points)
-        points.set(id, [point[0] + (width - staff.width) / 2, point[1] + top + packed.height + GROUP_GAP]);
+    const { column, row } = RELATION_CARD;
+    const receipts = nodes.filter(node => node.type === "inbound").sort(compare);
+    const orders = nodes.filter(node => node.type === "order").sort(compare);
+    const shipments = nodes.filter(node => node.type === "outbound").sort(compare);
+    const byOrder = new Map<string, RelationNode[]>();
+    for (const node of shipments) {
+        if (node.facts.type !== "outbound") continue;
+        const siblings = byOrder.get(node.facts.orderId) ?? [];
+        siblings.push(node);
+        byOrder.set(node.facts.orderId, siblings);
+    }
+    let cursor = 0;
+    for (const order of orders) {
+        const children = byOrder.get(order.id) ?? [];
+        const rows = Math.max(1, children.length);
+        points.set(order.id, [column * 2, cursor + ((rows - 1) * row) / 2]);
+        children.forEach((child, i) => points.set(child.id, [column * 3, cursor + i * row]));
+        cursor += rows * row;
+    }
+    const loose = shipments.filter(node => !points.has(node.id));
+    loose.forEach((node, i) => points.set(node.id, [column * 3, cursor + i * row]));
+    const rightHeight = cursor + loose.length * row;
+    const height = Math.max(row, receipts.length * row, rightHeight);
+    for (const node of nodes) if (node.type === "bom") points.set(node.id, [column, (height - row) / 2]);
+    receipts.forEach((node, i) => points.set(node.id, [0, i * row + (height - receipts.length * row) / 2]));
+    for (const [id, point] of points) {
+        if (point[0] >= column * 2) points.set(id, [point[0], point[1] + (height - rightHeight) / 2]);
+    }
+    const customers = nodes.filter(node => node.type === "customer").sort(compare);
+    const people = nodes.filter(node => node.type === "person").sort(compare);
+    customers.forEach((node, i) => points.set(node.id, [column * 2 + i * column, -row - 16]));
+    people.forEach((node, i) => points.set(node.id, [i * column, height]));
     return points;
 }
 
-/** At overview zoom, screen-space circles fit inside the smallest grid cell even after contain scaling. */
-export function relationSymbolScale(
-    points: Map<string, RelationPoint>,
-    width: number,
-    height: number,
-    nodeCount: number,
-) {
-    const values = [...points.values()];
-    if (values.length < 2) return 1;
-    const x = values.map(point => point[0]),
-        y = values.map(point => point[1]);
-    const scale = Math.min(
-        Math.max(1, width - 160) / Math.max(GAP, Math.max(...x) - Math.min(...x)),
-        Math.max(1, height - 135) / Math.max(GAP, Math.max(...y) - Math.min(...y)),
+/** A BOM moves its visible business family; an order moves only its own shipments. */
+export function relationDragIds(nodes: RelationNode[], id: string) {
+    const node = nodes.find(item => item.id === id);
+    if (!node) return new Set<string>();
+    return new Set(
+        nodes
+            .filter(
+                item =>
+                    item.id === id ||
+                    (node.type === "bom" && relationOwner(item) === id) ||
+                    (node.type === "order" && item.facts.type === "outbound" && item.facts.orderId === id),
+            )
+            .map(item => item.id),
     );
-    const density = nodeCount > 600 ? 0.55 : nodeCount > 300 ? 0.68 : nodeCount > 120 ? 0.82 : 1;
-    return Math.min(density, (GAP * 0.6 * scale) / 51);
 }
 
-/** Keep small ledgers visible without letting their minimum size exceed the screen-space spacing cap. */
-export function relationNodeVisual(baseSize: number, scale: number, voided = false) {
-    const cap = 51 * scale;
-    const symbolSize = Math.min(cap, Math.max(baseSize * scale, Math.min(4, cap * 0.55)));
-    const borderWidth = symbolSize <= 8 ? Math.min(0.4, symbolSize * 0.08) : voided ? 2 : 1.5;
-    return { symbolSize, borderWidth };
+export function relationEdgePath(
+    source: RelationPoint,
+    target: RelationPoint,
+    kind: "business" | "person" = "business",
+    compact = false,
+) {
+    const { width, height } = RELATION_CARD;
+    if (kind === "person") {
+        const x1 = source[0] + width / 2,
+            y1 = source[1] + (compact ? height / 2 - 17 : 0);
+        const x2 = target[0] + width / 2,
+            y2 = target[1] + (compact ? height / 2 + 17 : height);
+        return `M ${x1} ${y1} C ${x1} ${y1 - 44}, ${x2} ${y2 + 44}, ${x2} ${y2}`;
+    }
+    if (source[0] === target[0]) {
+        const [top, bottom] = source[1] <= target[1] ? [source, target] : [target, source];
+        const port = compact ? width / 2 - 17 : 0;
+        const lane = top[0] + port - 28;
+        return `M ${top[0] + port} ${top[1] + height / 2} H ${lane} V ${bottom[1] + height / 2} H ${bottom[0] + port}`;
+    }
+    const [left, right] = source[0] <= target[0] ? [source, target] : [target, source];
+    const x1 = left[0] + (compact ? width / 2 + 17 : width),
+        y1 = left[1] + height / 2;
+    const x2 = right[0] + (compact ? width / 2 - 17 : 0),
+        y2 = right[1] + height / 2;
+    const middle = (x1 + x2) / 2;
+    return `M ${x1} ${y1} H ${middle} V ${y2} H ${x2}`;
 }
 
-const labelRank: Record<RelationType, number> = { bom: 0, customer: 1, order: 2, person: 3, inbound: 4, outbound: 5 };
+export function relationNodeSummary(node: RelationNode, byId?: Map<string, RelationNode>) {
+    const facts = node.facts;
+    switch (facts.type) {
+        case "bom":
+            return `当前库存 ${facts.stock} ${facts.unit}`;
+        case "order":
+            return byId?.get(facts.customerId)?.name ?? `待交 ${facts.pendingQty} ${facts.unit}`;
+        case "inbound":
+        case "outbound":
+            return `${facts.date.slice(5)} · ${facts.qty} ${facts.unit}${facts.voided ? " · 作废" : ""}`;
+        case "customer":
+            return `客户编号 ${facts.code}`;
+        case "person":
+            return node.properties.角色 ?? facts.role;
+    }
+}
 
-/** Dense histories get a small overview label budget; selection reveals only a bounded neighborhood. */
-export function relationLabelIds(
+/** Global dependency view folds business documents into their BOM, retaining every external relationship and role. */
+export function buildGlobalRelationGraph(
     nodes: RelationNode[],
     edges: RelationEdge[],
-    selected: string | null,
-    viewport?: { width: number; height: number },
+    enabled: Set<RelationNode["type"]>,
 ) {
-    const ranked = [...nodes].sort((a, b) => labelRank[a.type] - labelRank[b.type] || compareId(a, b));
-    const count = nodes.length;
-    const availableArea = viewport ? Math.max(1, viewport.width - 100) * Math.max(1, viewport.height - 100) : Infinity;
-    const overviewBudget = Math.min(
-        count <= 70 ? 70 : count <= 180 ? 90 : count <= 400 ? 50 : 24,
-        Math.max(6, Math.floor(availableArea / 11000)),
-    );
-    const labels = new Set(
-        ranked
-            .filter(node => count <= 70 || (count <= 180 ? labelRank[node.type] <= 2 : labelRank[node.type] <= 1))
-            .slice(0, overviewBudget)
-            .map(node => node.id),
-    );
-    if (selected) {
-        labels.add(selected);
-        const neighbors = new Set<string>();
-        for (const edge of edges) {
-            if (edge.source === selected) neighbors.add(edge.target);
-            if (edge.target === selected) neighbors.add(edge.source);
-        }
-        const neighborBudget = Math.min(36, Math.max(8, Math.floor(availableArea / 8000)));
-        for (const node of ranked.filter(node => neighbors.has(node.id)).slice(0, neighborBudget)) labels.add(node.id);
+    const index = buildRelationFamilies(nodes, edges);
+    const targets = new Map<string, string>(),
+        familyIds = new Map<string, string>(),
+        summaries = new Map<string, string>();
+    const graphNodes: RelationNode[] = [];
+    const roots: RelationNode[] = [];
+    for (const family of index.families) {
+        const business = family.nodes.filter(node => relationOwner(node) && enabled.has(node.type));
+        if (!business.length) continue;
+        const id = `family:${family.id}`,
+            name = family.bom?.name ?? "关联型号";
+        const root: RelationNode = {
+            id,
+            name,
+            type: "bom",
+            facts: { type: "bom", code: name, unit: "", stock: 0, createdById: "" },
+            properties: {},
+        };
+        roots.push(root);
+        graphNodes.push(root);
+        familyIds.set(id, family.id);
+        summaries.set(
+            id,
+            `入 ${enabled.has("inbound") ? family.inbounds.length : "—"} · 订 ${enabled.has("order") ? family.orders.length : "—"} · 出 ${enabled.has("outbound") ? family.outbounds.length : "—"}`,
+        );
+        for (const node of business) targets.set(node.id, id);
     }
-    return labels;
+    const contextNodes = nodes.filter(node => !relationOwner(node) && enabled.has(node.type)).sort(compare);
+    for (const node of contextNodes) {
+        graphNodes.push(node);
+        targets.set(node.id, node.id);
+        summaries.set(node.id, relationNodeSummary(node));
+    }
+    const grouped = new Map<
+        string,
+        { source: string; target: string; kind: RelationEdge["kind"]; roles: Map<string, number> }
+    >();
+    for (const edge of edges) {
+        const source = targets.get(edge.source),
+            target = targets.get(edge.target);
+        if (!source || !target || source === target) continue;
+        const key = `${source}|${target}|${edge.kind}`;
+        const group = grouped.get(key) ?? { source, target, kind: edge.kind, roles: new Map<string, number>() };
+        group.roles.set(edge.relation, (group.roles.get(edge.relation) ?? 0) + 1);
+        grouped.set(key, group);
+    }
+    const graphEdges: RelationEdge[] = [...grouped.values()]
+        .map(group => ({
+            source: group.source,
+            target: group.target,
+            kind: group.kind,
+            relation: [...group.roles]
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([role, count]) => `${role}${count > 1 ? ` ×${count}` : ""}`)
+                .join("、"),
+        }))
+        .sort(
+            (a, b) =>
+                a.source.localeCompare(b.source) || a.target.localeCompare(b.target) || a.kind.localeCompare(b.kind),
+        );
+    const columns = Math.max(1, Math.ceil(Math.sqrt(roots.length * 0.7)));
+    const rowHeight = 104,
+        columnWidth = 216;
+    const height = Math.max(
+        rowHeight,
+        Math.ceil(roots.length / columns) * rowHeight,
+        ...["customer", "person"].map(type => contextNodes.filter(node => node.type === type).length * rowHeight),
+    );
+    const points = new Map<string, RelationPoint>();
+    roots.forEach((node, i) =>
+        points.set(node.id, [
+            464 + (i % columns) * columnWidth,
+            Math.floor(i / columns) * rowHeight + (height - Math.ceil(roots.length / columns) * rowHeight) / 2,
+        ]),
+    );
+    const adjacent = new Map<string, number[]>();
+    for (const edge of graphEdges) {
+        const point = points.get(edge.target);
+        if (point) {
+            const values = adjacent.get(edge.source) ?? [];
+            values.push(point[1]);
+            adjacent.set(edge.source, values);
+        }
+    }
+    const mean = (id: string) => {
+        const values = adjacent.get(id) ?? [];
+        return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : height / 2;
+    };
+    for (const type of ["person", "customer"] as const) {
+        const lane = contextNodes
+            .filter(node => node.type === type)
+            .sort((a, b) => mean(a.id) - mean(b.id) || compare(a, b));
+        lane.forEach((node, i) =>
+            points.set(node.id, [
+                type === "person" ? 0 : 232,
+                ((height - RELATION_CARD.height) * (i + 0.5)) / Math.max(1, lane.length),
+            ]),
+        );
+    }
+    return { nodes: graphNodes, edges: graphEdges, points, familyIds, summaries };
 }

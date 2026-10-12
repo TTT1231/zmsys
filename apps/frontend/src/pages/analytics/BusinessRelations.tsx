@@ -1,10 +1,10 @@
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { fetchWorkbenchRelations } from "@/api/workbench";
 import { Button } from "@/components/ui/Button";
 import { addDays, monthStartOf, todayIso } from "@/lib/date";
 import { RELATION_TYPES, type RelationsData, type RelationStatus, type RelationType } from "@/data/relations";
-import { useRelationChart } from "./useRelationChart";
+import { RelationExplorer } from "./RelationExplorer";
 import { RelationNodeSearch } from "./RelationNodeSearch";
 import { isApiError } from "@/http/errors";
 import "./business-relations.css";
@@ -41,7 +41,6 @@ export function BusinessRelations() {
     const validRange = !draftRange.start || !draftRange.end || draftRange.start <= draftRange.end;
     const [enabled, setEnabled] = useState(() => new Set(RELATION_TYPES.map(t => t.key)));
     const [selectedId, setSelectedId] = useState<string | null>(null);
-    const containerRef = useRef<HTMLDivElement>(null);
     const query = useQuery({
         queryKey: ["workbench", "relations", status, range, bomCode],
         queryFn: ({ signal }) => fetchWorkbenchRelations(status, range, ALL_TYPES, { signal, bomCode }),
@@ -64,7 +63,6 @@ export function BusinessRelations() {
         setSelectedId(id);
         setRelatedLimit(40);
     };
-    const chart = useRelationChart(containerRef, data.nodes, data.edges, selected?.id ?? null, selectNode);
     const related = selected ? data.edges.filter(e => e.source === selected.id || e.target === selected.id) : [];
     const applyRange = (next: { start: string; end: string }) => {
         setDraftRange(next);
@@ -107,15 +105,6 @@ export function BusinessRelations() {
                             </button>
                         ))}
                     </div>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        icon="refresh"
-                        onClick={chart.reset}
-                        disabled={query.isFetching || query.isError || !data.nodes.length}
-                    >
-                        重新布局
-                    </Button>
                 </div>
             </header>
             <form
@@ -205,92 +194,64 @@ export function BusinessRelations() {
                     {query.isFetching ? "正在更新…" : `${data.nodes.length} 个节点 · ${data.edges.length} 条关系`}
                 </span>
             </form>
-            <div className="relation-stage">
-                <div
-                    ref={containerRef}
-                    className="relation-canvas"
-                    tabIndex={0}
-                    role="img"
-                    aria-label="订单、客户、BOM、入库、出库和人员关系图。点击节点查看详情，拖动节点或画布，滚轮缩放。可用下方查找节点选中节点，在画布使用方向键移动节点、加减键缩放、Home 适应画布、Escape 关闭详情。"
-                />
-                {query.isLoading || query.isPlaceholderData ? (
-                    <div className="relation-message" role="status">
-                        <p className="text-13 text-muted">正在加载业务关系…</p>
-                    </div>
-                ) : query.isError ? (
-                    <div className="relation-message" role="alert">
-                        <p className="text-14 text-muted">暂时无法加载关系图</p>
-                        <p className="max-w-110 px-5 text-center text-13 text-muted">{query.error.message}</p>
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => {
-                                setPeriod("recent");
-                                applyRange({ start: addDays(todayIso(), -29), end: todayIso() });
-                            }}
-                        >
-                            查看近30天
-                        </Button>
-                        <Button variant="secondary" size="sm" onClick={() => void query.refetch()}>
-                            重试
-                        </Button>
-                    </div>
-                ) : data.nodes.length === 0 ? (
-                    <div className="relation-message">
-                        <p className="text-14 text-muted">
-                            {enabled.size === 0 ? "请选择节点类型" : "当前日期和状态下暂无业务关系"}
-                        </p>
-                        {enabled.size === 0 ? (
+            <div
+                className={`relation-stage${selected && !query.isError && !query.isPlaceholderData ? " has-details" : ""}`}
+            >
+                <div className="relation-main-view">
+                    {!query.isLoading && !query.isPlaceholderData && !query.isError && data.nodes.length > 0 && (
+                        <RelationExplorer
+                            key={JSON.stringify([status, range, bomCode])}
+                            source={source}
+                            enabled={enabled}
+                            selectedId={selected?.id ?? null}
+                            onSelect={selectNode}
+                        />
+                    )}
+                    {query.isLoading || query.isPlaceholderData ? (
+                        <div className="relation-message" role="status">
+                            <p className="text-13 text-muted">正在加载业务关系…</p>
+                        </div>
+                    ) : query.isError ? (
+                        <div className="relation-message" role="alert">
+                            <p className="text-14 text-muted">暂时无法加载关系图</p>
+                            <p className="max-w-110 px-5 text-center text-13 text-muted">{query.error.message}</p>
                             <Button
                                 variant="secondary"
                                 size="sm"
-                                onClick={() => setEnabled(new Set(RELATION_TYPES.map(t => t.key)))}
+                                onClick={() => {
+                                    setPeriod("recent");
+                                    applyRange({ start: addDays(todayIso(), -29), end: todayIso() });
+                                }}
                             >
-                                显示全部类型
+                                查看近30天
                             </Button>
-                        ) : status !== "all" && data.counts.all > 0 ? (
-                            <Button variant="secondary" size="sm" onClick={() => setStatus("all")}>
-                                查看全部订单
+                            <Button variant="secondary" size="sm" onClick={() => void query.refetch()}>
+                                重试
                             </Button>
-                        ) : null}
-                    </div>
-                ) : (
-                    <>
-                        <p className="relation-hint text-12 text-muted">
-                            {data.nodes.length > 80 ? "节点较多，可查找节点查看具体关联" : "点击节点查看关联"}
-                        </p>
-                        <div
-                            className="relation-tools rounded-btn border border-line bg-surface shadow-card"
-                            aria-label="画布控制"
-                        >
-                            <Button
-                                iconOnly
-                                icon="plus"
-                                aria-label="放大关系图"
-                                title="放大"
-                                onClick={() => chart.zoomBy(1.2)}
-                            />
-                            <span className="text-center text-11 text-muted tnum">{Math.round(chart.zoom * 100)}%</span>
-                            <Button iconOnly aria-label="缩小关系图" title="缩小" onClick={() => chart.zoomBy(1 / 1.2)}>
-                                <span aria-hidden="true" className="text-20">
-                                    −
-                                </span>
-                            </Button>
-                            <Button
-                                iconOnly
-                                icon="maximize"
-                                aria-label="适应画布"
-                                title="适应画布"
-                                onClick={chart.fit}
-                            />
                         </div>
-                    </>
-                )}
+                    ) : data.nodes.length === 0 ? (
+                        <div className="relation-message">
+                            <p className="text-14 text-muted">
+                                {enabled.size === 0 ? "请选择节点类型" : "当前日期和状态下暂无业务关系"}
+                            </p>
+                            {enabled.size === 0 ? (
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => setEnabled(new Set(RELATION_TYPES.map(t => t.key)))}
+                                >
+                                    显示全部类型
+                                </Button>
+                            ) : status !== "all" && data.counts.all > 0 ? (
+                                <Button variant="secondary" size="sm" onClick={() => setStatus("all")}>
+                                    查看全部订单
+                                </Button>
+                            ) : null}
+                        </div>
+                    ) : null}
+                </div>
                 {selected && !query.isError && !query.isPlaceholderData && (
-                    <aside
-                        className="relation-details rounded-card border border-line bg-surface shadow-card"
-                        aria-label="节点信息"
-                    >
+                    <aside className="relation-details" aria-label="节点信息">
                         <div className="flex items-center justify-between gap-2">
                             <span className="flex items-center gap-2 text-12 text-muted">
                                 <i aria-hidden="true" className="relation-dot" style={colorStyle(selected.type)} />
