@@ -6,7 +6,7 @@ import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SystemLogsPage } from "@/pages/system-logs/SystemLogsPage";
 import { EMPTY_SNAPSHOT } from "@/data/views";
-import type { SystemLogPage } from "@/api";
+import type { SystemLogPage, WbUser } from "@/api";
 
 const useSystemLogs = vi.fn();
 const useWbView = vi.fn();
@@ -187,6 +187,48 @@ it("切换业务域 tab 时以新筛选发起查询", () => {
     expect(useSystemLogs).toHaveBeenLastCalledWith(expect.objectContaining({ domain: "inbound" }), true);
     fireEvent.click(screen.getByRole("button", { name: "全部" }));
     expect(useSystemLogs).toHaveBeenLastCalledWith(expect.not.objectContaining({ domain: expect.anything() }), true);
+});
+
+it("操作人下拉来自用户快照：含已停用账号；选择后并入 operator 查询，重置归位", () => {
+    const users: WbUser[] = [
+        {
+            version: 1,
+            name: "李晓",
+            account: "lixiao",
+            role: "admin",
+            active: true,
+            last: "2026-09-25T08:00:00.000Z",
+            createdAt: "2026-01-01T00:00:00.000Z",
+        },
+        {
+            version: 1,
+            name: "周宁",
+            account: "zhouning",
+            role: "sales",
+            active: false,
+            last: "2026-09-20T08:00:00.000Z",
+            createdAt: "2026-01-01T00:00:00.000Z",
+        },
+    ];
+    useWbView.mockReturnValue({
+        snap: { ...EMPTY_SNAPSHOT, users },
+        isLoading: false,
+        refreshing: false,
+    });
+    renderPage();
+    const select = screen.getByLabelText("操作人");
+    // 全部操作人 + 快照两个用户；停用账号带标记（历史操作仍可按人追溯）
+    const options = within(select).getAllByRole("option");
+    expect(options).toHaveLength(3);
+    expect(options[1]!.textContent).toBe("李晓（lixiao）");
+    expect(options[2]!.textContent).toBe("周宁（zhouning）· 已停用");
+
+    fireEvent.change(select, { target: { value: "zhouning" } });
+    expect(useSystemLogs).toHaveBeenLastCalledWith(expect.objectContaining({ operator: "zhouning" }), true);
+
+    fireEvent.click(screen.getByRole("button", { name: "重置" }));
+    const last = useSystemLogs.mock.calls.at(-1)![0] as Record<string, unknown>;
+    expect(last.operator).toBeUndefined();
 });
 
 it("自定义范围延迟生效：from>to 报错（role=alert），合法时点应用才并入查询", () => {

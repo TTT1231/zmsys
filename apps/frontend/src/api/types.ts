@@ -124,7 +124,10 @@ export interface Customer {
     cooperation: "合作中" | "待跟进";
     owner: string;
     ownerAccount: string;
+    /** 创建人姓名（建档后不变） */
+    createdBy: string;
     payTerms: string;
+    /** 建档时刻（ISO 8601 带时区），展示用 formatDateTime 到分钟 */
     created: string;
 }
 
@@ -222,6 +225,8 @@ export interface SystemLogPage {
 export interface SystemLogQuery {
     domain?: SystemLogDomain;
     action?: SystemLogAction;
+    /** 操作人筛选（用户账号；姓名可重名，账号唯一） */
+    operator?: string;
     range: "today" | "7d" | "30d" | "custom";
     from?: string;
     to?: string;

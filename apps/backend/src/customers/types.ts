@@ -13,7 +13,10 @@ export interface Customer {
     cooperation: "合作中" | "待跟进";
     owner: string;
     ownerAccount: string;
+    /** 创建人姓名（created_by → creator，建档后不变） */
+    createdBy: string;
     payTerms: string;
+    /** 建档时刻（ISO 8601 带时区），前端展示到分钟 */
     created: string;
 }
 

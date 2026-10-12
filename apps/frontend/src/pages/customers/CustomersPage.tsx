@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
 import { Icon } from "@/lib/icons";
 import { num } from "@/lib/format";
+import { formatDateTime } from "@/lib/date";
 import { focusFirstInvalid } from "@/lib/formFocus";
 import { useApp } from "@/context/useApp";
 import { useTableControls } from "@/lib/useTableControls";
@@ -125,7 +126,11 @@ function CustomerFormModal({ customer, onClose }: { customer: Customer | null; o
             open
             onClose={onClose}
             title={customer ? "编辑客户档案" : "新建客户档案"}
-            subtitle={customer ? `${customer.code} · 建档 ${customer.created}` : "客户编码自动生成，订单从档案选择"}
+            subtitle={
+                customer
+                    ? `${customer.code} · 建档 ${formatDateTime(customer.created)}`
+                    : "客户编码自动生成，订单从档案选择"
+            }
             width={640}
             footer={
                 <>
@@ -235,7 +240,7 @@ export function CustomerDetailModal({
                 onClose={onClose}
                 label="客户档案详情"
                 title={customer.name}
-                subtitle={`${customer.code} · 建档 ${customer.created}`}
+                subtitle={`${customer.code} · 建档 ${formatDateTime(customer.created)}`}
                 width={560}
                 layout="detail"
                 footer={
@@ -261,7 +266,7 @@ export function CustomerDetailModal({
                         <div className="min-w-0 flex-1">
                             <div className="text-14 font-semibold text-ink">{customer.name}</div>
                             <div className="tnum text-13 text-muted">
-                                {customer.code} · 建档 {customer.created}
+                                {customer.code} · 建档 {formatDateTime(customer.created)}
                             </div>
                         </div>
                         <Badge tone={customer.cooperation === "合作中" ? "done" : "pending"}>
@@ -514,6 +519,9 @@ export function CustomersPage() {
                                         {customer.contact} · {customer.phone}
                                     </p>
                                     <div className="mt-2 flex flex-col gap-1.5">
+                                        <CardField label="客户负责人" value={customer.owner} />
+                                        <CardField label="创建人" value={customer.createdBy} />
+                                        <CardField label="创建时间" value={formatDateTime(customer.created)} />
                                         <CardField label="累计订单" value={`${orderCount} 单`} />
                                         <CardField label="待交" value={`${num(pendingQty)} 个`} strong />
                                     </div>
@@ -527,7 +535,7 @@ export function CustomersPage() {
                         ) : (
                             <DataTable
                                 tableId="customers"
-                                defaultWidths={[240, 124, 150, 170, 120, 130, 138, 110, 120]}
+                                defaultWidths={[240, 124, 150, 110, 100, 112, 170, 120, 130, 138, 110, 120]}
                                 recordCount={rows.length}
                                 identityColumn={0}
                                 scrollRef={tableScrollRef}
@@ -537,6 +545,9 @@ export function CustomersPage() {
                                         <th className="cell-pad-wide">客户信息</th>
                                         <th>客户联系人</th>
                                         <th>电话</th>
+                                        <th>客户负责人</th>
+                                        <th>创建人</th>
+                                        <th>创建时间</th>
                                         <th>所在地</th>
                                         <SortTh
                                             label="累计订单"
@@ -561,7 +572,9 @@ export function CustomersPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {pageRows.length === 0 && <EmptyRow colSpan={9} description="没有找到匹配的客户" />}
+                                    {pageRows.length === 0 && (
+                                        <EmptyRow colSpan={12} description="没有找到匹配的客户" />
+                                    )}
                                     {pageRows.map((row, index) => (
                                         <tr key={row.customer.code}>
                                             <td className="cell-pad-wide">
@@ -580,6 +593,11 @@ export function CustomersPage() {
                                             </td>
                                             <td className="text-14 text-td">{row.customer.contact}</td>
                                             <td className="tnum text-14 text-td">{row.customer.phone}</td>
+                                            <td className="text-14 text-td">{row.customer.owner}</td>
+                                            <td className="text-14 text-td">{row.customer.createdBy}</td>
+                                            <td className="tnum text-14 text-td">
+                                                {formatDateTime(row.customer.created)}
+                                            </td>
                                             <td>
                                                 <span className="flex items-center gap-1.5 text-14 text-td">
                                                     {regionText(row.customer) ? (

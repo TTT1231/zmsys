@@ -16,7 +16,8 @@
  * 行数比对可能误报，重跑即可。
  *
  * 前置：本机可免密 ssh 登录 DEPLOY_SSH_HOST；本地 MySQL 可连（复用根 .env 的 DB_*，
- * 还原校验仅允许 localhost）；本机 PATH 有 mysql 客户端（还原校验用）。
+ * 还原校验仅允许 localhost）；本机有 mysql 客户端（还原校验用；PATH 没有，
+ * Windows 下回落搜索 C:\Program Files\MySQL\MySQL Server *\bin\mysql.exe）。
  *
  * 用法：pnpm backup-database
  */
@@ -24,7 +25,7 @@ import { config } from "dotenv";
 import { loadDbEnv } from "../apps/backend/src/configuration/raw-env.js";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
@@ -120,6 +121,40 @@ const parseCounts = (output: string): Map<string, number> => {
 const objectsSql = (database: string): string =>
     `SELECT table_name, table_type FROM information_schema.tables WHERE table_schema='${database}' ORDER BY table_name`;
 
+/**
+ * 定位本机 mysql 客户端：先按 PATH（mac/linux），找不到再回落 Windows MySQL 默认安装目录
+ * （本机装了 MySQL Server 但未加 PATH；绝对路径经 spawnSync 数组参数传入，含空格无需转义）。
+ */
+const resolveMysqlClient = (): string => {
+    const candidates: string[] = ["mysql"];
+    if (process.platform === "win32") {
+        const programRoots = [
+            process.env.ProgramFiles ?? "C:\\Program Files",
+            process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)",
+        ];
+        for (const root of programRoots) {
+            const mysqlRoot = join(root, "MySQL");
+            if (!existsSync(mysqlRoot)) continue;
+            // 目录名形如 "MySQL Server 8.0"，倒序取最高版本
+            candidates.push(
+                ...readdirSync(mysqlRoot)
+                    .filter(name => /^MySQL Server \d/.test(name))
+                    .sort()
+                    .reverse()
+                    .map(name => join(mysqlRoot, name, "bin", "mysql.exe"))
+                    .filter(path => existsSync(path)),
+            );
+        }
+    }
+    const found = candidates.find(candidate => spawnSync(candidate, ["--version"], { encoding: "utf8" }).status === 0);
+    if (!found) {
+        throw new Error(
+            "未找到 mysql 客户端（PATH 与 C:\\Program Files\\MySQL\\MySQL Server *\\bin 均不可用），无法做还原校验",
+        );
+    }
+    return found;
+};
+
 const pad = (value: number): string => String(value).padStart(2, "0");
 
 const main = async (): Promise<void> => {
@@ -193,16 +228,15 @@ docker exec $C sh -c "mysqldump -uroot -p\\"\\$MYSQL_ROOT_PASSWORD\\" --single-t
     // DEFINER 子句指向源库才有的 root@% 账号，本地不存在会还原失败；去掉后以当前用户身份创建
     const restoreSql = sql.replace(/\/\*!\d+ DEFINER=`[^`]*`@`[^`]*`( SQL SECURITY (?:DEFINER|INVOKER))?\s*\*\//g, "");
 
-    const checkClient = spawnSync("mysql", ["--version"], { encoding: "utf8" });
-    if (checkClient.status !== 0) {
-        throw new Error("本机 PATH 中未找到 mysql 客户端，无法做还原校验");
-    }
+    const mysqlClient = resolveMysqlClient();
 
     const connection = await mariadb.createConnection({
         host: VERIFY_HOST,
         port: VERIFY_PORT,
         user: VERIFY_USER,
         password: VERIFY_PASSWORD,
+        // 本地 MySQL 8 默认 caching_sha2_password，非 SSL 连接须允许公钥检索（仅 localhost，见上方护栏）
+        allowPublicKeyRetrieval: true,
     });
     try {
         // 校验库名为固定字面量（上方已断言），用完即删，不影响 zmdb / zmdb_test
@@ -210,7 +244,7 @@ docker exec $C sh -c "mysqldump -uroot -p\\"\\$MYSQL_ROOT_PASSWORD\\" --single-t
         await connection.query(`CREATE DATABASE ${VERIFY_DB} CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci`);
 
         const restore = spawnSync(
-            "mysql",
+            mysqlClient,
             [
                 "-h",
                 VERIFY_HOST,
