@@ -25,7 +25,7 @@ export function voidInbound(no: string, input: VoidInboundInput): Promise<Inboun
     return requestClient.post<InboundRow>(`/inbound/${no}/void`, input, idempotencyConfig());
 }
 
-/** 删除已作废入库（软删除）：响应恒为 data:null，列表刷新由 useWbMutation 失效驱动 */
+/** 删除已作废入库（物理删除）：响应恒为 data:null，列表刷新由 useWbMutation 失效驱动 */
 export function deleteInbound(no: string, input: DeleteInboundInput): Promise<null> {
     return requestClient.post<null>(`/inbound/${no}/delete`, input, idempotencyConfig());
 }

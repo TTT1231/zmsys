@@ -392,7 +392,7 @@ function EditOrderModal({
     /* 整单可改：一件未发且无未删除出库单（含已作废），与删除同口径——这种订单
      * 没有任何发货事实，改客户/BOM 与重新建单等价，可放心修 */
     const fullEdit = order.outbound === 0 && !hasShipmentLedger;
-    /* 可见出库单（含已作废但未删除）仍需先处理；已软删除的出库单不再阻止订单删除。 */
+    /* 出库单（含已作废但未删除）仍需先处理；已删除的出库单物理消失，不再阻止订单删除。 */
     const canDelete = can("orders:delete") && fullEdit;
     /* 归档（仅超级管理员）：发过货的订单（已完成/部分发货）不要了直接归档结案；
      * 一件未发不归档，直接删除 */
@@ -580,7 +580,7 @@ function EditOrderModal({
                 >
                     <DangerNote
                         impact="删除后，这张订单会从列表移除"
-                        note={`${num(order.qty)} 个的订单当前已发 0 个。删除后无恢复入口，记录由系统保留 7 天供审计，随后永久删除；操作日志始终保留。`}
+                        note={`${num(order.qty)} 个的订单当前已发 0 个。删除后无恢复入口，单据与修正记录立即永久删除；操作日志始终保留。`}
                     />
                 </Modal>
             )}

@@ -226,7 +226,7 @@ paths:
             tags: [orders]
             operationId: deleteOrder
             summary: 删除净发货为零且无可见出库单的销售订单
-            description: 受保护权限 `orders:delete`，仅 super。累计已发必须为 0，且关联出库单均已作废并软删除；仍可见的已作废出库单也会阻止删除。成功后订单打 `deleted_at` 标记并立即退出列表和待交统计，`op_log` 保存删除前快照；7 天后且关联出库单已物理清理时，维护任务清理订单及其变更日志。删除与出库登记竞争同一订单锁。
+            description: 受保护权限 `orders:delete`，仅 super。累计已发必须为 0，且无任何出库单；仍存在的已作废出库单也会阻止删除。成功后订单及其变更日志同事务物理删除并立即退出列表和待交统计，`op_log` 保存删除前快照。删除与出库登记竞争同一订单锁。
             parameters:
                 - $ref: "#/components/parameters/OrderNo"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -402,7 +402,7 @@ paths:
             tags: [boms]
             operationId: listBomStocks
             summary: BOM 当前库存余量聚合
-            description: 权限 `bom:view`。口径同 v_bom_stock：有效入库 + 库存调整 − 未软删出库单的全部台账事件（作废单正向+冲销行等额相抵）；仅返回存在流水的 bomCode，无流水者由前端按 0 展示。
+            description: 权限 `bom:view`。口径同 v_bom_stock：有效入库 + 库存调整 − 全部出库单的台账事件（作废单正向+冲销行等额相抵）；仅返回存在流水的 bomCode，无流水者由前端按 0 展示。
             responses:
                 "200":
                     description: 成功
@@ -416,7 +416,7 @@ paths:
             tags: [boms]
             operationId: getBomStockLedger
             summary: BOM 出入库流水与逐笔结余
-            description: 权限 `bom:view`。入库仅展示有效（ACTIVE）单，库存调整全部展示；出库展示未软删单的全部事件，作废单的正向与冲销行成对出现（冲销行备注展示作废原因），按业务日升序计算逐笔结余。`stockQty` 与末笔 `balance` 及 v_bom_stock 恒等。BOM 不存在返回 404；存在但无有效流水返回空 flows 与 stockQty 0。
+            description: 权限 `bom:view`。入库仅展示有效（ACTIVE）单，库存调整全部展示；出库展示全部单据的全部事件，作废单的正向与冲销行成对出现（冲销行备注展示作废原因），按业务日升序计算逐笔结余。`stockQty` 与末笔 `balance` 及 v_bom_stock 恒等。BOM 不存在返回 404；存在但无有效流水返回空 flows 与 stockQty 0。
             parameters:
                 - $ref: "#/components/parameters/BomCode"
             responses:
@@ -516,8 +516,8 @@ paths:
         post:
             tags: [inbound]
             operationId: deleteInbound
-            summary: 删除已作废的入库记录（软删除）
-            description: 权限 `inbound:delete`，默认 warehouse/super（非受保护，super 可按需授予其他角色）。仅 VOIDED 状态可删（ACTIVE 必须先作废，作废时库存已扣回）；被库存调整单引用的单返回 409（保证物理清理外键安全）。软删除：行打 `deleted_at` 标记、列表不再返回，不递增 row_version、不写变更日志（版本链止于 VOID）；`op_log` 记 delete_inbound 与删除前快照（含作废原因）。7 天保留期后由 maintenance 定时物理清理（连带变更日志同删，op_log 快照为唯一残留）。
+            summary: 删除已作废的入库记录（物理删除）
+            description: 权限 `inbound:delete`，默认 warehouse/super（非受保护，super 可按需授予其他角色）。仅 VOIDED 状态可删（ACTIVE 必须先作废，作废时库存已扣回）；被库存调整单引用的单返回 409（调整单不可变，引用中的入库单永不删除）。物理删除：行与变更日志同事务删除、列表不再返回，不递增 row_version（版本链止于 VOID）；`op_log` 记 delete_inbound 与删除前快照（含作废原因），是删除后唯一残留。删错直接重建单，无恢复入口。
             parameters:
                 - $ref: "#/components/parameters/InboundNo"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -632,8 +632,8 @@ paths:
         post:
             tags: [outbound]
             operationId: deleteOutbound
-            summary: 删除已作废的出库单（软删除）
-            description: 权限 `outbound:delete`，默认 warehouse/super（非受保护，super 可按需授予其他角色）。仅 VOIDED 状态可删（作废时已追加冲销、订单已发量已恢复）。软删除：单头打 `deleted_at` 标记、出库列表与 BOM 库存流水不再返回；不递增 row_version、不写状态日志。`op_log` 记 delete_outbound 与删除前快照（含原始发货备注、登记人/时点及作废原因）。7 天保留期后由 maintenance 定时物理清理（连带状态日志与 NORMAL+CORRECTION 数量流水同删，零和不改变统计）。
+            summary: 删除已作废的出库单（物理删除）
+            description: 权限 `outbound:delete`，默认 warehouse/super（非受保护，super 可按需授予其他角色）。仅 VOIDED 状态可删（作废时已追加冲销、订单已发量已恢复）；所属订单已归档返回 409（删除即断归档审计链）。物理删除：单头与状态日志、NORMAL+CORRECTION 数量流水同事务删除（零和不改变统计）、出库列表与 BOM 库存流水不再返回；不递增 row_version、不写状态日志。`op_log` 记 delete_outbound 与删除前快照（含原始发货备注、登记人/时点及作废原因）。
             parameters:
                 - $ref: "#/components/parameters/OutboundNo"
                 - $ref: "#/components/parameters/IdempotencyKey"
@@ -834,7 +834,7 @@ paths:
                 日期含首尾：订单按 orderDate，出入库按 businessDate；范围内出库引用的历史订单也保留。
                 status=all 时还纳入范围内仅有入库、没有订单的 BOM；指定 orderNo/customerCode 时不混入无关 BOM。
                 completed 表示累计有效出库 >= 订单数量，含已交满归档单；archived 表示归档，可能尚未交满，两组可重叠。
-                软删订单/单据不返回；作废未删单据保留 voided 标记，qty 是原登记量，不是有效出库量。
+                已删除订单/单据物理消失不返回；作废未删单据保留 voided 标记，qty 是原登记量，不是有效出库量。
                 order.facts.shipped 与 bom.facts.stock 为当前全生命周期净额（统一视图口径），不是区间流水合计或期末历史库存。
                 counts 为日期/编号条件下各状态订单数；typeCounts 为状态筛选后、类型筛选前的节点数。
                 summary 在类型筛选前计算，按单位分组；已归档订单 pendingQty=0，unshippedQty 仍保留历史未发量。
@@ -910,7 +910,7 @@ paths:
                 UPDATE 的当天修正）、stock_adjustment（库存调整，domain=inbound、
                 action=adjust）。同表的 db_backup/db_restore 是系统审计动作，不进入此业务时间线。
                 上述业务动作在当前留存策略下全量覆盖——订单/入库的编辑明细日志随
-                订单物理清理而消失，属有限留存而非永久历史审计。
+                订单删除而消失，属有限留存而非永久历史审计。
 
                 分批为 (occurredAt, id) 复合游标（加载更多语义）：首批不带游标，后续
                 携带上一批 nextCursor 的 at+id；两批无重叠、合集与全量一致。雪花 id 以

@@ -943,7 +943,6 @@ CREATE TABLE sales_order_table (
     archived_at DATETIME(3) NULL,
     archived_by BIGINT NULL,
     archive_reason VARCHAR(500) NULL,
-    deleted_at DATETIME(3) NULL,
     row_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
     request_key VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     created_by BIGINT NOT NULL,
@@ -955,7 +954,6 @@ CREATE TABLE sales_order_table (
     UNIQUE KEY uk_sales_order_request (request_key),
     KEY idx_sales_order_bom_queue (bom_id, lifecycle_status, deliver_date, order_no),
     KEY idx_sales_order_customer_date (customer_id, order_date),
-    KEY idx_sales_order_deleted (deleted_at),
     CONSTRAINT fk_sales_order_customer FOREIGN KEY (customer_id) REFERENCES custom_table (id)
         ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT fk_sales_order_bom FOREIGN KEY (bom_id) REFERENCES bom_table (id)
@@ -1023,12 +1021,10 @@ CREATE TABLE inbound_ledger (
     updated_by BIGINT NOT NULL,
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    deleted_at DATETIME(3) NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_inbound_entry_no (entry_no),
     UNIQUE KEY uk_inbound_request (request_key),
     KEY idx_inbound_bom_status_date (bom_id, status, business_date, id),
-    KEY idx_inbound_deleted (deleted_at),
     CONSTRAINT fk_inbound_bom FOREIGN KEY (bom_id) REFERENCES bom_table (id)
         ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT fk_inbound_operator FOREIGN KEY (operator_id) REFERENCES sys_user (id)
@@ -1111,7 +1107,6 @@ CREATE TABLE outbound_shipment (
     voided_by BIGINT NULL,
     void_reason VARCHAR(500) NULL,
     voided_at DATETIME(3) NULL,
-    deleted_at DATETIME(3) NULL,
     row_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
     request_key VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     registered_by BIGINT NOT NULL,
@@ -1122,7 +1117,6 @@ CREATE TABLE outbound_shipment (
     UNIQUE KEY uk_outbound_shipment_request (request_key),
     KEY idx_outbound_shipment_order_state_date (order_id, state, business_date, id),
     KEY idx_outbound_shipment_state_time (state, registered_at),
-    KEY idx_outbound_deleted (deleted_at),
     CONSTRAINT fk_outbound_shipment_order FOREIGN KEY (order_id) REFERENCES sales_order_table (id)
         ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT fk_outbound_shipment_registrar FOREIGN KEY (registered_by) REFERENCES sys_user (id)
@@ -1174,8 +1168,9 @@ CREATE TABLE outbound_ledger (
     CONSTRAINT ck_outbound_ledger_request CHECK (CHAR_LENGTH(request_key) BETWEEN 8 AND 128)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- 有效出库净额的事件级判据（迁移 20260946000000）：未软删出库单的全部台账事件，
--- 不按 state 过滤（作废单 = NORMAL + 等额 CORRECTION，未来部分冲销时残值即实际出库）
+-- 有效出库净额的事件级判据（迁移 20260946000000；20261012100000 起删除单已物理
+-- 消失，不再过滤 deleted_at）：全部出库单的台账事件，不按 state 过滤
+-- （作废单 = NORMAL + 等额 CORRECTION，未来部分冲销时残值即实际出库）
 CREATE SQL SECURITY INVOKER VIEW v_outbound_effective_event AS
 SELECT
     shipment.shipment_no,
@@ -1191,8 +1186,7 @@ SELECT
 FROM outbound_ledger AS event
 JOIN outbound_shipment AS shipment ON shipment.id = event.shipment_id
 JOIN sales_order_table AS sales_order ON sales_order.id = shipment.order_id
-JOIN sys_user AS operator ON operator.id = event.operator_id
-WHERE shipment.deleted_at IS NULL;
+JOIN sys_user AS operator ON operator.id = event.operator_id;
 
 CREATE SQL SECURITY INVOKER VIEW v_order_outbound_qty AS
 SELECT
@@ -1206,7 +1200,7 @@ SELECT movement.bom_id, SUM(movement.qty_delta) AS stock_qty
 FROM (
     SELECT inbound.bom_id, CAST(inbound.qty AS SIGNED) AS qty_delta
     FROM inbound_ledger AS inbound
-    WHERE inbound.status = 'ACTIVE' AND inbound.deleted_at IS NULL
+    WHERE inbound.status = 'ACTIVE'
     UNION ALL
     SELECT adjustment.bom_id, adjustment.qty_delta
     FROM stock_adjustment AS adjustment
@@ -1306,10 +1300,9 @@ CREATE TABLE sys_restore_job (
 --    bom_table / bom_item 的 DELETE 仅授予 BOM 删除专用服务：仅超级管理员、无任何销售订单
 --    引用且无入库/调整流水，事务内先清理 bom_item 再删档案行并写 op_log(delete_bom) 快照
 --    （见 db-scheme.md 5.2）。
--- 2. inbound_ledger / outbound_shipment 仅由带状态校验、版本检查和审计日志的业务事务
---    UPDATE（含软删除打 deleted_at 标记）；不授予人工 DELETE。inbound_ledger /
---    outbound_shipment / inbound_change_log / outbound_state_log / outbound_ledger 的 DELETE
---    仅授予台账清理专用服务（maintenance）：仅处理 deleted_at 超过 7 天保留期的已作废单，
---    分批事务内连带子行同删，删除动作本身已在 op_log 留全量快照（见 db-scheme.md §7.1）。
+-- 2. inbound_ledger / outbound_shipment 的写路径为带状态校验、版本检查和审计日志的
+--    业务事务 UPDATE（修正/作废）与 DELETE（删除接口，2026-10 起物理删除：仅 VOIDED
+--    单、事务内连带子行同删并先在 op_log 留全量快照，见 db-scheme.md §7.1/§7.3）；
+--    不授予人工 DELETE。
 -- 3. 不授予 stock_adjustment / 各日志表的 UPDATE 或 DELETE。
 -- 4. 仅迁移账号拥有 ALTER / DROP / REFERENCES。

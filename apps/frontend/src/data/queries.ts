@@ -304,7 +304,7 @@ export const useVoidInbound = () =>
     useWbMutation((input: { no: string; expectedVersion: number; reason: string }) =>
         voidInbound(input.no, { expectedVersion: input.expectedVersion, reason: input.reason }),
     );
-/** 删除已作废入库（软删除，仅已作废记录可删） */
+/** 删除已作废入库（物理删除，仅已作废记录可删） */
 export const useDeleteInbound = () =>
     useWbMutation((input: { no: string; expectedVersion: number }) => {
         const { no, ...body } = input;
@@ -315,7 +315,7 @@ export const useVoidOutbound = () =>
     useWbMutation((input: { no: string; expectedVersion: number; reason: string }) =>
         voidOutbound(input.no, { expectedVersion: input.expectedVersion, reason: input.reason }),
     );
-/** 删除已作废出库单（软删除，仅已作废单可删） */
+/** 删除已作废出库单（物理删除，仅已作废单可删） */
 export const useDeleteOutbound = () =>
     useWbMutation((input: { no: string; expectedVersion: number }) => {
         const { no, ...body } = input;

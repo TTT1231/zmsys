@@ -398,7 +398,7 @@ function EditInboundModal({ row, onClose }: { row: InboundRow; onClose: () => vo
     );
 }
 
-/** 删除已作废入库的二次确认：软删除（7 天后悔期后系统物理清理），动作记入系统日志 */
+/** 删除已作废入库的二次确认：物理删除（单据与修正记录立即清除），动作记入系统日志 */
 function DeleteInboundModal({
     row,
     pending,
@@ -430,7 +430,7 @@ function DeleteInboundModal({
         >
             <DangerNote
                 impact="删除后，这笔入库单会从列表移除"
-                note={`已作废的 ${num(row.qty)} 个不再计入库存。删除后无恢复入口，记录由系统保留 7 天供审计，随后永久删除；操作日志始终保留。`}
+                note={`已作废的 ${num(row.qty)} 个不再计入库存。删除后无恢复入口，单据与修正记录立即永久删除；操作日志始终保留。`}
             />
         </Modal>
     );
@@ -750,7 +750,7 @@ export function InboundPage() {
                                         修正
                                     </Button>
                                 )}
-                                {/* 已作废记录的清理入口：软删除（7 天后悔期），仅持有删除权限者可见 */}
+                                {/* 已作废记录的删除入口：物理删除，仅持有删除权限者可见 */}
                                 {canDeleteVoided && currentVoucher.status === "voided" && (
                                     <Button
                                         size="sm"

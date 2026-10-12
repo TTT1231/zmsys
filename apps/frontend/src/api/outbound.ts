@@ -14,7 +14,7 @@ export function voidOutbound(no: string, input: VoidOutboundInput): Promise<Outb
     return requestClient.post<OutboundRow>(`/outbound/${no}/void`, input, idempotencyConfig());
 }
 
-/** 删除已作废出库单（软删除）：响应恒为 data:null，列表刷新由 useWbMutation 失效驱动 */
+/** 删除已作废出库单（物理删除）：响应恒为 data:null，列表刷新由 useWbMutation 失效驱动 */
 export function deleteOutbound(no: string, input: DeleteOutboundInput): Promise<null> {
     return requestClient.post<null>(`/outbound/${no}/delete`, input, idempotencyConfig());
 }
