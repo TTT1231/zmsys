@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 import type { ProfileResult, WbUser } from "@/api";
-import { type PermCode, type RoleGrant, type RoleId } from "@/data/permissions";
+import { DEFAULT_PROTECTED_CODES, type PermCode, type RoleGrant, type RoleId } from "@/data/permissions";
 
 /* 认证上下文的非组件部分（context 对象、hook、角色元数据）单独成文件，
    避免与 AppProvider 混在一个文件导出而破坏 React Fast Refresh */
@@ -28,6 +28,9 @@ interface AppState {
     role: Role;
     /** 当前角色的授权（含菜单与操作权限码），由 /auth/profile 下发 */
     grant: RoleGrant;
+    /** 当前受保护权限码（运行时真源，随 profile 刷新）：侧边栏「超管专属」标签、
+     *  编辑器灰显与矩阵口径共用；profile 未下发前用字典兜底集合 */
+    protectedCodes: ReadonlySet<string>;
     /** 权限码判断：can("outbound:ship") */
     can: (perm: PermCode) => boolean;
     /** 登录成功后建立会话并返回完整 profile（用户 + 授权：欢迎提示用 user，落地页用 grant）；失败抛出带 message 的错误供登录页展示 */
@@ -42,6 +45,7 @@ export const AppContext = createContext<AppState>({
     user: null,
     role: "admin",
     grant: EMPTY_GRANT,
+    protectedCodes: DEFAULT_PROTECTED_CODES,
     can: () => false,
     login: async () => ({ user: {} as WbUser, grant: EMPTY_GRANT }),
     logout: async () => {},

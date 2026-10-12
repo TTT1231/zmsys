@@ -145,7 +145,7 @@ export function BackupPage() {
     }, [active, allChecked]);
 
     if (!can("system-backup:run")) {
-        return <div className="p-6 text-14 text-subtle">仅超级管理员可访问数据库备份。</div>;
+        return <div className="p-6 text-14 text-subtle">当前角色无数据库备份权限。</div>;
     }
 
     /** 勾选联动后同步 explicit：新勾的组计为人工选择；explicit 剪除已不在选中集的项 */

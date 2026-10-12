@@ -42,11 +42,14 @@ import {
     fetchInboundLedger,
     fetchOrders,
     fetchOutboundLedger,
+    fetchPermissionCatalog,
+    fetchProtectionLog,
     fetchStockAdjustments,
     fetchSystemLogs,
     fetchUsers,
     resetUserPassword as resetUserPasswordReq,
     saveRoleGrants,
+    setPermissionProtection,
     setUserActive as setUserActiveReq,
     updateCustomer as updateCustomerReq,
     updateInbound,
@@ -62,6 +65,8 @@ export const wbKeys = {
     bomUsage: ["wb", "bom-usage"] as const,
     grants: ["roles", "grants"] as const,
     grantLog: ["roles", "grants", "log"] as const,
+    catalog: ["permissions", "catalog"] as const,
+    protectionLog: ["permissions", "catalog", "log"] as const,
 };
 
 /* BOM 慢变主数据独立缓存：列表页/选择器只拉所需接口，不再等聚合快照 */
@@ -385,6 +390,37 @@ export function useSaveGrants() {
             queryClient.invalidateQueries({ queryKey: wbKeys.grantLog });
             queryClient.invalidateQueries({ queryKey: wbKeys.all });
             void variables; // roleId：如影响当前登录角色，调用方负责 refreshProfile
+        },
+    });
+}
+
+/** 权限目录（含各码运行时受保护状态）：编辑器灰显与「受保护权限」管理共用 */
+export function usePermissionCatalog() {
+    return useQuery({ queryKey: wbKeys.catalog, queryFn: fetchPermissionCatalog });
+}
+
+/** 保护开关审计日志（最新在前） */
+export function useProtectionLog() {
+    return useQuery({ queryKey: wbKeys.protectionLog, queryFn: fetchProtectionLog });
+}
+
+/** 切换受保护状态（仅 super 角色端点）：加锁会同事务清理该码授权行并全角色递增
+ *  grant_version，故除目录/审计外还要失效授权数据与自身 profile（protectedCodes 随之刷新） */
+export function useSetPermissionProtection() {
+    const queryClient = useQueryClient();
+    const toast = useToast();
+    const { refreshProfile } = useApp();
+    return useMutation({
+        mutationFn: (input: { code: string; protected: boolean; reason?: string }) =>
+            setPermissionProtection(input.code, { protected: input.protected, reason: input.reason }),
+        onError: error => toast.error(error.message),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: wbKeys.catalog });
+            queryClient.invalidateQueries({ queryKey: wbKeys.protectionLog });
+            queryClient.invalidateQueries({ queryKey: wbKeys.grants });
+            queryClient.invalidateQueries({ queryKey: wbKeys.grantLog });
+            queryClient.invalidateQueries({ queryKey: wbKeys.all });
+            void refreshProfile();
         },
     });
 }

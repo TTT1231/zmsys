@@ -21,6 +21,13 @@ export {
     setUserActive,
     resetUserPassword,
 } from "./users";
-export { fetchGrants, saveRoleGrants, fetchGrantLog } from "./permissions";
+export {
+    fetchGrants,
+    saveRoleGrants,
+    fetchGrantLog,
+    fetchPermissionCatalog,
+    setPermissionProtection,
+    fetchProtectionLog,
+} from "./permissions";
 export { fetchBackupCatalog, runBackup, previewRestore, runRestore, fetchRestoreJobByKey } from "./system";
 export { fetchSystemLogs } from "./system-logs";

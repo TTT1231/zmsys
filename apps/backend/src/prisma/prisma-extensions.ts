@@ -17,6 +17,10 @@ import { Prisma } from "../generated/prisma/client";
 /** updatedAt 注入适用的写操作（upsert 仅 update 分支需要） */
 const DATA_OPERATIONS = new Set(["update", "updateMany", "upsert"]);
 
+/** 无 updated_at 列的模型：注入会让 Prisma 拒绝整个写操作（Unknown argument）。
+ *  目前只有权限目录表（仅保护开关一个写路径，目录行不需要"最近修改时间"语义） */
+const NO_UPDATED_AT_MODELS = new Set(["SysPermission"]);
+
 /** updatedAt 注入：未显式传值时补 new Date()（Node 时钟，见文件头注释） */
 export function applyUpdatedAt(args: { data?: unknown }, operation: string): void {
     const now = new Date();
@@ -38,7 +42,7 @@ export const prismaExtensions = Prisma.defineExtension({
     query: {
         $allModels: {
             async $allOperations({ model, operation, args, query }) {
-                if (model !== undefined && DATA_OPERATIONS.has(operation)) {
+                if (model !== undefined && DATA_OPERATIONS.has(operation) && !NO_UPDATED_AT_MODELS.has(model)) {
                     applyUpdatedAt(args as { data?: unknown }, operation);
                 }
                 return query(args);

@@ -114,8 +114,8 @@
 - 菜单码格式：`menu:<menuKey>`，如 `menu:orders`。
 - 动作码格式：`<menuKey>:<actionId>`，如 `outbound:ship`。
 - 勾选动作必须同时拥有其父菜单和对应 `view` 动作；保存时由服务端规范化并复核。
-- `(role_code, permission_code)` 为 `sys_grant` 主键。`permissions:view/manage`、`menu:permissions`、`menu:permissions-accounts`、`menu:permissions-roles`、`menu:permissions-matrix`、客户批量移交、订单删除、订单归档、订单归档回退、BOM 删除、跨日库存调整 `inbound:adjust`、跨天作废入库 `inbound:void-any-day`、`menu:system-logs`、`system-logs:view`、`system-backup:run` 与 `system-restore:run` 属于受保护权限，只允许 `super`。
-- `menu:system-backup` / `menu:system-restore` 在目录中为非受保护菜单码，但不播普通角色授权，前端也不提供勾选。备份目录、恢复预检/任务查询与实际执行端点均检查对应受保护的 `:run` 动作，单独持有菜单码不能调用这些接口；系统日志端点检查 `system-logs:view`。默认角色分布及权限矩阵显示口径见 [角色与权限](business/roles.md)。
+- `(role_code, permission_code)` 为 `sys_grant` 主键。`permissions:view/manage`、`menu:permissions`、`menu:permissions-accounts`、`menu:permissions-roles`、`menu:permissions-matrix`、客户批量移交、订单删除、订单归档、订单归档回退、BOM 删除、跨日库存调整 `inbound:adjust`、跨天作废入库 `inbound:void-any-day`、`menu:system-logs`、`system-logs:view`、`menu:system-backup`、`menu:system-restore`、`system-backup:run` 与 `system-restore:run` 属于受保护权限，默认仅 `super` 持有。2026-10 起受保护状态可由 super 经 `PATCH /permissions/catalog/{code}/protected` 运行时切换：解锁（protected=0）后即可在「角色与权限」编辑器授予其他角色；重新加锁时同事务清理该码全部 `sys_grant` 行并递增所有角色 `grant_version`（JwtStrategy 权限缓存唯一的失效通道，已登录角色立即失去该权限）。切换端点仅认 super 角色本身（@SuperOnly，不校验权限码——权限码可被解锁后授予他人，用它守门等于自我提权通道），审计见 §3.6。
+- `menu:system-backup` / `menu:system-restore` 与其 `:run` 动作均为受保护行（2026-10 迁移 `20261010100000` 起，与前端 onlyFor 锁收敛为单一机制）：菜单可见性、编辑器灰显与解锁下放统一由 protected 标志治理。备份目录、恢复预检/任务查询与实际执行端点均检查受保护的 `:run` 动作，单独持有菜单码不能调用这些接口；系统日志端点检查 `system-logs:view`。默认角色分布及权限矩阵显示口径见 [角色与权限](business/roles.md)。
 - 建表脚本直接播种四个普通角色的默认授权。初始行使用 `grant_source=BOOTSTRAP` 且 `granted_by=NULL`；此后所有界面修改必须使用 `grant_source=USER` 和真实操作人。`super` 不依赖授权行，服务端固定视为全量权限。归档订单菜单 `menu:archived-orders` 为普通菜单，四个普通角色默认可见（数据来自既有 `orders:view`，归档动作本身仍仅 `super`）。分析页菜单 `menu:analytics`（交付甘特图自工作台二级视图迁出）同为普通可授权菜单，但不播普通角色 BOOTSTRAP 行——默认仅超管可见，需要时由超管在界面勾选授予；交付数据取自 `GET /workbench/overview`（校验 `menu:workbench`）；业务关系图与 agent 共用只读 `GET /workbench/relations`（同时校验 `menu:analytics`、`menu:workbench`），按日期/订单状态/实体类型或业务编号聚合必要业务关系及人员姓名/角色，不暴露用户管理或联系方式。授予分析页的角色须同时保留工作台菜单。
 
 ### 3.4 `sys_grant_log`
@@ -126,6 +126,13 @@
 
 - `api_idempotency` 是所有创建、归档/回退、删除、作废与库存调整类 POST 的统一幂等登记表；表内保存请求 SHA-256、处理状态和成功响应快照。
 - `sys_user_change_log` 保存新增用户、管理员对用户资料的修改、角色/状态变更与改密事件。快照不得包含密码哈希；密码事件只记录“已变更”及版本，不记录任何密码材料。
+
+### 3.6 `sys_permission_change_log`
+
+- 受保护状态每次翻转（解锁/加锁）在同一事务写一行；`before_protected` / `after_protected` 恒不相等（数据库 CHECK 兜底，同态请求在服务端即 400 拒绝）。
+- `cleaned_grants` 记录加锁时同事务清理的该码 `sys_grant` 行数——清理保证 `/auth/profile`、编辑器与守卫三端口径一致（loadPermissionRows 不按 protected 过滤，残留授权行会造成侧边栏可见而接口 403 的半态）。
+- 与 `sys_grant_log` 分表：后者只记角色授权整组保存，本表只记目录级保护状态变化；客户端 reason 只作补充，服务端拼装展示文案（含权限名、操作人与清理数）。
+- 查询端点 `GET /permissions/catalog/log`（受保护权限 `permissions:view`，默认仅 super）join 操作人姓名与权限名后下发。
 
 ## 4. 客户表
 

@@ -7,13 +7,14 @@ import type { AuthUser } from "../types/auth-user";
 function createContext(
     user: AuthUser | undefined,
     permissionsMetadata: unknown,
-    flags: { isPublic?: boolean; authOnly?: boolean } = {},
+    flags: { isPublic?: boolean; authOnly?: boolean; superOnly?: unknown } = {},
 ) {
     const reflector = {
         getAllAndOverride: (key: string) => {
             if (key === "requiredPermissions") return permissionsMetadata;
             if (key === "isPublic") return flags.isPublic ?? false;
             if (key === "authenticatedOnly") return flags.authOnly ?? false;
+            if (key === "superOnly") return flags.superOnly;
             return undefined;
         },
     } as unknown as Reflector;
@@ -92,5 +93,27 @@ describe("PermissionsGuard（默认拒绝）", () => {
             message: "无权",
         });
         expect(() => guard.canActivate(ctx)).toThrow(ForbiddenException);
+    });
+
+    it("@SuperOnly() 端点：super 角色直通", () => {
+        const { guard, ctx } = createContext(superUser, undefined, {
+            superOnly: { message: "仅超级管理员可调整受保护权限" },
+        });
+        expect(guard.canActivate(ctx)).toBe(true);
+    });
+
+    it("@SuperOnly() 端点：非 super 即使持全部权限码也 403（不经权限码，防自我提权）", () => {
+        const omnipotentStaff = { ...staffUser, permissions: new Set(["permissions:manage", "orders:view"]) };
+        const { guard, ctx } = createContext(omnipotentStaff, undefined, {
+            superOnly: { message: "仅超级管理员可调整受保护权限" },
+        });
+        expect(() => guard.canActivate(ctx)).toThrow(new ForbiddenException("仅超级管理员可调整受保护权限"));
+    });
+
+    it("@SuperOnly() 端点：无用户（未认证）403 并携带端点文案", () => {
+        const { guard, ctx } = createContext(undefined, undefined, {
+            superOnly: { message: "仅超级管理员可操作" },
+        });
+        expect(() => guard.canActivate(ctx)).toThrow(new ForbiddenException("仅超级管理员可操作"));
     });
 });

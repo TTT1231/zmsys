@@ -81,3 +81,37 @@ describe("AuthService.login", () => {
         );
     });
 });
+
+describe("AuthService.getProfile", () => {
+    it("返回授权与受保护码目录（侧边栏标签等展示口径的运行时真源）", async () => {
+        const grant = { version: 1, menus: ["orders"], actions: { orders: ["view"] } };
+        const prisma = {
+            sysUser: { findUnique: vi.fn().mockResolvedValue(activeUser) },
+            sysPermission: {
+                findMany: vi.fn().mockResolvedValue([{ code: "menu:permissions" }, { code: "permissions:manage" }]),
+            },
+            $transaction: vi.fn(),
+        } as unknown as PrismaService;
+        const accessControl = { getGrant: vi.fn().mockResolvedValue(grant) } as unknown as AccessControlService;
+        const service = new AuthService(
+            prisma,
+            {} as unknown as JwtService,
+            accessControl,
+            { next: () => 1n } as unknown as SnowflakeGenerator,
+            new TransactionRunner(prisma),
+        );
+        const result = await service.getProfile({
+            id: "1",
+            account: "guojun",
+            name: "郭均",
+            role: "super",
+            isSuper: true,
+            rowVersion: 1,
+            permissions: new Set(),
+        });
+        expect(result.grant).toBe(grant);
+        expect(result.protectedCodes).toEqual(["menu:permissions", "permissions:manage"]);
+        // 只取 code 列，不下发整表目录
+        expect(prisma.sysPermission.findMany).toHaveBeenCalledWith(expect.objectContaining({ select: { code: true } }));
+    });
+});

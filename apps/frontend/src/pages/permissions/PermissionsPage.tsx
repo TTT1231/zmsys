@@ -6,6 +6,7 @@ import { Button, TableLink } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { SelectField, TextArea, TextField } from "@/components/ui/Field";
+import { Switch } from "@/components/ui/Switch";
 import { useToast } from "@/components/ui/toastContexts";
 import { Icon } from "@/lib/icons";
 import { useApp } from "@/context/useApp";
@@ -13,8 +14,11 @@ import {
     useCreateUser,
     useGrantLog,
     useGrants,
+    usePermissionCatalog,
+    useProtectionLog,
     useResetUserPassword,
     useSaveGrants,
+    useSetPermissionProtection,
     useSetUserActive,
     useUpdateUser,
     useWbView,
@@ -23,8 +27,8 @@ import type { Customer, CustomerOwnerOption, WbUser } from "@/api";
 import {
     ACTION_CATALOG,
     DEFAULT_GRANTS,
+    DEFAULT_PROTECTED_CODES,
     MENU_CATALOG,
-    ONLY_FOR_ACTION_GROUPS,
     ROLES,
     actionsOf,
     diffGrants,
@@ -35,7 +39,7 @@ import {
 import { num } from "@/lib/format";
 import { copyText } from "@/lib/clipboard";
 
-type PermTab = "accounts" | "roles" | "matrix";
+type PermTab = "accounts" | "roles" | "matrix" | "protection";
 
 /** 契约初始密码：新增用户与重置密码统一为 123456（后端 INITIAL_PASSWORD 同值） */
 const INITIAL_PASSWORD = "123456";
@@ -55,10 +59,12 @@ const ownedCustomerCount = (customers: Customer[], account: string) =>
     customers.filter(customer => customer.ownerAccount === account).length;
 
 export function PermissionsPage() {
-    const { can, grant } = useApp();
+    const { can, grant, user } = useApp();
     const { snap, isLoading } = useWbView();
     const { data: grantLogData } = useGrantLog();
     const [tab, setTab] = useState<PermTab>("accounts");
+    // 「受保护权限」仅超管可见（界面便利；后端 @SuperOnly 才是真边界，防借下放的权限码提权）
+    const tabs = user?.role === "super" ? [...TABS, { key: "protection" as PermTab, label: "受保护权限" }] : TABS;
 
     if (!can("permissions:view")) return <Navigate to={firstAllowedPath(grant)} replace />;
 
@@ -90,7 +96,7 @@ export function PermissionsPage() {
             </div>
 
             <div className="task-tabs" role="tablist" aria-label="权限管理视图">
-                {TABS.map(item => (
+                {tabs.map(item => (
                     <button
                         key={item.key}
                         type="button"
@@ -113,6 +119,7 @@ export function PermissionsPage() {
             )}
             {tab === "roles" && <RolesTab users={users} />}
             {tab === "matrix" && <MatrixTab />}
+            {tab === "protection" && user?.role === "super" && <ProtectionTab />}
 
             <GrantLogPanel />
         </div>
@@ -696,7 +703,7 @@ function TransferFields({
 /* ================= Tab 2 · 角色与权限 ================= */
 
 function RolesTab({ users }: { users: WbUser[] }) {
-    const { refreshProfile } = useApp();
+    const { refreshProfile, protectedCodes } = useApp();
     const toast = useToast();
     const { data: grantsData, isLoading: grantsLoading } = useGrants();
     const saveGrants = useSaveGrants();
@@ -758,17 +765,23 @@ function RolesTab({ users }: { users: WbUser[] }) {
     const toggleAll = (checked: boolean) =>
         edit(grant => {
             grant.menus = checked
-                ? MENU_CATALOG.flatMap(menu =>
-                      // 受保护菜单只能由超级管理员持有：全选写入同样跳过（含其子菜单）
-                      menu.onlyFor || menu.protected
-                          ? []
-                          : [menu.key, ...(menu.children ?? []).map(child => child.key)],
-                  )
+                ? MENU_CATALOG.flatMap(menu => {
+                      // 仍受保护的菜单（含仍受保护的子菜单）不随全选写入；说明型 onlyFor 项不占权限码
+                      if (menu.onlyFor || protectedCodes.has(`menu:${menu.key}`)) return [];
+                      const children = (menu.children ?? [])
+                          .filter(child => !protectedCodes.has(`menu:${child.key}`))
+                          .map(child => child.key);
+                      return [menu.key, ...children];
+                  })
                 : [];
             grant.actions = Object.fromEntries(
                 Object.keys(ACTION_CATALOG).map(menu => [
                     menu,
-                    checked ? (actionsOf(menu) ?? []).filter(action => !action.protected).map(action => action.id) : [],
+                    checked
+                        ? (actionsOf(menu) ?? [])
+                              .filter(action => !protectedCodes.has(`${menu}:${action.id}`))
+                              .map(action => action.id)
+                        : [],
                 ]),
             );
         });
@@ -876,7 +889,10 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                     type="checkbox"
                                     className="accent-primary"
                                     checked={MENU_CATALOG.every(
-                                        menu => menu.onlyFor || menu.protected || effective.menus.includes(menu.key),
+                                        menu =>
+                                            menu.onlyFor ||
+                                            protectedCodes.has(`menu:${menu.key}`) ||
+                                            effective.menus.includes(menu.key),
                                     )}
                                     onChange={event => toggleAll(event.target.checked)}
                                 />
@@ -884,20 +900,19 @@ function RolesTab({ users }: { users: WbUser[] }) {
                             </label>
                         </div>
                         <p className="mb-2.5 text-12 leading-5 text-subtle">
-                            标有「仅超管」的灰色菜单为受保护入口（如备份、恢复、系统日志），仅超级管理员持有，
-                            不能授权给其他角色。
+                            灰色「仅超管」菜单为受保护权限（默认仅超级管理员持有）；超级管理员可在「受保护权限」页签解锁后授予其他角色，重新加锁将自动收回。
                         </p>
                         <div className="rounded-xl border border-line bg-panel px-3 py-2">
                             {/* 说明型 onlyFor 项（无路由，如仓管「变更记录」）不占权限码，不参与展示；
-                                受保护 / super 专属菜单灰显举证，不可勾选 */}
+                                受保护菜单灰显举证，不可勾选（解锁后变为正常可勾选行） */}
                             {MENU_CATALOG.filter(menu => !(menu.onlyFor && !menu.to)).map(menu => {
-                                const superOnly = menu.protected || !!menu.onlyFor?.includes("super");
+                                const superOnly = protectedCodes.has(`menu:${menu.key}`);
                                 return (
                                     <div key={menu.key}>
                                         {superOnly ? (
                                             <div
                                                 className="flex min-h-10 cursor-not-allowed items-center gap-2.5 rounded-lg px-2 opacity-60"
-                                                title="受保护菜单：仅超级管理员持有，不可授权"
+                                                title="受保护菜单：默认仅超级管理员，超管可在「受保护权限」解锁"
                                             >
                                                 <input
                                                     type="checkbox"
@@ -933,7 +948,7 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                                         <div
                                                             key={child.key}
                                                             className="flex min-h-9 cursor-not-allowed items-center gap-2.5 rounded-lg px-2 opacity-60"
-                                                            title="受保护菜单：仅超级管理员持有，不可授权"
+                                                            title="受保护菜单：默认仅超级管理员，超管可在「受保护权限」解锁"
                                                         >
                                                             <input
                                                                 type="checkbox"
@@ -971,14 +986,13 @@ function RolesTab({ users }: { users: WbUser[] }) {
                     <div>
                         <h3 className="mb-1 text-14 font-semibold text-ink">操作权限（按钮 / 动作级）</h3>
                         <p className="mb-2.5 text-12 leading-5 text-subtle">
-                            灰色不可勾选项为受保护权限（如删除订单、执行备份、执行恢复），仅超级管理员持有，
-                            不能授权给其他角色。
+                            灰色不可勾选项为受保护权限（默认仅超级管理员持有），超级管理员可在「受保护权限」页签解锁后授予其他角色。
                         </p>
                         <div className="rounded-xl border border-line bg-panel px-4 py-1">
                             {Object.entries(ACTION_CATALOG).map(([menuKey, actions]) => {
                                 const menuDef = MENU_CATALOG.find(menu => menu.key === menuKey);
-                                // 系统组（备份/恢复/系统日志/用户与权限）灰显举证：动作全部受保护，不可勾选
-                                const superOnly = !!menuDef?.protected || ONLY_FOR_ACTION_GROUPS.has(menuKey);
+                                // 菜单仍受保护的动作组整体灰显举证（备份/恢复/系统日志/用户与权限）
+                                const superOnly = protectedCodes.has(`menu:${menuKey}`);
                                 const menuOn = effective.menus.includes(menuKey);
                                 const chosen = effective.actions[menuKey] ?? [];
                                 return (
@@ -1000,13 +1014,13 @@ function RolesTab({ users }: { users: WbUser[] }) {
                                         <div className="flex flex-wrap gap-2">
                                             {actions.map(action => {
                                                 const checked = chosen.includes(action.id);
-                                                const isProtected = "protected" in action && action.protected;
+                                                const isProtected = protectedCodes.has(`${menuKey}:${action.id}`);
                                                 return (
                                                     <label
                                                         key={action.id}
                                                         title={
                                                             isProtected
-                                                                ? "受保护权限：仅超级管理员持有，不可授权"
+                                                                ? "受保护权限：默认仅超级管理员，超管可在「受保护权限」解锁"
                                                                 : undefined
                                                         }
                                                         className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 text-13 transition ${
@@ -1076,12 +1090,11 @@ function RolesTab({ users }: { users: WbUser[] }) {
 /* ================= Tab 3 · 权限矩阵 ================= */
 
 function MatrixTab() {
+    const { protectedCodes } = useApp();
     const { data } = useGrants();
     const grants = data ?? DEFAULT_GRANTS;
-    // 系统模块虽仅超管可用，也纳入矩阵作为授权举证；工作台是固定入口，不单独列模块。
-    const modules = MENU_CATALOG.filter(
-        menu => menu.group === "系统" || (!menu.onlyFor && !menu.protected && menu.key !== "workbench"),
-    );
+    // 系统模块默认仅超管，也纳入矩阵作为授权举证；工作台是固定入口，不单独列模块。
+    const modules = MENU_CATALOG.filter(menu => menu.group === "系统" || (!menu.onlyFor && menu.key !== "workbench"));
     return (
         <section className="overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
             <div className="border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4">
@@ -1107,10 +1120,10 @@ function MatrixTab() {
                                 </th>
                                 {ROLES.map(role => {
                                     const grant = grants[role.id];
-                                    // 系统组为超管专属入口：超管列统一「超管专属」举证口径（与侧边栏
-                                    // 标签、编辑器灰显一致）；普通角色即使出现脏菜单授权行也无访问权，
-                                    // 系统接口一律按受保护动作校验。
-                                    if (menu.group === "系统") {
+                                    // 仍受保护的系统组模块：超管列统一「超管专属」举证口径（与侧边栏
+                                    // 标签、编辑器灰显一致）；普通角色即使出现脏菜单授权行也无访问权。
+                                    // 超管解锁后该行落入下方正常派生（按各角色实时授权）。
+                                    if (menu.group === "系统" && protectedCodes.has(`menu:${menu.key}`)) {
                                         return role.id === "super" ? (
                                             <td
                                                 key={role.id}
@@ -1183,6 +1196,226 @@ function MatrixTab() {
                     </tbody>
                 </table>
             </div>
+        </section>
+    );
+}
+
+/* ================= Tab 4 · 受保护权限（仅超管） ================= */
+
+/* 开关行：Switch 即整行按钮（label + 权限码 + 状态徽章 + 滑块）；
+   checked=受保护（开），关闭即解锁 */
+function ProtectionToggleRow({
+    label,
+    code,
+    locked,
+    onToggle,
+}: {
+    label: string;
+    code: string;
+    locked: boolean;
+    onToggle: (label: string, code: string, next: boolean) => void;
+}) {
+    return (
+        <Switch checked={locked} onCheckedChange={() => onToggle(label, code, !locked)}>
+            <span className="flex min-h-9 flex-wrap items-center gap-2 py-0.5 text-14">
+                <span className="font-medium text-ink">{label}</span>
+                <span className="tnum text-12 text-subtle">{code}</span>
+                <Badge tone={locked ? "progress" : "success"}>{locked ? "仅超管" : "已解锁"}</Badge>
+            </span>
+        </Switch>
+    );
+}
+
+function ProtectionLogPanel() {
+    const { data } = useProtectionLog();
+    const logs = (data ?? []).slice(0, 8);
+    return (
+        <div className="rounded-xl border border-line bg-panel px-5 py-2">
+            <div className="flex items-center justify-between border-b border-dashed border-line py-2.5">
+                <h3 className="text-13 font-semibold text-ink">保护开关记录</h3>
+                {!!logs.length && <span className="text-12 text-subtle">最近 {logs.length} 条</span>}
+            </div>
+            {logs.length ? (
+                <ol className="flex flex-col border-l border-line py-2 pl-4">
+                    {logs.map((entry, index) => (
+                        <li key={`${entry.time}-${index}`} className="relative py-2">
+                            <span
+                                className={`absolute top-4.75 -left-5.25 h-2 w-2 rounded-full ${
+                                    entry.text.includes("已解锁") ? "bg-success" : "bg-primary"
+                                }`}
+                            />
+                            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                                <p className="min-w-0 text-13 text-td">{entry.text}</p>
+                                <span className="ml-auto shrink-0 text-12 whitespace-nowrap text-subtle">
+                                    {entry.user} · <span className="tnum">{entry.time}</span>
+                                </span>
+                            </div>
+                        </li>
+                    ))}
+                </ol>
+            ) : (
+                <p className="py-3 text-13 text-subtle">暂无解锁/加锁记录</p>
+            )}
+        </div>
+    );
+}
+
+function ProtectionTab() {
+    const toast = useToast();
+    const { data: catalog, isLoading } = usePermissionCatalog();
+    const setProtection = useSetPermissionProtection();
+    const [pending, setPending] = useState<{ label: string; code: string; next: boolean } | null>(null);
+    const [reason, setReason] = useState("");
+
+    /** 目录未就绪或缺行按受保护兜底（安全默认，不会误显示为可操作态之外的状态） */
+    const lockedOf = (code: string) => catalog?.find(entry => entry.code === code)?.protected ?? true;
+    const requestToggle = (label: string, code: string, next: boolean) => {
+        setPending({ label, code, next });
+        setReason("");
+    };
+    const confirm = () => {
+        if (!pending || setProtection.isPending) return;
+        setProtection.mutate(
+            { code: pending.code, protected: pending.next, reason: reason.trim() || undefined },
+            {
+                onSuccess: (_data, variables) => {
+                    toast.success(
+                        variables.protected
+                            ? `【${pending.label}】已加锁，已授角色即时收回`
+                            : `【${pending.label}】已解锁，可在「角色与权限」授予其他角色`,
+                    );
+                    setPending(null);
+                    setReason("");
+                },
+                // 失败保留弹窗与原因，可改后重试（错误提示由 hook 统一 toast）
+            },
+        );
+    };
+
+    /* 管理范围 = 迁移播种的默认受保护全集（DEFAULT_PROTECTED_CODES）：普通可授权
+     * 权限不在此列；解锁后仍留在列表中可随时重新加锁 */
+    const protectedMenus = MENU_CATALOG.filter(menu => DEFAULT_PROTECTED_CODES.has(`menu:${menu.key}`));
+    const protectedActionGroups = Object.keys(ACTION_CATALOG).filter(menu =>
+        (actionsOf(menu) ?? []).some(action => DEFAULT_PROTECTED_CODES.has(`${menu}:${action.id}`)),
+    );
+
+    return (
+        <section className="overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
+            <div className="border-b border-line bg-linear-to-b from-surface to-panel px-5 py-4">
+                <h2 className="text-15 font-semibold text-ink">受保护权限</h2>
+                <p className="mt-1 text-13 leading-5 text-subtle">
+                    受保护权限默认仅超级管理员持有。解锁后可在「角色与权限」授予其他角色；重新加锁将立即收回全部已授角色（无需其重新登录）。该开关仅超级管理员可操作，不随「用户与角色管理」下放。
+                </p>
+            </div>
+            {isLoading ? (
+                <p className="px-5 py-4 text-13 text-subtle">加载中…</p>
+            ) : (
+                <div className="flex flex-col gap-5 p-5">
+                    <div>
+                        <h3 className="mb-2.5 text-14 font-semibold text-ink">菜单</h3>
+                        <div className="flex flex-col rounded-xl border border-line bg-panel px-3 py-2">
+                            {protectedMenus.map(menu => (
+                                <div key={menu.key}>
+                                    <ProtectionToggleRow
+                                        label={menu.label}
+                                        code={`menu:${menu.key}`}
+                                        locked={lockedOf(`menu:${menu.key}`)}
+                                        onToggle={requestToggle}
+                                    />
+                                    {(menu.children ?? [])
+                                        .filter(child => DEFAULT_PROTECTED_CODES.has(`menu:${child.key}`))
+                                        .map(child => (
+                                            <div
+                                                key={child.key}
+                                                className="ml-6.5 border-l border-dashed border-line pl-1.5"
+                                            >
+                                                <ProtectionToggleRow
+                                                    label={child.label}
+                                                    code={`menu:${child.key}`}
+                                                    locked={lockedOf(`menu:${child.key}`)}
+                                                    onToggle={requestToggle}
+                                                />
+                                            </div>
+                                        ))}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div>
+                        <h3 className="mb-2.5 text-14 font-semibold text-ink">操作（按钮 / 动作级）</h3>
+                        <div className="flex flex-col rounded-xl border border-line bg-panel px-3 py-2">
+                            {protectedActionGroups.map(menuKey => {
+                                const menuDef = MENU_CATALOG.find(menu => menu.key === menuKey);
+                                const actions = (actionsOf(menuKey) ?? []).filter(action =>
+                                    DEFAULT_PROTECTED_CODES.has(`${menuKey}:${action.id}`),
+                                );
+                                return (
+                                    <div
+                                        key={menuKey}
+                                        className="border-b border-dashed border-line py-1.5 last:border-b-0"
+                                    >
+                                        <div className="flex items-center gap-2 px-2 py-1 text-13 font-semibold text-ink">
+                                            <Icon name={menuDef?.icon ?? "grid"} size={14} className="text-muted" />
+                                            {menuDef?.label ?? menuKey}
+                                        </div>
+                                        {actions.map(action => (
+                                            <ProtectionToggleRow
+                                                key={action.id}
+                                                label={action.label}
+                                                code={`${menuKey}:${action.id}`}
+                                                locked={lockedOf(`${menuKey}:${action.id}`)}
+                                                onToggle={requestToggle}
+                                            />
+                                        ))}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <ProtectionLogPanel />
+                </div>
+            )}
+
+            <Modal
+                open={pending !== null}
+                onClose={() => setPending(null)}
+                title={pending ? (pending.next ? `加锁【${pending.label}】` : `解锁【${pending.label}】`) : ""}
+                subtitle={
+                    pending?.next
+                        ? "加锁后仅超级管理员持有该权限，所有角色已获授权立即收回。"
+                        : "解锁后可在「角色与权限」将该权限授予其他角色。"
+                }
+                label="受保护权限"
+                width={480}
+                footer={
+                    <>
+                        <Button variant="secondary" onClick={() => setPending(null)}>
+                            取消
+                        </Button>
+                        <Button
+                            variant={pending?.next ? "danger" : "primary"}
+                            disabled={setProtection.isPending}
+                            onClick={confirm}
+                        >
+                            {pending?.next ? "确认加锁" : "确认解锁"}
+                        </Button>
+                    </>
+                }
+            >
+                <div className="flex flex-col gap-3 py-1">
+                    <div className="flex items-center gap-2 rounded-lg bg-soft px-3 py-2 text-13 text-td">
+                        <Icon name="shield" size={14} className="shrink-0 text-muted" />
+                        <span className="tnum">{pending?.code}</span>
+                    </div>
+                    <TextArea
+                        label="原因（选填，记入保护开关日志）"
+                        rows={3}
+                        maxLength={500}
+                        value={reason}
+                        onChange={event => setReason(event.target.value)}
+                    />
+                </div>
+            </Modal>
         </section>
     );
 }

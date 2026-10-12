@@ -28,7 +28,14 @@ describe("备份分组目录", () => {
         expect([...tables]).toEqual(["biz_sequence"]);
         const usersTables = closureTables(["users"]);
         expect([...usersTables].sort()).toEqual(
-            ["sys_role", "sys_user", "sys_grant", "sys_grant_log", "sys_user_change_log"].sort(),
+            [
+                "sys_role",
+                "sys_user",
+                "sys_grant",
+                "sys_grant_log",
+                "sys_user_change_log",
+                "sys_permission_change_log",
+            ].sort(),
         );
     });
     it("完整备份判定：目录全集动态计算", () => {

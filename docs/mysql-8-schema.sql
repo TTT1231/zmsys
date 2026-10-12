@@ -174,8 +174,8 @@ INSERT INTO sys_permission (code, kind, menu_key, action_id, label, protected) V
     ('outbound:delete', 'ACTION', 'outbound', 'delete', '删除出库记录', 0),
     ('permissions:view', 'ACTION', 'permissions', 'view', '查看', 1),
     ('permissions:manage', 'ACTION', 'permissions', 'manage', '用户与角色管理', 1),
-    ('menu:system-backup', 'MENU', 'system-backup', NULL, '备份', 0),
-    ('menu:system-restore', 'MENU', 'system-restore', NULL, '恢复', 0),
+    ('menu:system-backup', 'MENU', 'system-backup', NULL, '备份', 1),
+    ('menu:system-restore', 'MENU', 'system-restore', NULL, '恢复', 1),
     ('system-backup:run', 'ACTION', 'system-backup', 'run', '执行备份', 1),
     ('system-restore:run', 'ACTION', 'system-restore', 'run', '执行恢复', 1),
     ('system-logs:view', 'ACTION', 'system-logs', 'view', '查看', 1);
@@ -290,6 +290,29 @@ CREATE TABLE sys_grant_log (
     ),
     CONSTRAINT ck_sys_grant_log_before CHECK (JSON_TYPE(before_json) = 'OBJECT'),
     CONSTRAINT ck_sys_grant_log_after CHECK (JSON_TYPE(after_json) = 'OBJECT')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- 权限保护开关日志（db-scheme.md §3.6）：解锁/加锁各写一行；加锁时
+-- cleaned_grants 记录同事务清理的该码 sys_grant 行数
+CREATE TABLE sys_permission_change_log (
+    id BIGINT NOT NULL,
+    operator_id BIGINT NOT NULL,
+    permission_code VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    before_protected TINYINT UNSIGNED NOT NULL,
+    after_protected TINYINT UNSIGNED NOT NULL,
+    cleaned_grants INT UNSIGNED NOT NULL DEFAULT 0,
+    reason VARCHAR(500) NOT NULL DEFAULT '',
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    KEY idx_sys_permission_change_log_perm_time (permission_code, created_at DESC),
+    KEY idx_sys_permission_change_log_operator_time (operator_id, created_at DESC),
+    CONSTRAINT fk_sys_permission_change_log_operator FOREIGN KEY (operator_id) REFERENCES sys_user (id)
+        ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_sys_permission_change_log_permission FOREIGN KEY (permission_code) REFERENCES sys_permission (code)
+        ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT ck_sys_permission_change_log_values CHECK (
+        before_protected IN (0, 1) AND after_protected IN (0, 1) AND after_protected <> before_protected
+    )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE bom_category (

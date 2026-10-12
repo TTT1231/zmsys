@@ -287,14 +287,39 @@ export interface LoginResult {
     user: WbUser;
 }
 
-/** 登录用户 + 其角色的授权（对应 sys_grant 按 role 下发） */
+/** 登录用户 + 其角色的授权（对应 sys_grant 按 role 下发）；
+ *  protectedCodes 为当前受保护权限码（运行时真源，侧边栏标签等展示口径用） */
 export interface ProfileResult {
     user: WbUser;
     grant: RoleGrant;
+    protectedCodes?: string[];
 }
 
 /** 授权变更日志条目 */
 export interface GrantLogEntry {
+    time: string;
+    user: string;
+    text: string;
+}
+
+/** 权限目录条目（GET /permissions/catalog）：protected 为运行时受保护状态 */
+export interface PermissionCatalogEntry {
+    code: string;
+    kind: "MENU" | "ACTION";
+    menuKey: string;
+    actionId: string | null;
+    label: string;
+    protected: boolean;
+}
+
+/** PATCH /permissions/catalog/:code/protected 入参（仅 super 角色） */
+export interface SetPermissionProtectionInput {
+    protected: boolean;
+    reason?: string;
+}
+
+/** 保护开关审计条目（与 GrantLogEntry 同形态，文案服务端拼装） */
+export interface ProtectionLogEntry {
     time: string;
     user: string;
     text: string;
