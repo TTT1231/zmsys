@@ -168,8 +168,8 @@ export function LoginPage() {
             </aside>
 
             {/* 表单区：vben 式平铺面板（无卡片），移动端顺接横幅下方，桌面端垂直居中 */}
-            <main className="relative flex flex-1 justify-center bg-surface px-6 pt-10 pb-[max(2.5rem,env(safe-area-inset-bottom))] lg:items-center lg:px-8 lg:py-10">
-                <div key={view} className="w-full max-w-md animate-rise">
+            <main className="relative flex flex-1 justify-center bg-canvas px-6 pt-10 pb-[max(2.5rem,env(safe-area-inset-bottom))] lg:items-center lg:px-8 lg:py-10">
+                <div key={view} className="login-flow w-full max-w-md animate-rise p-6">
                     {view === "login" ? (
                         <>
                             <div className="mb-7">

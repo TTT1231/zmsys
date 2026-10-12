@@ -1435,3 +1435,62 @@ html.dark .login-captcha-text {
         background-position: -200% 0%;
     }
 }
+
+/* ── 登录卡片流光边框：超大锥形渐变层（line 色基线环 + 主色→accent 光束头）绕卡心匀速旋转，
+   内衬层相对 padding box（此处无边框 = 卡外缘）内缩 1px 盖住中部，只留 1px 环缝露出光束。
+   两个伪元素都挂负 z 沉到内容之下（配合 isolation 形成独立层叠上下文），内容无需再包一层；
+   transform 合成器动画逐帧零重绘，光束色取主题令牌（预设切换/暗色自动跟随）；
+   reduced-motion 下停转并退化为静态 line 色细环 ── */
+.login-flow {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+}
+
+.login-flow::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    z-index: -2;
+    /* 250% 方形保证任意卡片比例/字号缩放下旋转全程盖住四角（需 ≥ 对角线/边长） */
+    width: 250%;
+    aspect-ratio: 1;
+    translate: -50% -50%;
+    background: conic-gradient(
+        from 0deg,
+        var(--color-line),
+        var(--color-line) 296deg,
+        color-mix(in srgb, var(--color-primary) 40%, var(--color-line)) 320deg,
+        var(--color-primary) 342deg,
+        var(--color-accent) 354deg,
+        var(--color-line)
+    );
+    animation: login-flow-spin 6s linear infinite;
+    pointer-events: none;
+}
+
+.login-flow::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 1px;
+    border-radius: calc(var(--radius-card) - 1px);
+    background: var(--color-surface);
+    pointer-events: none;
+}
+
+@keyframes login-flow-spin {
+    to {
+        transform: rotate(1turn);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .login-flow::before {
+        animation: none;
+        background: var(--color-line);
+    }
+}
