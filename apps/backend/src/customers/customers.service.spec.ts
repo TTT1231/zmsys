@@ -37,8 +37,11 @@ const mkUser = (overrides: Partial<SysUser>): SysUser =>
         ...overrides,
     }) as SysUser;
 
-/** 客户行 + service 期望的 owner 关联（内存实现直接把 owner 挂在行上） */
-type CustomerRow = CustomTable & { owner: Pick<SysUser, "id" | "name" | "account"> };
+/** 客户行 + service 期望的 owner/creator 关联（内存实现直接把关联挂在行上） */
+type CustomerRow = CustomTable & {
+    owner: Pick<SysUser, "id" | "name" | "account">;
+    creator: Pick<SysUser, "id" | "name" | "account">;
+};
 
 const mkCustomer = (id: bigint, ownerId: bigint, overrides: Partial<CustomerRow> = {}): CustomerRow => {
     const owner = mkUser({ id: ownerId, account: `sales${ownerId}`, name: `销售${ownerId}`, roleCode: "sales" });
@@ -62,6 +65,8 @@ const mkCustomer = (id: bigint, ownerId: bigint, overrides: Partial<CustomerRow>
         createdAt: new Date(Date.UTC(2026, 8, 1)),
         updatedAt: new Date(),
         owner: { id: owner.id, name: owner.name, account: owner.account },
+        // createdBy 恒为 1n：对应固定创建人「郭均」（与 actor 一致）
+        creator: { id: 1n, name: "郭均", account: "guojun" },
         ...overrides,
     };
 };
@@ -140,10 +145,17 @@ const createStore = (store: Store) => {
             findMany: vi.fn(async () => [...store.customers]),
             create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
                 const owner = [...store.users.values()].find(u => u.id === data.ownerId)!;
+                // 创建人即操作者；store 常缺 id=1 的种子用户，缺省回退固定「郭均」
+                const creator = ([...store.users.values()].find(u => u.id === data.createdBy) ?? {
+                    id: data.createdBy as bigint,
+                    name: "郭均",
+                    account: "guojun",
+                }) as Pick<SysUser, "id" | "name" | "account">;
                 const created = {
                     ...data,
                     rowVersion: 1n,
                     owner: { id: owner.id, name: owner.name, account: owner.account },
+                    creator,
                 } as unknown as CustomerRow;
                 store.customers.push(created);
                 return created;
@@ -262,8 +274,9 @@ describe("CustomersService.listCustomers", () => {
             cooperation: "合作中",
             owner: "销售200",
             ownerAccount: "sales200",
+            createdBy: "郭均",
             district: "",
-            created: "2026-09-01",
+            created: "2026-09-01T00:00:00.000Z",
         });
         expect(list[1].cooperation).toBe("待跟进");
     });
@@ -371,6 +384,7 @@ describe("CustomersService.createCustomer", () => {
             phone: "138****1111",
             cooperation: "待跟进",
             ownerAccount: "sales01",
+            createdBy: "郭均",
         });
         expect(store.customers).toHaveLength(1);
         expect(store.customers[0].contactPhone).toBe("13800001111");
