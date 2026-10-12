@@ -180,6 +180,12 @@ INSERT INTO sys_permission (code, kind, menu_key, action_id, label, protected) V
     ('system-restore:run', 'ACTION', 'system-restore', 'run', '执行恢复', 1),
     ('system-logs:view', 'ACTION', 'system-logs', 'view', '查看', 1);
 
+-- BOM 结构在线维护（db-scheme.md §5.4）：超管专属，protected=1 且不播普通角色 BOOTSTRAP 行
+INSERT INTO sys_permission (code, kind, menu_key, action_id, label, protected) VALUES
+    ('menu:bom-structure', 'MENU', 'bom-structure', NULL, 'BOM 结构', 1),
+    ('bom-structure:view', 'ACTION', 'bom-structure', 'view', '查看BOM结构', 1),
+    ('bom-structure:manage', 'ACTION', 'bom-structure', 'manage', '维护BOM结构', 1);
+
 CREATE TABLE sys_grant (
     role_code VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     permission_code VARCHAR(80) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -332,7 +338,8 @@ UPDATE bom_category SET status = 0 WHERE id IN (1008, 1009);
 
 -- 物料目录节点：分区（SECTION，仅展示与折叠、不挂物料）或分组（GROUP，挂可选物料）。
 -- 分组 key 为稳定标识（model 用于型号派生）；qty=1 的分组选中项可携带 1-99 数量
--- （如琴键开关的扣板/连锁片/静片/动片），其余分组数量恒 1；目录修改只走迁移（不可变边界见 db-scheme.md §5）。
+-- （如琴键开关的扣板/连锁片/静片/动片），其余分组数量恒 1；目录结构变更走迁移或
+-- 超管在线维护（POST /bom-structure/*，生效口径见 db-scheme.md §5.4）。
 CREATE TABLE material_group (
     id BIGINT NOT NULL,
     category_id BIGINT NOT NULL,
@@ -1261,7 +1268,8 @@ CREATE TABLE op_log (
         'create_inbound', 'void_inbound', 'delete_inbound',
         'void_outbound', 'delete_outbound',
         'create_bom', 'update_customer',
-        'db_backup', 'db_restore'
+        'db_backup', 'db_restore',
+        'create_bom_category', 'update_bom_structure'
     ) NOT NULL,
     target_type VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     target_id BIGINT NOT NULL,

@@ -47,6 +47,9 @@ export class AccessControlService {
             where: { roleCode },
             include: { permission: true },
         });
-        return grants.map(grant => grant.permission);
+        // 受保护权限码与 jwt.strategy 的权限集同口径过滤：库里脏授权行（迁移写错/
+        // 直改库）不进入 profile 下发——否则侧边栏/路由显示可访问而 API 实为 403。
+        // super 分支保持全量；roles.getGrantMap（超管举证视角）也不过滤。
+        return grants.map(grant => grant.permission).filter(permission => !permission.isProtected);
     }
 }

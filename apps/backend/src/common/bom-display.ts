@@ -5,7 +5,10 @@
  * 目录——目录后续改名、排序调整或停用都不影响已建 BOM 与订单冻结快照。
  */
 
-/** 契约 BomCatalogNode（openapi boms tag）：分区为纯展示树节点，分组挂可选物料 */
+/** 契约 BomCatalogNode（openapi boms tag）：分区为纯展示树节点，分组挂可选物料。
+ * 目录接口全量下发（含停用节点/物料，status=false 标记）——停用项仅供管理页展示
+ * 与历史归属匹配（bomComposition），新建 BOM 的可选集由消费方按「自身∧祖先启用」
+ * 过滤；启用节点省略 status 字段。 */
 export interface BomCatalogNode {
     id: string;
     parentId: string | null;
@@ -17,8 +20,10 @@ export interface BomCatalogNode {
     multi: boolean | null;
     /** 分组数量语义：true 时选中项可携带 1-99 数量（如扣板/静片）；分区为 null */
     qty: boolean | null;
+    /** false = 节点已隐藏（不可再选，历史归属仍匹配）；启用省略 */
+    status?: boolean;
     /** 分区恒为空数组 */
-    items: Array<{ id: string; name: string }>;
+    items: Array<{ id: string; name: string; /** false = 物料已隐藏；启用省略 */ status?: boolean }>;
 }
 
 /** 契约 BomItemView：GET /boms 的明细行（按建档 position 排序返回） */

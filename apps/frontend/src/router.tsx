@@ -11,6 +11,7 @@ import {
     ArchivedOrdersPage,
     BackupPage,
     BomPage,
+    BomStructurePage,
     CustomersPage,
     HomeRedirect,
     InboundPage,
@@ -52,6 +53,9 @@ export const router = createBrowserRouter([
                     { path: "/archived-orders", element: <ArchivedOrdersPage /> },
                     { path: "/customers", element: <CustomersPage /> },
                     { path: "/bom", element: <BomPage /> },
+                    /* BOM 结构（仅超管）：路径不以 /bom 开头——AppLayout 守卫按 startsWith
+                     * 匹配菜单，/bom-structure 会被 /bom 菜单抢先命中 */
+                    { path: "/product-structure", element: <BomStructurePage /> },
                     { path: "/inbound", element: <InboundPage /> },
                     { path: "/outbound", element: <OutboundPage /> },
                     { path: "/stock", element: <StockPage /> },

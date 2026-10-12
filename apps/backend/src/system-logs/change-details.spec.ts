@@ -376,3 +376,74 @@ describe("changesOfAdjustment / reasonText", () => {
         expect(reasonText(null)).toBeNull();
     });
 });
+
+describe("BOM 结构维护动作卡片", () => {
+    it("create_bom_category：品类名/编码前缀/目录结构关键事实", () => {
+        expect(
+            changesOfOpLog("create_bom_category", {
+                name: "新品类1",
+                categoryKey: "np1",
+                codePrefix: "NP1",
+                seqWidth: 3,
+                sections: 1,
+                groups: 2,
+                items: 5,
+            }),
+        ).toEqual([
+            { key: "name", label: "品类名称", before: null, after: "新品类1" },
+            { key: "codePrefix", label: "编码前缀", before: null, after: "NP1" },
+            { key: "structure", label: "目录结构", before: null, after: "1 分区 · 2 分组 · 5 物料" },
+        ]);
+    });
+
+    it("update_bom_structure：版本跃迁 + 变动节点前后值 + 隐藏引用提示；空操作为 null", () => {
+        expect(
+            changesOfOpLog("update_bom_structure", {
+                name: "旋转XK2",
+                rowVersionBefore: 3,
+                rowVersionAfter: 4,
+                operations: [
+                    { nodeType: "group", nodeId: "9001", name: "弹静片", added: true, after: { position: 3 } },
+                    {
+                        nodeType: "item",
+                        nodeId: "3051",
+                        name: "0-2",
+                        before: { status: true },
+                        after: { status: false },
+                    },
+                    {
+                        nodeType: "group",
+                        nodeId: "2008",
+                        name: "A面",
+                        before: { multi: true, qty: false },
+                        after: { multi: false, qty: false },
+                    },
+                    { nodeType: "item", nodeId: "3001", name: "0-1", before: { position: 2 }, after: { position: 1 } },
+                ],
+                hiddenUsage: 3,
+            }),
+        ).toEqual([
+            { key: "category", label: "品类", before: null, after: "旋转XK2" },
+            { key: "version", label: "目录版本", before: "3", after: "4" },
+            { key: "op-0", label: "变动 1", before: null, after: "分组「弹静片」新增" },
+            { key: "op-1", label: "变动 2", before: null, after: "物料「0-2」隐藏" },
+            { key: "op-2", label: "变动 3", before: null, after: "分组「A面」多选 → 单选" },
+            { key: "op-3", label: "变动 4", before: null, after: "物料「0-1」第 2 位 → 第 1 位" },
+            {
+                key: "hiddenUsage",
+                label: "隐藏物料引用",
+                before: null,
+                after: "仍被 3 行既有 BOM 明细引用（不影响旧档案）",
+            },
+        ]);
+        expect(changesOfOpLog("update_bom_structure", null)).toBeNull();
+        expect(
+            changesOfOpLog("update_bom_structure", {
+                name: "旋转XK2",
+                rowVersionBefore: 1,
+                rowVersionAfter: 2,
+                operations: [],
+            }),
+        ).toBeNull();
+    });
+});

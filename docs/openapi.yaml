@@ -35,6 +35,8 @@ tags:
       description: 客户档案与负责人候选
     - name: boms
       description: 成品/BOM 档案与后端规格目录
+    - name: bom-structure
+      description: BOM 结构在线维护（仅超管；品类/分区/分组/物料树的隐藏、排序、规则与新建品类，只影响之后新建的 BOM）
     - name: inbound
       description: 成品入库、当天修正和库存调整
     - name: outbound
@@ -336,8 +338,8 @@ paths:
         get:
             tags: [boms]
             operationId: listBomCategories
-            summary: 后端权威 BOM 品类与物料目录
-            description: 权限 `bom:view`。返回 9 行品类（7 个启用品类 + xk3-wire/xk3-plug 两个停用目录容器，status=false 下发供合并目录）及分区/分组/可选物料树；跌倒开关、旋转XK3 品类额外下发 childCategories 标记（建档时传子品类 key，该子品类完整物料目录并入校验，不引用任何已建 BOM）；前端不得自行决定有效品类、目录结构或编码前缀。
+            summary: 后端权威 BOM 品类与物料目录（全量含停用标记）
+            description: "权限 `bom:view`。品类集合 = 7 个启用品类 + xk3-wire/xk3-plug 两个停用目录容器（status=false 下发供合并目录）；品类内节点/物料全量下发——停用节点/物料带 `status: false` 标记（启用省略），仅供管理页展示与历史归属匹配（bomComposition），新建 BOM 的可选集由前端按「自身∧祖先启用」过滤、后端建档校验仍以启用目录为权威。每品类携带 rowVersion（目录整树乐观锁，结构维护保存时比对）。跌倒开关、旋转XK3 品类额外下发 childCategories 标记（建档时传子品类 key，该子品类完整物料目录并入校验，不引用任何已建 BOM）；前端不得自行决定有效品类、目录结构或编码前缀。"
             responses:
                 "200":
                     description: 成功
@@ -395,6 +397,53 @@ paths:
                 "400": { $ref: "#/components/responses/BadRequest" }
                 "403": { $ref: "#/components/responses/Forbidden" }
                 "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
+
+    /bom-structure/apply:
+        post:
+            tags: [bom-structure]
+            operationId: applyBomStructure
+            summary: 维护既有品类的目录结构（新增/隐藏/恢复/排序/规则）
+            description: 受保护权限 `bom-structure:manage`，仅 super。携带期望版本 expectedRowVersion 做乐观锁（与品类当前 row_version 不一致即 409「品类结构已被他人修改」）；服务端锁定本品类及结构伙伴品类（正/反向 child_categories 引用，id 升序）后重读校验：全树层级/无环/唯一性、复合目录伙伴 groupKey 冲突、编码前缀不涉及。operations 为顺序应用的操作序列（七态，草稿节点用 tempId 关联），单次至多 200 条且必须产生实际变更。生效口径：结构变更只影响保存后新建的 BOM；已保存 BOM 及关联订单、出入库记录不会自动补充或修改（隐藏不影响旧档案，旧 BOM 需要增加物料时请另建 BOM）。本次隐藏的物料仍被既有 BOM 明细引用时响应附带 hiddenUsageCount 行数提示（不阻断）。同幂等键同请求摘要重放原成功响应，同键异内容 409。
+            parameters:
+                - $ref: "#/components/parameters/IdempotencyKey"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/ApplyBomStructureInput" }
+            responses:
+                "200":
+                    description: 成功（新版本号）
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/BomStructureApplyResultEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
+
+    /bom-structure/categories:
+        post:
+            tags: [bom-structure]
+            operationId: createBomCategory
+            summary: 新建简单品类（名称 + 编码前缀 + 整棵草稿树）
+            description: 受保护权限 `bom-structure:manage`，仅 super。事务内锁定 bom_category 全部既有行（id 升序）串行化创建：校验品类名/编码前缀唯一，且前缀不得与既有前缀构成「前缀 + 纯数字尾差」的数字延长关系（XK2 与 XK21 拒绝；KW/KWO、XK3/XK3W 字母尾差合法——序列 padStart 不截断，数字延长会拼出相同 BOM 编码）。categoryKey 与分组 groupKey 由后端生成（isModel 标记型号组，品类内至多一个）。仅支持简单品类（不携带 child_categories）；整棵草稿树一次保存，成功后才对建档可见。v1 不开放品类改名、改 key/前缀、复合关系编辑与品类级停用。
+            parameters:
+                - $ref: "#/components/parameters/IdempotencyKey"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/CreateBomCategoryInput" }
+            responses:
+                "200":
+                    description: 成功（新品类）
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/BomStructureCategoryCreatedEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
                 "409": { $ref: "#/components/responses/Conflict" }
 
     /bom-stocks:
@@ -1558,7 +1607,7 @@ components:
         BomCatalogNode:
             type: object
             required: [id, parentId, kind, name, key, multi, qty, items]
-            description: 目录树节点；分区（section）为纯展示节点（不挂物料、不提供全选），分组（group）挂可选物料
+            description: 目录树节点；分区（section）为纯展示节点（不挂物料、不提供全选），分组（group）挂可选物料。目录接口全量下发：停用节点/物料带 status=false 标记（启用省略），停用项仅供管理页展示与历史归属匹配，不可再选（可选 = 自身∧祖先启用）
             properties:
                 id: { type: string }
                 parentId: { type: [string, "null"] }
@@ -1567,18 +1616,20 @@ components:
                 key: { type: [string, "null"], description: 分组稳定标识（model 用于型号派生）；分区为 null }
                 multi: { type: [boolean, "null"], description: 分组选择语义（false 单选 / true 多选）；分区为 null }
                 qty: { type: [boolean, "null"], description: 分组数量语义（true 时选中项可携带 1-99 数量，如琴键开关的扣板/连锁片/静片/动片）；分区为 null }
+                status: { type: boolean, description: 仅停用（隐藏）节点返回 false——整支对新建档不可选但历史归属仍匹配；启用省略 }
                 items:
                     type: array
                     description: 分区恒为空数组
-                    items: { type: object, required: [id, name], properties: { id: { type: string }, name: { type: string } } }
+                    items: { type: object, required: [id, name], properties: { id: { type: string }, name: { type: string }, status: { type: boolean, description: 仅停用（隐藏）物料返回 false；启用省略 } } }
 
         BomCategory:
             type: object
-            required: [key, name, codePrefix, groups]
+            required: [key, name, codePrefix, rowVersion, groups]
             properties:
                 key: { type: string }
                 name: { type: string }
                 codePrefix: { type: string }
+                rowVersion: { type: integer, minimum: 1, description: 品类目录整树乐观锁版本——任一分区/分组/物料/顺序/状态/规则变更在同事务 +1（结构维护保存携带期望值比对） }
                 seqWidth: { type: integer, minimum: 3, maximum: 8 }
                 status:
                     type: boolean
@@ -1588,6 +1639,94 @@ components:
                     items: { type: string }
                     description: 标记该品类建档必须传子品类 key（如跌倒开关的微动开关类型、旋转XK3 的焊线工艺），建档时将该子品类完整物料目录并入校验（不引用任何已建 BOM）；普通品类无此字段
                 groups: { type: array, items: { $ref: "#/components/schemas/BomCatalogNode" } }
+
+        StructureOperation:
+            type: object
+            additionalProperties: false
+            required: [type]
+            description: 单个结构操作（七态；targetId/groupId/parentId 兼容已存节点 id 与同批草稿 tempId）；按 type 的必填字段约束由服务层校验，缺字段返回 400
+            properties:
+                type: { type: string, enum: [add_section, add_group, add_item, hide, restore, reorder, set_rules] }
+                tempId: { type: string, maxLength: 64, description: 新增节点/物料的草稿标识（同批唯一，供后续操作引用） }
+                name: { type: string, maxLength: 64 }
+                parentId: { type: [string, "null"], description: add_group：null/省略 = 挂品类根；否则为已存分区 id 或同批草稿分区 tempId }
+                groupId: { type: string, description: add_item/set_rules：已存分组 id 或同批草稿分组 tempId }
+                multi: { type: boolean }
+                qty: { type: boolean }
+                isModel: { type: boolean, description: add_group 专属：标记为型号组（groupKey=model，品类内至多一个） }
+                targetType: { type: string, enum: [section, group, item] }
+                targetId: { type: string, description: hide/restore/reorder：已存节点/物料 id 或同批草稿 tempId }
+                direction: { type: string, enum: [up, down] }
+                items:
+                    type: array
+                    maxItems: 200
+                    description: add_group 专属：随组新建的物料
+                    items: { type: object, additionalProperties: false, required: [tempId, name], properties: { tempId: { type: string, maxLength: 64 }, name: { type: string, maxLength: 64 } } }
+
+        ApplyBomStructureInput:
+            type: object
+            additionalProperties: false
+            required: [categoryKey, expectedRowVersion, operations]
+            properties:
+                categoryKey: { type: string, maxLength: 40 }
+                expectedRowVersion: { type: integer, minimum: 1, description: 期望的品类目录版本（乐观锁），不一致即 409 }
+                operations:
+                    type: array
+                    minItems: 1
+                    maxItems: 200
+                    items: { $ref: "#/components/schemas/StructureOperation" }
+
+        BomStructureApplyResult:
+            type: object
+            required: [rowVersion]
+            properties:
+                rowVersion: { type: integer, description: 保存后的新目录版本 }
+                hiddenUsageCount: { type: integer, description: 本次隐藏的物料仍被既有 BOM 明细引用的总行数（提示不阻断——隐藏不影响旧档案） }
+
+        DraftItem:
+            type: object
+            additionalProperties: false
+            required: [tempId, name]
+            properties:
+                tempId: { type: string, maxLength: 64 }
+                name: { type: string, maxLength: 64 }
+
+        DraftNode:
+            type: object
+            additionalProperties: false
+            required: [kind, tempId, name]
+            description: 新建品类的草稿节点（平铺形态，tempId 关联分区父子与组内物料）；SECTION 纯展示，GROUP 挂根或分区（parentTempId），multi/qty 缺省按 false
+            properties:
+                kind: { type: string, enum: [SECTION, GROUP] }
+                tempId: { type: string, maxLength: 64 }
+                name: { type: string, maxLength: 64 }
+                parentTempId: { type: [string, "null"], description: GROUP 专属：所属分区 tempId；null/省略 = 挂品类根 }
+                multi: { type: boolean }
+                qty: { type: boolean }
+                isModel: { type: boolean, description: 型号组标记（groupKey=model，品类内至多一个） }
+                items: { type: array, maxItems: 200, items: { $ref: "#/components/schemas/DraftItem" } }
+
+        CreateBomCategoryInput:
+            type: object
+            additionalProperties: false
+            required: [name, codePrefix, groups]
+            properties:
+                name: { type: string, maxLength: 64 }
+                codePrefix: { type: string, pattern: "^[A-Z0-9]{1,16}$", description: BOM 编码前缀（1-16 位大写字母/数字）；不得与既有前缀构成数字延长关系 }
+                seqWidth: { type: integer, minimum: 3, maximum: 8, description: BOM 编码序号宽度，缺省 3 }
+                groups:
+                    type: array
+                    maxItems: 100
+                    items: { $ref: "#/components/schemas/DraftNode" }
+
+        BomStructureCategoryCreated:
+            type: object
+            required: [key, name, codePrefix, rowVersion]
+            properties:
+                key: { type: string, description: 后端生成的品类稳定 key }
+                name: { type: string }
+                codePrefix: { type: string }
+                rowVersion: { type: integer, description: 新品类初始版本恒 1 }
 
         BomItemView:
             type: object
@@ -1831,6 +1970,16 @@ components:
                 - $ref: "#/components/schemas/Envelope"
                 - type: object
                   properties: { code: { const: 0 }, data: { type: array, items: { $ref: "#/components/schemas/BomCategory" } }, message: { const: ok } }
+        BomStructureApplyResultEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/BomStructureApplyResult" }, message: { const: ok } }
+        BomStructureCategoryCreatedEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/BomStructureCategoryCreated" }, message: { const: ok } }
         BomStockEnvelope:
             allOf:
                 - $ref: "#/components/schemas/Envelope"

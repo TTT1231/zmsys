@@ -408,7 +408,7 @@ const createStore = (store: Store) => {
     const prisma = Object.assign(tx, {
         bomCategory: {
             // Object.assign 会覆盖 tx 侧同名面，事务内 deleteBom 的 by-id 查询与
-            // lockCategoryByName 的 by-name 查询共用同一实现
+            // lockCategoryTree 的 by-name/by-id 查询共用同一实现
             findUnique: tx.bomCategory.findUnique,
             findMany: vi.fn(
                 async ({
@@ -422,18 +422,17 @@ const createStore = (store: Store) => {
                         .filter(category => where?.status === undefined || category.status === where.status)
                         .map(category => ({
                             ...category,
-                            groups: category.groups
-                                .filter(group => group.status)
-                                .map(group => ({
-                                    ...group,
-                                    items:
-                                        include?.groups?.include?.items?.where?.status === undefined
-                                            ? group.items
-                                            : group.items.filter(
-                                                  item =>
-                                                      item.status === include!.groups!.include!.items!.where!.status,
-                                              ),
-                                })),
+                            // 目录读取契约：节点与物料全量返回（含停用）——停用过滤
+                            // 已上收到 orderedCatalogAll 的输出标记与建档侧 loadCatalog
+                            groups: category.groups.map(group => ({
+                                ...group,
+                                items:
+                                    include?.groups?.include?.items?.where?.status === undefined
+                                        ? group.items
+                                        : group.items.filter(
+                                              item => item.status === include!.groups!.include!.items!.where!.status,
+                                          ),
+                            })),
                         })),
             ),
         },
@@ -510,12 +509,12 @@ describe("BomsService", () => {
     });
 
     describe("listCategories", () => {
-        it("仅启用品类；分区/分组树、停用分区与停用物料不输出；seqWidth=3 省略", async () => {
+        it("品类集合不变；节点/物料全量下发且停用带 status:false；seqWidth=3 省略；rowVersion 恒下发", async () => {
             const { service } = mkService(store);
             const categories = await service.listCategories();
             expect(categories).toHaveLength(2);
             const rotary = categories[0]!;
-            expect(rotary).toMatchObject({ key: "rotary-switch", name: "旋转XK2", codePrefix: "XK2" });
+            expect(rotary).toMatchObject({ key: "rotary-switch", name: "旋转XK2", codePrefix: "XK2", rowVersion: 1 });
             expect(rotary).not.toHaveProperty("seqWidth");
             expect(rotary.groups.map(group => [group.kind, group.name, group.parentId])).toEqual([
                 ["group", "型号", null],
@@ -523,15 +522,29 @@ describe("BomsService", () => {
                 ["group", "弹簧", null],
                 ["group", "静片", null],
             ]);
-            expect(rotary.groups[1]!.items).toEqual([{ id: "3003", name: "0.2" }]);
+            // 停用物料照常下发（status:false 标记）：供管理页展示与历史归属匹配，可选集由消费方过滤
+            expect(rotary.groups[1]!.items).toEqual([
+                { id: "3003", name: "0.2" },
+                { id: "3004", name: "0.3", status: false },
+            ]);
             // 数量分组下发 qty=true，普通分组 qty=false，分区为 null
             expect(rotary.groups[3]).toMatchObject({ name: "静片", qty: true });
             expect(rotary.groups[0]).toMatchObject({ name: "型号", qty: false });
             const micro = categories[1]!;
             expect(micro.seqWidth).toBe(4);
-            expect(micro.groups.map(group => group.name)).toEqual(["PA66塑料", "底座", "五金件", "支架"]);
+            // 全量树序：停用分区及其子组照常下发（分区带 status:false），不因停用消失
+            expect(micro.groups.map(group => group.name)).toEqual([
+                "PA66塑料",
+                "底座",
+                "五金件",
+                "支架",
+                "停用分区",
+                "弹片",
+            ]);
             expect(micro.groups[0]).toMatchObject({ kind: "section", key: null, multi: null, items: [] });
             expect(micro.groups[3]).toMatchObject({ kind: "group", parentId: "2102", key: "bracket", multi: false });
+            expect(micro.groups[4]).toMatchObject({ kind: "section", status: false });
+            expect(micro.groups[5]).toMatchObject({ kind: "group", parentId: "2103" });
         });
     });
 
@@ -805,9 +818,12 @@ describe("BomsService", () => {
                 codePrefix: "XK2",
                 seqWidth: 3,
             });
-            // 品类行锁在建档事务内执行（db-scheme §2：BOM 新建锁品类与其序列表）
-            const calls = fresh.tx.$queryRaw.mock.calls as unknown as Array<[TemplateStringsArray]>;
-            const lockSql = calls.filter(call => /bom_category.*FOR UPDATE/s.test(String(call[0] ?? "")));
+            // 品类行锁在建档事务内执行（db-scheme §2：BOM 新建锁主品类与全部子品类行）。
+            // lockCategoryTree 经 lockRowsById 取锁——表名在 Prisma.raw 值里，须渲染后再匹配
+            const calls = fresh.tx.$queryRaw.mock.calls as unknown as Array<[TemplateStringsArray, ...unknown[]]>;
+            const lockSql = calls.filter(call =>
+                /bom_category.*FOR UPDATE/s.test(renderSql(call[0] ?? [], ...call.slice(1))),
+            );
             expect(lockSql.length).toBeGreaterThan(0);
         });
     });

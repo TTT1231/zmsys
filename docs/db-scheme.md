@@ -66,7 +66,9 @@
 | 订单删除           | 仅超级管理员；固定先锁 BOM，再锁订单；校验 `row_version`、累计已发为 0 且无任何出库单引用；同事务删除变更日志并写 `op_log`  |
 | 用户编辑/启停      | 锁目标用户；若销售离岗，按 id 顺序锁接任销售及其全部客户，批量移交、记录历史、更新用户必须同事务                            |
 | 角色授权           | 锁 `sys_role`；请求携带 `grant_version`；替换授权、写前后快照日志、版本 `+1` 同事务                                         |
-| BOM 新建           | 锁品类与其序列表；规范化规格、计算 SHA-256 指纹；唯一键防重复                                                               |
+| BOM 新建           | 锁主品类与 `child_categories` 全部子品类行（id 升序）后重读；锁内完成子选校验、目录校验、指纹判重与取号（序列行锁见 §1.3） |
+| BOM 结构维护       | 仅超级管理员；锁目标品类及其结构伙伴品类（正/反向 `child_categories` 引用，id 升序）后重读；校验 `row_version` 乐观锁、全树合法性与伙伴 groupKey 冲突；差分写入、`row_version+1`、同事务写 `op_log`（§5.4） |
+| BOM 品类新建       | 仅超级管理员；锁 `bom_category` 全部既有行（id 升序）串行化创建；校验名称/前缀唯一与编码前缀数字延长冲突（§5.4）；整树一次插入并写 `op_log` |
 | BOM 删除           | 仅超级管理员；锁 BOM 行；校验无订单引用且无入库/调整流水；同事务删除明细与主行并写 `op_log`                                 |
 | 入库新增/当天修改  | 按 id 升序锁修改前后的 BOM，再锁入库行；校验北京时间录入日、版本与修改后的库存，更新入库并写前后快照日志                    |
 | 跨日库存调整       | 仅超级管理员；锁 BOM，校验调整后库存非负，追加不可变的调整单                                                                |
@@ -114,7 +116,7 @@
 - 菜单码格式：`menu:<menuKey>`，如 `menu:orders`。
 - 动作码格式：`<menuKey>:<actionId>`，如 `outbound:ship`。
 - 勾选动作必须同时拥有其父菜单和对应 `view` 动作；保存时由服务端规范化并复核。
-- `(role_code, permission_code)` 为 `sys_grant` 主键。`permissions:view/manage`、`menu:permissions`、`menu:permissions-accounts`、`menu:permissions-roles`、`menu:permissions-matrix`、客户批量移交、订单删除、订单归档、订单归档回退、BOM 删除、跨日库存调整 `inbound:adjust`、跨天作废入库 `inbound:void-any-day`、`menu:system-logs`、`system-logs:view`、`system-backup:run` 与 `system-restore:run` 属于受保护权限，只允许 `super`。
+- `(role_code, permission_code)` 为 `sys_grant` 主键。`permissions:view/manage`、`menu:permissions`、`menu:permissions-accounts`、`menu:permissions-roles`、`menu:permissions-matrix`、客户批量移交、订单删除、订单归档、订单归档回退、BOM 删除、BOM 结构维护（`menu:bom-structure`、`bom-structure:view`、`bom-structure:manage`，§5.4）、跨日库存调整 `inbound:adjust`、跨天作废入库 `inbound:void-any-day`、`menu:system-logs`、`system-logs:view`、`system-backup:run` 与 `system-restore:run` 属于受保护权限，只允许 `super`。
 - `menu:system-backup` / `menu:system-restore` 在目录中为非受保护菜单码，但不播普通角色授权，前端也不提供勾选。备份目录、恢复预检/任务查询与实际执行端点均检查对应受保护的 `:run` 动作，单独持有菜单码不能调用这些接口；系统日志端点检查 `system-logs:view`。默认角色分布及权限矩阵显示口径见 [角色与权限](business/roles.md)。
 - 建表脚本直接播种四个普通角色的默认授权。初始行使用 `grant_source=BOOTSTRAP` 且 `granted_by=NULL`；此后所有界面修改必须使用 `grant_source=USER` 和真实操作人。`super` 不依赖授权行，服务端固定视为全量权限。归档订单菜单 `menu:archived-orders` 为普通菜单，四个普通角色默认可见（数据来自既有 `orders:view`，归档动作本身仍仅 `super`）。分析页菜单 `menu:analytics`（交付甘特图自工作台二级视图迁出）同为普通可授权菜单，但不播普通角色 BOOTSTRAP 行——默认仅超管可见，需要时由超管在界面勾选授予；交付数据取自 `GET /workbench/overview`（校验 `menu:workbench`）；业务关系图与 agent 共用只读 `GET /workbench/relations`（同时校验 `menu:analytics`、`menu:workbench`），按日期/订单状态/实体类型或业务编号聚合必要业务关系及人员姓名/角色，不暴露用户管理或联系方式。授予分析页的角色须同时保留工作台菜单。
 
@@ -149,7 +151,7 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 
 品类目录由后端提供（`bom_category`：稳定 key、显示名称、编码前缀、最小序号宽度、可空 `child_categories` JSON 数组），前端只能消费。已用品类前缀：旋转XK2 `XK2`、旋转XK3 `XK3`、新微动 `KW`、老微动 `KWO`、安全开关 `AQ`、跌倒开关 `KD`、琴键开关 `KQ`（编码如 `XK2001` / `KW001` / `KWO001` / `AQ001` / `KD001` / `KQ001`）；另有焊线 `XK3W`（xk3-wire）、插线 `XK3P`（xk3-plug）两个停用品类，仅作为旋转XK3 的焊线工艺目录容器（child_categories 引用），不出现在建档品类下拉。`child_categories` 标记变体品类：建档时先从列表中单选一个子品类，物料目录按 5.2 合并校验，不引用任何已建 BOM（跌倒开关 → `["new-micro-switch", "old-micro-switch"]` 选微动开关类型，旋转XK3 → `["xk3-wire", "xk3-plug"]` 选焊线工艺）。
 
-可选物料目录由三张表表达，目录修改只走数据库迁移并同步 mock 种子：
+可选物料目录由三张表表达。目录结构变更走两条通道：初始化/批量勘误走数据库迁移（并同步 mock 种子），日常维护（新增分区/分组/物料、排序、隐藏/恢复、规则调整、新建简单品类）走超管在线维护接口（§5.4）——两者都遵守同一「目录不可变边界」：
 
 - `material_group`：目录树节点。`kind=SECTION` 为分区（纯展示与折叠，只能为根节点、不挂物料、无 key/multi/qty，如“PA66塑料 / 五金件”）；`kind=GROUP` 为分组（挂可选物料），必须有稳定 `group_key`、`multi` 选择语义与 `qty` 数量语义——`multi=0` 单选（0/1 项，换选替换、可取消），`multi=1` 多选（可全选/清空）；`qty=1` 数量分组（选中项可携带 1-99 数量，前端呈 −/×N/+ 步进器，如琴键开关的扣板/连锁片/静片/动片），`qty=0` 恒为 1。分组可直接挂品类或挂同品类分区下；禁止跨品类挂接与超过两级的层级。分区停用后其下所有物料不可用于新建 BOM。`group_key='model'` 的分组选中项即 BOM 型号。
 - `material_item`：可选物料项（如“6.3支架：铜镀银”“二脚底座有CB（无挡脚）”），完整物料名逐项可选，不再组合。
@@ -171,6 +173,19 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
     - 删除事务先锁 BOM 行（订单新建与入库登记同样先锁 BOM，§2 锁序），校验通过后同事务删除该 BOM 全部 `bom_item`（外键 RESTRICT 要求先清理）与 `bom_table` 行，并写 `op_log(action=delete_bom)`，`detail_json` 保存删除前档案快照。
     - 删除与订单新建、入库登记竞争同一 BOM 行锁，先提交者生效，后提交者返回 409。BOM 建档后不可修改，无乐观锁版本。
 - 幂等与判重分开：同用户、同操作、同幂等键且请求摘要一致时重放原成功响应；同键不同请求内容返回 409。事务顺序：幂等检查 → 锁品类行 → 目录校验（含子品类合并）→ 集合判重 → 取号（品类前缀 + 至少 `seq_width` 位序号）→ 写 `bom_table` + `bom_item` 快照 → 落幂等响应。
+
+### 5.4 BOM 结构在线维护（仅超管）
+
+「业务导航 → BOM 结构」页面（路径 `/product-structure`，受保护菜单 `menu:bom-structure` + 动作 `bom-structure:view/manage`，仅 super）维护「新建 BOM 的可选目录」。**生效口径：结构变更只影响保存后新建的 BOM**——已保存 BOM（`bom_item` 冻结行）、订单快照、出入库与库存按建档冻结数据展示，不自动补充或修改；旧 BOM 需要增加物料时请另建 BOM（构成完全相同命中 `uk_bom_identity` 判重 409 并提示已有编码）。不选新增项的建档与旧档案指纹一致，这是零影响的硬保证。
+
+- **读取契约**：`GET /bom-categories` 全量下发节点/物料（停用带 `status:false` 标记，启用省略），供管理页展示与历史归属匹配（`bomComposition` 用全量 ID 集合判定复合分节，隐藏子件不退化为「系列待确认」）；每品类带 `rowVersion`（目录整树乐观锁）。新建 BOM 可选集由前端按「自身∧祖先启用」过滤、后端建档校验仍以启用目录（`loadCatalog`）为权威——隐藏项直调建档 API 返回 400。
+- **维护接口**（`POST /bom-structure/*`，`Idempotency-Key` 幂等）：
+    - `apply`：对既有品类按序应用操作序列（七态：add_section / add_group / add_item / hide / restore / reorder / set_rules，草稿节点用 tempId 关联，单次 ≤200 条且必须产生实际变更）。携带 `expectedRowVersion` 乐观锁，不一致 409。事务内锁定本品类及结构伙伴品类（正向 `child_categories` 子品类 + 反向被引用的主品类，id 升序）后重读——防两个超管并发改主/子品类各自通过键检查后交叉提交；随后全树校验（层级/无环/唯一/model 唯一——成环会让备份导出的根递归行数自检中止，必须写前拒绝）、复合伙伴 groupKey 冲突检查（新键生成已避开保留键，检查是纵深防御）、差分写入、`row_version+1`、同事务 `op_log(action=update_bom_structure)`（detail 含变动节点前后值：状态/规则/位置，只记差异不复制整树）。
+    - `categories`：新建简单品类（名称 + 编码前缀 + 整棵草稿树一次保存；`categoryKey` 与 `groupKey` 后端生成，`isModel` 标记型号组）。事务内锁 `bom_category` 全部既有行（id 升序）串行化创建，校验名称/前缀唯一与**编码前缀数字延长冲突**（一个前缀 + 纯数字尾差 = 另一前缀即拒绝，如 XK2/XK21；字母尾差 KW/KWO、XK3/XK3W 合法——序列 padStart 不截断，数字延长最终会拼出相同 BOM 编码，唯一键兜底为时已晚）；并发插入窗口由 uk + P2002→409 兜底。`biz_sequence` 行首次建档惰性初始化。
+- **边界（v1）**：不开放品类改名/改 key/改前缀、`child_categories` 复合关系编辑、品类级 `status` 切换、复合品类新建；已保存节点不做物理删除/重命名/移组（规格变化 = 新增 + 旧项隐藏，恢复沿用原 id）；隐藏父节点不级联改子节点状态（可选 = 自身∧祖先启用，恢复分区≠恢复子项）。
+- **审计与时间线**：`create_bom_category`（归一 create）、`update_bom_structure`（归一 edit）入 bom 域；系统日志「编辑」筛选含结构维护。隐藏物料仍被既有 BOM 明细引用时，apply 响应附 `hiddenUsageCount` 行数提示（不阻断——隐藏不影响旧档案）。
+
+
 
 ## 6. 销售订单
 
@@ -258,11 +273,11 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 
 ## 8. 日志与不可篡改性
 
-- `op_log` 为集中审计索引（横向："谁在何时对什么目标做了什么敏感操作"），按审计清单覆盖：登记发货（ship）、新建/更新客户、新建/删除订单、归档/回退归档订单、新建/删除 BOM、入库创建/作废/删除、出库作废/删除；这些日志与业务行同事务提交。`(action, target_id)` 为普通索引（`update_customer` 同目标可多条），重复记录由幂等层防重放兜底。
+- `op_log` 为集中审计索引（横向："谁在何时对什么目标做了什么敏感操作"），按审计清单覆盖：登记发货（ship）、新建/更新客户、新建/删除订单、归档/回退归档订单、新建/删除 BOM、BOM 品类创建/结构维护（§5.4）、入库创建/作废/删除、出库作废/删除；这些日志与业务行同事务提交。`(action, target_id)` 为普通索引（`update_customer` 同目标可多条），重复记录由幂等层防重放兜底。
 - 入库当天修改由 `inbound_change_log` 形成审计链；库存调整和出库冲销由追加事件本身形成记录；负责人移交和订单变更分别使用专表记录。`op_log` 快照自包含（含操作人姓名/角色快照），业务行被清理后仍可独立还原"删除时刻的单据终态 + 作废原因"。
 - 所有日志、库存调整和出库数量事件不提供人工 UPDATE/DELETE；入库只允许业务服务执行带当天窗口（或跨天作废权限）、版本和日志约束的 UPDATE，以及删除接口对 `VOIDED` 行的 `deleted_at` 标记 UPDATE。订单与出入库单由用户软删除，维护任务在保留期后清理；BOM 无引用时可由超级管理员物理删除，所有删除动作均在 `op_log` 留快照。
 - 操作日志保留 `operator_id`，同时保存操作发生时的姓名和角色快照，避免用户改名/改角色后历史展示变化。
-- **系统日志聚合端点（`GET /system-logs`，受保护权限 `system-logs:view` 仅 super）**：四来源 UNION ALL——`op_log`（14 种业务动作，含回退归档订单与离岗批量移交补写的 `update_customer`；备份/恢复的 `db_backup`、`db_restore` 虽写在同表，但不属于此业务时间线；`customer_owner_history` 仍作归属变更业务表保留但不进聚合）、`sales_order_change_log`（仅 UPDATE，CREATE/ARCHIVE 由 op_log 出，天然去重；订单物理清理时同事务先删日志，FK 保证无孤儿行）、`inbound_change_log`（仅 UPDATE）、`stock_adjustment`（adjust 动作，domain 归 inbound）。分批为 `(occurredAt, id)` 复合游标（业务先取 now 后生成雪花 id，并发事务中两者顺序可能倒置）。
+- **系统日志聚合端点（`GET /system-logs`，受保护权限 `system-logs:view` 仅 super）**：四来源 UNION ALL——`op_log`（16 种业务动作，含回退归档订单、离岗批量移交补写的 `update_customer` 与 BOM 结构维护的 `create_bom_category`/`update_bom_structure`；备份/恢复的 `db_backup`、`db_restore` 虽写在同表，但不属于此业务时间线；`customer_owner_history` 仍作归属变更业务表保留但不进聚合）、`sales_order_change_log`（仅 UPDATE，CREATE/ARCHIVE 由 op_log 出，天然去重；订单物理清理时同事务先删日志，FK 保证无孤儿行）、`inbound_change_log`（仅 UPDATE）、`stock_adjustment`（adjust 动作，domain 归 inbound）。分批为 `(occurredAt, id)` 复合游标（业务先取 now 后生成雪花 id，并发事务中两者顺序可能倒置）。
 - 历史身份漂移口径：op_log 来源展示操作时姓名/角色**快照**；change_log/调整来源的操作人 join `sys_user` 展示**当前**姓名与角色，随改名/改角色漂移属可接受（不加快照列，避免过度设计）。
 - 关键词按操作人姓名、目标编号、目标名称三项 LIKE。名称命中依赖快照存在——存量 `create_order`/`ship` 等旧日志无名称快照，按名称搜不到属预期降级（按编号/操作人仍可命中），不做历史回填；新事件（2026-09 起）写入时携带名称快照。
 - 系统日志对上述业务动作是当前留存策略下的全量覆盖：订单/入库的编辑明细日志随订单物理清理而消失，属有限留存而非永久历史审计。`sys_grant_log`/`sys_user_change_log`（权限域已有专页）、`outbound_state_log`（ship/void 已由 op_log 覆盖）及系统备份/恢复审计动作不进聚合。

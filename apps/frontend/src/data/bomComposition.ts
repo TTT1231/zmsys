@@ -22,7 +22,9 @@ const CHILD_KINDS: Record<string, ChildKind> = {
     跌倒开关: { section: "微动开关", row: "微动组件", empty: "未记录微动物料" },
 };
 
-/** 目录仅用于识别归属，展示仍使用建档快照；历史/歧义物料不推测系列、不丢弃。 */
+/** 目录仅用于识别归属，展示仍使用建档快照；历史/歧义物料不推测系列、不丢弃。
+ * 匹配集合是全量目录（含 status:false 停用项）——超管隐藏子件物料后，历史 BOM
+ * 的分节归属仍按建档时的目录成员判定，不退化为「系列待确认」。 */
 export function bomComposition(bom: Pick<Bom, "name" | "items">, categories: BomCategory[] = []) {
     const parent = categories.find(category => category.name === bom.name);
     const composite = !!parent?.childCategories?.length || bom.name === "跌倒开关";

@@ -49,6 +49,8 @@ const OP_LOG_DOMAIN: Record<TimelineOpLogAction, SystemLogDomain> = {
     update_customer: "customer",
     create_bom: "bom",
     delete_bom: "bom",
+    create_bom_category: "bom",
+    update_bom_structure: "bom",
     create_inbound: "inbound",
     void_inbound: "inbound",
     delete_inbound: "inbound",
@@ -67,6 +69,8 @@ const OP_LOG_ACTION: Record<TimelineOpLogAction, SystemLogAction> = {
     update_customer: "edit",
     create_bom: "create",
     delete_bom: "delete",
+    create_bom_category: "create",
+    update_bom_structure: "edit",
     create_inbound: "create",
     void_inbound: "void",
     delete_inbound: "delete",
@@ -245,7 +249,11 @@ export class SystemLogsService {
             return Prisma.sql`o.action = 'update_customer' AND JSON_TYPE(JSON_EXTRACT(o.detail_json, '$.ownerChanged')) = 'OBJECT'`;
         }
         if (action === "edit") {
-            return Prisma.sql`o.action = 'update_customer' AND (JSON_EXTRACT(o.detail_json, '$.ownerChanged') IS NULL OR JSON_TYPE(JSON_EXTRACT(o.detail_json, '$.ownerChanged')) <> 'OBJECT')`;
+            // 结构维护（update_bom_structure）归一为 edit：须与客户编辑一并纳入筛选，
+            // 否则时间线「全部」可见而「编辑」筛选漏项
+            return Prisma.sql`(o.action = 'update_bom_structure'
+                OR (o.action = 'update_customer' AND (JSON_EXTRACT(o.detail_json, '$.ownerChanged') IS NULL
+                    OR JSON_TYPE(JSON_EXTRACT(o.detail_json, '$.ownerChanged')) <> 'OBJECT')))`;
         }
         return Prisma.sql`o.action IN (${Prisma.raw(actionsOfType(action))})`;
     }

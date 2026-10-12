@@ -61,6 +61,16 @@ export const MENU_CATALOG: MenuNode[] = [
     },
     { key: "customers", label: "客户档案", icon: "contacts", group: "业务导航", to: "/customers" },
     { key: "bom", label: "物料与 BOM", icon: "bom", group: "业务导航", to: "/bom" },
+    /* BOM 结构：超管专属的目录在线维护（隐藏/新增/排序/规则/新建品类），只影响
+     * 之后新建的 BOM；路径避开 /bom 前缀（AppLayout 路由守卫为 startsWith 匹配） */
+    {
+        key: "bom-structure",
+        label: "BOM 结构",
+        icon: "cube",
+        group: "业务导航",
+        to: "/product-structure",
+        protected: true,
+    },
     { key: "inbound", label: "成品入库", icon: "inbound", group: "业务导航", to: "/inbound" },
     { key: "outbound", label: "成品出库", icon: "outbound", group: "业务导航", to: "/outbound" },
     { key: "stock", label: "库存", icon: "stock", group: "业务导航", to: "/stock" },
@@ -133,6 +143,10 @@ export const ACTION_CATALOG = {
         { id: "view", label: "查看" },
         { id: "create", label: "新建BOM" },
         { id: "delete", label: "删除BOM", protected: true },
+    ],
+    "bom-structure": [
+        { id: "view", label: "查看", protected: true },
+        { id: "manage", label: "维护结构", protected: true },
     ],
     inbound: [
         { id: "view", label: "查看台账" },

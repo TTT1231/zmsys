@@ -13,6 +13,7 @@ import { UsersModule } from "./users/users.module";
 import { CustomersModule } from "./customers/customers.module";
 import { OrdersModule } from "./orders/orders.module";
 import { BomsModule } from "./boms/boms.module";
+import { BomStructureModule } from "./bom-structure/bom-structure.module";
 import { InboundModule } from "./inbound/inbound.module";
 import { OutboundModule } from "./outbound/outbound.module";
 import { MaintenanceModule } from "./maintenance/maintenance.module";
@@ -43,6 +44,7 @@ import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
         CustomersModule,
         OrdersModule,
         BomsModule,
+        BomStructureModule,
         InboundModule,
         OutboundModule,
         MaintenanceModule,
