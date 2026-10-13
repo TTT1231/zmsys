@@ -17,11 +17,11 @@ const ACTOR: AuthUser = {
 };
 
 const PERMISSION = {
-    code: "menu:system-logs",
+    code: "menu:system-backup",
     kind: "MENU" as const,
     menuKey: "system-logs",
     actionId: null,
-    label: "系统日志",
+    label: "备份",
     isProtected: true,
 };
 
@@ -61,7 +61,7 @@ describe("PermissionCatalogService.setProtection", () => {
 
     it("受保护状态未变化返回 400 且零写入", async () => {
         const { service, prisma } = createService(PERMISSION);
-        await expect(service.setProtection("menu:system-logs", { protected: true }, ACTOR)).rejects.toThrow(
+        await expect(service.setProtection("menu:system-backup", { protected: true }, ACTOR)).rejects.toThrow(
             new BadRequestException("受保护状态未变化"),
         );
         expect(prisma.sysPermission.update).not.toHaveBeenCalled();
@@ -73,11 +73,11 @@ describe("PermissionCatalogService.setProtection", () => {
     it("解锁：更新标志、不清理授权行、全角色递增 grant_version、写审计日志", async () => {
         const { service, prisma } = createService(PERMISSION);
         const result = await service.setProtection(
-            "menu:system-logs",
+            "menu:system-backup",
             { protected: false, reason: "下放给管理员" },
             ACTOR,
         );
-        expect(result).toMatchObject({ code: "menu:system-logs", protected: false });
+        expect(result).toMatchObject({ code: "menu:system-backup", protected: false });
         expect(prisma.sysPermission.update).toHaveBeenCalledWith(
             expect.objectContaining({ data: { isProtected: false } }),
         );
@@ -87,7 +87,7 @@ describe("PermissionCatalogService.setProtection", () => {
         expect(prisma.sysPermissionChangeLog.create).toHaveBeenCalledWith(
             expect.objectContaining({
                 data: expect.objectContaining({
-                    permissionCode: "menu:system-logs",
+                    permissionCode: "menu:system-backup",
                     beforeProtected: true,
                     afterProtected: false,
                     cleanedGrants: 0,
@@ -99,9 +99,9 @@ describe("PermissionCatalogService.setProtection", () => {
 
     it("加锁：同事务清理该码全部授权行并记录清理数", async () => {
         const { service, prisma } = createService({ ...PERMISSION, isProtected: false }, 2);
-        const result = await service.setProtection("menu:system-logs", { protected: true }, ACTOR);
-        expect(result).toMatchObject({ code: "menu:system-logs", protected: true });
-        expect(prisma.sysGrant.deleteMany).toHaveBeenCalledWith({ where: { permissionCode: "menu:system-logs" } });
+        const result = await service.setProtection("menu:system-backup", { protected: true }, ACTOR);
+        expect(result).toMatchObject({ code: "menu:system-backup", protected: true });
+        expect(prisma.sysGrant.deleteMany).toHaveBeenCalledWith({ where: { permissionCode: "menu:system-backup" } });
         expect(prisma.sysPermissionChangeLog.create).toHaveBeenCalledWith(
             expect.objectContaining({
                 data: expect.objectContaining({ beforeProtected: false, afterProtected: true, cleanedGrants: 2 }),
@@ -118,7 +118,7 @@ describe("PermissionCatalogService.listChangeLogs", () => {
                     {
                         id: 2n,
                         operatorId: 1n,
-                        permissionCode: "menu:system-logs",
+                        permissionCode: "menu:system-backup",
                         beforeProtected: true,
                         afterProtected: false,
                         cleanedGrants: 0,
@@ -128,7 +128,7 @@ describe("PermissionCatalogService.listChangeLogs", () => {
                 ]),
             },
             sysUser: { findMany: vi.fn().mockResolvedValue([{ id: 1n, name: "郭均" }]) },
-            sysPermission: { findMany: vi.fn().mockResolvedValue([{ code: "menu:system-logs", label: "系统日志" }]) },
+            sysPermission: { findMany: vi.fn().mockResolvedValue([{ code: "menu:system-backup", label: "备份" }]) },
             $transaction: vi.fn(),
         } as unknown as PrismaService;
         const service = new PermissionCatalogService(
@@ -139,6 +139,6 @@ describe("PermissionCatalogService.listChangeLogs", () => {
         const logs = await service.listChangeLogs();
         expect(logs).toHaveLength(1);
         expect(logs[0].user).toBe("郭均");
-        expect(logs[0].text).toBe("权限【系统日志】已解锁，可授予其他角色；原因：下放给管理员");
+        expect(logs[0].text).toBe("权限【备份】已解锁，可授予其他角色；原因：下放给管理员");
     });
 });

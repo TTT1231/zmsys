@@ -103,7 +103,7 @@ const EMPTY_ARM = Prisma.sql`SELECT NULL AS id, NULL AS created_at, NULL AS acto
     NULL AS qty_delta, NULL AS related_no FROM DUAL WHERE FALSE`;
 
 /**
- * 系统日志聚合查询（契约 system-logs:view，仅 super）：四来源 UNION ALL——
+ * 系统日志聚合查询（契约 system-logs:view，可授权动作码，默认仅超管）：四来源 UNION ALL——
  * op_log（14 种业务动作；db_backup/db_restore 为系统审计，不进入业务时间线；
  * customer 域唯一卡片源，离岗批量移交亦写 op_log）、
  * sales_order_change_log（仅 UPDATE；CREATE/ARCHIVE 由 op_log 出，天然去重；

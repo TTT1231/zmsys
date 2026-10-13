@@ -148,7 +148,7 @@ INSERT INTO sys_permission (code, kind, menu_key, action_id, label, protected) V
     ('menu:permissions-accounts', 'MENU', 'permissions-accounts', NULL, '账号管理', 1),
     ('menu:permissions-roles', 'MENU', 'permissions-roles', NULL, '角色与权限', 1),
     ('menu:permissions-matrix', 'MENU', 'permissions-matrix', NULL, '权限矩阵', 1),
-    ('menu:system-logs', 'MENU', 'system-logs', NULL, '系统日志', 1),
+    ('menu:system-logs', 'MENU', 'system-logs', NULL, '系统日志', 0),
     ('orders:view', 'ACTION', 'orders', 'view', '查看', 0),
     ('orders:create', 'ACTION', 'orders', 'create', '新建订单', 0),
     ('orders:edit', 'ACTION', 'orders', 'edit', '编辑订单', 0),
@@ -178,7 +178,7 @@ INSERT INTO sys_permission (code, kind, menu_key, action_id, label, protected) V
     ('menu:system-restore', 'MENU', 'system-restore', NULL, '恢复', 1),
     ('system-backup:run', 'ACTION', 'system-backup', 'run', '执行备份', 1),
     ('system-restore:run', 'ACTION', 'system-restore', 'run', '执行恢复', 1),
-    ('system-logs:view', 'ACTION', 'system-logs', 'view', '查看', 1);
+    ('system-logs:view', 'ACTION', 'system-logs', 'view', '查看', 0);
 
 -- BOM 结构在线维护（db-scheme.md §5.4）：超管专属，protected=1 且不播普通角色 BOOTSTRAP 行
 INSERT INTO sys_permission (code, kind, menu_key, action_id, label, protected) VALUES

@@ -3,6 +3,10 @@
  * 会真实解锁/加锁受保护码并保存 admin 授权（走完行锁 → 加锁清理授权行 →
  * 全角色版本递增 → 审计链路），afterAll 恢复默认受保护态与 admin 原授权；
  * ensureProtection 先读目录再切换，未重置库重跑亦安全。
+ * 解锁/加锁回路以「用户与权限」家族为样板（menu:permissions + permissions:view——
+ * 受保护码中唯一带 view 动作且守纯读端点 GET /permissions/catalog 的组合，可走通
+ * saveGrant 的「动作须同时含 view」目录不变量）；系统日志两码已经 20261013100000
+ * 迁移降为普通可授权码（无需解锁即可授予），另设用例覆盖。
  * 运行前置：pnpm test:db:reset（test:e2e 已串联）。
  */
 import "./db-guard";
@@ -14,8 +18,6 @@ import type { PermissionCatalogEntry, RoleGrant } from "../src/roles/types";
 
 /** 本用例动过受保护态的码全集（afterAll 兜底恢复默认加锁） */
 const TOUCHED_CODES = [
-    "menu:system-logs",
-    "system-logs:view",
     "menu:permissions",
     "menu:permissions-accounts",
     "menu:permissions-roles",
@@ -102,11 +104,15 @@ describe("权限目录与保护开关 (e2e)", () => {
 
     it("目录下发运行时受保护状态；profile 携带 protectedCodes；读取受 permissions:view 保护", async () => {
         const catalog = await getCatalog();
-        expect(catalog.find(item => item.code === "menu:system-logs")?.protected).toBe(true);
+        // 系统日志已降为普通可授权码；备份仍受保护
+        expect(catalog.find(item => item.code === "menu:system-logs")?.protected).toBe(false);
+        expect(catalog.find(item => item.code === "menu:system-backup")?.protected).toBe(true);
 
         const profile = await app.inject({ method: "GET", url: "/api/auth/profile", headers: superHeaders() });
         expect(profile.statusCode).toBe(200);
-        expect(profile.json().data.protectedCodes).toContain("menu:system-logs");
+        const protectedCodes: string[] = profile.json().data.protectedCodes;
+        expect(protectedCodes).not.toContain("menu:system-logs");
+        expect(protectedCodes).toContain("menu:system-backup");
 
         const staffRes = await app.inject({
             method: "GET",
@@ -116,21 +122,7 @@ describe("权限目录与保护开关 (e2e)", () => {
         expect(staffRes.statusCode).toBe(403);
     });
 
-    it("super 解锁 → 目录反映 + 审计记录解锁", async () => {
-        await ensureProtection("menu:system-logs", false, "e2e 解锁系统日志");
-        await ensureProtection("system-logs:view", false, "e2e 解锁系统日志查看");
-        expect((await getCatalog()).find(item => item.code === "menu:system-logs")?.protected).toBe(false);
-
-        const logRes = await app.inject({
-            method: "GET",
-            url: "/api/permissions/catalog/log",
-            headers: superHeaders(),
-        });
-        expect(logRes.statusCode).toBe(200);
-        expect(logRes.json().data[0].text).toContain("已解锁");
-    });
-
-    it("解锁后可授予其他角色（saveGrant 不再拒绝）", async () => {
+    it("系统日志为普通可授权码：无需解锁即可授予其他角色（saveGrant 直接放行）", async () => {
         const grant = await fetchGrant("admin");
         const res = await saveGrant(
             "admin",
@@ -160,13 +152,55 @@ describe("权限目录与保护开关 (e2e)", () => {
         expect(res.statusCode).toBe(200);
     });
 
-    it("重新加锁：同事务清理授权行，已登录角色立即 403（grant_version 递增失效缓存）", async () => {
-        await ensureProtection("system-logs:view", true, "e2e 重新加锁系统日志查看");
-        await ensureProtection("menu:system-logs", true, "e2e 重新加锁系统日志");
+    it("super 解锁用户与权限对 → 目录反映 + 审计记录解锁", async () => {
+        await ensureProtection("menu:permissions", false, "e2e 解锁用户与权限菜单");
+        await ensureProtection("permissions:view", false, "e2e 解锁用户与权限查看");
+        expect((await getCatalog()).find(item => item.code === "menu:permissions")?.protected).toBe(false);
 
-        expect((await fetchGrant("admin")).menus).not.toContain("system-logs");
+        const logRes = await app.inject({
+            method: "GET",
+            url: "/api/permissions/catalog/log",
+            headers: superHeaders(),
+        });
+        expect(logRes.statusCode).toBe(200);
+        expect(logRes.json().data[0].text).toContain("已解锁");
+    });
+
+    it("解锁后可授予其他角色（saveGrant 不再拒绝）", async () => {
+        const grant = await fetchGrant("admin");
+        const res = await saveGrant(
+            "admin",
+            {
+                version: grant.version,
+                menus: [...grant.menus, "permissions"],
+                actions: { ...grant.actions, permissions: ["view"] },
+            },
+            "e2e 授予用户与权限",
+        );
+        expect(res.statusCode).toBe(200);
+        expect((await fetchGrant("admin")).menus).toContain("permissions");
+    });
+
+    it("被授权角色真实可访问权限目录（只读探针，校验 permissions:view）", async () => {
+        const res = await app.inject({
+            method: "GET",
+            url: "/api/permissions/catalog",
+            headers: authHeaders(e2eAdminToken),
+        });
+        expect(res.statusCode).toBe(200);
+    });
+
+    it("重新加锁：同事务清理授权行，已登录角色立即 403（grant_version 递增失效缓存）", async () => {
+        await ensureProtection("permissions:view", true, "e2e 重新加锁用户与权限查看");
+        await ensureProtection("menu:permissions", true, "e2e 重新加锁用户与权限菜单");
+
+        expect((await fetchGrant("admin")).menus).not.toContain("permissions");
         // 旧 token 无需重登录：JwtStrategy 缓存按 grant_version 失效后即拒
-        const res = await app.inject({ method: "GET", url: "/api/system-logs", headers: authHeaders(e2eAdminToken) });
+        const res = await app.inject({
+            method: "GET",
+            url: "/api/permissions/catalog",
+            headers: authHeaders(e2eAdminToken),
+        });
         expect(res.statusCode).toBe(403);
 
         const logRes = await app.inject({
@@ -193,7 +227,7 @@ describe("权限目录与保护开关 (e2e)", () => {
         expect(staffRes.json().message).toBe("仅超级管理员可调整受保护权限");
 
         // 解锁用户与权限全家桶并授予 admin：admin 持 permissions:manage 后仍不能切换
-        for (const code of TOUCHED_CODES.slice(2)) {
+        for (const code of TOUCHED_CODES) {
             await ensureProtection(code, false, "e2e 解锁用户与权限（防提权用例）");
         }
         const grant = await fetchGrant("admin");
@@ -219,7 +253,7 @@ describe("权限目录与保护开关 (e2e)", () => {
         expect(adminRes.json().message).toBe("仅超级管理员可调整受保护权限");
 
         // 重新加锁：同事务清理自动收回 admin 的 permissions 系授权（自愈）
-        for (const code of TOUCHED_CODES.slice(2).reverse()) {
+        for (const code of [...TOUCHED_CODES].reverse()) {
             await ensureProtection(code, true, "e2e 清理：重新加锁用户与权限");
         }
         expect((await fetchGrant("admin")).menus).not.toContain("permissions");

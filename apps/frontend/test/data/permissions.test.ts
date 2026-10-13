@@ -119,11 +119,12 @@ describe("menuTagFor", () => {
     });
 
     it("labels protected system entries with the unified super-only tag", () => {
-        // 系统组统一「超管专属」口径：不套用只读/全部权限归并（矩阵超管列同款口径）
+        // 系统组受保护菜单统一「超管专属」口径：不套用只读/全部权限归并（矩阵超管列同款口径）
         expect(menuTagFor("permissions", grantOf("super"))).toBe("超管专属");
-        expect(menuTagFor("system-logs", grantOf("super"))).toBe("超管专属");
         expect(menuTagFor("system-backup", grantOf("super"))).toBe("超管专属");
         expect(menuTagFor("system-restore", grantOf("super"))).toBe("超管专属");
+        // 系统日志已降为普通可授权码：超管仅持 view 动作，按通用口径标「只读」
+        expect(menuTagFor("system-logs", grantOf("super"))).toBe("只读");
     });
 });
 
@@ -134,12 +135,10 @@ describe("DEFAULT_PROTECTED_CODES（兜底受保护全集 = 迁移播种默认�
             "menu:permissions-accounts",
             "menu:permissions-roles",
             "menu:permissions-matrix",
-            "menu:system-logs",
             "menu:system-backup",
             "menu:system-restore",
             "permissions:view",
             "permissions:manage",
-            "system-logs:view",
             "system-backup:run",
             "system-restore:run",
             "orders:delete",
@@ -155,9 +154,11 @@ describe("DEFAULT_PROTECTED_CODES（兜底受保护全集 = 迁移播种默认�
         ]) {
             expect(DEFAULT_PROTECTED_CODES.has(code), code).toBe(true);
         }
-        // 普通可授权权限不在受保护全集
+        // 普通可授权权限不在受保护全集（系统日志 20261013100000 迁移起已降级）
         expect(DEFAULT_PROTECTED_CODES.has("orders:view")).toBe(false);
         expect(DEFAULT_PROTECTED_CODES.has("menu:analytics")).toBe(false);
+        expect(DEFAULT_PROTECTED_CODES.has("menu:system-logs")).toBe(false);
+        expect(DEFAULT_PROTECTED_CODES.has("system-logs:view")).toBe(false);
     });
 });
 
@@ -165,25 +166,20 @@ describe("运行时受保护集（protectedCodes，超管可解锁）", () => {
     const unlocked = new Set<string>();
 
     it("解锁后菜单标签按授权正常派生，不再「超管专属」；默认参仍走兜底集", () => {
-        expect(menuTagFor("system-logs", grantOf("super"), unlocked)).toBe("只读");
-        expect(menuTagFor("system-logs", grantOf("super"))).toBe("超管专属");
+        expect(menuTagFor("permissions", grantOf("super"), unlocked)).toBe("全部权限");
+        expect(menuTagFor("permissions", grantOf("super"))).toBe("超管专属");
     });
 
-    it("解锁并授权后系统日志进入普通角色侧边栏；仍受保护时仅标签口径受限", () => {
+    it("系统日志已降为普通可授权码：授权即进侧边栏，标签按通用口径派生", () => {
         const adminGranted: RoleGrant = {
             version: 1,
             menus: [...grantOf("admin").menus, "system-logs"],
             actions: { ...grantOf("admin").actions, "system-logs": ["view"] },
         };
-        const unlockedItems = buildNavSections("admin", adminGranted, unlocked)
+        const items = buildNavSections("admin", adminGranted)
             .find(section => section.group === "系统")
             ?.items.find(item => item.to === "/system-logs");
-        expect(unlockedItems?.tag).toBe("只读");
-        // 受保护态（兜底集）下即使出现授权行，标签仍标注「超管专属」
-        const lockedItems = buildNavSections("admin", adminGranted)
-            .find(section => section.group === "系统")
-            ?.items.find(item => item.to === "/system-logs");
-        expect(lockedItems?.tag).toBe("超管专属");
+        expect(items?.tag).toBe("只读");
     });
 });
 

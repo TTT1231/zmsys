@@ -83,7 +83,8 @@ export const MENU_CATALOG: MenuNode[] = [
         onlyFor: ["warehouse"],
         note: "审计记录：业务创建、订单变更、入库修正、库存调整、出库作废及负责人移交均保留操作人与时间，不可删除、不可篡改。",
     },
-    /* 系统组：用户与权限、数据库备份与恢复、系统日志；受保护菜单，默认仅超管（可解锁下放） */
+    /* 系统组：用户与权限、数据库备份与恢复为受保护菜单（默认仅超管，可解锁下放）；
+     * 系统日志为可授权菜单（默认仅超管，照分析页口径可在角色编辑器勾选授予） */
     {
         key: "permissions",
         label: "用户与权限",
@@ -119,7 +120,6 @@ export const MENU_CATALOG: MenuNode[] = [
         icon: "log",
         group: "系统",
         to: "/system-logs",
-        protected: true,
     },
 ];
 
@@ -167,10 +167,10 @@ export const ACTION_CATALOG = {
         { id: "view", label: "查看", protected: true },
         { id: "manage", label: "用户与角色管理", protected: true },
     ],
-    /* 系统组动作（受保护，默认仅 super）：登记固定权限码字面量与前端 can() 判断 */
+    /* 系统组动作：备份/恢复受保护（默认仅 super）；系统日志为可授权动作（默认仅超管） */
     "system-backup": [{ id: "run", label: "执行备份", protected: true }],
     "system-restore": [{ id: "run", label: "执行恢复", protected: true }],
-    "system-logs": [{ id: "view", label: "查看", protected: true }],
+    "system-logs": [{ id: "view", label: "查看" }],
 } as const satisfies Record<string, readonly ActionDef[]>;
 
 /** 权限码字面量联合（"outbound:ship" 等），拼错编译期报错 */
@@ -219,8 +219,8 @@ export function buildDefaultGrants(): GrantMap {
     return {
         super: {
             version: 1,
-            // 说明型 onlyFor 项（无路由）不占权限码；受保护菜单（备份/恢复/系统日志/
-            // 用户与权限）super 实际持有——服务端固定全量，不依赖 sys_grant 行
+            // 说明型 onlyFor 项（无路由）不占权限码；受保护菜单（备份/恢复/用户与权限）与
+            // 默认仅超管的普通菜单（分析页/系统日志）super 实际持有——服务端固定全量，不依赖 sys_grant 行
             menus: MENU_CATALOG.flatMap(menu =>
                 menu.onlyFor && !menu.to ? [] : [menu.key, ...(menu.children ?? []).map(child => child.key)],
             ),

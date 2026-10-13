@@ -75,4 +75,3 @@ pnpm clean                    # 深度清理：递归删除 node_modules/dist/.t
 
 - [业务流程](./docs/business/process.md)
 - [角色划分](./docs/business/roles.md)
-- 新增菜单、动作或修改授权范围时，同步核对 `docs/business/roles.md` 的默认授权与权限矩阵说明、`docs/db-scheme.md` §3.3、`docs/openapi.yaml` 的接口权限，并以迁移播种和前后端校验为依据；受保护的系统日志、备份、恢复入口也在范围内。受保护状态可由超管在界面运行时解锁/加锁（机制与审计见 `docs/db-scheme.md` §3.3/§3.6），切换端点仅 super 角色可调用（@SuperOnly，不走权限码）。

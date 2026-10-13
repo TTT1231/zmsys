@@ -16,12 +16,12 @@ export const PERMISSIONS = {
     MENU_STOCK: "menu:stock",
     MENU_ARCHIVED_ORDERS: "menu:archived-orders",
     MENU_ANALYTICS: "menu:analytics", // 可授权菜单，默认仅超管（不播普通角色授权行）
+    MENU_SYSTEM_LOGS: "menu:system-logs", // 可授权菜单，默认仅超管（不播普通角色授权行）
     // 受保护菜单（默认仅 super，超管可运行时解锁下放）
     MENU_PERMISSIONS: "menu:permissions",
     MENU_PERMISSIONS_ACCOUNTS: "menu:permissions-accounts",
     MENU_PERMISSIONS_ROLES: "menu:permissions-roles",
     MENU_PERMISSIONS_MATRIX: "menu:permissions-matrix",
-    MENU_SYSTEM_LOGS: "menu:system-logs",
 
     // ---- 订单 ----
     ORDERS_VIEW: "orders:view",
@@ -70,7 +70,7 @@ export const PERMISSIONS = {
     MENU_SYSTEM_RESTORE: "menu:system-restore",
     SYSTEM_BACKUP_RUN: "system-backup:run", // 受保护
     SYSTEM_RESTORE_RUN: "system-restore:run", // 受保护
-    // ---- 系统日志（受保护，默认仅 super）----
+    // ---- 系统日志（可授权动作，默认仅超管，不播普通角色授权行）----
     SYSTEM_LOGS_VIEW: "system-logs:view",
 } as const;
 

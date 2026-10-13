@@ -1,7 +1,7 @@
 import { requestClient } from "@/http";
 import type { SystemLogPage, SystemLogQuery } from "./types";
 
-/** 系统日志时间线（仅超级管理员）；分批为 (beforeAt, beforeId) 复合游标追加语义 */
+/** 系统日志时间线（system-logs:view，可授权动作码，默认仅超管）；分批为 (beforeAt, beforeId) 复合游标追加语义 */
 export function fetchSystemLogs(query: SystemLogQuery): Promise<SystemLogPage> {
     const params = new URLSearchParams();
     if (query.domain) params.set("domain", query.domain);

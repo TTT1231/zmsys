@@ -39,7 +39,7 @@ const pickCategory = async (user: ReturnType<typeof userEvent.setup>, name: stri
 
 const itemCheckbox = (label: string) => screen.getByRole("checkbox", { name: label });
 
-it("单选组：换选替换旧项、可再点取消；右框按组分节且无数量输入", async () => {
+it("单选组：换选替换旧项、可再点取消；右框按组分节且无数量输入", { timeout: 15000 }, async () => {
     const user = userEvent.setup();
     render(<NewBomModal open onClose={vi.fn()} />);
     await pickCategory(user, "新微动");

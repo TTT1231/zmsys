@@ -52,7 +52,7 @@ tags:
     - name: system
       description: 应用内数据库备份/恢复（默认仅超管，可解锁下放；含恢复任务查询）
     - name: system-logs
-      description: 系统日志时间线聚合（默认仅超级管理员，可解锁下放）
+      description: 系统日志时间线聚合（默认仅超管，可在角色与权限授予其他角色）
     - name: health
       description: 存活/就绪探针（无鉴权，供编排系统与冒烟脚本）
 
@@ -1005,7 +1005,7 @@ paths:
             operationId: listSystemLogs
             summary: 系统日志时间线（分批追加）
             description: |
-                受保护权限 `system-logs:view`，默认仅 super（super 可解锁后授予其他角色）。聚合四来源为统一业务事件流：op_log
+                权限 `system-logs:view`（普通可授权码，默认仅超管，可在角色与权限直接授予其他角色）。聚合四来源为统一业务事件流：op_log
                 （订单创建/归档/归档回退/删除、客户创建/编辑/负责人移交（含离岗批量移交）、BOM
                 创建/删除、入库创建/作废/删除、出库登记发货/作废/删除）、
                 sales_order_change_log（仅 UPDATE 的编辑明细）、inbound_change_log（仅
@@ -1356,7 +1356,7 @@ components:
             name: code
             in: path
             required: true
-            description: 权限码，如 `menu:system-logs`、`orders:delete`（含冒号，URL 编码传入）
+            description: 权限码，如 `menu:system-backup`、`orders:delete`（含冒号，URL 编码传入）
             schema: { type: string, pattern: "^[a-z0-9-]+(:[a-z0-9-]+)?$" }
 
     responses:

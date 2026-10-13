@@ -42,6 +42,9 @@ const main = async (): Promise<void> => {
         port: db.port,
         user: db.user,
         password: db.password,
+        // 本机 caching_sha2 完整认证需取服务端 RSA 公钥（backup-database 同款回落；
+        // 上方护栏已限定 localhost）
+        allowPublicKeyRetrieval: true,
     });
     // DB 名已通过 _test 断言，此处标识符拼接安全
     await connection.query(`DROP DATABASE IF EXISTS ${DB}`);

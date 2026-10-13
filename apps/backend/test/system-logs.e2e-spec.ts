@@ -344,13 +344,13 @@ describe("系统日志 (e2e)", () => {
         await app.close();
     });
 
-    it("未登录 401；普通角色（sales）403——受保护权限仅 super", async () => {
+    it("未登录 401；未授予角色（sales）403——system-logs:view 默认仅超管持有", async () => {
         const anonymous = await app.inject({ method: "GET", url: "/api/system-logs" });
         expect(anonymous.statusCode).toBe(401);
 
         const denied = await logs(salesToken, "");
         expect(denied.statusCode).toBe(403);
-        expect(denied.message).toBe("仅超级管理员可查看系统日志");
+        expect(denied.message).toBe("无权查看系统日志");
     });
 
     it("备份与恢复审计留在 op_log，不混入业务时间线", async () => {
