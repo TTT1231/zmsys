@@ -710,15 +710,27 @@ function RolesTab({ users }: { users: WbUser[] }) {
     const grants = grantsData ?? DEFAULT_GRANTS;
     const [activeRole, setActiveRole] = useState<RoleId>("admin");
     const [draft, setDraft] = useState<RoleGrant | null>(null);
+    const [switchAsk, setSwitchAsk] = useState<RoleId | null>(null);
     const locked = ROLES.find(role => role.id === activeRole)?.locked ?? false;
     const effective = draft ?? grants[activeRole] ?? { version: 0, menus: [], actions: {} };
     const roleMembers = users.filter(user => user.role === activeRole);
 
     const selectRole = (id: RoleId) => {
         if (id === activeRole) return;
-        if (draft && !window.confirm("当前角色有未保存的授权修改，切换后将丢弃。确认切换？")) return;
+        // 有未保存草稿时走主题化确认弹窗（原生 confirm 与界面风格不符），确认丢弃才切换
+        if (draft) {
+            setSwitchAsk(id);
+            return;
+        }
         setActiveRole(id);
         setDraft(null);
+    };
+
+    const confirmSwitch = () => {
+        if (!switchAsk) return;
+        setActiveRole(switchAsk);
+        setDraft(null);
+        setSwitchAsk(null);
     };
 
     const edit = (mutate: (grant: RoleGrant) => void) => {
@@ -1083,6 +1095,39 @@ function RolesTab({ users }: { users: WbUser[] }) {
                     </div>
                 </div>
             </section>
+
+            <Modal
+                open={switchAsk !== null}
+                onClose={() => setSwitchAsk(null)}
+                label="用户与权限"
+                title="切换角色"
+                subtitle={switchAsk ? `${roleNameOf(activeRole)} → ${roleNameOf(switchAsk)}` : undefined}
+                width={440}
+                footer={
+                    <>
+                        <Button size="sm" variant="secondary" onClick={() => setSwitchAsk(null)}>
+                            取消
+                        </Button>
+                        <Button size="sm" onClick={confirmSwitch}>
+                            确认切换
+                        </Button>
+                    </>
+                }
+            >
+                <div className="flex items-start gap-3 rounded-xl border border-warning/60 bg-warning/5 p-4">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-warning-soft">
+                        <Icon name="alert" size={16} className="text-warning" />
+                    </span>
+                    <div className="min-w-0 flex-1 pt-0.5">
+                        <p className="text-14 leading-relaxed text-td">
+                            切换后，【{roleNameOf(activeRole)}】里没保存的授权修改会全部丢弃。
+                        </p>
+                        <p className="mt-1 text-13 leading-relaxed text-subtle">
+                            想保留这次修改：先点「取消」，回到该角色点「保存授权」，再切换。
+                        </p>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 }
