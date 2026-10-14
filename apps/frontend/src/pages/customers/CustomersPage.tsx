@@ -19,13 +19,14 @@ import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { Button, TableLink } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { CustomerCell } from "@/components/ui/cells";
+import { DangerNote } from "@/components/business/DangerNote";
 import { OrderDetailModal } from "@/pages/orders/OrdersPage";
 import { SortTh } from "@/components/ui/SortTh";
 import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { nextSortState, type SortState } from "@/lib/tableSort";
 import { SelectField, TextField } from "@/components/ui/Field";
 import { RegionCascader, type RegionValue } from "@/components/ui/RegionCascader";
-import { useCreateCustomer, useUpdateCustomer, useWbRefresh, useWbView } from "@/data/queries";
+import { useCreateCustomer, useDeleteCustomer, useUpdateCustomer, useWbRefresh, useWbView } from "@/data/queries";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { SnapProvider } from "@/context/snap";
@@ -211,27 +212,50 @@ export function CustomerDetailModal({
     onEdit?: (customer: Customer) => void;
 }) {
     const snap = useSnap();
+    const { can } = useApp();
+    const deleteCustomer = useDeleteCustomer();
+    const toast = useToast();
     // 叠加在客户详情之上的订单详情；存 orderNo 渲染时回捞，刷新后数据保持同步
     const [orderNo, setOrderNo] = useState<string | null>(null);
     // 最近订单默认 3 笔，“查看全部”就地展开完整时间线，不跳出当前弹窗
     const [expanded, setExpanded] = useState(false);
-    // 切换查看的客户时在渲染期清掉上层订单详情与展开态，避免残留上一个客户的弹窗
+    // 删除二次确认（叠加在客户详情之上，同订单详情的层级）
+    const [confirmDelete, setConfirmDelete] = useState(false);
+    // 切换查看的客户时在渲染期清掉上层订单详情、展开态与删除确认，避免残留上一个客户的弹窗
     const viewedCode = customer?.code;
     const [lastViewedCode, setLastViewedCode] = useState(viewedCode);
     if (viewedCode !== lastViewedCode) {
         setLastViewedCode(viewedCode);
         setOrderNo(null);
         setExpanded(false);
+        setConfirmDelete(false);
     }
     /* P2 一次派生：时间线逐行状态查预计算索引，不再逐行全量派生（组件自建，调用方无需传） */
     const derived = useMemo(() => deriveOrders(snap), [snap]);
     if (!customer) return null;
     const orders = snap.orders.filter(order => order.customerCode === customer.code);
+    /* 删除入口与后端同口径：有任意订单（含已归档）即隐藏；已删除订单物理消失，
+     * 天然不计数——订单删光后按钮自动回来 */
+    const canDelete = can("customers:delete") && orders.length === 0;
     // 待交付口径与订单列表一致：已归档订单剩余按 0，不再计入
     const pendingQty = orders.reduce((sum, order) => sum + remainingOf(order), 0);
     const byDateDesc = [...orders].sort((a, b) => b.orderDate.localeCompare(a.orderDate));
     const timeline = expanded ? byDateDesc : byDateDesc.slice(0, 3);
     const orderDetail = orderNo ? (snap.orders.find(order => order.orderNo === orderNo) ?? null) : null;
+
+    const submitDelete = () => {
+        if (deleteCustomer.isPending) return;
+        deleteCustomer.mutate(
+            { code: customer.code, expectedVersion: customer.version },
+            {
+                onSuccess: () => {
+                    toast.success(`客户档案 ${customer.code} 已删除`);
+                    setConfirmDelete(false);
+                    onClose();
+                },
+            },
+        );
+    };
 
     return (
         <>
@@ -245,6 +269,13 @@ export function CustomerDetailModal({
                 layout="detail"
                 footer={
                     <>
+                        <div className="mr-auto flex flex-wrap items-center gap-1">
+                            {canDelete && (
+                                <Button variant="ghost" tone="danger" size="sm" onClick={() => setConfirmDelete(true)}>
+                                    删除档案
+                                </Button>
+                            )}
+                        </div>
                         {onEdit && (
                             <Button size="sm" variant="secondary" onClick={() => onEdit(customer)}>
                                 编辑档案
@@ -359,6 +390,41 @@ export function CustomerDetailModal({
                         )}
                     </div>
                 </div>
+                {confirmDelete && (
+                    <Modal
+                        open
+                        onClose={() => setConfirmDelete(false)}
+                        title="删除客户档案"
+                        subtitle={`${customer.code} · ${customer.name}`}
+                        width={440}
+                        footer={
+                            <>
+                                <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    type="button"
+                                    onClick={() => setConfirmDelete(false)}
+                                >
+                                    取消
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="danger"
+                                    type="button"
+                                    disabled={deleteCustomer.isPending}
+                                    onClick={submitDelete}
+                                >
+                                    {deleteCustomer.isPending ? "正在删除…" : "确认删除"}
+                                </Button>
+                            </>
+                        }
+                    >
+                        <DangerNote
+                            impact="删除后，这份客户档案会从列表移除"
+                            note="该客户没有任何销售订单（已删除的订单不计入）。删除后无恢复入口，档案与负责人变更记录立即永久删除；操作日志始终保留。"
+                        />
+                    </Modal>
+                )}
             </Modal>
             {orderDetail && <OrderDetailModal order={orderDetail} derived={derived} onClose={() => setOrderNo(null)} />}
         </>

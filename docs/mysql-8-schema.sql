@@ -158,6 +158,7 @@ INSERT INTO sys_permission (code, kind, menu_key, action_id, label, protected) V
     ('customers:view', 'ACTION', 'customers', 'view', '查看', 0),
     ('customers:create', 'ACTION', 'customers', 'create', '新建客户', 0),
     ('customers:edit', 'ACTION', 'customers', 'edit', '编辑客户', 0),
+    ('customers:delete', 'ACTION', 'customers', 'delete', '删除客户', 1),
     ('customers:bulk-transfer', 'ACTION', 'customers', 'bulk-transfer', '批量移交负责人', 1),
     ('bom:view', 'ACTION', 'bom', 'view', '查看', 0),
     ('bom:create', 'ACTION', 'bom', 'create', '新建BOM', 0),
@@ -1394,7 +1395,7 @@ CREATE TABLE op_log (
         'void_outbound', 'delete_outbound',
         'create_bom', 'update_customer',
         'db_backup', 'db_restore',
-        'create_bom_category', 'update_bom_structure'
+        'create_bom_category', 'update_bom_structure', 'delete_customer'
     ) NOT NULL,
     target_type VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     target_id BIGINT NOT NULL,

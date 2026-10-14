@@ -1,4 +1,10 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+    BadRequestException,
+    ConflictException,
+    ForbiddenException,
+    Injectable,
+    NotFoundException,
+} from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { TransactionRunner } from "../prisma/transaction.runner";
 import type { Tx } from "../prisma/transaction.runner";
@@ -12,12 +18,16 @@ import { recordOpLog } from "../domain/op-log";
 import { BusinessSequenceService } from "../sequence/business-sequence.service";
 import type { AuthUser } from "../common/types/auth-user";
 import type { CustomTable, SysUser } from "../generated/prisma/client";
+import { ExpectedVersionDto } from "../common/dto/expected-version.dto";
 import type { Customer, CustomerOwnerOption, CustomerPhone } from "./types";
 import type { CreateCustomerDto } from "./dto/create-customer.dto";
 import type { UpdateCustomerDto } from "./dto/update-customer.dto";
 
 /** api_idempotency 的 operation_key：同用户 + 操作 + key 唯一（db-scheme.md §1.3） */
 const CREATE_OPERATION_KEY = "customers:create";
+
+/** 删除按客户编码独立域（同订单删除口径） */
+const deleteOperationKeyOf = (code: string): string => `customers:delete:${code}`;
 
 /** 负责人移交历史 reason（契约 UpdateCustomerInput 未提供原因字段，用固定描述） */
 const OWNER_CHANGE_REASON = "编辑客户档案变更负责人";
@@ -156,7 +166,7 @@ export class CustomersService {
     }
 
     /**
-     * 编辑客户档案（不可删除）：乐观锁比对 row_version；负责人变化锁定新负责人
+     * 编辑客户档案：乐观锁比对 row_version；负责人变化锁定新负责人
      * 并写移交历史（db-scheme.md §4.2）；phone 空串表示保留原号码。
      */
     async updateCustomer(code: string, dto: UpdateCustomerDto, actor: AuthUser): Promise<Customer> {
@@ -255,6 +265,70 @@ export class CustomersService {
             });
             return this.toCustomer(updated, cooperating !== null);
         });
+    }
+
+    /**
+     * 删除客户档案（清理手误建档，物理删除）：仅无任何销售订单（含已归档；订单
+     * 删除为物理删除，已删除订单视同无订单）的客户可删。同事务先清负责人移交
+     * 历史子行再删客户行（外键要求先清子行）；删除事件与删除前快照写 op_log
+     * 留痕，是删除后唯一的审计残留（手机号按保护口径不落明文）。删除与订单
+     * 新建竞争同一客户行锁，外键 RESTRICT 为最终防线，先提交者生效。
+     */
+    async deleteCustomer(
+        code: string,
+        dto: ExpectedVersionDto,
+        actor: AuthUser,
+        idempotencyKey: string | undefined,
+    ): Promise<null> {
+        const operationKey = deleteOperationKeyOf(code);
+        // 删除的契约响应恒为 data:null：重放与成功均归一返回 null（runGuardedVoid）
+        return this.idempotency.runGuardedVoid(
+            {
+                actorId: BigInt(actor.id),
+                operationKey,
+                idempotencyKey,
+                digest: { method: "POST", pathParams: { code }, body: dto },
+            },
+            async (tx: Tx) => {
+                const now = new Date();
+                const current = await this.lockByCode(tx, code);
+                assertVersionMatches(current.rowVersion, dto.expectedVersion, "客户信息已被其他人修改，请刷新后重试");
+                // 任意状态订单（进行中/已归档）都构成引用；已删除订单物理消失、天然不计数
+                const orderCount = await tx.salesOrderTable.count({ where: { customerId: current.id } });
+                if (orderCount > 0) {
+                    throw new ConflictException("客户已有销售订单，不可删除");
+                }
+                await tx.customerOwnerHistory.deleteMany({ where: { customerId: current.id } });
+                await tx.customTable.delete({ where: { id: current.id } });
+                await recordOpLog(tx, this.snowflake, actor, {
+                    action: "delete_customer",
+                    targetType: "customer",
+                    targetId: current.id,
+                    targetCode: code,
+                    detail: {
+                        name: current.name,
+                        contact: current.contactPerson,
+                        province: current.province,
+                        city: current.city,
+                        district: current.district,
+                        town: current.town,
+                        address: current.address,
+                        payTerms: current.payTerms,
+                        owner: current.owner.name,
+                        ownerAccount: current.owner.account,
+                        createdBy: current.creator.name,
+                        created: current.createdAt.toISOString(),
+                    },
+                    now,
+                });
+                // JSON 列不接受 null 占位；重放路径已归一为 null，此快照仅审计兜底
+                return {
+                    httpStatus: 200,
+                    responseBody: { deleted: true, code },
+                    resource: { type: "customer", code },
+                };
+            },
+        );
     }
 
     /** 合作窗口起点：北京今日减 6 个日历月（含边界）；DATE 列比较用 UTC 午夜表示 */

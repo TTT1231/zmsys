@@ -3,11 +3,13 @@
  * 账号与客户带随机前缀，写操作可重复执行；运行前置：pnpm test:db:reset。
  */
 import "./db-guard";
+import { randomBytes } from "node:crypto";
 import { Test } from "@nestjs/testing";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { AppModule } from "../src/app.module";
 import { configureApp } from "../src/main";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { SnowflakeGenerator } from "../src/common/snowflake";
 
 const RUN = Date.now().toString(36);
 const accountOf = (name: string): string => `qa_${name}_${RUN}`;
@@ -29,6 +31,7 @@ const customerInput = (ownerAccount: string) => ({
 describe("客户档案 (e2e)", () => {
     let app: NestFastifyApplication;
     let prisma: PrismaService;
+    let snowflake: SnowflakeGenerator;
     let superToken: string;
     let salesAccount: string;
     let salesToken: string;
@@ -62,12 +65,60 @@ describe("客户档案 (e2e)", () => {
         return res;
     };
 
+    /** 删除拦截测试的引用 BOM：随机指纹避开既有判重行（订单直插只借 FK，无明细） */
+    const ensureOrderRefBom = async (): Promise<bigint> => {
+        const category = await prisma.bomCategory.findUnique({ where: { categoryKey: "new-micro-switch" } });
+        const superUser = await prisma.sysUser.findUnique({ where: { account: "guojun" } });
+        const bomId = snowflake.next();
+        await prisma.bomTable.create({
+            data: {
+                id: bomId,
+                bomCode: `ZMCUSDEL${RUN}`,
+                categoryId: category!.id,
+                specHash: randomBytes(32),
+                requestKey: `e2e-cust-${RUN}-ref-bom`,
+                createdBy: superUser!.id,
+                updatedBy: superUser!.id,
+                createdAt: new Date(),
+            },
+        });
+        return bomId;
+    };
+
+    /** 直插活动订单行构造引用（不走出库/校验管线，只为挡删与随后的订单删除） */
+    const seedOrderOf = async (customerId: bigint, orderNo: string): Promise<void> => {
+        const bomId = await ensureOrderRefBom();
+        const superUser = await prisma.sysUser.findUnique({ where: { account: "guojun" } });
+        await prisma.salesOrderTable.create({
+            data: {
+                id: snowflake.next(),
+                orderNo,
+                customerId,
+                bomId,
+                qty: 10,
+                lifecycleStatus: "ACTIVE",
+                orderDate: new Date(),
+                deliverDate: new Date(),
+                remark: "",
+                customerNameSnapshot: "删除联调客户",
+                bomNameSnapshot: "引用占位",
+                bomModelSnapshot: "",
+                bomSpecSnapshot: {},
+                requestKey: `e2e-cust-${RUN}-order`,
+                createdBy: superUser!.id,
+                updatedBy: superUser!.id,
+                createdAt: new Date(),
+            },
+        });
+    };
+
     beforeAll(async () => {
         const moduleFixture = await Test.createTestingModule({ imports: [AppModule] }).compile();
         app = moduleFixture.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
         configureApp(app);
         await app.init();
         prisma = app.get(PrismaService);
+        snowflake = app.get(SnowflakeGenerator);
         superToken = await login("guojun");
 
         salesAccount = accountOf("sales01");
@@ -257,5 +308,81 @@ describe("客户档案 (e2e)", () => {
         });
         expect(missing.statusCode).toBe(404);
         expect(missing.json().message).toBe("客户不存在");
+    });
+
+    it("删除客户档案：非超管 403；有订单 409；订单删光后可删、重放幂等、op_log 留快照", async () => {
+        const created = (await createCustomer(salesAccount, `e2e-cust-${RUN}-del`)).json().data as {
+            code: string;
+            version: number;
+        };
+        const stored = await prisma.customTable.findUnique({ where: { customerCode: created.code } });
+
+        // 受保护权限：销售 403
+        const denied = await app.inject({
+            method: "POST",
+            url: `/api/customers/${created.code}/delete`,
+            headers: { ...authHeaders(salesToken), "idempotency-key": `e2e-cust-${RUN}-del-sales` },
+            payload: { expectedVersion: created.version },
+        });
+        expect(denied.statusCode).toBe(403);
+        expect(denied.json().message).toContain("超级管理员");
+
+        // 有任意订单（进行中）即拒绝
+        const orderNo = `ZMCUSDEL${RUN}`;
+        await seedOrderOf(stored!.id, orderNo);
+        const blocked = await app.inject({
+            method: "POST",
+            url: `/api/customers/${created.code}/delete`,
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-cust-${RUN}-del-blocked` },
+            payload: { expectedVersion: created.version },
+        });
+        expect(blocked.statusCode).toBe(409);
+        expect(blocked.json().message).toBe("客户已有销售订单，不可删除");
+
+        // 订单删除（物理消失）后客户订单数回零 → 可删（版本随订单删除不变，仍为建档版本）
+        const removeOrder = await app.inject({
+            method: "POST",
+            url: `/api/orders/${orderNo}/delete`,
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-cust-${RUN}-del-order` },
+            payload: { expectedVersion: 1 },
+        });
+        expect(removeOrder.statusCode).toBe(200);
+
+        const key = `e2e-cust-${RUN}-del-ok`;
+        const removed = await app.inject({
+            method: "POST",
+            url: `/api/customers/${created.code}/delete`,
+            headers: { ...authHeaders(superToken), "idempotency-key": key },
+            payload: { expectedVersion: created.version },
+        });
+        expect(removed.statusCode).toBe(200);
+        expect(removed.json()).toEqual({ code: 0, data: null, message: "ok" });
+
+        const replay = await app.inject({
+            method: "POST",
+            url: `/api/customers/${created.code}/delete`,
+            headers: { ...authHeaders(superToken), "idempotency-key": key },
+            payload: { expectedVersion: created.version },
+        });
+        expect(replay.statusCode).toBe(200);
+        expect(replay.json().data).toBeNull();
+
+        const gone = await app.inject({
+            method: "POST",
+            url: `/api/customers/${created.code}/delete`,
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-cust-${RUN}-del-gone` },
+            payload: { expectedVersion: created.version },
+        });
+        expect(gone.statusCode).toBe(404);
+
+        // 删除即物理清理：客户行不存在、移交历史同事务清空，op_log 快照是唯一残留
+        expect(await prisma.customTable.findUnique({ where: { customerCode: created.code } })).toBeNull();
+        expect(await prisma.customerOwnerHistory.count({ where: { customerId: stored!.id } })).toBe(0);
+        const list = await app.inject({ method: "GET", url: "/api/customers", headers: authHeaders(superToken) });
+        expect(list.json().data.some((item: { code: string }) => item.code === created.code)).toBe(false);
+        const opLog = await prisma.opLog.findFirst({
+            where: { action: "delete_customer", targetCode: created.code },
+        });
+        expect(opLog?.detailJson).toMatchObject({ name: `深圳市联调电子_${RUN}`, ownerAccount: salesAccount });
     });
 });

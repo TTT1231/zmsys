@@ -10,6 +10,7 @@ import type {
     BomCategoryCreateEventDetail,
     BomCategoryDeleteEventDetail,
     BomStructureUpdateEventDetail,
+    CustomerDeleteEventDetail,
     CustomerEditableFields,
     EntrySnapshotCore,
     InboundVoidEventDetail,
@@ -186,6 +187,24 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
                 { key: "name", label: "客户名称", before: null, after: asText(detail?.name) },
                 { key: "ownerAccount", label: "负责销售", before: null, after: asText(detail?.ownerAccount) },
             ].filter(change => change.after !== null);
+        case "delete_customer": {
+            // detail 为删除前档案快照：删除后客户行不复存在，本日志是唯一留存
+            const snapshot = (detail ?? {}) as CustomerDeleteEventDetail;
+            const region =
+                [snapshot.province, snapshot.city, snapshot.district, snapshot.town]
+                    .map(part => asText(part))
+                    .filter(part => part !== null)
+                    .join(" / ") || null;
+            return [
+                { key: "name", label: "客户名称", before: null, after: asText(snapshot.name) },
+                { key: "contact", label: "联系人", before: null, after: asText(snapshot.contact) },
+                { key: "region", label: "所在地区", before: null, after: region },
+                { key: "address", label: "详细地址", before: null, after: asText(snapshot.address) },
+                { key: "payTerms", label: "付款条件", before: null, after: asText(snapshot.payTerms) },
+                { key: "owner", label: "负责销售", before: null, after: asText(snapshot.owner) },
+                { key: "created", label: "建档时间", before: null, after: asText(snapshot.created) },
+            ].filter(change => change.after !== null);
+        }
         case "create_bom":
         case "delete_bom": {
             // detail 为 BOM 契约响应/删除前快照
