@@ -31,13 +31,24 @@ export class DraftItemDto {
 }
 
 /**
- * 单个结构操作。语义类型是 catalog-projector 的 StructureOperation（七态
+ * 单个结构操作。语义类型是 catalog-projector 的 StructureOperation（十态
  * discriminated union）；class-validator 对多态嵌套校验支持有限，这里用一个
  * 宽松类声明全部字段，按 type 的必填约束由服务层 normalizeOperations 收口
  * （缺字段返回 400，与未知字段拒绝的管线口径一致）。
  */
 export class StructureOperationDto {
-    @IsIn(["add_section", "add_group", "add_item", "hide", "restore", "reorder", "set_rules"])
+    @IsIn([
+        "add_section",
+        "add_group",
+        "add_item",
+        "hide",
+        "restore",
+        "reorder",
+        "set_rules",
+        "rename",
+        "move",
+        "remove",
+    ])
     type!: string;
 
     /** 新增节点/物料的草稿标识（同批唯一，供后续操作引用） */
@@ -54,7 +65,8 @@ export class StructureOperationDto {
     @MaxLength(64)
     name?: string;
 
-    /** add_group 专属：null/省略 = 挂品类根；否则为已存分区 id 或同批草稿分区 tempId */
+    /** add_group/move 专属：add_group 与 move 分组时 null/省略 = 挂品类根；move 物料时
+     *  必填目标分组 id（已存或同批草稿 tempId） */
     @IsOptional()
     parentId?: string | null;
 

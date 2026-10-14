@@ -188,18 +188,9 @@ describe("BOM 结构在线维护 (e2e)", () => {
         await prisma.bizSequence.deleteMany({
             where: { sequenceKey: { in: createdCategoryKeys.map(key => `bom:${key}`) } },
         });
-        // 4) 种子品类还原：本 spec 新增的分组（快照之外的）整支删除 + 快照字段回写
+        // 4) 种子品类还原：先回写快照字段（含 parentId）——v2 的 move 可能把快照分组
+        //    挂到本 spec 新增的分区上，先回写再删新增行才不会撞 fk_material_group_parent
         if (seedSnapshot) {
-            const snapshotIds = new Set(seedSnapshot.groups.map(group => group.id.toString()));
-            const current = await prisma.materialGroup.findMany({
-                where: { category: { categoryKey: XK2 } },
-                select: { id: true },
-            });
-            const added = current.filter(group => !snapshotIds.has(group.id.toString()));
-            if (added.length > 0) {
-                await prisma.materialItem.deleteMany({ where: { groupId: { in: added.map(group => group.id) } } });
-                await prisma.materialGroup.deleteMany({ where: { id: { in: added.map(group => group.id) } } });
-            }
             for (const group of seedSnapshot.groups) {
                 await prisma.materialGroup.update({
                     where: { id: group.id },
@@ -224,6 +215,16 @@ describe("BOM 结构在线维护 (e2e)", () => {
                 where: { categoryKey: XK2 },
                 data: { rowVersion: seedSnapshot.rowVersion },
             });
+            const snapshotIds = new Set(seedSnapshot.groups.map(group => group.id.toString()));
+            const current = await prisma.materialGroup.findMany({
+                where: { category: { categoryKey: XK2 } },
+                select: { id: true },
+            });
+            const added = current.filter(group => !snapshotIds.has(group.id.toString()));
+            if (added.length > 0) {
+                await prisma.materialItem.deleteMany({ where: { groupId: { in: added.map(group => group.id) } } });
+                await prisma.materialGroup.deleteMany({ where: { id: { in: added.map(group => group.id) } } });
+            }
         }
         await app.close();
     });
@@ -633,5 +634,292 @@ describe("BOM 结构在线维护 (e2e)", () => {
         ]);
         expect([y1.statusCode, y2.statusCode].sort((p, q) => p - q)).toEqual([200, 409]);
         createdCategoryKeys.push("qz");
+    });
+
+    it("v2 改名/移动/删除：未引用项放行并落库；被既有 BOM 引用的物料/分组被 400 引用守卫拒绝", async () => {
+        /* 未引用的种子节点：规格组与 211-1 物料（建档只用了 型号/方向/弹簧）。
+           改名会改写种子行——afterAll 按快照回写 name/parentId 恢复。 */
+        const specGroupId = (await prisma.materialGroup.findFirst({
+            where: { name: "规格", category: { categoryKey: XK2 } },
+            select: { id: true },
+        }))!.id;
+        const specItemId = await itemIdOf(XK2, "规格", "211-1");
+        const referencedItemId = await itemIdOf(XK2, "方向", "正面"); // bom1 引用（且已被隐藏）
+        const modelGroupId = (await prisma.materialGroup.findFirst({
+            where: { name: "型号", category: { categoryKey: XK2 } },
+            select: { id: true },
+        }))!.id;
+        const tangentialGroupId = (await prisma.materialGroup.findFirst({
+            where: { name: "弹静片", category: { categoryKey: XK2 } },
+            select: { id: true },
+        }))!.id;
+
+        // 1) 改名放行：新增分区（草稿 tempId 引用）+ 分区改名 + 未引用分组/物料改名
+        let version = await rowVersionOf(XK2);
+        const renamed = await apply(
+            {
+                categoryKey: XK2,
+                expectedRowVersion: version,
+                operations: [
+                    { type: "add_section", tempId: "t-sec", name: "新区" },
+                    { type: "rename", targetType: "section", targetId: "t-sec", name: "新区二" },
+                    { type: "rename", targetType: "group", targetId: specGroupId.toString(), name: "规格件" },
+                    { type: "rename", targetType: "item", targetId: specItemId, name: "211-1A" },
+                ],
+            },
+            `e2e-bs-${RUN}-v2rename`,
+        );
+        expect(renamed.statusCode).toBe(200);
+        expect(renamed.json().data.rowVersion).toBe(version + 1);
+        // 审计：改名批次进入 op_log 摘要（紧随该 apply 读取，避免被后续保存顶掉）
+        const renameOpLog = await prisma.opLog.findFirst({
+            where: { action: "update_bom_structure", targetCode: XK2 },
+            orderBy: { id: "desc" },
+        });
+        expect(JSON.stringify((renameOpLog!.detailJson as { operations: unknown[] }).operations)).toContain("211-1A");
+        const sectionId = (await prisma.materialGroup.findFirst({
+            where: { name: "新区二", category: { categoryKey: XK2 } },
+            select: { id: true },
+        }))!.id;
+
+        // 2) 引用守卫：被 bom_item 引用的物料不能改名/换组/删除；被引用分组不能改名
+        version = await rowVersionOf(XK2);
+        const guard = async (operations: Record<string, unknown>[], tag: string, keyword: string) => {
+            const res = await apply(
+                { categoryKey: XK2, expectedRowVersion: version, operations },
+                `e2e-bs-${RUN}-v2g-${tag}`,
+            );
+            expect(res.statusCode).toBe(400);
+            expect(res.json().message).toContain(keyword);
+        };
+        await guard(
+            [{ type: "rename", targetType: "item", targetId: referencedItemId, name: "正面2" }],
+            "item-rename",
+            "不能改名",
+        );
+        await guard(
+            [{ type: "move", targetType: "item", targetId: referencedItemId, parentId: specGroupId.toString() }],
+            "item-move",
+            "不能移动到其他分组",
+        );
+        await guard([{ type: "remove", targetType: "item", targetId: referencedItemId }], "item-remove", "不能删除");
+        await guard(
+            [{ type: "rename", targetType: "group", targetId: modelGroupId.toString(), name: "型号选择" }],
+            "group-rename",
+            "不能改名",
+        );
+        // 分组删除守卫：弹静片组内的 动弹静片 被 bom2 引用 → 整组删除被拒
+        await guard(
+            [{ type: "remove", targetType: "group", targetId: tangentialGroupId.toString() }],
+            "group-remove",
+            "不能删除",
+        );
+
+        // 3) 移动放行：分组换分区（挂到末位）；未引用物料换组
+        version = await rowVersionOf(XK2);
+        const added = await apply(
+            {
+                categoryKey: XK2,
+                expectedRowVersion: version,
+                operations: [
+                    {
+                        type: "move",
+                        targetType: "group",
+                        targetId: specGroupId.toString(),
+                        parentId: sectionId.toString(),
+                    },
+                    { type: "add_item", tempId: "t-guard", groupId: tangentialGroupId.toString(), name: "守卫物料" },
+                ],
+            },
+            `e2e-bs-${RUN}-v2move`,
+        );
+        expect(added.statusCode).toBe(200);
+        const guardItemId = (await prisma.materialItem.findFirst({
+            where: { name: "守卫物料" },
+            select: { id: true },
+        }))!.id;
+        version = await rowVersionOf(XK2);
+        const itemMoved = await apply(
+            {
+                categoryKey: XK2,
+                expectedRowVersion: version,
+                operations: [
+                    {
+                        type: "move",
+                        targetType: "item",
+                        targetId: guardItemId.toString(),
+                        parentId: specGroupId.toString(),
+                    },
+                ],
+            },
+            `e2e-bs-${RUN}-v2move2`,
+        );
+        expect(itemMoved.statusCode).toBe(200);
+
+        const list = await app.inject({ method: "GET", url: "/api/bom-categories", headers: authHeaders(superToken) });
+        const xk2 = (list.json().data as Array<Record<string, unknown>>).find(row => row.key === XK2)!;
+        const groups = xk2.groups as Array<Record<string, unknown>>;
+        expect(groups.find(group => group.name === "规格件")).toMatchObject({
+            parentId: sectionId.toString(),
+        });
+        expect(
+            (groups.find(group => group.name === "规格件")!.items as Array<Record<string, unknown>>).map(
+                item => item.name,
+            ),
+        ).toContain("守卫物料");
+
+        // 4) 删除放行：未引用物料物理删除（快照还原不涉及本 spec 新增行）
+        version = await rowVersionOf(XK2);
+        const removed = await apply(
+            {
+                categoryKey: XK2,
+                expectedRowVersion: version,
+                operations: [{ type: "remove", targetType: "item", targetId: guardItemId.toString() }],
+            },
+            `e2e-bs-${RUN}-v2remove`,
+        );
+        expect(removed.statusCode).toBe(200);
+        expect(await prisma.materialItem.count({ where: { id: guardItemId } })).toBe(0);
+
+        // 审计：删除进入最新 op_log 摘要（removed 标记）
+        const removeOpLog = await prisma.opLog.findFirst({
+            where: { action: "update_bom_structure", targetCode: XK2 },
+            orderBy: { id: "desc" },
+        });
+        expect(JSON.stringify((removeOpLog!.detailJson as { operations: unknown[] }).operations)).toContain("守卫物料");
+
+        // 5) 回归：同批换名环链（写侧两阶段改名不撞 uk_material_group_name）与
+        //    分区整支删除（子分组先于分区删行，物料先于分组删行，fk RESTRICT 顺序）
+        version = await rowVersionOf(XK2);
+        const seeded = await apply(
+            {
+                categoryKey: XK2,
+                expectedRowVersion: version,
+                operations: [
+                    { type: "add_section", tempId: "t-rm", name: `换名分区_${RUN}` },
+                    {
+                        type: "add_group",
+                        tempId: "t-a",
+                        name: `换名甲_${RUN}`,
+                        parentId: "t-rm",
+                        multi: false,
+                        qty: false,
+                        items: [{ tempId: "t-i", name: `换名物料_${RUN}` }],
+                    },
+                    {
+                        type: "add_group",
+                        tempId: "t-b",
+                        name: `换名乙_${RUN}`,
+                        parentId: "t-rm",
+                        multi: false,
+                        qty: false,
+                    },
+                ],
+            },
+            `e2e-bs-${RUN}-v2seed2`,
+        );
+        expect(seeded.statusCode).toBe(200);
+        const swapPair = await prisma.materialGroup.findMany({
+            where: { category: { categoryKey: XK2 }, name: { in: [`换名甲_${RUN}`, `换名乙_${RUN}`] } },
+            select: { id: true, name: true },
+        });
+        expect(swapPair).toHaveLength(2);
+        const jia = swapPair.find(row => row.name === `换名甲_${RUN}`)!.id.toString();
+        const yi = swapPair.find(row => row.name === `换名乙_${RUN}`)!.id.toString();
+        version = await rowVersionOf(XK2);
+        const swapped = await apply(
+            {
+                categoryKey: XK2,
+                expectedRowVersion: version,
+                operations: [
+                    { type: "rename", targetType: "group", targetId: jia, name: `换名乙_${RUN}` },
+                    { type: "rename", targetType: "group", targetId: yi, name: `换名甲_${RUN}` },
+                ],
+            },
+            `e2e-bs-${RUN}-v2swap`,
+        );
+        expect(swapped.statusCode).toBe(200);
+        const swapSection = await prisma.materialGroup.findFirst({
+            where: { name: `换名分区_${RUN}`, category: { categoryKey: XK2 } },
+            select: { id: true },
+        });
+        expect(swapSection).not.toBeNull();
+        version = await rowVersionOf(XK2);
+        const sectionRemoved = await apply(
+            {
+                categoryKey: XK2,
+                expectedRowVersion: version,
+                operations: [{ type: "remove", targetType: "section", targetId: swapSection!.id.toString() }],
+            },
+            `e2e-bs-${RUN}-v2rmsec`,
+        );
+        expect(sectionRemoved.statusCode).toBe(200);
+        expect(
+            await prisma.materialGroup.count({
+                where: { id: { in: [swapSection!.id, BigInt(jia), BigInt(yi)] } },
+            }),
+        ).toBe(0);
+        expect(await prisma.materialItem.count({ where: { name: `换名物料_${RUN}` } })).toBe(0);
+    });
+
+    it("新建复合品类（带下属类型）：主品类登记 child_categories，类型为停用容器；类型前缀冲突被拒", async () => {
+        const dupTypePrefix = await createCategory(
+            {
+                name: `复合品类A_${RUN}`,
+                codePrefix: "QT",
+                groups: [],
+                types: [{ name: `类型一_${RUN}`, codePrefix: "QT1" }],
+            },
+            `e2e-bs-${RUN}-cat9`,
+        );
+        expect(dupTypePrefix.statusCode).toBe(400);
+        expect(dupTypePrefix.json().message).toContain("数字延长冲突");
+
+        const dupTypeName = await createCategory(
+            {
+                name: `复合品类B_${RUN}`,
+                codePrefix: "QU",
+                groups: [],
+                types: [{ name: `复合品类B_${RUN}`, codePrefix: "QUA" }],
+            },
+            `e2e-bs-${RUN}-cat10`,
+        );
+        expect(dupTypeName.statusCode).toBe(409);
+        expect(dupTypeName.json().message).toContain("已存在");
+
+        const name = `复合品类C_${RUN}`;
+        const created = await createCategory(
+            {
+                name,
+                codePrefix: "QT",
+                groups: [],
+                types: [
+                    { name: `类型一_${RUN}`, codePrefix: "QTA" },
+                    { name: `类型二_${RUN}`, codePrefix: "QTB" },
+                ],
+            },
+            `e2e-bs-${RUN}-cat11`,
+        );
+        expect(created.statusCode).toBe(200);
+        expect(created.json().data).toMatchObject({ key: "qt", name, codePrefix: "QT", rowVersion: 1 });
+        expect(created.json().data.types).toEqual([
+            { key: "qta", name: `类型一_${RUN}`, codePrefix: "QTA", rowVersion: 1 },
+            { key: "qtb", name: `类型二_${RUN}`, codePrefix: "QTB", rowVersion: 1 },
+        ]);
+        createdCategoryKeys.push("qt", "qta", "qtb");
+
+        const parent = await prisma.bomCategory.findUnique({ where: { categoryKey: "qt" } });
+        expect(parent).not.toBeNull();
+        expect(parent!.childCategories).toEqual(["qta", "qtb"]);
+        expect(parent!.status).toBe(true);
+        const children = await prisma.bomCategory.findMany({ where: { categoryKey: { in: ["qta", "qtb"] } } });
+        expect(children).toHaveLength(2);
+        expect(children.every(row => row.status === false)).toBe(true);
+
+        // 目录接口：容器品类随启用主品类下发（建档合并树与结构页折叠面板依赖此行为）
+        const list = await app.inject({ method: "GET", url: "/api/bom-categories", headers: authHeaders(superToken) });
+        const keys = (list.json().data as Array<Record<string, unknown>>).map(row => row.key);
+        expect(keys).toContain("qta");
+        expect(keys).toContain("qtb");
     });
 });

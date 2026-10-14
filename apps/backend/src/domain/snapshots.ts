@@ -166,11 +166,28 @@ export interface StructureChangeSummaryJson {
     name: string;
     /** 新增节点（nodeId 为本次生成的雪花 id） */
     added?: true;
-    before?: { multi?: boolean; qty?: boolean; status?: boolean; position?: number };
-    after?: { multi?: boolean; qty?: boolean; status?: boolean; position?: number };
+    /** 删除节点（终态已不存在；nodeId/name 为基线值） */
+    removed?: true;
+    before?: {
+        multi?: boolean;
+        qty?: boolean;
+        status?: boolean;
+        position?: number;
+        name?: string;
+        /** 移动前父分区名（null = 品类根；物料移动时为原分组名） */
+        parent?: string | null;
+    };
+    after?: {
+        multi?: boolean;
+        qty?: boolean;
+        status?: boolean;
+        position?: number;
+        name?: string;
+        parent?: string | null;
+    };
 }
 
-/** create_bom_category：品类创建事实（名称/编码/整树规模） */
+/** create_bom_category：品类创建事实（名称/编码/整树规模/下属类型清单） */
 export type BomCategoryCreateEventDetail = {
     name: string;
     categoryKey: string;
@@ -179,6 +196,8 @@ export type BomCategoryCreateEventDetail = {
     sections: number;
     groups: number;
     items: number;
+    /** 复合品类：一并创建的下属类型（目录容器品类） */
+    types?: Array<{ name: string; categoryKey: string; codePrefix: string }>;
 };
 
 /** update_bom_structure：结构维护——品类名、版本跃迁、变动节点前后值；hiddenUsage

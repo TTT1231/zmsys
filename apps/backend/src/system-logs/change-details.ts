@@ -246,6 +246,16 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
                     before: null,
                     after: `${snapshot.sections} 分区 · ${snapshot.groups} 分组 · ${snapshot.items} 物料`,
                 },
+                ...(snapshot.types?.length
+                    ? [
+                          {
+                              key: "types",
+                              label: "下属类型",
+                              before: null,
+                              after: snapshot.types.map(type => `${type.name}（${type.codePrefix}）`).join("、"),
+                          },
+                      ]
+                    : []),
             ].filter(change => change.after !== null);
         }
         case "update_bom_structure": {
@@ -262,15 +272,28 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
                 if (entry.added) {
                     return `${typeLabel[entry.nodeType]}「${entry.name}」新增`;
                 }
+                if (entry.removed) {
+                    return `${typeLabel[entry.nodeType]}「${entry.name}」删除`;
+                }
                 const parts: string[] = [];
                 const before = entry.before ?? {};
                 const after = entry.after ?? {};
                 if (before.status !== undefined || after.status !== undefined) {
                     parts.push(after.status === false ? "隐藏" : "恢复显示");
                 }
+                if (before.name !== undefined || after.name !== undefined) {
+                    parts.push(`改名「${before.name ?? "?"}」→「${after.name ?? "?"}」`);
+                }
                 if (before.multi !== undefined || before.qty !== undefined) {
                     parts.push(
                         `${before.multi ? "多选" : "单选"}${before.qty ? "+数量" : ""} → ${after.multi ? "多选" : "单选"}${after.qty ? "+数量" : ""}`,
+                    );
+                }
+                if (before.parent !== undefined || after.parent !== undefined) {
+                    parts.push(
+                        entry.nodeType === "item"
+                            ? `移入分组「${after.parent ?? "?"}」`
+                            : `移入${after.parent === null ? "品类根" : `分区「${after.parent}」`}`,
                     );
                 }
                 if (before.position !== undefined || after.position !== undefined) {

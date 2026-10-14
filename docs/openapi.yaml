@@ -405,8 +405,8 @@ paths:
         post:
             tags: [bom-structure]
             operationId: applyBomStructure
-            summary: 维护既有品类的目录结构（新增/隐藏/恢复/排序/规则）
-            description: 受保护权限 `bom-structure:manage`，默认仅 super（super 可解锁后授予其他角色）。携带期望版本 expectedRowVersion 做乐观锁（与品类当前 row_version 不一致即 409「品类结构已被他人修改」）；服务端锁定本品类及结构伙伴品类（正/反向 child_categories 引用，id 升序）后重读校验：全树层级/无环/唯一性、复合目录伙伴 groupKey 冲突、编码前缀不涉及。operations 为顺序应用的操作序列（七态，草稿节点用 tempId 关联），单次至多 200 条且必须产生实际变更。生效口径：结构变更只影响保存后新建的 BOM；已保存 BOM 及关联订单、出入库记录不会自动补充或修改（隐藏不影响旧档案，旧 BOM 需要增加物料时请另建 BOM）。本次隐藏的物料仍被既有 BOM 明细引用时响应附带 hiddenUsageCount 行数提示（不阻断）。同幂等键同请求摘要重放原成功响应，同键异内容 409。
+            summary: 维护既有品类的目录结构（新增/隐藏/恢复/排序/规则/改名/移动/删除）
+            description: 受保护权限 `bom-structure:manage`，默认仅 super（super 可解锁后授予其他角色）。携带期望版本 expectedRowVersion 做乐观锁（与品类当前 row_version 不一致即 409「品类结构已被他人修改」）；服务端锁定本品类及结构伙伴品类（正/反向 child_categories 引用，id 升序）后重读校验：全树层级/无环/唯一性（分区与分组共享名称命名空间）、复合目录伙伴 groupKey 冲突、编码前缀不涉及。operations 为顺序应用的操作序列（十态，草稿节点用 tempId 关联），单次至多 200 条且必须产生实际变更。v2 新增 rename 改名 / move 跨父移动（分组换分区或根、物料换分组，均追加到目标末位） / remove 删除（分区连带子分组整支），受冻结边界引用守卫约束：被既有 BOM 明细引用（bom_item.material_id / group_key）的物料不能删除、改名、换组，被引用分组不能改名——400 带行数提示，请改走隐藏；分区名不进冻结快照，改名不受限。生效口径：结构变更只影响保存后新建的 BOM；已保存 BOM 及关联订单、出入库记录不会自动补充或修改（隐藏/删除不影响旧档案，旧 BOM 需要增加物料时请另建 BOM）。本次隐藏的物料仍被既有 BOM 明细引用时响应附带 hiddenUsageCount 行数提示（不阻断）。同幂等键同请求摘要重放原成功响应，同键异内容 409。
             parameters:
                 - $ref: "#/components/parameters/IdempotencyKey"
             requestBody:
@@ -429,8 +429,8 @@ paths:
         post:
             tags: [bom-structure]
             operationId: createBomCategory
-            summary: 新建简单品类（名称 + 编码前缀 + 整棵草稿树）
-            description: 受保护权限 `bom-structure:manage`，默认仅 super（super 可解锁后授予其他角色）。事务内锁定 bom_category 全部既有行（id 升序）串行化创建：校验品类名/编码前缀唯一，且前缀不得与既有前缀构成「前缀 + 纯数字尾差」的数字延长关系（XK2 与 XK21 拒绝；KW/KWO、XK3/XK3W 字母尾差合法——序列 padStart 不截断，数字延长会拼出相同 BOM 编码）。categoryKey 与分组 groupKey 由后端生成（isModel 标记型号组，品类内至多一个）。仅支持简单品类（不携带 child_categories）；整棵草稿树一次保存，成功后才对建档可见。v1 不开放品类改名、改 key/前缀、复合关系编辑与品类级停用。
+            summary: 新建品类（名称 + 编码前缀 + 整棵草稿树，可选下属类型）
+            description: 受保护权限 `bom-structure:manage`，默认仅 super（super 可解锁后授予其他角色）。事务内锁定 bom_category 全部既有行（id 升序）串行化创建：校验品类名/编码前缀唯一，且前缀不得与既有前缀构成「前缀 + 纯数字尾差」的数字延长关系（XK2 与 XK21 拒绝；KW/KWO、XK3/XK3W 字母尾差合法——序列 padStart 不截断，数字延长会拼出相同 BOM 编码）。categoryKey 与分组 groupKey 由后端生成（isModel 标记型号组，品类内至多一个）。v2 新增可选 types（下属类型，至多 12 个，各带名称与前缀、同样参与唯一/数字延长校验）：创建后主品类登记 child_categories 成为复合品类，类型为停用的目录容器品类（永不取号、不进建档下拉），与既有 焊线/插线、新/老微动跌倒 容器同构。仍不开放品类改名、改 key/前缀、复合关系编辑与品类级停用。
             parameters:
                 - $ref: "#/components/parameters/IdempotencyKey"
             requestBody:
@@ -1736,18 +1736,18 @@ components:
             type: object
             additionalProperties: false
             required: [type]
-            description: 单个结构操作（七态；targetId/groupId/parentId 兼容已存节点 id 与同批草稿 tempId）；按 type 的必填字段约束由服务层校验，缺字段返回 400
+            description: 单个结构操作（十态；targetId/groupId/parentId 兼容已存节点 id 与同批草稿 tempId）；按 type 的必填字段约束由服务层校验，缺字段返回 400。rename/move/remove 受引用守卫约束（被既有 BOM 明细引用的物料/分组 → 400）
             properties:
-                type: { type: string, enum: [add_section, add_group, add_item, hide, restore, reorder, set_rules] }
+                type: { type: string, enum: [add_section, add_group, add_item, hide, restore, reorder, set_rules, rename, move, remove] }
                 tempId: { type: string, maxLength: 64, description: 新增节点/物料的草稿标识（同批唯一，供后续操作引用） }
-                name: { type: string, maxLength: 64 }
-                parentId: { type: [string, "null"], description: add_group：null/省略 = 挂品类根；否则为已存分区 id 或同批草稿分区 tempId }
+                name: { type: string, maxLength: 64, description: 新增/rename 的目标名称（同品类内分区与分组不能重名，物料按组内唯一） }
+                parentId: { type: [string, "null"], description: add_group 与 move 分组：null/省略 = 挂品类根，否则为已存分区 id 或同批草稿分区 tempId；move 物料：必填目标分组 id }
                 groupId: { type: string, description: add_item/set_rules：已存分组 id 或同批草稿分组 tempId }
                 multi: { type: boolean }
                 qty: { type: boolean }
                 isModel: { type: boolean, description: add_group 专属：标记为型号组（groupKey=model，品类内至多一个） }
                 targetType: { type: string, enum: [section, group, item] }
-                targetId: { type: string, description: hide/restore/reorder：已存节点/物料 id 或同批草稿 tempId }
+                targetId: { type: string, description: hide/restore/reorder/rename/move/remove：已存节点/物料 id 或同批草稿 tempId }
                 direction: { type: string, enum: [up, down] }
                 items:
                     type: array
@@ -1806,6 +1806,17 @@ components:
                 name: { type: string, maxLength: 64 }
                 codePrefix: { type: string, pattern: "^[A-Z0-9]{1,16}$", description: BOM 编码前缀（1-16 位大写字母/数字）；不得与既有前缀构成数字延长关系 }
                 seqWidth: { type: integer, minimum: 3, maximum: 8, description: BOM 编码序号宽度，缺省 3 }
+                types:
+                    type: array
+                    maxItems: 12
+                    description: 可选下属类型（目录容器品类）：创建后主品类登记 child_categories 成为复合品类
+                    items:
+                        type: object
+                        additionalProperties: false
+                        required: [name, codePrefix]
+                        properties:
+                            name: { type: string, maxLength: 64 }
+                            codePrefix: { type: string, pattern: "^[A-Z0-9]{1,16}$" }
                 groups:
                     type: array
                     maxItems: 100
@@ -1819,6 +1830,17 @@ components:
                 name: { type: string }
                 codePrefix: { type: string }
                 rowVersion: { type: integer, description: 新品类初始版本恒 1 }
+                types:
+                    type: array
+                    description: 带下属类型创建时附类型清单（目录容器品类）
+                    items:
+                        type: object
+                        required: [key, name, codePrefix, rowVersion]
+                        properties:
+                            key: { type: string }
+                            name: { type: string }
+                            codePrefix: { type: string }
+                            rowVersion: { type: integer }
 
         BomItemView:
             type: object

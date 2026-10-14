@@ -7,10 +7,11 @@ export interface BomStructureApplyResult {
     hiddenUsageCount?: number;
 }
 
-/** POST /bom-structure/categories 响应 */
+/** POST /bom-structure/categories 响应；带下属类型创建时附类型清单（目录容器品类） */
 export interface BomStructureCategoryCreated {
     key: string;
     name: string;
     codePrefix: string;
     rowVersion: number;
+    types?: Array<{ key: string; name: string; codePrefix: string; rowVersion: number }>;
 }

@@ -8,13 +8,19 @@ import type { CatalogTreeNode } from "./catalog-validator";
  * - 同级顺序恒归一化：兄弟集合按 sortOrder 稳定排序后以 0..n-1 重排，reorder 即
  *   在该序列中与相邻项交换位置（边界不动 = 无操作）；摘要中的「顺序」用 1 起始的
  *   位置而非裸 sortOrder（归一化会压缩序号，位置才是操作人看到的次序）。
- * - 冗余操作（隐藏已隐藏项、恢复已启项、规则未变化）不产生写入也不进摘要。
+ * - 冗余操作（隐藏已隐藏项、恢复已启项、规则未变化、改名同名）不产生写入也不进摘要。
  * - 草稿节点（tempId）在投影时立即分配真实雪花 id 并登记映射，后续操作可按
  *   tempId 或已存 id 引用；隐藏/恢复只改自身 status，不级联改子节点（可选 =
  *   自身∧祖先启用）。
+ * - rename 改名 / move 跨父移动（分组换分区或根、物料换分组，均追加到目标末位）/
+ *   remove 删除（分区连带子分组整支）：基线物料被删除/改名/换组、基线分组被改名
+ *   的信息单列输出，由服务层做 bom_item 引用守卫（被引用即 400，只能隐藏）。
  */
 
-/** 结构操作（discriminated union；DTO 校验后映射为本类型） */
+/** 结构操作（discriminated union；DTO 校验后映射为本类型）。v2 增补：
+ *  rename 改名（被既有 BOM 引用的物料/分组由服务层引用守卫拒绝）、move 跨父移动
+ *  （分组换分区/根、物料换分组，追加到目标末位）、remove 删除（整支；同样受引用守卫，
+ *  被引用时只能隐藏，见 db-scheme.md §5.4） */
 export type StructureOperation =
     | { type: "add_section"; tempId: string; name: string }
     | {
@@ -31,7 +37,10 @@ export type StructureOperation =
     | { type: "hide"; targetType: "section" | "group" | "item"; targetId: string }
     | { type: "restore"; targetType: "section" | "group" | "item"; targetId: string }
     | { type: "reorder"; targetType: "section" | "group" | "item"; targetId: string; direction: "up" | "down" }
-    | { type: "set_rules"; groupId: string; multi: boolean; qty: boolean };
+    | { type: "set_rules"; groupId: string; multi: boolean; qty: boolean }
+    | { type: "rename"; targetType: "section" | "group" | "item"; targetId: string; name: string }
+    | { type: "move"; targetType: "group" | "item"; targetId: string; parentId: string | null }
+    | { type: "remove"; targetType: "section" | "group" | "item"; targetId: string };
 
 /** 变动节点摘要（op_log detail 的 operations 数组元素；只记差异，不复制整树） */
 export interface StructureChangeSummary {
@@ -40,8 +49,25 @@ export interface StructureChangeSummary {
     name: string;
     /** 新增节点（nodeId 为本次生成的雪花 id） */
     added?: true;
-    before?: { multi?: boolean; qty?: boolean; status?: boolean; position?: number };
-    after?: { multi?: boolean; qty?: boolean; status?: boolean; position?: number };
+    /** 删除节点（终态已不存在；nodeId/name 为基线值） */
+    removed?: true;
+    before?: {
+        multi?: boolean;
+        qty?: boolean;
+        status?: boolean;
+        position?: number;
+        name?: string;
+        /** 移动前父分区名（null = 品类根；物料移动时为原分组名） */
+        parent?: string | null;
+    };
+    after?: {
+        multi?: boolean;
+        qty?: boolean;
+        status?: boolean;
+        position?: number;
+        name?: string;
+        parent?: string | null;
+    };
 }
 
 export interface ProjectionResult {
@@ -59,18 +85,35 @@ export interface ProjectionResult {
             sortOrder: number;
         }>;
         createItems: Array<{ id: bigint; groupId: bigint; name: string; sortOrder: number }>;
+        /** 终态已消失的基线节点（带形态：写侧须分组先于分区删除，满足父外键 RESTRICT） */
+        deleteGroups: Array<{ id: bigint; kind: "SECTION" | "GROUP" }>;
+        deleteItems: bigint[];
         updateGroups: Array<{
             id: bigint;
-            data: { status?: boolean; sortOrder?: number; multi?: boolean; qty?: boolean };
+            data: {
+                status?: boolean;
+                sortOrder?: number;
+                multi?: boolean;
+                qty?: boolean;
+                name?: string;
+                parentId?: bigint | null;
+            };
         }>;
-        updateItems: Array<{ id: bigint; data: { status?: boolean; sortOrder?: number } }>;
+        updateItems: Array<{
+            id: bigint;
+            data: { status?: boolean; sortOrder?: number; name?: string; groupId?: bigint };
+        }>;
     };
     /** 本次由启用转停用的物料（引用计数提示用，不阻断） */
     hiddenMaterialIds: bigint[];
+    /** 基线物料中被删除/改名/换组的（服务层引用守卫：被 bom_item 引用即 400） */
+    removedItemIds: bigint[];
+    renamedItemIds: bigint[];
+    movedItemIds: bigint[];
+    /** 基线分组中被改名的（groupKey 稳定不变，守卫按 bom_item.group_key 计数） */
+    renamedGroupKeys: Array<{ groupKey: string; name: string }>;
     summary: StructureChangeSummary[];
 }
-
-type ChangeFlags = { multi?: boolean; qty?: boolean; status?: boolean; position?: number };
 
 export function projectStructure(
     base: readonly CatalogTreeNode[],
@@ -119,6 +162,27 @@ export function projectStructure(
             throw new BadRequestException("目标节点不是物料");
         }
         throw new BadRequestException(`物料「${ref}」不存在（可能已被他人删除或草稿标识无效）`);
+    };
+
+    /** 定位物料当前所在分组与下标（hide/reorder/rename/move/remove 共用） */
+    const findItem = (
+        ref: string,
+    ): { node: CatalogTreeNode; index: number; item: CatalogTreeNode["items"][number] } => {
+        for (const node of nodes.values()) {
+            const index = node.items.findIndex(item => item.id === ref);
+            if (index >= 0) {
+                return { node, index, item: node.items[index]! };
+            }
+        }
+        throw new BadRequestException("目标节点不是物料");
+    };
+
+    /** 分区/分组形态校验（rename/move/remove 的 targetType 与实际节点对齐） */
+    const assertNodeKind = (node: CatalogTreeNode, targetType: "section" | "group"): void => {
+        const expected = targetType === "section" ? "SECTION" : "GROUP";
+        if (node.kind !== expected) {
+            throw new BadRequestException(`节点「${node.name}」不是${targetType === "section" ? "分区" : "分组"}`);
+        }
     };
 
     const usedKeys = new Set<string>([
@@ -217,64 +281,33 @@ export function projectStructure(
                 const status = op.type === "restore";
                 if (op.targetType === "item") {
                     const itemId = resolveItem(op.targetId);
-                    let found = false;
-                    for (const node of nodes.values()) {
-                        const item = node.items.find(entry => entry.id === itemId);
-                        if (item) {
-                            item.status = status;
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found) {
-                        throw new BadRequestException("目标节点不是物料");
-                    }
+                    findItem(itemId).item.status = status;
                     break;
                 }
                 const nodeId = resolve(op.targetId, op.targetType === "section" ? "分区" : "分组");
                 const node = nodes.get(nodeId)!;
-                const expected = op.targetType === "section" ? "SECTION" : "GROUP";
-                if (node.kind !== expected) {
-                    throw new BadRequestException(
-                        `节点「${node.name}」不是${op.targetType === "section" ? "分区" : "分组"}`,
-                    );
-                }
+                assertNodeKind(node, op.targetType);
                 node.status = status;
                 break;
             }
             case "reorder": {
                 if (op.targetType === "item") {
                     const itemId = resolveItem(op.targetId);
-                    let found = false;
-                    for (const node of nodes.values()) {
-                        const index = node.items.findIndex(item => item.id === itemId);
-                        if (index < 0) {
-                            continue;
-                        }
-                        const target = op.direction === "up" ? index - 1 : index + 1;
-                        if (target >= 0 && target < node.items.length) {
-                            const [moved] = node.items.splice(index, 1);
-                            node.items.splice(target, 0, moved!);
-                            node.items.forEach((item, order) => {
-                                item.sortOrder = order;
-                            });
-                        }
-                        found = true;
-                        break;
-                    }
-                    if (!found) {
-                        throw new BadRequestException("目标节点不是物料");
+                    const { node } = findItem(itemId);
+                    const index = node.items.findIndex(item => item.id === itemId);
+                    const target = op.direction === "up" ? index - 1 : index + 1;
+                    if (target >= 0 && target < node.items.length) {
+                        const [moved] = node.items.splice(index, 1);
+                        node.items.splice(target, 0, moved!);
+                        node.items.forEach((item, order) => {
+                            item.sortOrder = order;
+                        });
                     }
                     break;
                 }
                 const nodeId = resolve(op.targetId, op.targetType === "section" ? "分区" : "分组");
                 const node = nodes.get(nodeId)!;
-                const expected = op.targetType === "section" ? "SECTION" : "GROUP";
-                if (node.kind !== expected) {
-                    throw new BadRequestException(
-                        `节点「${node.name}」不是${op.targetType === "section" ? "分区" : "分组"}`,
-                    );
-                }
+                assertNodeKind(node, op.targetType);
                 const siblings = siblingsOf(node.parentId);
                 const index = siblings.findIndex(entry => entry.id === nodeId);
                 const target = op.direction === "up" ? index - 1 : index + 1;
@@ -296,6 +329,72 @@ export function projectStructure(
                 }
                 node.multi = op.multi;
                 node.qty = op.qty;
+                break;
+            }
+            case "rename": {
+                if (op.targetType === "item") {
+                    const itemId = resolveItem(op.targetId);
+                    findItem(itemId).item.name = op.name;
+                    break;
+                }
+                const nodeId = resolve(op.targetId, op.targetType === "section" ? "分区" : "分组");
+                const node = nodes.get(nodeId)!;
+                assertNodeKind(node, op.targetType);
+                node.name = op.name;
+                break;
+            }
+            case "move": {
+                if (op.targetType === "item") {
+                    const itemId = resolveItem(op.targetId);
+                    if (op.parentId === null) {
+                        throw new BadRequestException("物料移动必须指定目标分组");
+                    }
+                    const targetId = resolve(op.parentId, "目标分组");
+                    const target = nodes.get(targetId)!;
+                    if (target.kind !== "GROUP") {
+                        throw new BadRequestException("物料只能挂在分组下");
+                    }
+                    const { node: owner, index, item } = findItem(itemId);
+                    owner.items.splice(index, 1);
+                    item.sortOrder = target.items.length;
+                    target.items.push(item);
+                    break;
+                }
+                const nodeId = resolve(op.targetId, "分组");
+                const node = nodes.get(nodeId)!;
+                assertNodeKind(node, "group");
+                const parentId = op.parentId === null ? null : resolve(op.parentId, "目标分区");
+                if (parentId !== null && nodes.get(parentId)!.kind !== "SECTION") {
+                    throw new BadRequestException("分组只能挂在品类根或分区下");
+                }
+                node.parentId = parentId;
+                node.sortOrder = nextSortOrder(parentId);
+                break;
+            }
+            case "remove": {
+                if (op.targetType === "item") {
+                    const itemId = resolveItem(op.targetId);
+                    const { node: owner, index } = findItem(itemId);
+                    owner.items.splice(index, 1);
+                    break;
+                }
+                const nodeId = resolve(op.targetId, op.targetType === "section" ? "分区" : "分组");
+                const node = nodes.get(nodeId)!;
+                assertNodeKind(node, op.targetType);
+                if (node.kind === "SECTION") {
+                    // 分区只承载一层分组：连带其子分组整支移除（物料嵌在分组里随之消失）
+                    for (const child of [...nodes.values()].filter(entry => entry.parentId === nodeId)) {
+                        nodes.delete(child.id);
+                        // 释放子分组的键（含 model）：同批可再建新的型号组
+                        if (child.groupKey) {
+                            usedKeys.delete(child.groupKey);
+                        }
+                    }
+                }
+                if (node.groupKey) {
+                    usedKeys.delete(node.groupKey);
+                }
+                nodes.delete(nodeId);
                 break;
             }
         }
@@ -333,12 +432,26 @@ export function projectStructure(
         node.items.forEach((item, index) => basePositions.set(item.id, index + 1));
     }
 
-    const writes: ProjectionResult["writes"] = { createGroups: [], createItems: [], updateGroups: [], updateItems: [] };
+    const writes: ProjectionResult["writes"] = {
+        createGroups: [],
+        createItems: [],
+        deleteGroups: [],
+        deleteItems: [],
+        updateGroups: [],
+        updateItems: [],
+    };
     const summary: StructureChangeSummary[] = [];
     const hiddenMaterialIds: bigint[] = [];
+    const removedItemIds: bigint[] = [];
+    const renamedItemIds: bigint[] = [];
+    const movedItemIds: bigint[] = [];
+    const renamedGroupKeys: Array<{ groupKey: string; name: string }> = [];
 
     const positionOf = (node: CatalogTreeNode): number =>
         siblingsOf(node.parentId).findIndex(entry => entry.id === node.id) + 1;
+    /** 终态父名（分组 → 所属分区名；品类根为 null）——摘要可读性用 */
+    const parentLabelOf = (node: CatalogTreeNode): string | null =>
+        node.parentId === null ? null : (nodes.get(node.parentId)?.name ?? null);
 
     for (const node of nodes.values()) {
         const before = baseNodes.get(node.id);
@@ -377,80 +490,129 @@ export function projectStructure(
             }
             continue;
         }
-        const flags: ChangeFlags = {};
-        if (before.status !== node.status) {
-            flags.status = node.status;
-        }
-        if (before.multi !== node.multi) {
-            flags.multi = node.multi!;
-        }
-        if (before.qty !== node.qty) {
-            flags.qty = node.qty!;
-        }
-        if (basePositions.get(node.id) !== positionOf(node)) {
-            flags.position = positionOf(node);
-        }
-        if (Object.keys(flags).length > 0) {
+        const changedStatus = before.status !== node.status;
+        const changedMulti = before.multi !== node.multi;
+        const changedQty = before.qty !== node.qty;
+        const changedName = before.name !== node.name;
+        const changedPosition = basePositions.get(node.id) !== positionOf(node);
+        const changedParent = before.parentId !== node.parentId;
+        if (changedStatus || changedMulti || changedQty || changedName || changedPosition || changedParent) {
             writes.updateGroups.push({
                 id: BigInt(node.id),
                 data: {
-                    ...(flags.status !== undefined ? { status: node.status } : {}),
-                    ...(flags.position !== undefined ? { sortOrder: node.sortOrder } : {}),
-                    ...(flags.multi !== undefined ? { multi: node.multi! } : {}),
-                    ...(flags.qty !== undefined ? { qty: node.qty! } : {}),
+                    ...(changedStatus ? { status: node.status } : {}),
+                    ...(changedPosition ? { sortOrder: node.sortOrder } : {}),
+                    ...(changedMulti ? { multi: node.multi! } : {}),
+                    ...(changedQty ? { qty: node.qty! } : {}),
+                    ...(changedName ? { name: node.name } : {}),
+                    ...(changedParent ? { parentId: node.parentId === null ? null : BigInt(node.parentId) } : {}),
                 },
             });
-            const after: NonNullable<StructureChangeSummary["after"]> = { ...flags };
-            const beforeFlags: ChangeFlags = {};
-            if (after.status !== undefined) beforeFlags.status = before.status;
-            if (after.multi !== undefined) beforeFlags.multi = before.multi!;
-            if (after.qty !== undefined) beforeFlags.qty = before.qty!;
-            if (after.position !== undefined) beforeFlags.position = basePositions.get(node.id);
             summary.push({
                 nodeType: node.kind === "SECTION" ? "section" : "group",
                 nodeId: node.id,
                 name: node.name,
-                before: beforeFlags,
-                after,
+                before: {
+                    ...(changedStatus ? { status: before.status } : {}),
+                    ...(changedMulti ? { multi: before.multi! } : {}),
+                    ...(changedQty ? { qty: before.qty! } : {}),
+                    ...(changedName ? { name: before.name } : {}),
+                    ...(changedPosition ? { position: basePositions.get(node.id) } : {}),
+                    ...(changedParent
+                        ? {
+                              parent: before.parentId === null ? null : (baseNodes.get(before.parentId)?.name ?? null),
+                          }
+                        : {}),
+                },
+                after: {
+                    ...(changedStatus ? { status: node.status } : {}),
+                    ...(changedMulti ? { multi: node.multi! } : {}),
+                    ...(changedQty ? { qty: node.qty! } : {}),
+                    ...(changedName ? { name: node.name } : {}),
+                    ...(changedPosition ? { position: positionOf(node) } : {}),
+                    ...(changedParent ? { parent: parentLabelOf(node) } : {}),
+                },
             });
+            if (changedName && node.kind === "GROUP" && node.groupKey) {
+                renamedGroupKeys.push({ groupKey: node.groupKey, name: node.name });
+            }
         }
     }
 
-    // 已存物料差分：按基线序迭代（基线节点 → 基线物料），摘要顺序确定可读
+    // 基线节点终态消失 = 删除（分区连带子分组分别登记；物料的删除统一在下方
+    // 物料差分按终态定位登记——无论其原分组是否存续，避免「移出后删组」双重写）
+    for (const baseNode of base) {
+        if (nodes.has(baseNode.id)) {
+            continue;
+        }
+        writes.deleteGroups.push({ id: BigInt(baseNode.id), kind: baseNode.kind });
+        summary.push({
+            nodeType: baseNode.kind === "SECTION" ? "section" : "group",
+            nodeId: baseNode.id,
+            name: baseNode.name,
+            removed: true,
+        });
+    }
+
+    // 已存物料差分：物料可换组（move），须按终态定位表比对而非基线所属组
+    const finalItems = new Map<string, { node: CatalogTreeNode; item: CatalogTreeNode["items"][number] }>();
+    for (const node of nodes.values()) {
+        for (const item of node.items) {
+            finalItems.set(item.id, { node, item });
+        }
+    }
     for (const baseNode of base) {
         if (baseNode.kind !== "GROUP") {
             continue;
         }
-        const node = nodes.get(baseNode.id)!;
         for (const baseItem of baseNode.items) {
-            const item = node.items.find(entry => entry.id === baseItem.id)!;
-            const flags: ChangeFlags = {};
-            if (baseItem.status !== item.status) {
-                flags.status = item.status;
-                if (item.status === false) {
-                    hiddenMaterialIds.push(BigInt(item.id));
-                }
+            const final = finalItems.get(baseItem.id);
+            if (!final) {
+                // 终态不存在 = 被删除（单独 remove 或随组/随分区整支）
+                writes.deleteItems.push(BigInt(baseItem.id));
+                removedItemIds.push(BigInt(baseItem.id));
+                summary.push({ nodeType: "item", nodeId: baseItem.id, name: baseItem.name, removed: true });
+                continue;
             }
-            if (basePositions.get(item.id) !== item.sortOrder + 1) {
-                flags.position = item.sortOrder + 1;
+            const changedStatus = baseItem.status !== final.item.status;
+            const changedName = baseItem.name !== final.item.name;
+            const changedGroup = baseNode.id !== final.node.id;
+            const changedPosition = basePositions.get(baseItem.id) !== final.item.sortOrder + 1;
+            if (changedStatus && final.item.status === false) {
+                hiddenMaterialIds.push(BigInt(baseItem.id));
             }
-            if (Object.keys(flags).length > 0) {
+            if (changedName) {
+                renamedItemIds.push(BigInt(baseItem.id));
+            }
+            if (changedGroup) {
+                movedItemIds.push(BigInt(baseItem.id));
+            }
+            if (changedStatus || changedName || changedGroup || changedPosition) {
                 writes.updateItems.push({
-                    id: BigInt(item.id),
+                    id: BigInt(baseItem.id),
                     data: {
-                        ...(flags.status !== undefined ? { status: item.status } : {}),
-                        ...(flags.position !== undefined ? { sortOrder: item.sortOrder } : {}),
+                        ...(changedStatus ? { status: final.item.status } : {}),
+                        ...(changedName ? { name: final.item.name } : {}),
+                        ...(changedGroup ? { groupId: BigInt(final.node.id) } : {}),
+                        ...(changedPosition ? { sortOrder: final.item.sortOrder } : {}),
                     },
                 });
                 summary.push({
                     nodeType: "item",
-                    nodeId: item.id,
-                    name: item.name,
+                    nodeId: baseItem.id,
+                    name: final.item.name,
                     before: {
-                        ...(flags.status !== undefined ? { status: baseItem.status } : {}),
-                        ...(flags.position !== undefined ? { position: basePositions.get(item.id) } : {}),
+                        ...(changedStatus ? { status: baseItem.status } : {}),
+                        ...(changedName ? { name: baseItem.name } : {}),
+                        ...(changedGroup ? { parent: baseNode.name } : {}),
+                        ...(changedPosition ? { position: basePositions.get(baseItem.id) } : {}),
                     },
-                    after: flags,
+                    after: {
+                        ...(changedStatus ? { status: final.item.status } : {}),
+                        ...(changedName ? { name: final.item.name } : {}),
+                        ...(changedGroup ? { parent: final.node.name } : {}),
+                        ...(changedPosition ? { position: final.item.sortOrder + 1 } : {}),
+                    },
                 });
             }
         }
@@ -482,5 +644,14 @@ export function projectStructure(
         throw new BadRequestException("操作未产生任何变更");
     }
 
-    return { afterTree: [...nodes.values()], writes, hiddenMaterialIds, summary };
+    return {
+        afterTree: [...nodes.values()],
+        writes,
+        hiddenMaterialIds,
+        removedItemIds,
+        renamedItemIds,
+        movedItemIds,
+        renamedGroupKeys,
+        summary,
+    };
 }
