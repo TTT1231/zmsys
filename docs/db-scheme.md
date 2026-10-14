@@ -314,7 +314,7 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 
 ## 10. 应用内数据库备份/恢复（仅超管）
 
-超管专属功能：菜单「系统」→「备份」「恢复」；引擎与校验同时供 CLI（`pnpm restore-database`）应急通道复用。业务组闭包含 `sys_user`（bcrypt 哈希）——**备份文件按机密保管**。
+超管专属功能：菜单「系统」→「备份」「恢复」；引擎与校验同时供 CLI（`pnpm restore-database`）应急通道复用。业务组闭包含 `sys_user`（bcrypt 哈希）——**备份文件按机密保管**。另一类是运维级 mysqldump 全量备份（`pnpm backup-database`，含 DDL/视图/触发器，部署前兜底，用 mysql 客户端还原）——与本节 zmsys-backup v1 格式互不通用，恢复预检识别后明确拒绝。
 
 ### 10.1 分组与文件格式
 
@@ -344,6 +344,7 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 
 ### 10.5 CLI 与演练
 
+- `pnpm backup-app [--local] [--groups <逗号分隔>] [--out <目录>] [--no-gzip]`：应用级备份 CLI（与网页「备份」同一引擎，产 zmsys-backup v1 文件，可用网页「恢复」或 restore-database 恢复）；默认远程全量 gzip，临时命令容器跑 `node dist/system/backup-cli.js`（stdout 纯备份字节、状态走 stderr），只读一致性快照不要求停写、不记 op_log（运维通道）；本地 `--local` 仅允许 localhost。与 backup-database（mysqldump 运维全量，含 DDL）互不替代。
 - `pnpm restore-database [--local] [--replace] [--yes] [--request-key <key>] <文件>`：--local 与容器同一薄入口（`apps/backend/src/system/restore-cli.ts`，进程 UTC 初始化，stdin 专用于备份字节）；默认远程＝一次 SSH → backend 镜像临时命令容器 `docker compose run --rm -T --no-deps backend node dist/system/restore-cli.js ...`，先检查 backend 已停、目标库与本地确认值一致，确认在本地外壳完成。**停写前提**（backend/其他写入进程已停、暂停部署迁移）不因 --yes 绕过。
 - `--reset-password <account>` 独立救援改密：不要求重跑恢复；停写后取得同一恢复锁，新密码经 stdin 隐藏传入（不走 argv、不记录），复用口令规则（6-128 位），更新 bcrypt/password_changed_at/token_version/row_version 并记用户变更日志。现有 users 重置接口禁止 super，本救援入口不沿用该限制。
 - `pnpm restore-drill` 对 `*_test` 双轨演练：replace 轨（自引用三层且子 id 小于父、幂等清理、字段还原、token_version、序列、凭证）+ merge 轨（补插/GREATEST/分歧回滚）+ 四项故障注入（同 key 回放、COMMIT 回执丢失核实、提交后崩溃凭证可查、回滚中重启后同 key 重跑）。
