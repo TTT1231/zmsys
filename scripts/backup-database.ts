@@ -320,6 +320,8 @@ docker exec $C sh -c "mysqldump -uroot -p\\"\\$MYSQL_ROOT_PASSWORD\\" --single-t
                 "备份完成，校验全部通过：",
                 `  对象 ${sourceObjects.size} 个（${tableCount} 表 + ${viewCount} 视图），行数合计 ${totalRows}，逐表一致`,
                 `  gzip 完整 ✓  dump 尾注 ✓  本地还原 ✓  对象清单 ✓  行数 ✓`,
+                `  注意：mysqldump 运维备份（含表结构）须用 mysql 客户端还原；`,
+                `        网页「恢复」与 pnpm restore-database 仅接受 zmsys-backup v1 文件（网页「备份」导出）`,
                 `  文件：${dumpPath}`,
                 `  大小：${(gzipBuffer.length / 1024).toFixed(1)} KB（gzip）/ ${(Buffer.byteLength(sql) / 1024).toFixed(1)} KB（sql）`,
                 `  sha256：${sha256}`,

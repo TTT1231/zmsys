@@ -234,6 +234,21 @@ describe("validateBackup 文法与一致性", () => {
         expect(validated.tables.map(table => table.rowCount)).toEqual([1, 1]);
     });
 
+    it("mysqldump 运维备份（平文/gzip）给出针对性拒绝", async () => {
+        const executor = new ScriptedExecutor();
+        // backup-database 产物首行为 mysqldump 版本注记，其余为任意 SQL（DDL/条件注释等）
+        const dump = Buffer.from(
+            "-- MySQL dump 10.13  Distrib 8.0.36, for Linux (x86_64)\n\n--\n-- Table structure for table `sys_user`\n\nDROP TABLE IF EXISTS `sys_user`;\n",
+            "utf8",
+        );
+        await expect(validateBackup(executor, DATABASE, fromBuffer(dump), "merge")).rejects.toThrow(
+            "mysqldump 运维备份",
+        );
+        await expect(
+            validateBackup(executor, DATABASE, () => Readable.from([gzipSync(dump)]), "merge"),
+        ).rejects.toThrow("mysqldump 运维备份");
+    });
+
     it("checksum 不符拒绝", async () => {
         const executor = new ScriptedExecutor();
         const fingerprint = await fixtureFingerprint(executor, ["users"]);

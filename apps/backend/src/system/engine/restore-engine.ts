@@ -273,6 +273,13 @@ async function validateBackupStream(
 
     const first = await nextLine(lines);
     if (first === undefined || first.toString("utf8") !== FORMAT_HEADER) {
+        // mysqldump 产物（pnpm backup-database）首行为 "-- MySQL dump ..."，给出针对性引导
+        if (first !== undefined && first.toString("utf8").startsWith("-- MySQL dump")) {
+            throw new RestoreValidationError(
+                "检测到 mysqldump 运维备份（pnpm backup-database 产物）。" +
+                    "应用内恢复仅支持 zmsys-backup v1 格式（网页「备份」导出）；mysqldump 文件请用 mysql 客户端还原",
+            );
+        }
         throw new RestoreValidationError("缺少固定文件头（-- zmsys-backup v1）");
     }
     const second = await nextLine(lines);
