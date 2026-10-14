@@ -174,6 +174,14 @@ const createStore = (store: Store) => {
                 store.customers[index] = applied;
                 return applied;
             }),
+            delete: vi.fn(async ({ where }: { where: { id: bigint } }) => {
+                const index = store.customers.findIndex(c => c.id === where.id);
+                if (index >= 0) {
+                    const [removed] = store.customers.splice(index, 1);
+                    return removed;
+                }
+                return null;
+            }),
         },
         salesOrderTable: {
             groupBy: vi.fn(async ({ where }: { where: { lifecycleStatus: string; orderDate: { gte: Date } } }) =>
@@ -200,11 +208,22 @@ const createStore = (store: Store) => {
                             o.orderDate >= where.orderDate.gte,
                     ) ?? null,
             ),
+            count: vi.fn(
+                async ({ where }: { where: { customerId: bigint } }) =>
+                    store.orders.filter(o => o.customerId === where.customerId).length,
+            ),
         },
         customerOwnerHistory: {
             create: vi.fn(async ({ data }: { data: unknown }) => {
                 store.ownerHistories.push(data);
                 return data;
+            }),
+            deleteMany: vi.fn(async ({ where }: { where: { customerId: bigint } }) => {
+                const before = store.ownerHistories.length;
+                store.ownerHistories = store.ownerHistories.filter(
+                    history => (history as { customerId: bigint }).customerId !== where.customerId,
+                );
+                return before - store.ownerHistories.length;
             }),
         },
         opLog: {
@@ -510,5 +529,80 @@ describe("CustomersService.updateCustomer", () => {
                 actor,
             ),
         ).rejects.toThrow(new NotFoundException("负责人账号不存在"));
+    });
+});
+
+describe("CustomersService.deleteCustomer", () => {
+    let store: Store;
+    let ctx: ReturnType<typeof mkService>;
+
+    beforeEach(() => {
+        store = {
+            users: new Map([["sales200", mkUser({ id: 200n, account: "sales200", roleCode: "sales" })]]),
+            customers: [mkCustomer(900n, 200n)],
+            orders: [],
+            ownerHistories: [{ customerId: 900n }],
+            opLogs: [],
+        };
+        ctx = mkService(store);
+    });
+
+    it("客户不存在 404；版本不匹配 409", async () => {
+        await expect(ctx.service.deleteCustomer("CUS-9999", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
+            new NotFoundException("客户不存在"),
+        );
+        await expect(ctx.service.deleteCustomer("CUS-0900", { expectedVersion: 9 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException("客户信息已被其他人修改，请刷新后重试"),
+        );
+        expect(ctx.tx.customTable.delete).not.toHaveBeenCalled();
+    });
+
+    it("有任意状态订单即 409：进行中与已归档均构成引用，已删除订单（行消失）不阻止", async () => {
+        store.orders.push(mkOrder({ id: 1n, customerId: 900n }));
+        await expect(ctx.service.deleteCustomer("CUS-0900", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException("客户已有销售订单，不可删除"),
+        );
+        store.orders[0]!.lifecycleStatus = "ARCHIVED" as const;
+        await expect(ctx.service.deleteCustomer("CUS-0900", { expectedVersion: 1 }, actor, ID_KEY)).rejects.toThrow(
+            new ConflictException("客户已有销售订单，不可删除"),
+        );
+        // 订单物理删除后（行从表里消失）客户可删
+        store.orders.splice(0, 1);
+        await expect(ctx.service.deleteCustomer("CUS-0900", { expectedVersion: 1 }, actor, ID_KEY)).resolves.toBeNull();
+        expect(store.customers).toHaveLength(0);
+    });
+
+    it("删除成功：负责人移交历史同事务清空，op_log 留删除前快照且不落手机号明文", async () => {
+        await expect(ctx.service.deleteCustomer("CUS-0900", { expectedVersion: 1 }, actor, ID_KEY)).resolves.toBeNull();
+        expect(store.customers).toHaveLength(0);
+        expect(store.ownerHistories).toHaveLength(0);
+        expect(ctx.idempotency.complete).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+                httpStatus: 200,
+                resource: { type: "customer", code: "CUS-0900" },
+            }),
+        );
+        expect(store.opLogs.at(-1)).toMatchObject({
+            action: "delete_customer",
+            targetCode: "CUS-0900",
+            detailJson: {
+                name: "客户900",
+                owner: "销售200",
+                ownerAccount: "sales200",
+                created: "2026-09-01T00:00:00.000Z",
+            },
+        });
+        expect(
+            JSON.stringify(store.opLogs.at(-1), (_, value) => (typeof value === "bigint" ? value.toString() : value)),
+        ).not.toContain("13800001111");
+
+        const local = mkService(
+            store,
+            vi.fn(async () => ({ replay: { httpStatus: 200, body: { deleted: true } }, placeholderId: null })),
+        );
+        const replay = await local.service.deleteCustomer("CUS-0900", { expectedVersion: 1 }, actor, ID_KEY);
+        expect(replay).toBeNull();
+        expect(local.idempotency.complete).not.toHaveBeenCalled();
     });
 });

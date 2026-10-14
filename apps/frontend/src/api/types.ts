@@ -473,6 +473,11 @@ export interface UpdateCustomerInput {
     payTerms: string;
 }
 
+/** 删除客户仅限超级管理员，须无任何销售订单（已删除订单物理消失，视同无订单） */
+export interface DeleteCustomerInput {
+    expectedVersion: number;
+}
+
 export interface CreateBomInput {
     name: string;
     materialItemIds: string[];

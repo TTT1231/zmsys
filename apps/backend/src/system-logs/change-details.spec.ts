@@ -174,6 +174,33 @@ describe("changesOfOpLog", () => {
         ]);
     });
 
+    it("delete_customer：删除前快照透出档案关键事实，地区四段合并、可空字段缺省跳过", () => {
+        expect(
+            changesOfOpLog("delete_customer", {
+                name: "嘉信电子",
+                contact: "李强",
+                province: "广东省",
+                city: "深圳市",
+                district: "南山区",
+                town: null,
+                address: "科技园 1 号",
+                payTerms: "月结 30 天",
+                owner: "销售甲",
+                ownerAccount: "sales01",
+                createdBy: "郭均",
+                created: "2026-09-01T00:00:00.000Z",
+            }),
+        ).toEqual([
+            { key: "name", label: "客户名称", before: null, after: "嘉信电子" },
+            { key: "contact", label: "联系人", before: null, after: "李强" },
+            { key: "region", label: "所在地区", before: null, after: "广东省 / 深圳市 / 南山区" },
+            { key: "address", label: "详细地址", before: null, after: "科技园 1 号" },
+            { key: "payTerms", label: "付款条件", before: null, after: "月结 30 天" },
+            { key: "owner", label: "负责销售", before: null, after: "销售甲" },
+            { key: "created", label: "建档时间", before: null, after: "2026-09-01T00:00:00.000Z" },
+        ]);
+    });
+
     it("void_inbound：BOM 编码/数量随行（未变字段也要展示），状态 diff 映射有效/已作废", () => {
         expect(
             changesOfOpLog("void_inbound", {

@@ -133,6 +133,7 @@ enum OpLogAction {
   create_bom_category
   update_bom_structure
   delete_bom_category
+  delete_customer
 }
 
 /// 固定角色目录；grant_version 是整组授权的乐观锁版本

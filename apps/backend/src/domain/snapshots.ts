@@ -98,6 +98,23 @@ export type CustomerUpdateEventDetail =
 /** create_customer：客户名 + 负责人账号 */
 export type CustomerCreateEventDetail = { name: string; ownerAccount: string };
 
+/** delete_customer：删除后客户行不复存在，op_log 是唯一留存（手机号按保护口径不落明文） */
+export type CustomerDeleteEventDetail = {
+    name: string;
+    contact: string;
+    province: string | null;
+    city: string | null;
+    district: string | null;
+    town: string | null;
+    address: string | null;
+    payTerms: string;
+    owner: string;
+    ownerAccount: string;
+    createdBy: string;
+    /** 建档时刻（ISO 8601 带时区） */
+    created: string;
+};
+
 /** 入库行内快照（inbound.entrySnapshot）：台账 before/after_json 与 op_log detail 共同基底 */
 export type EntrySnapshotCore = {
     no: string;
@@ -231,6 +248,7 @@ export type OpLogDetailOf = {
     delete_order: OrderDeleteEventDetail;
     create_customer: CustomerCreateEventDetail;
     update_customer: CustomerUpdateEventDetail;
+    delete_customer: CustomerDeleteEventDetail;
     create_inbound: EntrySnapshotCore;
     void_inbound: InboundVoidEventDetail;
     delete_inbound: InboundDeleteEventDetail;

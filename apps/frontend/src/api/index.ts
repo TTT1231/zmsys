@@ -2,7 +2,7 @@
 export type * from "./types";
 export { login, logout, fetchProfile, changePassword } from "./auth";
 export { fetchOrders, createOrder, updateOrder, archiveOrder, unarchiveOrder, deleteOrder } from "./orders";
-export { fetchCustomers, createCustomer, updateCustomer } from "./customers";
+export { fetchCustomers, createCustomer, updateCustomer, deleteCustomer } from "./customers";
 export { fetchBoms, fetchBomCategories, fetchBomStocks, fetchBomStockLedger, createBom, deleteBom } from "./boms";
 export { applyBomStructure, createBomCategory, deleteBomCategory } from "./bom-structure";
 export {

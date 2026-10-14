@@ -3,12 +3,13 @@ import { CustomersService } from "./customers.service";
 import { Permissions } from "../common/decorators/permissions.decorator";
 import { PERMISSIONS } from "../constants";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
+import { ExpectedVersionDto } from "../common/dto/expected-version.dto";
 import { CreateCustomerDto } from "./dto/create-customer.dto";
 import { UpdateCustomerDto } from "./dto/update-customer.dto";
 import type { AuthUser } from "../common/types/auth-user";
 import type { Customer, CustomerPhone } from "./types";
 
-/** 客户档案（openapi customers tag）：客户不可删除，编辑走 PUT /customers/:code；完整手机号走 GET /customers/:code/phone（仅超管或负责人） */
+/** 客户档案（openapi customers tag）：编辑走 PUT /customers/:code；无任何销售订单的客户可由超级管理员删除（专用端点 :code/delete，物理删除）；完整手机号走 GET /customers/:code/phone（仅超管或负责人） */
 @Controller("customers")
 export class CustomersController {
     constructor(private readonly customersService: CustomersService) {}
@@ -44,5 +45,17 @@ export class CustomersController {
         @CurrentUser() actor: AuthUser,
     ): Promise<Customer> {
         return this.customersService.updateCustomer(code, dto, actor);
+    }
+
+    @Post(":code/delete")
+    @Permissions([PERMISSIONS.CUSTOMERS_DELETE], "只有超级管理员可以删除客户档案")
+    @HttpCode(HttpStatus.OK)
+    async deleteCustomer(
+        @Param("code") code: string,
+        @Body() dto: ExpectedVersionDto,
+        @CurrentUser() actor: AuthUser,
+        @Headers("idempotency-key") idempotencyKey: string | undefined,
+    ): Promise<null> {
+        return this.customersService.deleteCustomer(code, dto, actor, idempotencyKey);
     }
 }

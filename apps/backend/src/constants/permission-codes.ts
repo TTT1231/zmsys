@@ -35,6 +35,7 @@ export const PERMISSIONS = {
     CUSTOMERS_VIEW: "customers:view",
     CUSTOMERS_CREATE: "customers:create",
     CUSTOMERS_EDIT: "customers:edit",
+    CUSTOMERS_DELETE: "customers:delete", // 受保护：仅无任何销售订单的客户可删（清理手误建档）
     CUSTOMERS_BULK_TRANSFER: "customers:bulk-transfer", // 受保护
 
     // ---- BOM ----

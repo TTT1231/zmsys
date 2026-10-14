@@ -138,6 +138,7 @@ export const ACTION_CATALOG = {
         { id: "view", label: "查看" },
         { id: "create", label: "新建客户" },
         { id: "edit", label: "编辑客户" },
+        { id: "delete", label: "删除客户", protected: true },
         { id: "bulk-transfer", label: "批量移交负责人", protected: true },
     ],
     bom: [

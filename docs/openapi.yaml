@@ -303,7 +303,7 @@ paths:
             tags: [customers]
             operationId: updateCustomer
             summary: 编辑客户档案
-            description: 权限 `customers:edit`。客户不可删除；负责人变化写历史。phone 为空表示保留原号码。
+            description: 权限 `customers:edit`。负责人变化写历史。phone 为空表示保留原号码。删除走专用端点 POST /customers/{code}/delete。
             parameters:
                 - $ref: "#/components/parameters/CustomerCode"
             requestBody:
@@ -317,6 +317,27 @@ paths:
                     content:
                         application/json:
                             schema: { $ref: "#/components/schemas/CustomerEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
+
+    /customers/{code}/delete:
+        post:
+            tags: [customers]
+            operationId: deleteCustomer
+            summary: 删除无销售订单的客户档案
+            description: 受保护权限 `customers:delete`，默认仅 super（super 可解锁后授予其他角色）。用于清理手误建档：客户不得有任何销售订单（进行中/已归档均算引用；已删除订单物理删除、视同无订单），否则返回 409。删除为物理移除：负责人移交历史与客户行同事务删除（外键要求先清子行），`op_log` 记 delete_customer 事件与删除前档案快照（手机号不落明文），是删除后唯一残留。删除与订单新建竞争同一客户行锁与外键 RESTRICT，先提交者生效。幂等（Idempotency-Key）。
+            parameters:
+                - $ref: "#/components/parameters/CustomerCode"
+                - $ref: "#/components/parameters/IdempotencyKey"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/DeleteCustomerInput" }
+            responses:
+                "200": { $ref: "#/components/responses/SuccessWithoutData" }
                 "400": { $ref: "#/components/responses/BadRequest" }
                 "403": { $ref: "#/components/responses/Forbidden" }
                 "404": { $ref: "#/components/responses/NotFound" }
@@ -1637,6 +1658,13 @@ components:
                 reason: { type: string, maxLength: 500, description: 回退备注（选填） }
 
         DeleteOrderInput:
+            type: object
+            additionalProperties: false
+            required: [expectedVersion]
+            properties:
+                expectedVersion: { type: integer, minimum: 1 }
+
+        DeleteCustomerInput:
             type: object
             additionalProperties: false
             required: [expectedVersion]

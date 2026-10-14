@@ -53,6 +53,7 @@ import {
     saveRoleGrants,
     setPermissionProtection,
     setUserActive as setUserActiveReq,
+    deleteCustomer as deleteCustomerReq,
     updateCustomer as updateCustomerReq,
     updateInbound,
     updateOrder as updateOrderReq,
@@ -273,6 +274,12 @@ export const useUpdateOrder = () =>
 export const useCreateCustomer = () => useWbMutation(createCustomer);
 export const useUpdateCustomer = () =>
     useWbMutation((input: { code: string } & UpdateCustomerInput) => updateCustomerReq(input.code, input));
+/** 删除客户（仅超级管理员）：页面沿用旧签名 {code, expectedVersion}，此处拆参适配契约 POST /customers/:code/delete */
+export const useDeleteCustomer = () =>
+    useWbMutation((input: { code: string; expectedVersion: number }) => {
+        const { code, ...body } = input;
+        return deleteCustomerReq(code, body);
+    });
 /** 新建 BOM 只失效 BOM 列表与聚合快照；不动随台账变化的库存余量 */
 export const useCreateBom = () => {
     const queryClient = useQueryClient();
