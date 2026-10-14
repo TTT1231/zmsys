@@ -70,8 +70,12 @@ describe("validateCatalogTree", () => {
     });
 
     it("品类内组名 / groupKey / 组内物料名重复与双型号组均 400", () => {
+        // v2 起分区与分组共享名称命名空间（uk_material_group_name 覆盖两类节点）
         expect(() => validateCatalogTree([group("2001", "A面", "a"), group("2002", "A面", "b")])).toThrow(
-            new BadRequestException("分组名「A面」重复（与「A面」同名，请换一个名称）"),
+            new BadRequestException("名称「A面」重复（与「A面」同名，同品类内分区与分组不能重名）"),
+        );
+        expect(() => validateCatalogTree([section("2700", "结构分区"), group("2002", "结构分区", "x")])).toThrow(
+            new BadRequestException("名称「结构分区」重复（与「结构分区」同名，同品类内分区与分组不能重名）"),
         );
         expect(() => validateCatalogTree([group("2001", "A面", "face"), group("2002", "B面", "face")])).toThrow(
             new BadRequestException("分组「B面」的内部 key 与「A面」冲突"),

@@ -69,8 +69,9 @@ export interface BomCategory {
 
 /* ---- BOM 结构在线维护（仅超管，openapi bom-structure tag）---- */
 
-/** 结构操作七态（与后端 StructureOperation 同构）；targetId/groupId/parentId
- *  兼容已存节点 id 与同批草稿 tempId，服务端按序投影并校验 */
+/** 结构操作十态（与后端 StructureOperation 同构）；targetId/groupId/parentId
+ *  兼容已存节点 id 与同批草稿 tempId，服务端按序投影并校验。rename/move/remove
+ *  受冻结边界引用守卫约束：被既有 BOM 明细引用的物料/分组改名/删除会被 400 拒绝 */
 export type StructureOperation =
     | { type: "add_section"; tempId: string; name: string }
     | {
@@ -86,7 +87,10 @@ export type StructureOperation =
     | { type: "add_item"; tempId: string; groupId: string; name: string }
     | { type: "hide" | "restore"; targetType: "section" | "group" | "item"; targetId: string }
     | { type: "reorder"; targetType: "section" | "group" | "item"; targetId: string; direction: "up" | "down" }
-    | { type: "set_rules"; groupId: string; multi: boolean; qty: boolean };
+    | { type: "set_rules"; groupId: string; multi: boolean; qty: boolean }
+    | { type: "rename"; targetType: "section" | "group" | "item"; targetId: string; name: string }
+    | { type: "move"; targetType: "group" | "item"; targetId: string; parentId: string | null }
+    | { type: "remove"; targetType: "section" | "group" | "item"; targetId: string };
 
 export interface ApplyBomStructureInput {
     categoryKey: string;
@@ -117,10 +121,18 @@ export interface DraftNodeInput {
     items?: DraftItemInput[];
 }
 
+/** 新建品类时一并创建的下属类型（目录容器品类，status=false） */
+export interface CategoryTypeInput {
+    name: string;
+    codePrefix: string;
+}
+
 export interface CreateBomCategoryInput {
     name: string;
     codePrefix: string;
     seqWidth?: number;
+    /** 可选下属类型：创建后主品类为复合品类，建档时必选其一 */
+    types?: CategoryTypeInput[];
     groups: DraftNodeInput[];
 }
 
@@ -129,6 +141,7 @@ export interface BomStructureCategoryCreated {
     name: string;
     codePrefix: string;
     rowVersion: number;
+    types?: Array<{ key: string; name: string; codePrefix: string; rowVersion: number }>;
 }
 
 /** BOM 明细行（建档冻结快照，按 position 排序返回；目录后续变更不影响已建档案） */

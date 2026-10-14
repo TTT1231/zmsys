@@ -216,4 +216,98 @@ describe("projectStructure", () => {
             new BadRequestException("目标节点不是物料"),
         );
     });
+
+    it("v2 移出后删组：物料只落改挂差分，不进 deleteItems/removedItemIds（被引用物料合法保留）", () => {
+        const result = projectStructure(
+            base,
+            [
+                { type: "move", targetType: "item", targetId: "3003", parentId: "2001" },
+                { type: "remove", targetType: "group", targetId: "2002" },
+            ],
+            genId,
+        );
+        expect(result.writes.deleteGroups).toEqual([{ id: 2002n, kind: "GROUP" }]);
+        // a2 随组消亡（进删除集合 + 引用守卫集合），a1 已移出合法保留
+        expect(result.writes.deleteItems).toEqual([3004n]);
+        expect(result.removedItemIds).toEqual([3004n]);
+        expect(result.movedItemIds).toEqual([3003n]);
+        // a1 换组且随终态归一到型号组末位（position 4 → sortOrder 3）
+        expect(result.writes.updateItems).toEqual([{ id: 3003n, data: { groupId: 2001n, sortOrder: 3 } }]);
+    });
+
+    it("v2 单独删除物料：deleteItems + 引用守卫集合 + removed 摘要", () => {
+        const result = projectStructure(base, [{ type: "remove", targetType: "item", targetId: "3005" }], genId);
+        expect(result.writes.deleteItems).toEqual([3005n]);
+        expect(result.removedItemIds).toEqual([3005n]);
+        expect(result.summary).toEqual([{ nodeType: "item", nodeId: "3005", name: "大", removed: true }]);
+    });
+
+    it("v2 删分区连带子分组整支登记；删型号组后同批可再建型号组（键释放）", () => {
+        const cascaded = projectStructure(base, [{ type: "remove", targetType: "section", targetId: "2600" }], genId);
+        expect(cascaded.writes.deleteGroups).toEqual([
+            { id: 2600n, kind: "SECTION" },
+            { id: 2601n, kind: "GROUP" },
+        ]);
+        expect(cascaded.writes.deleteItems).toEqual([3005n]);
+        expect(cascaded.removedItemIds).toEqual([3005n]);
+
+        const released = projectStructure(
+            base,
+            [
+                { type: "remove", targetType: "group", targetId: "2001" },
+                {
+                    type: "add_group",
+                    tempId: "t-m",
+                    name: "新型号",
+                    parentId: null,
+                    multi: false,
+                    qty: false,
+                    isModel: true,
+                },
+            ],
+            genId,
+        );
+        expect(released.writes.deleteGroups).toEqual([{ id: 2001n, kind: "GROUP" }]);
+        expect(released.writes.deleteItems).toEqual([3000n, 3001n, 3002n]);
+        const replacement = released.afterTree.find(node => node.name === "新型号")!;
+        expect(replacement.groupKey).toBe("model");
+    });
+
+    it("v2 同批换名环链产出双向 name 前后值（写侧两阶段落库不撞 uk）", () => {
+        const result = projectStructure(
+            base,
+            [
+                { type: "rename", targetType: "group", targetId: "2002", name: "触点大小" },
+                { type: "rename", targetType: "group", targetId: "2601", name: "A面" },
+            ],
+            genId,
+        );
+        expect(result.writes.updateGroups).toEqual([
+            { id: 2002n, data: { name: "触点大小" } },
+            { id: 2601n, data: { name: "A面" } },
+        ]);
+        expect(result.renamedGroupKeys).toEqual([
+            { groupKey: "face-a", name: "触点大小" },
+            { groupKey: "contact-size", name: "A面" },
+        ]);
+    });
+
+    it("v2 分组跨分区移动：parentId 差分 + 归属前后值摘要", () => {
+        const result = projectStructure(
+            base,
+            [{ type: "move", targetType: "group", targetId: "2601", parentId: null }],
+            genId,
+        );
+        // 根序 [型号, A面, 触点, 触点大小→末位]：位置 1 → 4
+        expect(result.writes.updateGroups).toEqual([{ id: 2601n, data: { parentId: null, sortOrder: 3 } }]);
+        expect(result.summary).toEqual([
+            {
+                nodeType: "group",
+                nodeId: "2601",
+                name: "触点大小",
+                before: { parent: "触点", position: 1 },
+                after: { parent: null, position: 4 },
+            },
+        ]);
+    });
 });

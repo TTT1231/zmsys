@@ -12,7 +12,7 @@ import {
     type CatalogTreeNode,
 } from "./catalog-validator";
 import { projectStructure, type ProjectionResult, type StructureOperation } from "./catalog-projector";
-import type { DraftNodeDto } from "./dto/create-category.dto";
+import type { CategoryTypeDto, DraftNodeDto } from "./dto/create-category.dto";
 import type { StructureOperationDto } from "./dto/apply-structure.dto";
 import type { AuthUser } from "../common/types/auth-user";
 import type { BomStructureApplyResult, BomStructureCategoryCreated } from "./types";
@@ -69,8 +69,18 @@ const catalogTreeOf = (groups: GroupRow[]): CatalogTreeNode[] =>
         })),
     }));
 
+/* 树读取统一按 (sortOrder, id) 排序：投影的相邻交换/追加末位语义依赖确定次序，
+ * 与读取侧 orderedCatalogAll 一致——不排序时按主键序投影会与前端预览漂移 */
 const FULL_TREE_INCLUDE = {
-    groups: { include: { items: { select: { id: true, name: true, sortOrder: true, status: true } } } },
+    groups: {
+        orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+        include: {
+            items: {
+                orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+                select: { id: true, name: true, sortOrder: true, status: true },
+            },
+        },
+    },
 } satisfies Prisma.BomCategoryInclude;
 
 /** 宽松 DTO 操作 → 七态语义操作（缺必填字段即 400） */
@@ -132,6 +142,36 @@ function normalizeOperations(operations: StructureOperationDto[]): StructureOper
                 require(op.multi !== undefined, "multi");
                 require(op.qty !== undefined, "qty");
                 return { type: "set_rules", groupId: op.groupId!, multi: op.multi!, qty: op.qty! };
+            case "rename":
+                require(op.targetType, "targetType");
+                require(op.targetId, "targetId");
+                require(op.name, "name");
+                return {
+                    type: "rename",
+                    targetType: op.targetType as "section" | "group" | "item",
+                    targetId: op.targetId!,
+                    name: op.name!,
+                };
+            case "move":
+                require(op.targetType, "targetType");
+                require(op.targetId, "targetId");
+                if (op.targetType === "item") {
+                    require(op.parentId !== undefined && op.parentId !== null, "parentId");
+                }
+                return {
+                    type: "move",
+                    targetType: op.targetType as "group" | "item",
+                    targetId: op.targetId!,
+                    parentId: op.parentId ?? null,
+                };
+            case "remove":
+                require(op.targetType, "targetType");
+                require(op.targetId, "targetId");
+                return {
+                    type: "remove",
+                    targetType: op.targetType as "section" | "group" | "item",
+                    targetId: op.targetId!,
+                };
             default:
                 throw new BadRequestException(`未知结构操作类型：${op.type}`);
         }
@@ -318,6 +358,9 @@ export class BomStructureService {
                         ),
                         partners,
                     );
+                    // 冻结边界引用守卫：被既有 BOM 明细引用的物料不得删除/改名/换组，
+                    // 被引用分组（bom_item.group_key 冻结值）不得改名——只能隐藏
+                    await this.assertReferencesUntouched(tx, projection, [category.id, ...partnerIds], base);
                     await this.writeProjection(tx, projection, category.id, now);
                     const nextVersion = category.rowVersion + 1n;
                     await tx.bomCategory.update({
@@ -355,7 +398,13 @@ export class BomStructureService {
     }
 
     async createCategory(
-        dto: { name: string; codePrefix: string; seqWidth?: number; groups: DraftNodeDto[] },
+        dto: {
+            name: string;
+            codePrefix: string;
+            seqWidth?: number;
+            types?: CategoryTypeDto[];
+            groups: DraftNodeDto[];
+        },
         actor: AuthUser,
         idempotencyKey: string | undefined,
     ): Promise<BomStructureCategoryCreated> {
@@ -375,20 +424,34 @@ export class BomStructureService {
                     const all = await tx.bomCategory.findMany({
                         select: { categoryKey: true, name: true, codePrefix: true },
                     });
-                    if (all.some(row => row.name === dto.name)) {
-                        throw new ConflictException(`品类名「${dto.name}」已存在`);
+                    const types = dto.types ?? [];
+                    // 名称唯一：主品类与各类型互不相重、不与既有品类重名（类型与主品类
+                    // 平铺在同一 name 命名空间——bom_category.name 全局唯一）
+                    const newNames = [dto.name, ...types.map(type => type.name)];
+                    for (const [index, name] of newNames.entries()) {
+                        const dupInBatch = newNames.indexOf(name) !== index;
+                        if (all.some(row => row.name === name) || dupInBatch) {
+                            throw new ConflictException(`品类名「${name}」已存在`);
+                        }
                     }
-                    if (all.some(row => row.codePrefix === dto.codePrefix)) {
-                        throw new ConflictException(`编码前缀「${dto.codePrefix}」已存在`);
+                    // 前缀唯一 + 数字延长安全：新前缀集合内部与既有前缀双向校验
+                    const newPrefixes = [dto.codePrefix, ...types.map(type => type.codePrefix)];
+                    const existingPrefixes = all.map(row => row.codePrefix);
+                    for (const [index, prefix] of newPrefixes.entries()) {
+                        if (existingPrefixes.includes(prefix) || newPrefixes.indexOf(prefix) !== index) {
+                            throw new ConflictException(`编码前缀「${prefix}」已存在`);
+                        }
+                        assertPrefixSafe(prefix, [...existingPrefixes, ...newPrefixes]);
                     }
-                    assertPrefixSafe(
-                        dto.codePrefix,
-                        all.map(row => row.codePrefix),
-                    );
-                    const categoryKey = this.deriveCategoryKey(
-                        dto.codePrefix,
-                        all.map(row => row.categoryKey),
-                    );
+                    // categoryKey 依次派生（前缀间可能同基名，taken 集滚动累积）
+                    const takenKeys = new Set(all.map(row => row.categoryKey));
+                    const categoryKey = this.deriveCategoryKey(dto.codePrefix, [...takenKeys]);
+                    takenKeys.add(categoryKey);
+                    const childKeys = types.map(type => {
+                        const key = this.deriveCategoryKey(type.codePrefix, [...takenKeys]);
+                        takenKeys.add(key);
+                        return key;
+                    });
                     const tree = draftTreeOf(dto.groups, () => this.snowflake.next());
                     validateCatalogTree(tree);
                     const categoryId = this.snowflake.next();
@@ -402,10 +465,37 @@ export class BomStructureService {
                             seqWidth,
                             status: true,
                             rowVersion: 1n,
+                            // 下属类型一经创建即登记复合关系（建档时必选其一）
+                            ...(childKeys.length > 0 ? { childCategories: childKeys } : {}),
                             createdAt: now,
                             updatedAt: now,
                         },
                     });
+                    // 下属类型 = 目录容器品类（status=false，永不取号、不进建档下拉），
+                    // 与既有 焊线/插线、新/老微动跌倒 容器同构
+                    const createdTypes: Array<{ id: bigint; key: string; name: string; codePrefix: string }> = [];
+                    for (const [index, type] of types.entries()) {
+                        const typeId = this.snowflake.next();
+                        await tx.bomCategory.create({
+                            data: {
+                                id: typeId,
+                                categoryKey: childKeys[index]!,
+                                name: type.name,
+                                codePrefix: type.codePrefix,
+                                seqWidth: 3,
+                                status: false,
+                                rowVersion: 1n,
+                                createdAt: now,
+                                updatedAt: now,
+                            },
+                        });
+                        createdTypes.push({
+                            id: typeId,
+                            key: childKeys[index]!,
+                            name: type.name,
+                            codePrefix: type.codePrefix,
+                        });
+                    }
                     if (tree.length > 0) {
                         await tx.materialGroup.createMany({
                             data: tree.map(node => ({
@@ -450,12 +540,36 @@ export class BomStructureService {
                             sections,
                             groups,
                             items: itemCount,
+                            ...(createdTypes.length > 0
+                                ? {
+                                      types: createdTypes.map(type => ({
+                                          name: type.name,
+                                          categoryKey: type.key,
+                                          codePrefix: type.codePrefix,
+                                      })),
+                                  }
+                                : {}),
                         },
                         now,
                     });
                     return {
                         httpStatus: 200 as const,
-                        responseBody: { key: categoryKey, name: dto.name, codePrefix: dto.codePrefix, rowVersion: 1 },
+                        responseBody: {
+                            key: categoryKey,
+                            name: dto.name,
+                            codePrefix: dto.codePrefix,
+                            rowVersion: 1,
+                            ...(createdTypes.length > 0
+                                ? {
+                                      types: createdTypes.map(type => ({
+                                          key: type.key,
+                                          name: type.name,
+                                          codePrefix: type.codePrefix,
+                                          rowVersion: 1,
+                                      })),
+                                  }
+                                : {}),
+                        },
                         resource: { type: "bom_category", code: categoryKey },
                     };
                 } catch (error) {
@@ -487,21 +601,134 @@ export class BomStructureService {
     }
 
     private async writeProjection(tx: Tx, projection: ProjectionResult, categoryId: bigint, now: Date): Promise<void> {
-        if (projection.writes.createGroups.length > 0) {
+        const writes = projection.writes;
+        // 1) 物料删行先行：让出 (group_id, name) 唯一键并释放对 doomed 分组的引用
+        if (writes.deleteItems.length > 0) {
+            await tx.materialItem.deleteMany({ where: { id: { in: writes.deleteItems } } });
+        }
+        // 2) 改挂先行（分组 parentId / 物料 groupId）：fk ON DELETE RESTRICT 要求先把
+        //    子行摘离即将删除的父行——「移出后删组/删分区」必须先落改挂
+        for (const update of writes.updateGroups) {
+            if (update.data.parentId === undefined) {
+                continue;
+            }
+            await tx.materialGroup.update({
+                where: { id: update.id },
+                data: {
+                    parentId: update.data.parentId,
+                    ...(update.data.sortOrder !== undefined ? { sortOrder: update.data.sortOrder } : {}),
+                    updatedAt: now,
+                },
+            });
+        }
+        for (const update of writes.updateItems) {
+            if (update.data.groupId === undefined) {
+                continue;
+            }
+            await tx.materialItem.update({
+                where: { id: update.id },
+                data: {
+                    groupId: update.data.groupId,
+                    ...(update.data.sortOrder !== undefined ? { sortOrder: update.data.sortOrder } : {}),
+                    updatedAt: now,
+                },
+            });
+        }
+        // 3) 节点删行：分组（子）先于分区（父）——同一语句内父行先删必撞 RESTRICT
+        const doomedGroups = writes.deleteGroups.filter(row => row.kind === "GROUP").map(row => row.id);
+        const doomedSections = writes.deleteGroups.filter(row => row.kind === "SECTION").map(row => row.id);
+        if (doomedGroups.length > 0) {
+            await tx.materialGroup.deleteMany({ where: { id: { in: doomedGroups } } });
+        }
+        if (doomedSections.length > 0) {
+            await tx.materialGroup.deleteMany({ where: { id: { in: doomedSections } } });
+        }
+        // 4) 改名两阶段：先挪到行内唯一临时名（tmp-<id>，雪花 id 保证互异），再在阶段 6
+        //    落最终名——同批换名/环链（A→B、B→A）在逐行更新下不会中间态撞唯一键
+        const groupRenames = writes.updateGroups.filter(update => update.data.name !== undefined);
+        const itemRenames = writes.updateItems.filter(update => update.data.name !== undefined);
+        for (const update of groupRenames) {
+            await tx.materialGroup.update({
+                where: { id: update.id },
+                data: { name: `tmp-${update.id.toString()}`, updatedAt: now },
+            });
+        }
+        for (const update of itemRenames) {
+            await tx.materialItem.update({
+                where: { id: update.id },
+                data: { name: `tmp-${update.id.toString()}`, updatedAt: now },
+            });
+        }
+        // 5) 新增（Map 序保证分区先于其下新分组，自引用外键逐行检查可通过）
+        if (writes.createGroups.length > 0) {
             await tx.materialGroup.createMany({
-                data: projection.writes.createGroups.map(group => ({ ...group, categoryId, createdAt: now })),
+                data: writes.createGroups.map(group => ({ ...group, categoryId, createdAt: now })),
             });
         }
-        if (projection.writes.createItems.length > 0) {
+        if (writes.createItems.length > 0) {
             await tx.materialItem.createMany({
-                data: projection.writes.createItems.map(item => ({ ...item, createdAt: now })),
+                data: writes.createItems.map(item => ({ ...item, createdAt: now })),
             });
         }
-        for (const update of projection.writes.updateGroups) {
-            await tx.materialGroup.update({ where: { id: update.id }, data: { ...update.data, updatedAt: now } });
+        // 6) 其余更新（状态/规则/最终名/顺序；改挂字段已在阶段 2 落库，跳过）
+        for (const update of writes.updateGroups) {
+            const { parentId, ...rest } = update.data;
+            void parentId;
+            if (Object.keys(rest).length === 0) {
+                continue;
+            }
+            await tx.materialGroup.update({ where: { id: update.id }, data: { ...rest, updatedAt: now } });
         }
-        for (const update of projection.writes.updateItems) {
-            await tx.materialItem.update({ where: { id: update.id }, data: { ...update.data, updatedAt: now } });
+        for (const update of writes.updateItems) {
+            const { groupId, ...rest } = update.data;
+            void groupId;
+            if (Object.keys(rest).length === 0) {
+                continue;
+            }
+            await tx.materialItem.update({ where: { id: update.id }, data: { ...rest, updatedAt: now } });
+        }
+    }
+
+    /**
+     * 冻结边界引用守卫（db-scheme.md §5.4）：基线物料被 bom_item 引用（material_id）
+     * 时禁止删除/改名/换组；基线分组被引用（group_key 冻结值，限本品类及其伙伴品类的
+     * BOM）时禁止改名。分区名不进冻结快照，改名不受限。命中即 400，指引改走「隐藏」。
+     */
+    private async assertReferencesUntouched(
+        tx: Tx,
+        projection: ProjectionResult,
+        categoryIds: bigint[],
+        base: CatalogTreeNode[],
+    ): Promise<void> {
+        const itemNames = new Map(base.flatMap(node => node.items.map(item => [item.id, item.name] as const)));
+        const nameOf = (id: bigint): string => itemNames.get(id.toString()) ?? `物料 ${id.toString()}`;
+        const guardItems = async (ids: bigint[], remedy: string): Promise<void> => {
+            if (ids.length === 0) {
+                return;
+            }
+            const rows = await tx.$queryRaw<
+                Array<{ materialId: bigint; cnt: bigint | number }>
+            >`SELECT material_id AS materialId, COUNT(*) AS cnt FROM bom_item
+              WHERE material_id IN (${Prisma.join(ids)}) GROUP BY material_id LIMIT 1`;
+            const hit = rows[0];
+            if (hit) {
+                throw new BadRequestException(
+                    `物料「${nameOf(hit.materialId)}」已被 ${Number(hit.cnt)} 行既有 BOM 明细引用，${remedy}`,
+                );
+            }
+        };
+        await guardItems(projection.removedItemIds, "不能删除；请改为设为不可选（旧档案不受影响）");
+        await guardItems(projection.renamedItemIds, "不能改名；请新增替代物料并把旧物料设为不可选");
+        await guardItems(projection.movedItemIds, "不能移动到其他分组；请新增替代物料并把旧物料设为不可选");
+        for (const group of projection.renamedGroupKeys) {
+            const usage = await tx.bomItem.count({
+                where: { groupKey: group.groupKey, bom: { categoryId: { in: categoryIds } } },
+            });
+            if (usage > 0) {
+                throw new BadRequestException(
+                    `分组「${group.name}」已被 ${usage} 行既有 BOM 明细引用，不能改名；请新建分组并新增物料`,
+                );
+            }
         }
     }
 

@@ -60,6 +60,20 @@ export class DraftNodeDto {
     items?: DraftItemDto[];
 }
 
+/** 新建品类时一并创建的下属类型（目录容器品类）：类型即子品类，status=false、
+ *  归属主品类的 child_categories；前缀仅防撞号（容器永不取号） */
+export class CategoryTypeDto {
+    @Transform(trim)
+    @IsString()
+    @IsNotEmpty()
+    @MaxLength(64)
+    name!: string;
+
+    @IsString()
+    @Matches(/^[A-Z0-9]{1,16}$/, { message: "编码前缀为 1-16 位大写字母/数字" })
+    codePrefix!: string;
+}
+
 /** POST /bom-structure/categories 请求体 */
 export class CreateBomCategoryDto {
     @Transform(trim)
@@ -78,6 +92,14 @@ export class CreateBomCategoryDto {
     @Min(3)
     @Max(8)
     seqWidth?: number;
+
+    /** 可选下属类型（最多 12 个）：创建后主品类为复合品类，建档时必选其一 */
+    @IsOptional()
+    @IsArray()
+    @ArrayMaxSize(12)
+    @ValidateNested({ each: true })
+    @Type(() => CategoryTypeDto)
+    types?: CategoryTypeDto[];
 
     @IsArray()
     @ArrayMaxSize(100)

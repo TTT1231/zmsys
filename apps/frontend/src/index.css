@@ -1494,3 +1494,67 @@ html.dark .login-captcha-text {
         background: var(--color-line);
     }
 }
+
+/* ── BOM 结构页（/product-structure）：树列栅格与缩进步长。
+   列宽与原型档位一致（分组/物料 | 多选 | 数量 | 操作），窄屏依次收紧；
+   行内其余样式全走 Tailwind 工具类，这里只放工具类表达不了的结构栅格。 ── */
+.bs-cols {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 62px 62px 164px;
+    align-items: center;
+    min-width: 0;
+}
+.bs-cols .bs-rule {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+}
+.bs-tree {
+    --bs-step: 24px;
+    padding: 0.5rem 0.5rem 0.75rem;
+}
+@media (max-width: 1180px) {
+    .bs-cols {
+        grid-template-columns: minmax(0, 1fr) 48px 48px 150px;
+    }
+    .bs-tree {
+        --bs-step: 20px;
+    }
+}
+@media (max-width: 900px) {
+    .bs-cols {
+        grid-template-columns: minmax(0, 1fr) 40px 40px 132px;
+    }
+    .bs-tree {
+        --bs-step: 16px;
+    }
+}
+@media (max-width: 680px) {
+    .bs-cols {
+        grid-template-columns: minmax(0, 1fr) 34px 34px 96px;
+    }
+    .bs-tree {
+        --bs-step: 12px;
+    }
+}
+
+/* BOM 结构树行尾操作：按钮随断点收紧（列宽 164/150/132/96px，最多 5 枚 32px 按钮
+   在 ≤1180 起溢出）；≤680 隐藏上移/下移（更多菜单语义上已可承载，原型同款取舍） */
+.bs-tree .bs-cols .node-row > button,
+.bs-tree .bs-cols .node-row > span > button {
+    width: 28px;
+    height: 28px;
+}
+@media (max-width: 900px) {
+    .bs-tree .bs-cols .node-row > button,
+    .bs-tree .bs-cols .node-row > span > button {
+        width: 24px;
+        height: 24px;
+    }
+}
+@media (max-width: 680px) {
+    .bs-tree .bs-cols .node-row .bs-move {
+        display: none;
+    }
+}

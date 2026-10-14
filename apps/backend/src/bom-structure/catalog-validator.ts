@@ -73,18 +73,19 @@ export function validateCatalogTree(tree: readonly CatalogTreeNode[]): void {
             seen.add(id);
         }
     }
-    // 品类内唯一：组名、groupKey（先于数据库 uk 给出友好错误）
+    // 品类内唯一：分区与分组共享名称命名空间（uk_material_group_name 覆盖两类节点）、
+    // groupKey 唯一（先于数据库 uk 给出友好错误）
     const names = new Map<string, string>();
     const keys = new Map<string, string>();
     for (const node of tree) {
+        const named = names.get(node.name);
+        if (named) {
+            throw new BadRequestException(`名称「${node.name}」重复（与「${named}」同名，同品类内分区与分组不能重名）`);
+        }
+        names.set(node.name, node.name);
         if (node.kind !== "GROUP") {
             continue;
         }
-        const named = names.get(node.name);
-        if (named) {
-            throw new BadRequestException(`分组名「${node.name}」重复（与「${named}」同名，请换一个名称）`);
-        }
-        names.set(node.name, node.name);
         const keyed = keys.get(node.groupKey!);
         if (keyed) {
             throw new BadRequestException(`分组「${node.name}」的内部 key 与「${keyed}」冲突`);
