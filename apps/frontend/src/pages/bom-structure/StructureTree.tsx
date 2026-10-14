@@ -430,7 +430,6 @@ function GroupBranch({
                     selected={selectedId === group.id}
                     chips={
                         <>
-                            {group.isModel && <Chip tone="primary">型号组</Chip>}
                             {group.draft && <Chip tone="primary">新增</Chip>}
                             {hidden && <Chip tone="muted">不可选</Chip>}
                         </>
