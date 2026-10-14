@@ -186,6 +186,18 @@ export interface StructureChangeSummaryJson {
     };
 }
 
+/** delete_bom_category：品类删除事实（名称/编码/整树规模/级联删除的 BOM 数） */
+export type BomCategoryDeleteEventDetail = {
+    name: string;
+    categoryKey: string;
+    codePrefix: string;
+    sections: number;
+    groups: number;
+    items: number;
+    boms: number;
+    types?: Array<{ name: string; categoryKey: string; codePrefix: string }>;
+};
+
 /** create_bom_category：品类创建事实（名称/编码/整树规模/下属类型清单） */
 export type BomCategoryCreateEventDetail = {
     name: string;
@@ -227,4 +239,5 @@ export type OpLogDetailOf = {
     delete_outbound: OutboundDeleteEventDetail;
     create_bom_category: BomCategoryCreateEventDetail;
     update_bom_structure: BomStructureUpdateEventDetail;
+    delete_bom_category: BomCategoryDeleteEventDetail;
 };

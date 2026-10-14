@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, HttpCode, HttpStatus, Post } from "@nestjs/common";
+import { Body, Controller, Headers, HttpCode, HttpStatus, Param, Post } from "@nestjs/common";
 import { BomStructureService } from "./bom-structure.service";
 import { Permissions } from "../common/decorators/permissions.decorator";
 import { PERMISSIONS } from "../constants";
@@ -38,5 +38,16 @@ export class BomStructureController {
         @Headers("idempotency-key") idempotencyKey: string | undefined,
     ): Promise<BomStructureCategoryCreated> {
         return this.bomStructureService.createCategory(dto, actor, idempotencyKey);
+    }
+
+    @Post("categories/:categoryKey/delete")
+    @Permissions([PERMISSIONS.BOM_STRUCTURE_MANAGE], "只有超级管理员可以删除 BOM 品类")
+    @HttpCode(HttpStatus.OK)
+    async deleteCategory(
+        @Param("categoryKey") categoryKey: string,
+        @CurrentUser() actor: AuthUser,
+        @Headers("idempotency-key") idempotencyKey: string | undefined,
+    ): Promise<null> {
+        return this.bomStructureService.deleteCategory(categoryKey, actor, idempotencyKey);
     }
 }

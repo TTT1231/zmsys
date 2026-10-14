@@ -1,7 +1,7 @@
 /** 系统日志契约（openapi system-logs tag）：聚合 op_log 与各业务变更日志的
  * 统一事件模型；时间线页按天分组展示，(occurredAt, id) 复合游标分批追加。 */
 
-export type SystemLogDomain = "customer" | "order" | "bom" | "inbound" | "outbound";
+export type SystemLogDomain = "customer" | "order" | "bom" | "bom_structure" | "inbound" | "outbound";
 
 export type SystemLogAction =
     | "create"

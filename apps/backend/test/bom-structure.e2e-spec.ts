@@ -421,7 +421,7 @@ describe("BOM 结构在线维护 (e2e)", () => {
         // 时间线：domain=bom + action=edit 命中结构动作（edit 筛选修复的回归断言）
         const logs = await app.inject({
             method: "GET",
-            url: "/api/system-logs?domain=bom&action=edit&limit=100",
+            url: "/api/system-logs?domain=bom_structure&action=edit&limit=100",
             headers: authHeaders(superToken),
         });
         expect(logs.statusCode).toBe(200);
@@ -612,7 +612,7 @@ describe("BOM 结构在线维护 (e2e)", () => {
         // 时间线：create_bom_category 归一 create
         const logs = await app.inject({
             method: "GET",
-            url: "/api/system-logs?domain=bom&action=create&limit=100",
+            url: "/api/system-logs?domain=bom_structure&action=create&limit=100",
             headers: authHeaders(superToken),
         });
         expect((logs.json().data.items as Array<{ targetCode: string }>).some(item => item.targetCode === "qa")).toBe(
@@ -919,5 +919,183 @@ describe("BOM 结构在线维护 (e2e)", () => {
         const keys = (list.json().data as Array<Record<string, unknown>>).map(row => row.key);
         expect(keys).toContain("qta");
         expect(keys).toContain("qtb");
+    });
+
+    it("删除品类：admin 403、空品类/含未引用 BOM 级联删除、被订单引用与容器引用 409、op_log 与时间线", async () => {
+        const adminToken = await createUser(accountOf("admdel"), "admin");
+
+        // 空品类：admin 403 → super 200 → 目录消失、op_log 落 delete_bom_category、时间线归 bom_structure
+        const empty = await createCategory(
+            { name: `删除对象_${RUN}`, codePrefix: "QX", groups: [] },
+            `e2e-bs-${RUN}-del-cat`,
+        );
+        expect(empty.statusCode).toBe(200);
+        createdCategoryKeys.push("qx");
+        const denied = await app.inject({
+            method: "POST",
+            url: "/api/bom-structure/categories/qx/delete",
+            headers: { ...authHeaders(adminToken), "idempotency-key": `e2e-bs-${RUN}-del-deny` },
+        });
+        expect(denied.statusCode).toBe(403);
+        const removed = await app.inject({
+            method: "POST",
+            url: "/api/bom-structure/categories/qx/delete",
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-bs-${RUN}-del-qx` },
+        });
+        expect(removed.statusCode).toBe(200);
+        // runGuardedVoid 的契约响应恒为 data:null（重放与成功归一）
+        expect(removed.json().data).toBeNull();
+        const replay = await app.inject({
+            method: "POST",
+            url: "/api/bom-structure/categories/qx/delete",
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-bs-${RUN}-del-qx` },
+        });
+        expect(replay.statusCode).toBe(200);
+        expect(await prisma.bomCategory.count({ where: { categoryKey: "qx" } })).toBe(0);
+        const deleteLog = await prisma.opLog.findFirst({
+            where: { action: "delete_bom_category", targetCode: "qx" },
+        });
+        expect(deleteLog).not.toBeNull();
+        const timeline = await app.inject({
+            method: "GET",
+            url: "/api/system-logs?domain=bom_structure&action=delete&limit=100",
+            headers: authHeaders(superToken),
+        });
+        expect(
+            (timeline.json().data.items as Array<{ targetCode: string }>).some(item => item.targetCode === "qx"),
+        ).toBe(true);
+        const missing = await app.inject({
+            method: "POST",
+            url: "/api/bom-structure/categories/no-such-cat/delete",
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-bs-${RUN}-del-404` },
+        });
+        expect(missing.statusCode).toBe(404);
+
+        // 级联：含未引用 BOM 的品类整支删除（档案/明细/序列一并消失）
+        const cascade = await createCategory(
+            {
+                name: `级联删除_${RUN}`,
+                codePrefix: "QV",
+                groups: [
+                    {
+                        kind: "GROUP",
+                        tempId: "v",
+                        name: "级联组",
+                        multi: false,
+                        qty: false,
+                        items: [{ tempId: "v1", name: "级联物料" }],
+                    },
+                ],
+            },
+            `e2e-bs-${RUN}-del-casc`,
+        );
+        expect(cascade.statusCode).toBe(200);
+        createdCategoryKeys.push("qv");
+        const cascadeGroups = await prisma.materialGroup.findMany({
+            where: { category: { categoryKey: "qv" } },
+            include: { items: true },
+        });
+        const cascadeItemId = cascadeGroups[0]!.items[0]!.id.toString();
+        const cascadeBom = await app.inject({
+            method: "POST",
+            url: "/api/boms",
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-bs-${RUN}-del-casc-bom` },
+            payload: { name: `级联删除_${RUN}`, materialItemIds: [cascadeItemId] },
+        });
+        expect(cascadeBom.statusCode).toBe(200);
+        const cascadeCode = cascadeBom.json().data.code as string;
+        createdBomCodes.push(cascadeCode);
+        const cascadeDelete = await app.inject({
+            method: "POST",
+            url: "/api/bom-structure/categories/qv/delete",
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-bs-${RUN}-del-qv` },
+        });
+        expect(cascadeDelete.statusCode).toBe(200);
+        expect(await prisma.bomTable.count({ where: { bomCode: cascadeCode } })).toBe(0);
+        expect(await prisma.materialItem.count({ where: { id: BigInt(cascadeItemId) } })).toBe(0);
+        expect(await prisma.bomCategory.count({ where: { categoryKey: "qv" } })).toBe(0);
+        expect(await prisma.bizSequence.count({ where: { sequenceKey: "bom:qv" } })).toBe(0);
+
+        // 阻断：名下 BOM 已被订单引用 → 409 逐个列出；下属类型容器被复合品类引用 → 409
+        const block = await createCategory(
+            {
+                name: `阻断删除_${RUN}`,
+                codePrefix: "QW",
+                groups: [
+                    {
+                        kind: "GROUP",
+                        tempId: "w",
+                        name: "阻断组",
+                        multi: false,
+                        qty: false,
+                        items: [{ tempId: "w1", name: "阻断物料" }],
+                    },
+                ],
+            },
+            `e2e-bs-${RUN}-del-block`,
+        );
+        expect(block.statusCode).toBe(200);
+        createdCategoryKeys.push("qw");
+        const blockGroups = await prisma.materialGroup.findMany({
+            where: { category: { categoryKey: "qw" } },
+            include: { items: true },
+        });
+        const blockItemId = blockGroups[0]!.items[0]!.id.toString();
+        const blockBom = await app.inject({
+            method: "POST",
+            url: "/api/boms",
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-bs-${RUN}-del-block-bom` },
+            payload: { name: `阻断删除_${RUN}`, materialItemIds: [blockItemId] },
+        });
+        expect(blockBom.statusCode).toBe(200);
+        const blockCode = blockBom.json().data.code as string;
+        createdBomCodes.push(blockCode);
+        const customer = await app.inject({
+            method: "POST",
+            url: "/api/customers",
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-bs-${RUN}-del-cus` },
+            payload: {
+                name: `阻断删除客户_${RUN}`,
+                contact: "王经理",
+                phone: "13800002222",
+                province: "广东省",
+                city: "深圳市",
+                district: "南山区",
+                town: "粤海街道",
+                address: `科技园 ${RUN.slice(-3)} 号`,
+                ownerAccount: "guojun",
+                payTerms: "月结 30 天",
+            },
+        });
+        expect(customer.statusCode).toBe(200);
+        const order = await app.inject({
+            method: "POST",
+            url: "/api/orders",
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-bs-${RUN}-del-order` },
+            payload: {
+                customerCode: customer.json().data.code,
+                bomCode: blockCode,
+                qty: 10,
+                deliverDate: "2026-12-31",
+                orderDate: today(),
+                remark: `删除阻断 ${RUN}`,
+            },
+        });
+        expect(order.statusCode).toBe(200);
+        const blocked = await app.inject({
+            method: "POST",
+            url: "/api/bom-structure/categories/qw/delete",
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-bs-${RUN}-del-blocked` },
+        });
+        expect(blocked.statusCode).toBe(409);
+        expect(blocked.json().message).toContain(blockCode);
+        // 容器引用阻断：qta 被复合品类 qt 引用
+        const containerBlocked = await app.inject({
+            method: "POST",
+            url: "/api/bom-structure/categories/qta/delete",
+            headers: { ...authHeaders(superToken), "idempotency-key": `e2e-bs-${RUN}-del-container` },
+        });
+        expect(containerBlocked.statusCode).toBe(409);
+        expect(containerBlocked.json().message).toContain("下属类型");
     });
 });

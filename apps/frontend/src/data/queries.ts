@@ -22,6 +22,7 @@ import { useApp } from "@/context/useApp";
 import {
     archiveOrder as archiveOrderReq,
     applyBomStructure,
+    deleteBomCategory,
     createBom,
     createBomCategory,
     createCustomer,
@@ -324,6 +325,21 @@ export const useCreateBomCategory = () => {
     const toast = useToast();
     return useMutation({
         mutationFn: createBomCategory,
+        onError: error => toast.error(error.message),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: bomKeys.categories });
+            queryClient.invalidateQueries({ queryKey: bomKeys.list });
+            queryClient.invalidateQueries({ queryKey: wbKeys.all });
+            queryClient.invalidateQueries({ queryKey: ["workbench"] });
+        },
+    });
+};
+
+export const useDeleteBomCategory = () => {
+    const queryClient = useQueryClient();
+    const toast = useToast();
+    return useMutation({
+        mutationFn: deleteBomCategory,
         onError: error => toast.error(error.message),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: bomKeys.categories });

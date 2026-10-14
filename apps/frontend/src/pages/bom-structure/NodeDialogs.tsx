@@ -583,3 +583,62 @@ export function DeleteModal({
         </Modal>
     );
 }
+
+/* ---- 删除品类（危险操作，二次确认：输入品类名解锁删除按钮） ---- */
+
+export function DeleteCategoryModal({
+    categoryName,
+    stats,
+    onClose,
+    onSubmit,
+}: {
+    categoryName: string;
+    stats: { groups: number; materials: number };
+    onClose: () => void;
+    onSubmit: () => void;
+}) {
+    const [confirmName, setConfirmName] = useState("");
+    const matched = confirmName.trim() === categoryName;
+    return (
+        <Modal
+            open
+            onClose={onClose}
+            title={`删除品类「${categoryName}」？`}
+            width={480}
+            footer={
+                <>
+                    <Button size="sm" variant="secondary" onClick={onClose}>
+                        取消
+                    </Button>
+                    <Button size="sm" variant="danger" disabled={!matched} onClick={onSubmit}>
+                        确认删除
+                    </Button>
+                </>
+            }
+        >
+            <div className="mb-3 flex items-start gap-2.5 rounded-btn border border-danger/30 bg-danger-soft px-3.5 py-3 text-12 text-danger">
+                <Icon name="alert" size={16} className="mt-0.5 flex-none" />
+                <span>
+                    品类及其{" "}
+                    <strong>
+                        {stats.groups} 个分组 · {stats.materials} 项物料
+                    </strong>
+                    、全部 BOM 档案、下属类型容器与取号序列将一并删除，不可恢复。已被订单或出入库 引用的 BOM
+                    会阻止删除并逐个列出。
+                </span>
+            </div>
+            <label className="block">
+                <span className="mb-1 block text-13 font-medium text-td">
+                    请输入品类名称 <span className="font-semibold text-danger">{categoryName}</span> 以确认
+                </span>
+                <input
+                    autoFocus
+                    value={confirmName}
+                    onChange={event => setConfirmName(event.target.value)}
+                    placeholder={categoryName}
+                    className="w-full rounded-input border border-line-strong bg-surface px-3 py-2.5 text-14 text-ink outline-none focus:border-danger"
+                />
+            </label>
+        </Modal>
+    );
+}

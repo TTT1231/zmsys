@@ -448,6 +448,34 @@ paths:
                 "403": { $ref: "#/components/responses/Forbidden" }
                 "409": { $ref: "#/components/responses/Conflict" }
 
+    /bom-structure/categories/{categoryKey}/delete:
+        post:
+            tags: [bom-structure]
+            operationId: deleteBomCategory
+            summary: 删除品类（整支级联，危险操作）
+            description: 受保护权限 `bom-structure:manage`，默认仅 super（super 可解锁后授予其他角色）。事务内锁定全部品类行后级联删除品类自身、其下属类型容器、目录树（分区/分组/物料）、名下全部 BOM 档案与取号序列；被复合品类引用为下属类型时 409，名下任一 BOM 已被订单/出入库/库存调整引用时 409 并逐个列出 BOM 编码。同幂等键重放返回原响应。
+            parameters:
+                - $ref: "#/components/parameters/IdempotencyKey"
+                - name: categoryKey
+                  in: path
+                  required: true
+                  schema: { type: string, maxLength: 40 }
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                required: [deleted, key]
+                                properties:
+                                    deleted: { type: boolean, const: true }
+                                    key: { type: string }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "409": { $ref: "#/components/responses/Conflict" }
+
     /bom-stocks:
         get:
             tags: [boms]

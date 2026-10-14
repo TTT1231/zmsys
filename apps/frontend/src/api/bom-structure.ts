@@ -16,3 +16,13 @@ export function applyBomStructure(input: ApplyBomStructureInput): Promise<BomStr
 export function createBomCategory(input: CreateBomCategoryInput): Promise<BomStructureCategoryCreated> {
     return requestClient.post<BomStructureCategoryCreated>("/bom-structure/categories", input, idempotencyConfig());
 }
+
+/** 删除品类（整支级联：BOM 档案、目录树、下属类型容器、取号序列；仅超级管理员）。
+ *  已被订单/出入库引用的 BOM 会被服务端 409 阻断 */
+export function deleteBomCategory(categoryKey: string): Promise<{ deleted: boolean; key: string }> {
+    return requestClient.post<{ deleted: boolean; key: string }>(
+        `/bom-structure/categories/${categoryKey}/delete`,
+        {},
+        idempotencyConfig(),
+    );
+}

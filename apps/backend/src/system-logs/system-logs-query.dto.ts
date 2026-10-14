@@ -7,7 +7,7 @@ import type { SystemLogAction, SystemLogDomain } from "./types";
 export class SystemLogsQueryDto {
     /** 业务域筛选；缺省全部 */
     @IsOptional()
-    @IsIn(["customer", "order", "bom", "inbound", "outbound"])
+    @IsIn(["customer", "order", "bom", "bom_structure", "inbound", "outbound"])
     domain?: SystemLogDomain;
 
     /** 操作类型筛选；缺省全部 */
