@@ -8,14 +8,14 @@ import { Icon } from "@/lib/icons";
 import { useToast } from "@/components/ui/toastContexts";
 import { useApp } from "@/context/useApp";
 import { isApiError } from "@/http";
-import { useBomCategories, bomKeys, wbKeys } from "@/data/queries";
+import { useBomCategories, useDeleteBomCategory, bomKeys, wbKeys } from "@/data/queries";
 import { applyBomStructure, type BomCategory, type StructureOperation } from "@/api";
 import { uuid } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { CategoryCreateModal } from "./CategoryCreateModal";
 import { PreviewModal } from "./PreviewModal";
 import { StructureTree, type EditorSection, type RowRef, type TreeActions } from "./StructureTree";
-import { AddItemsModal, AddNodeModal, DeleteModal, MoveModal, RenameModal } from "./NodeDialogs";
+import { AddItemsModal, AddNodeModal, DeleteCategoryModal, DeleteModal, MoveModal, RenameModal } from "./NodeDialogs";
 import { StructureTour, type TourStep } from "./StructureTour";
 import { applyOpsToView, flattenTree, statsOf, viewTreeOf, withoutDraftSubtree, type ViewRoot } from "./structureView";
 
@@ -130,6 +130,7 @@ export function BomStructurePage() {
     const toast = useToast();
     const queryClient = useQueryClient();
     const { data: categories, isLoading } = useBomCategories();
+    const deleteCategory = useDeleteBomCategory();
     const [selectedKey, setSelectedKey] = useState("");
     const [state, dispatch] = useReducer(draftReducer, { drafts: {}, past: [], future: [] });
     const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
@@ -140,6 +141,7 @@ export function BomStructurePage() {
     const savingRef = useRef(false);
     savingRef.current = saving;
     const [creating, setCreating] = useState(false);
+    const [deleting, setDeleting] = useState(false);
     const [previewing, setPreviewing] = useState(false);
     const [touring, setTouring] = useState(false);
     const [dialog, setDialog] = useState<DialogState>(null);
@@ -795,6 +797,16 @@ export function BomStructurePage() {
                                             className="size-8"
                                         />
                                     </span>
+                                    <Button
+                                        id="bs-delete-cat"
+                                        size="sm"
+                                        variant="ghost"
+                                        tone="danger"
+                                        icon="trash"
+                                        onClick={() => setDeleting(true)}
+                                    >
+                                        删除品类
+                                    </Button>
                                     {!composite && (
                                         <Button
                                             id="bs-add-root"
@@ -887,6 +899,22 @@ export function BomStructurePage() {
                 />
             )}
 
+            {deleting && selected && (
+                <DeleteCategoryModal
+                    categoryName={selected.name}
+                    stats={statsOf(projections.get(selected.key) ?? [])}
+                    onClose={() => setDeleting(false)}
+                    onSubmit={() =>
+                        deleteCategory.mutate(selected.key, {
+                            onSuccess: () => {
+                                toast.success(`品类「${selected.name}」已删除`);
+                                setDeleting(false);
+                                setSelectedKey("");
+                            },
+                        })
+                    }
+                />
+            )}
             {touring && <StructureTour steps={tourSteps} onClose={() => setTouring(false)} />}
 
             {dialogNode?.kind === "add-node" && (

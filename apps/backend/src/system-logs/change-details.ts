@@ -8,6 +8,7 @@
 import { bomSpecOf } from "../common/bom-display";
 import type {
     BomCategoryCreateEventDetail,
+    BomCategoryDeleteEventDetail,
     BomStructureUpdateEventDetail,
     CustomerEditableFields,
     EntrySnapshotCore,
@@ -256,6 +257,31 @@ export function changesOfOpLog(action: string, detail: Json | null): SystemLogCh
                       ]
                     : []),
             ].filter(change => change.after !== null);
+        }
+        case "delete_bom_category": {
+            const deleted = (detail ?? {}) as BomCategoryDeleteEventDetail;
+            if (!detail) {
+                return null;
+            }
+            const rows: SystemLogChange[] = [
+                { key: "name", label: "品类名称", before: null, after: asText(deleted.name) },
+                { key: "codePrefix", label: "编码前缀", before: null, after: asText(deleted.codePrefix) },
+                {
+                    key: "structure",
+                    label: "删除规模",
+                    before: null,
+                    after: `${deleted.sections} 分区 · ${deleted.groups} 分组 · ${deleted.items} 物料 · ${deleted.boms} 份 BOM 档案`,
+                },
+            ];
+            if (deleted.types?.length) {
+                rows.push({
+                    key: "types",
+                    label: "下属类型",
+                    before: null,
+                    after: deleted.types.map(type => `${type.name}（${type.codePrefix}）`).join("、"),
+                });
+            }
+            return rows;
         }
         case "update_bom_structure": {
             const snapshot = (detail ?? {}) as BomStructureUpdateEventDetail;

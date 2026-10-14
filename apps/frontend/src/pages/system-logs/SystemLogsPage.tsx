@@ -31,6 +31,7 @@ const DOMAIN_LABELS: Record<SystemLogDomain, string> = {
     customer: "客户档案",
     order: "销售订单",
     bom: "物料与 BOM",
+    bom_structure: "BOM 结构",
     inbound: "成品入库",
     outbound: "成品出库",
 };
@@ -46,6 +47,7 @@ const DOMAIN_CHIPS: Record<SystemLogDomain, string> = {
     customer: "客户",
     order: "订单",
     bom: "BOM",
+    bom_structure: "结构",
     inbound: "入库",
     outbound: "出库",
 };
@@ -211,6 +213,8 @@ function indexSnapshot(snap: Snapshot): SnapshotIndex {
         codes: {
             order: new Set(snap.orders.map(item => item.orderNo)),
             bom: new Set(snap.boms.map(item => item.code)),
+            /* BOM 结构卡片的目标是品类 key，快照无对应集合：结构卡片无详情链接诉求 */
+            bom_structure: new Set<string>(),
             inbound: new Set(snap.inboundLedger.map(item => item.no)),
             outbound: new Set(snap.outboundLedger.map(item => item.no)),
             customer: new Set(snap.customers.map(item => item.code)),

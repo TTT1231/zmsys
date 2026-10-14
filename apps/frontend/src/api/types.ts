@@ -255,7 +255,7 @@ export interface StockAdjustmentRow {
 
 /* ---------- 系统日志（GET /system-logs，仅超级管理员） ---------- */
 
-export type SystemLogDomain = "customer" | "order" | "bom" | "inbound" | "outbound";
+export type SystemLogDomain = "customer" | "order" | "bom" | "bom_structure" | "inbound" | "outbound";
 
 export type SystemLogAction =
     | "create"

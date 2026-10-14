@@ -19,6 +19,7 @@ import type { BomStructureApplyResult, BomStructureCategoryCreated } from "./typ
 
 const APPLY_OPERATION_KEY = "bom-structure:apply";
 const CREATE_CATEGORY_OPERATION_KEY = "bom-structure:create-category";
+const DELETE_CATEGORY_OPERATION_KEY = "bom-structure:delete-category";
 
 /** bom_category.child_categories 的存储形态（JSON 数组存品类 key，与 boms.service 同构） */
 const childKeysOf = (value: unknown): string[] =>
@@ -737,6 +738,121 @@ export class BomStructureService {
         const [row] = await tx.$queryRaw<Array<{ cnt: bigint | number }>>`
             SELECT COUNT(*) AS cnt FROM bom_item WHERE material_id IN (${Prisma.join(projection.hiddenMaterialIds)})`;
         return Number(row!.cnt);
+    }
+
+    /** 删除品类（db-scheme.md §5.4，仅超管）：空品类/含未引用 BOM 的品类可整支删除——
+     *  级联其 BOM 档案、目录树、下属类型容器与取号序列；被订单/出入库引用的 BOM
+     *  或被复合品类引用为下属类型时 409 阻断。事务内锁全部品类行（id 升序）串行化。 */
+    async deleteCategory(categoryKey: string, actor: AuthUser, idempotencyKey: string | undefined): Promise<null> {
+        return this.idempotency.runGuardedVoid(
+            {
+                actorId: BigInt(actor.id),
+                operationKey: DELETE_CATEGORY_OPERATION_KEY,
+                idempotencyKey,
+                digest: { method: "POST", pathParams: { categoryKey } },
+            },
+            async (tx: Tx) => {
+                const located = await tx.bomCategory.findUnique({ where: { categoryKey }, select: { id: true } });
+                if (!located) {
+                    throw new NotFoundException("品类不存在");
+                }
+                // 锁全部品类行（表仅十行量级）：删除与 apply/建档/新建品类互斥
+                await tx.$queryRaw`SELECT id FROM bom_category ORDER BY id FOR UPDATE`;
+                const all = await tx.bomCategory.findMany({
+                    select: { id: true, categoryKey: true, name: true, codePrefix: true, childCategories: true },
+                });
+                const self = all.find(row => row.id === located.id)!;
+                const children = all.filter(row => childKeysOf(self.childCategories).includes(row.categoryKey));
+                const referrer = all.find(
+                    row => row.id !== self.id && childKeysOf(row.childCategories).includes(self.categoryKey),
+                );
+                if (referrer) {
+                    throw new ConflictException(`品类被复合品类「${referrer.name}」引用为下属类型，不能删除`);
+                }
+                const targetIds = [self.id, ...children.map(child => child.id)];
+                const boms = await tx.bomTable.findMany({
+                    where: { categoryId: { in: targetIds } },
+                    select: { id: true, bomCode: true },
+                    orderBy: { bomCode: "asc" },
+                });
+                if (boms.length > 0) {
+                    // 与 deleteBom 同口径：任意订单行（含归档）或入库/调整流水都算引用
+                    const referenced: string[] = [];
+                    for (const bom of boms) {
+                        const [row] = await tx.$queryRaw<Array<{ cnt: bigint | number }>>`
+                            SELECT (SELECT COUNT(*) FROM sales_order_table WHERE bom_id = ${bom.id})
+                                 + (SELECT COUNT(*) FROM inbound_ledger WHERE bom_id = ${bom.id})
+                                 + (SELECT COUNT(*) FROM stock_adjustment WHERE bom_id = ${bom.id}) AS cnt`;
+                        if (Number(row!.cnt) > 0) {
+                            referenced.push(bom.bomCode);
+                        }
+                    }
+                    if (referenced.length > 0) {
+                        throw new ConflictException(
+                            `品类下 BOM ${referenced.join("、")} 已被订单或出入库引用，不能删除品类`,
+                        );
+                    }
+                }
+                const groups = await tx.materialGroup.findMany({
+                    where: { categoryId: self.id },
+                    select: { kind: true, items: { select: { id: true } } },
+                });
+                const sections = groups.filter(group => group.kind === "SECTION").length;
+                const now = new Date();
+                // 级联顺序：BOM 明细与档案 → 物料 → 分组（GROUP 先于 SECTION，父外键 RESTRICT）
+                // → 取号序列 → 下属类型容器 → 自身
+                if (boms.length > 0) {
+                    await tx.bomItem.deleteMany({ where: { bomId: { in: boms.map(bom => bom.id) } } });
+                    await tx.bomTable.deleteMany({ where: { id: { in: boms.map(bom => bom.id) } } });
+                }
+                await tx.materialItem.deleteMany({ where: { group: { categoryId: { in: targetIds } } } });
+                await tx.materialGroup.deleteMany({ where: { categoryId: { in: targetIds }, kind: "GROUP" } });
+                await tx.materialGroup.deleteMany({ where: { categoryId: { in: targetIds }, kind: "SECTION" } });
+                await tx.bizSequence.deleteMany({
+                    where: {
+                        sequenceKey: {
+                            in: [self.categoryKey, ...children.map(child => child.categoryKey)].map(
+                                key => `bom:${key}`,
+                            ),
+                        },
+                    },
+                });
+                if (children.length > 0) {
+                    await tx.bomCategory.deleteMany({ where: { id: { in: children.map(child => child.id) } } });
+                }
+                await tx.bomCategory.delete({ where: { id: self.id } });
+                await recordOpLog(tx, this.snowflake, actor, {
+                    action: "delete_bom_category",
+                    targetType: "bom_category",
+                    targetId: self.id,
+                    targetCode: self.categoryKey,
+                    detail: {
+                        name: self.name,
+                        categoryKey: self.categoryKey,
+                        codePrefix: self.codePrefix,
+                        sections,
+                        groups: groups.length - sections,
+                        items: groups.reduce((sum, group) => sum + group.items.length, 0),
+                        boms: boms.length,
+                        ...(children.length > 0
+                            ? {
+                                  types: children.map(child => ({
+                                      name: child.name,
+                                      categoryKey: child.categoryKey,
+                                      codePrefix: child.codePrefix,
+                                  })),
+                              }
+                            : {}),
+                    },
+                    now,
+                });
+                return {
+                    httpStatus: 200 as const,
+                    responseBody: { deleted: true, key: self.categoryKey },
+                    resource: { type: "bom_category", code: self.categoryKey },
+                };
+            },
+        );
     }
 
     /** categoryKey 由前缀派生（小写 + 非字母数字转 -），冲突时追加 -2/-3… */

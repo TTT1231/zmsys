@@ -24,6 +24,7 @@ vi.mock("@/data/queries", () => ({
     wbKeys: { all: ["workbench"] },
     useBomCategories: () => ({ data: catalogRef.current, isLoading: false }),
     useCreateBomCategory: () => ({ mutate: vi.fn(), isPending: false }),
+    useDeleteBomCategory: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@/api", async importOriginal => {
