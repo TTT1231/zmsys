@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -9,17 +10,18 @@ import { useToast } from "@/components/ui/toastContexts";
 import { useApp } from "@/context/useApp";
 import { isApiError } from "@/http";
 import { useBomCategories, useDeleteBomCategory, bomKeys, wbKeys } from "@/data/queries";
-import { applyBomStructure, type BomCategory, type StructureOperation } from "@/api";
+import { applyBomStructure, createBomCategory, type BomCategory, type StructureOperation } from "@/api";
 import { uuid } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { CategoryCreateModal } from "./CategoryCreateModal";
 import { PreviewModal } from "./PreviewModal";
 import { StructureTree, type EditorSection, type RowRef, type TreeActions } from "./StructureTree";
-import { CategoryNav } from "./CategoryNav";
+import { CategoryNav, type DraftCategoryInfo } from "./CategoryNav";
 import { AddNodeModal, DeleteCategoryModal, DeleteModal, MoveModal, RenameModal } from "./NodeDialogs";
 import { StructureTour, type TourStep } from "./StructureTour";
 import {
     applyOpsToView,
+    flatDraftInputOf,
     flattenTree,
     standaloneItemOf,
     viewNodesOf,
@@ -40,6 +42,9 @@ import {
  * 草稿模型：每品类一份 ops 草稿（复合视图同时编辑主/子品类两份），保存时逐品类
  * 调 /bom-structure/apply（乐观锁 rowVersion）；409 保留草稿由操作人选择拉取最新
  * 或稍后再试。草稿跨品类切换保留；保存成功后清空历史（撤销不跨越保存边界）。
+ * 新建品类不即时落库：弹窗提交只生成左侧「未保存的新品类」草稿（draft- 键同样
+ * 走 ops 草稿机制，快照为空树），点保存结构时才调 createBomCategory 连品类带
+ * 整棵树一次写入；中途右键「丢弃草稿」即放弃，数据库无残留。
  */
 
 type Drafts = Record<string, StructureOperation[]>;
@@ -143,6 +148,9 @@ export function BomStructurePage() {
     const deleteCategory = useDeleteBomCategory();
     const [selectedKey, setSelectedKey] = useState("");
     const [state, dispatch] = useReducer(draftReducer, { drafts: {}, past: [], future: [] });
+    /* 新建品类草稿（未入库）：弹窗提交追加，保存结构时 createBomCategory 一次写入 */
+    const [draftCategories, setDraftCategories] = useState<DraftCategoryInfo[]>([]);
+    const [discarding, setDiscarding] = useState<DraftCategoryInfo | null>(null);
     const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
     const [expandedCategories, setExpandedCategories] = useState<ReadonlySet<string>>(new Set());
     const [selectedNode, setSelectedNode] = useState<string | null>(null);
@@ -188,21 +196,43 @@ export function BomStructurePage() {
     );
 
     const selected = categories?.find(row => row.key === selectedKey) ?? null;
+    const selectedDraft = selected ? null : (draftCategories.find(row => row.key === selectedKey) ?? null);
+    const hasSelection = selected !== null || selectedDraft !== null;
     const parentCategory = selected
         ? ((categories?.find(row => row.key === parentOf.get(selected.key)) ?? null) as BomCategory | null)
         : null;
+    /** 弹窗副标题用：已存品类名 → 草稿品类名 → 空串 */
+    const nameOfKey = useCallback(
+        (key: string) =>
+            categories?.find(row => row.key === key)?.name ?? draftCategories.find(row => row.key === key)?.name ?? "",
+        [categories, draftCategories],
+    );
 
-    /* 各品类当前投影（快照 + 草稿 ops，与后端投影同构） */
+    /* 各品类当前投影（快照 + 草稿 ops，与后端投影同构；草稿品类快照为空树） */
     const projections = useMemo(() => {
         const map = new Map<string, ViewRoot[]>();
         for (const row of categories ?? []) {
             map.set(row.key, applyOpsToView(viewTreeOf(row.groups), state.drafts[row.key] ?? []));
         }
+        for (const draft of draftCategories) {
+            map.set(draft.key, applyOpsToView([], state.drafts[draft.key] ?? []));
+        }
         return map;
-    }, [categories, state.drafts]);
+    }, [categories, draftCategories, state.drafts]);
 
-    /* 复合品类分节：主品类共用结构（有目录时）+ 本品结构；单品类视图无标题 */
+    /* 复合品类分节：主品类共用结构（有目录时）+ 本品结构；单品类视图无标题；
+     * 草稿品类 = 单分节空树编辑（保存后入库） */
     const sections = useMemo<EditorSection[]>(() => {
+        if (selectedDraft) {
+            return [
+                {
+                    categoryKey: selectedDraft.key,
+                    label: selectedDraft.name,
+                    composite: false,
+                    tree: projections.get(selectedDraft.key) ?? [],
+                },
+            ];
+        }
         if (!selected) {
             return [];
         }
@@ -232,13 +262,19 @@ export function BomStructurePage() {
             tree: projections.get(selected.key) ?? [],
         });
         return views;
-    }, [selected, parentCategory, projections]);
+    }, [selectedDraft, selected, parentCategory, projections]);
 
     const dirtyKeys = useMemo(
         () => (categories ?? []).filter(row => (state.drafts[row.key]?.length ?? 0) > 0).map(row => row.key),
         [categories, state.drafts],
     );
-    const dirtyCount = dirtyKeys.reduce((sum, key) => sum + (state.drafts[key]?.length ?? 0), 0);
+    /* 待保存总量 = 已存品类与草稿品类下的 ops 数 + 草稿品类数（每个草稿品类
+     * 本身即一条待入库变更） */
+    const pendingCount =
+        [...(categories ?? []).map(row => row.key), ...draftCategories.map(draft => draft.key)].reduce(
+            (sum, key) => sum + (state.drafts[key]?.length ?? 0),
+            0,
+        ) + draftCategories.length;
 
     /* 首个品类默认选中（下属类型优先展开归属主品类） */
     useEffect(() => {
@@ -247,9 +283,9 @@ export function BomStructurePage() {
         }
     }, [selectedKey, rootCategories]);
 
-    /* 离开页面前的未保存提醒（草稿仅存于内存） */
+    /* 离开页面前的未保存提醒（草稿与草稿品类仅存于内存） */
     useEffect(() => {
-        if (dirtyCount === 0) {
+        if (pendingCount === 0) {
             return;
         }
         const onBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -257,7 +293,7 @@ export function BomStructurePage() {
         };
         window.addEventListener("beforeunload", onBeforeUnload);
         return () => window.removeEventListener("beforeunload", onBeforeUnload);
-    }, [dirtyCount]);
+    }, [pendingCount]);
 
     /* 弹窗/操作后的焦点恢复：定位到目标行 */
     useEffect(() => {
@@ -339,17 +375,15 @@ export function BomStructurePage() {
                 dispatch({ type: "append", key: categoryKey, ops: [{ type: "set_rules", groupId, multi, qty }] });
             },
             openAddNode: (categoryKey, target) => {
-                const category = categories?.find(row => row.key === categoryKey);
-                setDialog({ kind: "add-node", categoryKey, categoryName: category?.name ?? "", target });
+                setDialog({ kind: "add-node", categoryKey, categoryName: nameOfKey(categoryKey), target });
             },
             openRename: row => setDialog({ kind: "rename", row, tree: treeOfCategory(row.categoryKey) }),
             openMove: row => {
-                const category = categories?.find(item => item.key === row.categoryKey);
                 setDialog({
                     kind: "move",
                     row,
                     tree: treeOfCategory(row.categoryKey),
-                    categoryName: category?.name ?? "",
+                    categoryName: nameOfKey(row.categoryKey),
                 });
             },
             openRemove: row => {
@@ -358,11 +392,11 @@ export function BomStructurePage() {
                 setDialog({ kind: "delete", row, childCount });
             },
         }),
-        [categories, toast, treeOfCategory],
+        [nameOfKey, toast, treeOfCategory],
     );
 
     const save = useCallback(async () => {
-        if (saving || dirtyKeys.length === 0) {
+        if (saving || (dirtyKeys.length === 0 && draftCategories.length === 0)) {
             return;
         }
         setSaving(true);
@@ -370,6 +404,7 @@ export function BomStructurePage() {
         let hiddenUsage = 0;
         let conflictName: string | null = null;
         let failure: string | null = null;
+        let createdTarget: { key: string; types?: Array<{ key: string }> } | null = null;
         for (const key of dirtyKeys) {
             const category = categories?.find(row => row.key === key);
             if (!category) {
@@ -393,6 +428,26 @@ export function BomStructurePage() {
                 break;
             }
         }
+        /* 草稿品类入库：品类 + 整棵投影树一次写入（名称/前缀冲突 409 保留草稿重试） */
+        if (!failure && !conflictName) {
+            for (const draft of draftCategories) {
+                try {
+                    const created = await createBomCategory({
+                        name: draft.name,
+                        codePrefix: draft.codePrefix,
+                        ...(draft.types.length > 0 ? { types: draft.types } : {}),
+                        groups: flatDraftInputOf(applyOpsToView([], stateRef.current.drafts[draft.key] ?? [])),
+                    });
+                    savedCount += 1;
+                    createdTarget = created;
+                    dispatch({ type: "saved", key: draft.key });
+                    setDraftCategories(current => current.filter(entry => entry.key !== draft.key));
+                } catch (error) {
+                    failure = error instanceof Error ? error.message : "保存失败，请稍后再试";
+                    break;
+                }
+            }
+        }
         setSaving(false);
         if (savedCount > 0) {
             void queryClient.invalidateQueries({ queryKey: bomKeys.categories });
@@ -405,13 +460,21 @@ export function BomStructurePage() {
             );
             setConflictCategory(null);
         }
+        /* 草稿品类落库后选中它（复合品类切到首个下属类型，方便继续搭目录） */
+        if (createdTarget) {
+            setSelectedKey(createdTarget.types?.[0]?.key ?? createdTarget.key);
+            if (createdTarget.types?.length) {
+                setExpandedCategories(current => new Set([...current, createdTarget.key]));
+            }
+            setSelectedNode(null);
+        }
         if (conflictName) {
             setConflictCategory(conflictName);
         }
         if (failure) {
             toast.error(failure);
         }
-    }, [saving, dirtyKeys, categories, queryClient, toast]);
+    }, [saving, dirtyKeys, draftCategories, categories, queryClient, toast]);
 
     /* 全局快捷键：Ctrl+S 保存 / Ctrl+Z·Ctrl+Shift+Z·Ctrl+Y 撤销重做 / F2 重命名选中行 */
     useEffect(() => {
@@ -536,7 +599,13 @@ export function BomStructurePage() {
         return <PageLoading label="加载 BOM 结构" />;
     }
 
-    const fullTitle = selected ? (parentCategory ? `${parentCategory.name} / ${selected.name}` : selected.name) : "";
+    const fullTitle = selectedDraft
+        ? `${selectedDraft.name}（编号 ${selectedDraft.codePrefix}…）`
+        : selected
+          ? parentCategory
+              ? `${parentCategory.name} / ${selected.name}`
+              : selected.name
+          : "";
     const composite = sections.some(section => section.composite);
 
     /* 弹窗提交处理器（与 dialog 状态一一对应） */
@@ -550,6 +619,7 @@ export function BomStructurePage() {
                 <CategoryNav
                     roots={rootCategories}
                     childrenOf={childrenOf}
+                    drafts={draftCategories}
                     selectedKey={selectedKey}
                     expanded={expandedCategories}
                     onToggle={key =>
@@ -563,6 +633,7 @@ export function BomStructurePage() {
                     onPick={pickCategory}
                     onCreate={() => setCreating(true)}
                     onDelete={setDeleting}
+                    onDiscardDraft={setDiscarding}
                 />
 
                 <section
@@ -570,7 +641,7 @@ export function BomStructurePage() {
                     aria-label="BOM 结构编辑区"
                     tabIndex={-1}
                 >
-                    {!selected ? (
+                    {!hasSelection ? (
                         <div className="flex flex-1 items-center justify-center">
                             <EmptyState description="左侧选择一个品类维护其结构，或点击「新建品类」" />
                         </div>
@@ -589,23 +660,28 @@ export function BomStructurePage() {
                                             aria-label="添加内容"
                                             title="添加物料或分组"
                                             className="size-8 text-primary-strong"
-                                            onClick={() => actions.openAddNode(selected.key, { type: "root" })}
+                                            onClick={() => actions.openAddNode(selectedKey, { type: "root" })}
                                         />
+                                    )}
+                                    {selectedDraft && (
+                                        <span className="flex-none rounded-[4px] bg-warning/15 px-1.5 py-0.5 text-11 text-warning">
+                                            草稿品类 · 保存后入库
+                                        </span>
                                     )}
                                     <span
                                         className={cn(
                                             "flex items-center gap-1.5 text-11",
-                                            dirtyCount > 0 ? "text-warning" : "text-muted",
+                                            pendingCount > 0 ? "text-warning" : "text-muted",
                                         )}
                                         role="status"
                                     >
                                         <span
                                             className={cn(
                                                 "size-1.5 rounded-full",
-                                                dirtyCount > 0 ? "bg-warning" : "bg-success",
+                                                pendingCount > 0 ? "bg-warning" : "bg-success",
                                             )}
                                         />
-                                        {dirtyCount > 0 ? `未保存 ${dirtyCount} 条` : "已保存"}
+                                        {pendingCount > 0 ? `未保存 ${pendingCount} 条` : "已保存"}
                                     </span>
                                 </div>
                                 <TableHeaderActions className="bs-header-actions flex-wrap justify-end">
@@ -687,7 +763,7 @@ export function BomStructurePage() {
                                         icon="eye"
                                         className="min-h-9 max-sm:px-2 max-sm:text-13"
                                         onClick={() => setPreviewing(true)}
-                                        disabled={!selected}
+                                        disabled={!hasSelection}
                                     >
                                         预览
                                     </Button>
@@ -697,7 +773,7 @@ export function BomStructurePage() {
                                         icon="save"
                                         className="min-h-9 max-sm:px-2 max-sm:text-13"
                                         onClick={() => void save()}
-                                        disabled={dirtyCount === 0 || saving}
+                                        disabled={pendingCount === 0 || saving}
                                     >
                                         {saving ? "正在保存…" : "保存结构"}
                                     </Button>
@@ -755,16 +831,55 @@ export function BomStructurePage() {
                 <CategoryCreateModal
                     open={creating}
                     onClose={() => setCreating(false)}
-                    onCreated={created => {
-                        const target = created.types?.[0]?.key ?? created.key;
-                        setSelectedKey(target);
+                    onDraft={draft => {
+                        const key = `draft-${uuid()}`;
+                        setDraftCategories(current => [
+                            ...current,
+                            { key, name: draft.name, codePrefix: draft.codePrefix, types: draft.types },
+                        ]);
+                        setSelectedKey(key);
                         setSelectedNode(null);
-                        if (created.types?.length) setExpandedCategories(current => new Set([...current, created.key]));
+                        setCreating(false);
+                        toast.success("草稿品类已创建，搭建结构后点「保存结构」入库");
                     }}
                 />
             )}
 
-            {previewing && selected && (
+            {discarding && (
+                <Modal
+                    open
+                    onClose={() => setDiscarding(null)}
+                    title={`丢弃草稿品类「${discarding.name}」？`}
+                    width={440}
+                    footer={
+                        <>
+                            <Button size="sm" variant="secondary" onClick={() => setDiscarding(null)}>
+                                取消
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="danger"
+                                onClick={() => {
+                                    const key = discarding.key;
+                                    setDraftCategories(current => current.filter(entry => entry.key !== key));
+                                    dispatch({ type: "replace", key, ops: [] });
+                                    setSelectedKey(current => (current === key ? "" : current));
+                                    setDiscarding(null);
+                                    setSelectedNode(null);
+                                }}
+                            >
+                                丢弃草稿
+                            </Button>
+                        </>
+                    }
+                >
+                    <p className="text-13 text-muted">
+                        该品类尚未写入数据库，右侧未保存的结构草稿会一并丢弃，不影响任何数据。
+                    </p>
+                </Modal>
+            )}
+
+            {previewing && hasSelection && (
                 <PreviewModal
                     open={previewing}
                     onClose={() => setPreviewing(false)}

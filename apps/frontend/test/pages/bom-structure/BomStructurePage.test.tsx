@@ -18,19 +18,26 @@ const catalogRef = vi.hoisted(() => ({ current: undefined as BomCategory[] | und
 const applyRef = vi.hoisted(() => ({
     current: vi.fn<(...args: unknown[]) => Promise<{ rowVersion: number }>>(),
 }));
+const createRef = vi.hoisted(() => ({
+    current:
+        vi.fn<(...args: unknown[]) => Promise<{ key: string; name: string; codePrefix: string; rowVersion: number }>>(),
+}));
 const deleteRef = vi.hoisted(() => ({ current: vi.fn() }));
 
 vi.mock("@/data/queries", () => ({
     bomKeys: { all: ["boms"], list: ["boms", "list"], categories: ["boms", "categories"], stocks: ["boms", "stocks"] },
     wbKeys: { all: ["workbench"] },
     useBomCategories: () => ({ data: catalogRef.current, isLoading: false }),
-    useCreateBomCategory: () => ({ mutate: vi.fn(), isPending: false }),
     useDeleteBomCategory: () => ({ mutate: deleteRef.current, isPending: false }),
 }));
 
 vi.mock("@/api", async importOriginal => {
     const actual = await importOriginal<typeof import("@/api")>();
-    return { ...actual, applyBomStructure: (...args: unknown[]) => applyRef.current(...args) };
+    return {
+        ...actual,
+        applyBomStructure: (...args: unknown[]) => applyRef.current(...args),
+        createBomCategory: (...args: unknown[]) => createRef.current(...args),
+    };
 });
 
 const invalidateQueries = vi.fn();
@@ -41,6 +48,7 @@ vi.mock("@tanstack/react-query", () => ({
 beforeEach(() => {
     catalogRef.current = BOM_CATEGORIES;
     applyRef.current = vi.fn().mockResolvedValue({ rowVersion: 2 });
+    createRef.current = vi.fn().mockResolvedValue({ key: "qa", name: "全微动", codePrefix: "QA", rowVersion: 1 });
     deleteRef.current = vi.fn();
 });
 
@@ -83,6 +91,49 @@ it("品类折叠面板：容器品类嵌套展开，点选下属类型展示复�
     expect(screen.getByText("跌倒盖", { exact: true })).toBeInTheDocument();
 }, 30000);
 
+it("新建品类先建本地草稿，保存结构时才连整棵树一次性入库", async () => {
+    const user = userEvent.setup();
+    render(<BomStructurePage />);
+
+    // 弹窗提交只建草稿：不发任何请求，左侧出现「未保存的新品类」并切换选中
+    await user.click(screen.getByRole("button", { name: /新建品类/ }));
+    const dialog = screen.getByRole("dialog");
+    await user.type(within(dialog).getByRole("textbox", { name: /品类名称/ }), "全微动");
+    await user.type(within(dialog).getByRole("textbox", { name: /编号开头/ }), "QA");
+    await user.click(within(dialog).getByRole("button", { name: "创建品类" }));
+    expect(createRef.current).not.toHaveBeenCalled();
+    expect(screen.getByText("未保存的新品类")).toBeInTheDocument();
+    expect(screen.getByText("草稿品类 · 保存后入库")).toBeInTheDocument();
+    // 草稿品类本身即一条待入库变更
+    expect(screen.getByText("未保存 1 条")).toBeInTheDocument();
+
+    // 草稿品类照常搭结构（ops 草稿机制复用）
+    await user.click(screen.getByRole("button", { name: "添加内容" }));
+    await user.click(screen.getByRole("radio", { name: "分组" }));
+    await user.type(screen.getByPlaceholderText("如：五金件"), "弹静片");
+    await user.click(screen.getByRole("button", { name: "添加分组" }));
+    expect(screen.getByText("弹静片", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("未保存 2 条")).toBeInTheDocument();
+
+    // 保存结构 → createBomCategory 连品类带树一次写入（不涉及 apply）
+    await user.click(screen.getByRole("button", { name: /保存结构/ }));
+    await waitForApply();
+    expect(applyRef.current).not.toHaveBeenCalled();
+    expect(createRef.current).toHaveBeenCalledTimes(1);
+    const [input] = createRef.current.mock.calls[0] as [
+        { name: string; codePrefix: string; groups: Array<Record<string, unknown>> },
+    ];
+    expect(input.name).toBe("全微动");
+    expect(input.codePrefix).toBe("QA");
+    expect(input.groups).toHaveLength(1);
+    expect(input.groups[0]).toMatchObject({ kind: "GROUP", name: "弹静片", multi: false, qty: false });
+
+    // 入库成功：草稿品类从导航消失（选中切到新建品类，目录刷新由 invalidate 驱动）
+    await act(async () => {});
+    expect(screen.queryByText("未保存的新品类")).not.toBeInTheDocument();
+    expect(invalidateQueries).toHaveBeenCalled();
+}, 30000);
+
 it("草稿投影所见即所存：新增分组（含随组物料）、设为不可选后保存携带版本与 ops", async () => {
     const user = userEvent.setup();
     render(<BomStructurePage />);
@@ -94,10 +145,11 @@ it("草稿投影所见即所存：新增分组（含随组物料）、设为不�
     expect(screen.getByText("弹静片", { exact: true })).toBeInTheDocument();
     expect(screen.getByText("未保存 1 条")).toBeInTheDocument();
 
-    // 设为不可选（物料行走右键菜单）：立即出现「不可选」角标（投影生效，不等待保存）
+    // 设为不可选（物料行走右键菜单）：立即出现「不可选」角标（投影生效，不等待保存；
+    // CPU 争用下 React 刷新可能滞后一拍，findByText 自动等待）
     fireEvent.contextMenu(screen.getByRole("button", { name: "0-2" }));
     await user.click(screen.getByRole("menuitem", { name: "设置为不可选" }));
-    expect(screen.getByText("不可选", { exact: true })).toBeInTheDocument();
+    expect(await screen.findByText("不可选", { exact: true })).toBeInTheDocument();
     expect(screen.getByText("未保存 2 条")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /保存结构/ }));
@@ -306,7 +358,7 @@ it("合为一行的物料仍可 F2 改名及设为不可选，分组与物料名
     expect(screen.getAllByText("新a", { exact: true })).toHaveLength(1);
     fireEvent.contextMenu(screen.getByRole("button", { name: "新a" }));
     await user.click(screen.getByRole("menuitem", { name: "设置为不可选" }));
-    expect(screen.getByText("不可选", { exact: true })).toBeInTheDocument();
+    expect(await screen.findByText("不可选", { exact: true })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /保存结构/ }));
     await waitForApply();
     const [input] = applyRef.current.mock.calls[0] as [{ operations: StructureOperation[] }];
@@ -481,10 +533,13 @@ it("物料右键菜单只有六项，合并展示物料可改名，普通物料�
             .map(item => item.textContent?.trim()),
     ).toEqual(["上移", "下移", "重命名", "移动位置", "设置为不可选", "删除"]);
     await user.pointer({ keys: "[MouseRight]", target: screen.getByRole("button", { name: "D" }) });
-    expect(screen.getByRole("menuitem", { name: "添加物料" })).toBeInTheDocument();
+    expect(await screen.findByRole("menuitem", { name: "添加物料" })).toBeInTheDocument();
     await user.pointer({ keys: "[MouseRight]", target: screen.getByRole("button", { name: "a" }) });
+    // 连续右键换目标时菜单内容随目标重渲染，CPU 争用下可能滞后一拍（waitFor 兜底）
+    await waitFor(() =>
+        expect(within(screen.getByRole("menu")).queryByRole("menuitem", { name: "添加物料" })).not.toBeInTheDocument(),
+    );
     menu = screen.getByRole("menu");
-    expect(within(menu).queryByRole("menuitem", { name: "添加物料" })).not.toBeInTheDocument();
     await user.click(within(menu).getByRole("menuitem", { name: "重命名" }));
     const dialog = screen.getByRole("dialog", { name: "重命名物料" });
     const input = within(dialog).getByRole("textbox", { name: "物料名称" });
@@ -492,15 +547,17 @@ it("物料右键菜单只有六项，合并展示物料可改名，普通物料�
     await user.type(input, "新a");
     await user.click(within(dialog).getByRole("button", { name: "确定" }));
     fireEvent.contextMenu(screen.getByRole("button", { name: "e" }), { clientX: 130, clientY: 240 });
+    await waitFor(() =>
+        expect(within(screen.getByRole("menu")).queryByRole("menuitem", { name: "添加物料" })).not.toBeInTheDocument(),
+    );
     menu = screen.getByRole("menu");
-    expect(within(menu).queryByRole("menuitem", { name: "添加物料" })).not.toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "上移" })).toHaveAttribute("aria-disabled", "true");
     expect(within(menu).getByRole("menuitem", { name: "下移" })).toHaveAttribute("aria-disabled", "true");
     await user.click(within(menu).getByRole("menuitem", { name: "设置为不可选" }));
-    expect(screen.getByText("不可选", { exact: true })).toBeInTheDocument();
+    expect(await screen.findByText("不可选", { exact: true })).toBeInTheDocument();
     fireEvent.contextMenu(screen.getByRole("button", { name: "e" }), { clientX: 130, clientY: 240 });
     await user.click(screen.getByRole("menuitem", { name: "恢复可选" }));
-    expect(screen.queryByText("不可选", { exact: true })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("不可选", { exact: true })).not.toBeInTheDocument());
     await user.click(screen.getByRole("button", { name: "保存结构" }));
     await waitForApply();
     expect(applyRef.current).toHaveBeenCalledWith(

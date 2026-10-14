@@ -2,27 +2,29 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Icon } from "@/lib/icons";
-import { useToast } from "@/components/ui/toastContexts";
-import { useCreateBomCategory } from "@/data/queries";
-import type { BomStructureCategoryCreated } from "@/api";
+
+/** 新建品类弹窗的产物：本地草稿（不落库），保存结构时才随整棵树一次性入库 */
+export interface NewCategoryDraftInput {
+    name: string;
+    codePrefix: string;
+    types: Array<{ name: string; codePrefix: string }>;
+}
 
 /**
- * 新建品类（BOM结构原型.html 交互）：名称 + 编码前缀，可选「设置下属类型」
- * （每个类型一行 名称 + 前缀）——创建后主品类为复合品类，类型为目录容器，
- * 建档时必选其一；结构树在主编辑器里逐品类搭建（创建时不再内嵌整树编辑）。
+ * 新建品类（BOM结构原型.html 交互）：名称 + 编码开头，可选「再分几种类型」——
+ * 提交只生成左侧导航里的本地草稿品类（未入库），右侧搭建结构后点「保存结构」
+ * 才调 createBomCategory 连品类带整棵树一次写入；中途放弃直接丢弃，无残留。
  */
 export function CategoryCreateModal({
     open,
     onClose,
-    onCreated,
+    onDraft,
 }: {
     open: boolean;
     onClose: () => void;
-    /** 创建成功后切换到首个下属类型（无类型则切到新品类本身） */
-    onCreated: (created: BomStructureCategoryCreated) => void;
+    /** 提交草稿：页面据此在品类面板追加草稿品类并切换选中 */
+    onDraft: (draft: NewCategoryDraftInput) => void;
 }) {
-    const createCategory = useCreateBomCategory();
-    const toast = useToast();
     const [name, setName] = useState("");
     const [codePrefix, setCodePrefix] = useState("");
     const [hasTypes, setHasTypes] = useState(false);
@@ -78,21 +80,8 @@ export function CategoryCreateModal({
             }
         }
         setError("");
-        createCategory.mutate(
-            {
-                name: trimmedName,
-                codePrefix,
-                groups: [],
-                ...(hasTypes ? { types: filledTypes } : {}),
-            },
-            {
-                onSuccess: created => {
-                    toast.success(`「${created.name}」已创建`);
-                    onCreated(created);
-                    close();
-                },
-            },
-        );
+        onDraft({ name: trimmedName, codePrefix, types: filledTypes });
+        close();
     };
 
     return (
@@ -106,8 +95,8 @@ export function CategoryCreateModal({
                     <Button size="sm" variant="secondary" onClick={close}>
                         取消
                     </Button>
-                    <Button size="sm" onClick={submit} disabled={createCategory.isPending}>
-                        {createCategory.isPending ? "正在创建…" : "创建品类"}
+                    <Button size="sm" onClick={submit}>
+                        创建品类
                     </Button>
                 </>
             }
@@ -233,6 +222,7 @@ export function CategoryCreateModal({
                     {error}
                 </p>
             )}
+            <p className="mt-4 text-12 text-subtle">创建后先在右侧搭建结构，点「保存结构」才会写入数据库。</p>
         </Modal>
     );
 }

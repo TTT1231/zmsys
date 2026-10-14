@@ -10,37 +10,64 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+/** 新建品类弹窗产出的本地草稿（未入库）：保存结构时才连整棵树一次写入 */
+export interface DraftCategoryInfo {
+    /** 本地草稿标识（draft- 前缀 uuid），兼作该品类的 ops 草稿键 */
+    key: string;
+    name: string;
+    codePrefix: string;
+    types: Array<{ name: string; codePrefix: string }>;
+}
+
 export function CategoryNav({
     roots,
     childrenOf,
+    drafts,
     selectedKey,
     expanded,
     onToggle,
     onPick,
     onCreate,
     onDelete,
+    onDiscardDraft,
 }: {
     roots: BomCategory[];
     childrenOf: Map<string, BomCategory[]>;
+    drafts: DraftCategoryInfo[];
     selectedKey: string;
     expanded: ReadonlySet<string>;
     onToggle: (key: string) => void;
     onPick: (key: string) => void;
     onCreate: () => void;
     onDelete: (category: BomCategory) => void;
+    onDiscardDraft: (draft: DraftCategoryInfo) => void;
 }) {
-    const [menu, setMenu] = useState<{ category: BomCategory; x: number; y: number } | null>(null);
+    const [menu, setMenu] = useState<{
+        target: BomCategory | DraftCategoryInfo;
+        isDraft: boolean;
+        x: number;
+        y: number;
+    } | null>(null);
     const returnFocus = useRef<HTMLElement | null>(null);
-    const showMenu = (category: BomCategory, event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>) => {
+    const showMenu = (
+        target: BomCategory | DraftCategoryInfo,
+        isDraft: boolean,
+        event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>,
+    ) => {
         event.preventDefault();
         const button = event.currentTarget.querySelector("button") ?? event.currentTarget;
         returnFocus.current = button;
         const rect = button.getBoundingClientRect();
         const pointer = "clientX" in event && (event.clientX !== 0 || event.clientY !== 0);
-        setMenu({ category, x: pointer ? event.clientX : rect.left + 16, y: pointer ? event.clientY : rect.bottom });
+        setMenu({
+            target,
+            isDraft,
+            x: pointer ? event.clientX : rect.left + 16,
+            y: pointer ? event.clientY : rect.bottom,
+        });
     };
-    const menuKeys = (category: BomCategory, event: KeyboardEvent<HTMLElement>) => {
-        if ((event.shiftKey && event.key === "F10") || event.key === "ContextMenu") showMenu(category, event);
+    const menuKeys = (target: BomCategory | DraftCategoryInfo, isDraft: boolean, event: KeyboardEvent<HTMLElement>) => {
+        if ((event.shiftKey && event.key === "F10") || event.key === "ContextMenu") showMenu(target, isDraft, event);
     };
     const itemClass = (active: boolean) =>
         cn(
@@ -72,8 +99,8 @@ export function CategoryNav({
                         <div key={root.key} className="mb-1">
                             <div
                                 data-category-item
-                                onContextMenu={event => showMenu(root, event)}
-                                onKeyDown={event => menuKeys(root, event)}
+                                onContextMenu={event => showMenu(root, false, event)}
+                                onKeyDown={event => menuKeys(root, false, event)}
                             >
                                 <button
                                     type="button"
@@ -102,8 +129,8 @@ export function CategoryNav({
                                         <div
                                             key={child.key}
                                             data-category-item
-                                            onContextMenu={event => showMenu(child, event)}
-                                            onKeyDown={event => menuKeys(child, event)}
+                                            onContextMenu={event => showMenu(child, false, event)}
+                                            onKeyDown={event => menuKeys(child, false, event)}
                                         >
                                             <button
                                                 type="button"
@@ -122,6 +149,32 @@ export function CategoryNav({
                         </div>
                     );
                 })}
+                {drafts.length > 0 && (
+                    <div className="mt-1 border-t border-line pt-2">
+                        <p className="mb-1 px-1 text-11 font-medium text-warning">未保存的新品类</p>
+                        {drafts.map(draft => (
+                            <div
+                                key={draft.key}
+                                data-category-item
+                                onContextMenu={event => showMenu(draft, true, event)}
+                                onKeyDown={event => menuKeys(draft, true, event)}
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() => onPick(draft.key)}
+                                    aria-current={draft.key === selectedKey ? "page" : undefined}
+                                    className={itemClass(draft.key === selectedKey)}
+                                >
+                                    <Icon name="layers" size={16} className="flex-none text-muted" />
+                                    <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{draft.name}</span>
+                                    <span className="flex-none rounded-[4px] bg-warning/15 px-1.5 py-0.5 text-11 text-warning">
+                                        草稿
+                                    </span>
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </nav>
             <DropdownMenu
                 modal={false}
@@ -160,17 +213,29 @@ export function CategoryNav({
                     }}
                 >
                     <DropdownMenuLabel className="max-w-64 truncate text-12 text-muted">
-                        {menu?.category.name}
+                        {menu?.target.name}
                     </DropdownMenuLabel>
-                    <DropdownMenuItem
-                        className="text-danger"
-                        onSelect={() => {
-                            if (menu) onDelete(menu.category);
-                        }}
-                    >
-                        <Icon name="trash" size={16} />
-                        删除品类
-                    </DropdownMenuItem>
+                    {menu?.isDraft ? (
+                        <DropdownMenuItem
+                            className="text-danger"
+                            onSelect={() => {
+                                if (menu) onDiscardDraft(menu.target as DraftCategoryInfo);
+                            }}
+                        >
+                            <Icon name="trash" size={16} />
+                            丢弃草稿
+                        </DropdownMenuItem>
+                    ) : (
+                        <DropdownMenuItem
+                            className="text-danger"
+                            onSelect={() => {
+                                if (menu) onDelete(menu.target as BomCategory);
+                            }}
+                        >
+                            <Icon name="trash" size={16} />
+                            删除品类
+                        </DropdownMenuItem>
+                    )}
                 </DropdownMenuContent>
             </DropdownMenu>
         </aside>

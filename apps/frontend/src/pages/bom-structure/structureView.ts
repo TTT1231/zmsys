@@ -1,4 +1,4 @@
-import type { BomCatalogNode, StructureOperation } from "@/api";
+import type { BomCatalogNode, DraftNodeInput, StructureOperation } from "@/api";
 
 /**
  * 「BOM 结构」编辑器的本地视图投影：编辑模式 = 服务端目录快照 + 草稿 ops 按序投影
@@ -415,6 +415,33 @@ export function withoutDraftSubtree(
 }
 
 /* ---- 展示辅助：统计、平铺行、重名校验 ---- */
+
+/** 新建品类草稿（本地未入库品类）的投影树 → 平铺 DraftNodeInput[]（DFS 先序，
+ *  parentTempId 关联多层父子；草稿品类节点 id 即 tempId）。保存结构时随
+ *  createBomCategory 一次性入库，服务端 draftTreeOf 按平铺序重建同构树。 */
+export function flatDraftInputOf(roots: readonly ViewRoot[]): DraftNodeInput[] {
+    const nodes: DraftNodeInput[] = [];
+    const visit = (siblings: readonly ViewRoot[], parentTempId: string | null): void => {
+        for (const node of siblings) {
+            if (node.kind === "section") {
+                nodes.push({ kind: "SECTION", tempId: node.id, name: node.name });
+            } else {
+                nodes.push({
+                    kind: "GROUP",
+                    tempId: node.id,
+                    name: node.name,
+                    ...(parentTempId === null ? {} : { parentTempId }),
+                    multi: node.multi,
+                    qty: node.qty,
+                    items: node.items.map(item => ({ tempId: item.id, name: item.name })),
+                });
+            }
+            visit(viewChildrenOf(node), node.id);
+        }
+    };
+    visit(roots, null);
+    return nodes;
+}
 
 /** 统计（编辑器头部的「X 个分组 · Y 项物料」口径：分组 = GROUP 节点，物料 = 叶子项） */
 export function statsOf(roots: readonly ViewRoot[]): { groups: number; materials: number } {

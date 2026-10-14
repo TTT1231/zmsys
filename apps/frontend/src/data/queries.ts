@@ -24,7 +24,6 @@ import {
     applyBomStructure,
     deleteBomCategory,
     createBom,
-    createBomCategory,
     createCustomer,
     createInbound,
     createOrder,
@@ -310,21 +309,6 @@ export const useApplyBomStructure = () => {
     const toast = useToast();
     return useMutation({
         mutationFn: applyBomStructure,
-        onError: error => toast.error(error.message),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: bomKeys.categories });
-            queryClient.invalidateQueries({ queryKey: bomKeys.list });
-            queryClient.invalidateQueries({ queryKey: wbKeys.all });
-            queryClient.invalidateQueries({ queryKey: ["workbench"] });
-        },
-    });
-};
-
-export const useCreateBomCategory = () => {
-    const queryClient = useQueryClient();
-    const toast = useToast();
-    return useMutation({
-        mutationFn: createBomCategory,
         onError: error => toast.error(error.message),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: bomKeys.categories });
