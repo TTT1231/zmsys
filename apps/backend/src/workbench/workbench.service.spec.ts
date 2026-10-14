@@ -118,12 +118,11 @@ describe("WorkbenchService.getOverview", () => {
         data = await mkService().service.getOverview();
     });
 
-    it("产品由冻结明细派生型号与规格，库存缺行按 0 理解", () => {
+    it("产品由冻结明细派生规格，库存缺行按 0 理解", () => {
         expect(data.products).toEqual([
             {
                 code: "ZMKW0001",
                 category: "新微动",
-                model: "1-1",
                 spec: "型号：1-1 · 底座：三脚底座 ×2",
                 unit: "个",
                 stock: 260,
@@ -131,7 +130,6 @@ describe("WorkbenchService.getOverview", () => {
             {
                 code: "ZMKW0002",
                 category: "新微动",
-                model: "1-1",
                 spec: "型号：1-1 · 底座：三脚底座 ×2",
                 unit: "个",
                 stock: 0,

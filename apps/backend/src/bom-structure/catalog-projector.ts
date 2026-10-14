@@ -30,7 +30,6 @@ export type StructureOperation =
           parentId: string | null;
           multi: boolean;
           qty: boolean;
-          isModel?: boolean;
           items?: Array<{ tempId: string; name: string }>;
       }
     | { type: "add_item"; tempId: string; groupId: string; name: string }
@@ -232,17 +231,11 @@ export function projectStructure(
             }
             case "add_group": {
                 claimTemp(op.tempId);
-                if (op.isModel && usedKeys.has("model")) {
-                    throw new BadRequestException("型号组（model）只能有一个，该品类已有型号组");
-                }
                 const parentId = op.parentId === null ? null : resolve(op.parentId, "上级分区");
                 if (parentId !== null && nodes.get(parentId)!.kind !== "SECTION") {
                     throw new BadRequestException("分组只能挂在品类根或分区下");
                 }
-                const groupKey = op.isModel ? "model" : genGroupKey();
-                if (op.isModel) {
-                    usedKeys.add("model");
-                }
+                const groupKey = genGroupKey();
                 const id = genId().toString();
                 tempToId.set(op.tempId, id);
                 nodes.set(id, {
@@ -385,14 +378,7 @@ export function projectStructure(
                     // 分区只承载一层分组：连带其子分组整支移除（物料嵌在分组里随之消失）
                     for (const child of [...nodes.values()].filter(entry => entry.parentId === nodeId)) {
                         nodes.delete(child.id);
-                        // 释放子分组的键（含 model）：同批可再建新的型号组
-                        if (child.groupKey) {
-                            usedKeys.delete(child.groupKey);
-                        }
                     }
-                }
-                if (node.groupKey) {
-                    usedKeys.delete(node.groupKey);
                 }
                 nodes.delete(nodeId);
                 break;

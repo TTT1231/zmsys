@@ -108,7 +108,6 @@ function normalizeOperations(operations: StructureOperationDto[]): StructureOper
                     parentId: op.parentId ?? null,
                     multi: op.multi!,
                     qty: op.qty!,
-                    ...(op.isModel ? { isModel: true } : {}),
                     ...(op.items?.length
                         ? { items: op.items.map(item => ({ tempId: item.tempId, name: item.name })) }
                         : {}),
@@ -178,7 +177,7 @@ function normalizeOperations(operations: StructureOperationDto[]): StructureOper
     });
 }
 
-/** 新建品类草稿 → 树形态（雪花 id；isModel → model，其余 g1..；sortOrder 按数组序） */
+/** 新建品类草稿 → 树形态（雪花 id；分组 key 依次派生 g1..；sortOrder 按数组序） */
 function draftTreeOf(drafts: DraftNodeDto[], genId: () => bigint): CatalogTreeNode[] {
     const tempToId = new Map<string, string>();
     const claim = (tempId: string): string => {
@@ -219,15 +218,13 @@ function draftTreeOf(drafts: DraftNodeDto[], genId: () => bigint): CatalogTreeNo
         if (draft.parentTempId && !parentId) {
             throw new BadRequestException(`分组「${draft.name}」的上级分区不存在`);
         }
-        const groupKey = draft.isModel
-            ? "model"
-            : (() => {
-                  let index = 1;
-                  while (usedKeys.has(`g${index}`)) {
-                      index += 1;
-                  }
-                  return `g${index}`;
-              })();
+        const groupKey = (() => {
+            let index = 1;
+            while (usedKeys.has(`g${index}`)) {
+                index += 1;
+            }
+            return `g${index}`;
+        })();
         usedKeys.add(groupKey);
         return {
             id: tempToId.get(draft.tempId)!,

@@ -23,8 +23,6 @@ export interface ViewGroupNode {
     multi: boolean;
     qty: boolean;
     status: boolean;
-    /** groupKey === "model"（型号组，后端生成、不可改） */
-    isModel: boolean;
     items: ViewItem[];
     draft?: boolean;
 }
@@ -48,7 +46,6 @@ const groupOf = (node: BomCatalogNode): ViewGroupNode => ({
     multi: node.multi === true,
     qty: node.qty === true,
     status: node.status !== false,
-    isModel: node.key === "model",
     items: node.items.map(item => ({ id: item.id, name: item.name, status: item.status !== false })),
 });
 
@@ -164,7 +161,6 @@ export function applyOpsToView(snapshot: ViewRoot[], operations: readonly Struct
                     multi: op.multi,
                     qty: op.qty,
                     status: true,
-                    isModel: op.isModel === true,
                     draft: true,
                     items: (op.items ?? []).map(item => ({
                         id: item.tempId,

@@ -1,4 +1,4 @@
-// 覆盖物料目录模式的 BomsService：目录树下发、快照派生（modelCode/spec/明细）、
+// 覆盖物料目录模式的 BomsService：目录树下发、快照派生（spec/明细）、
 // 物料集合校验（归属/停用/单选组）、判重 409 与幂等重放、取号与品类行锁；
 // 删除未引用 BOM（订单/台账引用 409、行锁、op_log 快照与幂等）
 import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
@@ -549,7 +549,7 @@ describe("BomsService", () => {
     });
 
     describe("listBoms", () => {
-        it("由冻结快照派生：position 排序、modelCode 取 model 组、摘要“组名：物料名”、创建人与建档时刻", async () => {
+        it("由冻结快照派生：position 排序、摘要“组名：物料名”、创建人与建档时刻", async () => {
             store.boms = [mkBom({ id: 5000n, createdAt: new Date(Date.UTC(2026, 8, 1, 4)) })];
             store.bomItems = [
                 {
@@ -568,7 +568,6 @@ describe("BomsService", () => {
             expect(boms[0]).toEqual({
                 code: "XK2010",
                 name: "旋转XK2",
-                modelCode: "1-1",
                 items: [
                     { materialId: "3001", groupKey: "model", groupName: "型号", name: "1-1", quantity: 1 },
                     {
@@ -587,7 +586,7 @@ describe("BomsService", () => {
             });
         });
 
-        it("未选 model 组时 modelCode 为空字符串", async () => {
+        it("未选型号组物料的规格摘要仍按冻结明细派生", async () => {
             store.boms = [mkBom()];
             store.bomItems = [
                 {
@@ -601,7 +600,6 @@ describe("BomsService", () => {
             ];
             const { service } = mkService(store);
             const boms = await service.listBoms();
-            expect(boms[0]!.modelCode).toBe("");
             expect(boms[0]!.spec).toBe("银丝厚度：0.2");
         });
     });
@@ -742,7 +740,6 @@ describe("BomsService", () => {
             expect(bom).toMatchObject({
                 code: "XK2011",
                 name: "旋转XK2",
-                modelCode: "",
                 spec: "银丝厚度：0.2 · 弹簧：0.5",
                 unit: "个",
             });
@@ -781,10 +778,9 @@ describe("BomsService", () => {
             ]);
         });
 
-        it("选中 model 组物料时响应 modelCode 为其名称", async () => {
+        it("多组选料的规格摘要按目录序拼接", async () => {
             const { service } = mkService(store);
             const bom = await service.createBom(dtoOf({ materialItemIds: ["3001", "3003"] }), actor, ID_KEY);
-            expect(bom.modelCode).toBe("1-1");
             expect(bom.spec).toBe("型号：1-1 · 银丝厚度：0.2");
         });
 

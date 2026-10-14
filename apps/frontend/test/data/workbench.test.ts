@@ -27,8 +27,8 @@ const data = (orders: WorkbenchOrder[]): WorkbenchData => ({
     orders,
     movements: [],
     products: [
-        { code: "B1", category: "旋转XK2", model: "M1", spec: "二脚", unit: "个", stock: 50 },
-        { code: "B2", category: "旋转XK2", model: "M2", spec: "三脚", unit: "个", stock: 1000 },
+        { code: "B1", category: "旋转XK2", spec: "二脚", unit: "个", stock: 50 },
+        { code: "B2", category: "旋转XK2", spec: "三脚", unit: "个", stock: 1000 },
     ],
 });
 const all = { start: "2026-01-01", end: "2026-09-12" };
@@ -120,7 +120,7 @@ describe("工作台统计", () => {
             }),
             order({ no: "live", qty: 70, shipped: 10 }),
         ]);
-        snapshot.products.push({ code: "B3", category: "琴键开关", model: "M3", spec: "四脚", unit: "个", stock: 0 });
+        snapshot.products.push({ code: "B3", category: "琴键开关", spec: "四脚", unit: "个", stock: 0 });
         expect(archivedCategoryStats(snapshot)).toEqual([{ name: "旋转XK2", orders: 3, qty: 180, shipped: 140 }]);
         expect(archivedCategoryStats(snapshot, { start: "2026-01-01", end: "2026-09-12" })).toEqual([
             { name: "旋转XK2", orders: 2, qty: 150, shipped: 110 },

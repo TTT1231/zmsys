@@ -319,7 +319,6 @@ describe("changesOfOrderEdit / changesOfInboundEdit", () => {
             { key: "customer", label: "客户", before: "华辰电器", after: "锦泰科技" },
             { key: "bomCode", label: "BOM 编码", before: "ZMKW0001", after: "ZMKW0002" },
             { key: "bomName", label: "成品名称", before: "新微动", after: "防水微动" },
-            { key: "bomModel", label: "型号", before: null, after: "FS-1A" },
         ]);
         // 同品类同名换 BOM：名称/型号不变，编码行是唯一可见变更
         expect(

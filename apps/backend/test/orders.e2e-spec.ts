@@ -281,9 +281,8 @@ describe("销售订单 (e2e)", () => {
             bomNameSnapshot: "新微动",
             bomModelSnapshot: "",
         });
-        // 冻结形态：{ items, modelCode, spec }，与建档快照同构
+        // 冻结形态：{ items, spec }，与建档快照同构（modelCode 已废弃）
         expect(stored!.bomSpecSnapshot).toMatchObject({
-            modelCode: "",
             spec: "底座：三脚底座有CB（有挡脚） · 按钮：8.5mm",
             items: BOM_ITEMS.map(item => expect.objectContaining({ groupName: item.groupName, name: item.name })),
         });

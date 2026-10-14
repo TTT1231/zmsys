@@ -21,7 +21,6 @@ const TODAY = "2026-03-15";
 const bom = (over: Partial<Bom> = {}): Bom => ({
     code: "ZMXK001",
     name: "旋转XK2",
-    modelCode: "M-100",
     remark: "",
     items: [
         { materialId: "3001", groupKey: "model", groupName: "型号", name: "M-100", quantity: 1 },
@@ -70,7 +69,6 @@ afterEach(() => {
 describe("bomByCode / stockOf / remainingOf", () => {
     it("finds bom by code", () => {
         const fixture = snap();
-        expect(bomByCode(fixture, "ZMXK001")?.modelCode).toBe("M-100");
         expect(bomByCode(fixture, "ZMKQ999")).toBeUndefined();
     });
 
@@ -262,9 +260,8 @@ describe("deriveOrders", () => {
     });
 
     it("indexes boms first-wins, matching bomByCode", () => {
-        const fixture = snap({ boms: [bom(), bom({ modelCode: "M-200", spec: "重复编码档案" })] });
+        const fixture = snap({ boms: [bom(), bom({ spec: "重复编码档案" })] });
         const index = bomIndexOf(fixture);
-        expect(index.get("ZMXK001")?.modelCode).toBe("M-100");
         expect(index.get("ZMXK001")).toBe(bomByCode(fixture, "ZMXK001"));
     });
 

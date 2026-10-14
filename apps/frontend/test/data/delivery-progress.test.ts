@@ -27,8 +27,8 @@ const data = (orders: WorkbenchOrder[]): WorkbenchData => ({
     movements: [],
     orders,
     products: [
-        { code: "B1", category: "开关", model: "M1", spec: "二脚", stock: 50, unit: "个" },
-        { code: "B2", category: "开关", model: "M2", spec: "三脚", stock: 1000, unit: "个" },
+        { code: "B1", category: "开关", spec: "二脚", stock: 50, unit: "个" },
+        { code: "B2", category: "开关", spec: "三脚", stock: 1000, unit: "个" },
     ],
 });
 

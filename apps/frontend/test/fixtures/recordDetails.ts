@@ -5,7 +5,6 @@ import { EMPTY_SNAPSHOT } from "@/data/views";
 export const detailBom: Bom = {
     code: "KW042",
     name: "新微动",
-    modelCode: "",
     spec: "底座：二脚底座（无挡脚） · 盖子：盖子 · 按钮：8.5mm · 支架：6.3支架：铜镀银 · 静片：6.3静片：铜镀银",
     remark: "",
     unit: "个",

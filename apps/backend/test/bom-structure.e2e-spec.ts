@@ -562,7 +562,6 @@ describe("BOM 结构在线维护 (e2e)", () => {
                         name: "型号",
                         multi: false,
                         qty: false,
-                        isModel: true,
                         items: [
                             { tempId: "m1", name: "型号A" },
                             { tempId: "m2", name: "型号B" },
@@ -591,9 +590,9 @@ describe("BOM 结构在线维护 (e2e)", () => {
         expect(qa).toBeDefined();
         const qaGroups = qa.groups as Array<Record<string, unknown>>;
         expect(qaGroups.map(group => [group.kind, group.name, group.key])).toEqual([
-            ["group", "型号", "model"],
+            ["group", "型号", "g1"],
             ["section", "结构分区", null],
-            ["group", "结构件", "g1"],
+            ["group", "结构件", "g2"],
         ]);
         expect(qaGroups[2]).toMatchObject({ parentId: qaGroups[1]!.id, multi: true, qty: true });
 
@@ -608,7 +607,6 @@ describe("BOM 结构在线维护 (e2e)", () => {
         });
         expect(bom.statusCode).toBe(200);
         expect(bom.json().data.code as string).toMatch(/^QA\d+$/);
-        expect(bom.json().data.modelCode).toBe("型号A");
         createdBomCodes.push(bom.json().data.code as string);
 
         // 时间线：create_bom_category 归一 create

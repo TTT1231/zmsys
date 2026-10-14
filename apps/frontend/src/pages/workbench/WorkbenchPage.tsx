@@ -39,7 +39,7 @@ const percent = (done: number, total: number) => (total ? Math.round((done / tot
 /* 明细弹窗表：data-table 基线（见 index.css @layer components）给出 th/td 内距、行线与悬停 */
 const tableClass = "data-table w-full min-w-150 text-left text-14 tnum";
 
-/* 型号明细首列信息密度（对齐主列表的紧凑/标准/宽松）：紧凑只留品类/型号，
+/* 产品明细首列信息密度（对齐主列表的紧凑/标准/宽松）：紧凑只留品类，
  * 标准补 BOM 编码，宽松再挂规格全文；编码与规格始终可经悬浮 title 读到。 */
 type DetailDensity = "compact" | "standard" | "roomy";
 const DETAIL_DENSITY_KEY = "zmsys.workbench.detail-density";
@@ -151,7 +151,7 @@ function OwnerWorkbench() {
         period === "all" ? "累计" : period === "year" ? "今年" : period === "month" ? "本月" : "所选期间";
     const productName = (code: string) => {
         const product = data.products.find(item => item.code === code);
-        return product ? `${product.category} / ${product.model}` : code;
+        return product?.category ?? code;
     };
     const showCustomer = (code: string) => {
         const orders = summary.orders.filter(order => order.customerCode === code);
@@ -171,7 +171,7 @@ function OwnerWorkbench() {
     const detailTitle = !detail
         ? "明细"
         : detail.kind === "products"
-          ? `${detail.category ?? "全部品类"} · 型号与规格`
+          ? `${detail.category ?? "全部品类"} · 产品与规格`
           : detail.kind === "customers"
             ? "客户 TOP 20 · 排行明细"
             : detail.kind === "orders"
@@ -303,7 +303,7 @@ function OwnerWorkbench() {
                 {detail?.kind === "products" && (
                     <>
                         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                            <span className="text-13 text-muted">共 {plainNum(productRows.length)} 个型号</span>
+                            <span className="text-13 text-muted">共 {plainNum(productRows.length)} 个产品</span>
                             <div role="group" aria-label="明细信息密度" className="flex rounded-input bg-soft p-1">
                                 {DETAIL_DENSITIES.map(([value, label]) => (
                                     <button
@@ -319,11 +319,11 @@ function OwnerWorkbench() {
                         </div>
                         <div className="overflow-x-auto">
                             <table className={tableClass}>
-                                <caption className="sr-only">型号与BOM规格交付明细</caption>
+                                <caption className="sr-only">产品与BOM规格交付明细</caption>
                                 <thead>
                                     <tr className="text-13 text-muted">
                                         {[
-                                            "品类 / 型号 / 规格",
+                                            "品类 / 编码 / 规格",
                                             "需求总量",
                                             "已发",
                                             "未发",
@@ -352,14 +352,14 @@ function OwnerWorkbench() {
                                                                 kind: "products",
                                                                 category: detail.category,
                                                             },
-                                                            title: `${product.model || product.code} · 订单明细`,
+                                                            title: `${product.category ?? product.code} · 订单明细`,
                                                             orders: summary.orders.filter(
                                                                 order => order.bomCode === product.code,
                                                             ),
                                                         })
                                                     }
                                                 >
-                                                    {product.category} / {product.model}
+                                                    {product.category} / {product.code}
                                                 </Button>
                                                 {density !== "compact" && (
                                                     <p className="text-13 text-muted">{product.code}</p>
@@ -386,7 +386,7 @@ function OwnerWorkbench() {
                             </table>
                         </div>
                         <p className="mt-4 text-14 text-muted">
-                            点击型号查看订单。当前库存与缺口始终统计全部有效订单，不同 BOM 的库存不可互抵。
+                            点击产品查看订单。当前库存与缺口始终统计全部有效订单，不同 BOM 的库存不可互抵。
                         </p>
                     </>
                 )}

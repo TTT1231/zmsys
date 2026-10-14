@@ -130,7 +130,7 @@ export class OrdersService {
                     throw new NotFoundException("客户不存在");
                 }
                 // BOM 快照冻结（db-scheme.md §6.1）：明细取建档冻结行（position 排序），
-                // modelCode/spec 由其派生；下单后目录变更不影响本订单快照
+                // spec 由其派生；下单后目录变更不影响本订单快照（bom_model_snapshot 列废弃，新单恒空串）
                 const bomSnapshot = await this.freezeBomSnapshot(tx, bom.id);
 
                 const now = new Date();
@@ -148,7 +148,7 @@ export class OrdersService {
                         remark: dto.remark,
                         customerNameSnapshot: customer.name,
                         bomNameSnapshot: bom.category.name,
-                        bomModelSnapshot: bomSnapshot.modelCode,
+                        bomModelSnapshot: "",
                         bomSpecSnapshot: bomSnapshot as unknown as Prisma.InputJsonValue,
                         requestKey: this.idempotency.requestKey(BigInt(actor.id), CREATE_OPERATION_KEY, key),
                         createdBy: BigInt(actor.id),
@@ -274,7 +274,7 @@ export class OrdersService {
                         ? {
                               bomId: nextBom!.id,
                               bomNameSnapshot: nextBom!.category.name,
-                              bomModelSnapshot: nextBomSnapshot!.modelCode,
+                              bomModelSnapshot: "",
                               bomSpecSnapshot: nextBomSnapshot as unknown as Prisma.InputJsonValue,
                           }
                         : {}),
@@ -586,7 +586,7 @@ export class OrdersService {
         );
     }
 
-    /** BOM 快照冻结：明细取建档冻结行（position 排序），modelCode/spec 由其派生——
+    /** BOM 快照冻结：明细取建档冻结行（position 排序），spec 由其派生——
      *  新建与编辑换 BOM 重冻共用同一配方，避免两处快照形态漂移 */
     private async freezeBomSnapshot(tx: Tx, bomId: bigint) {
         return bomItemsSnapshotOf(await tx.bomItem.findMany({ where: { bomId }, orderBy: { position: "asc" } }));
@@ -657,7 +657,7 @@ export class OrdersService {
         BOM 在编辑换 BOM 时重冻；订单删除后 changeLog 与 BOM 行均可能不复存在，
         删除事件的 op_log 是唯一留存，须能独立还原终态语境与建档时的成品形态。
         customerCode 取自关联（无关联的调用点显式补传，如 createOrder 的 create 返回行）；
-        bomCode 同理——同品类换 BOM 时 bomName/bomModel 可能不变，审计行靠编码可见 */
+        bomCode 同理——同品类换 BOM 时 bomName 可能不变，审计行靠编码可见 */
     private orderSnapshot(
         order: SalesOrderTable & { customer?: { customerCode: string }; bom?: { bomCode: string } },
     ): OrderSnapshotCore {
@@ -674,7 +674,6 @@ export class OrdersService {
             customerCode: order.customer?.customerCode ?? "",
             bomCode: order.bom?.bomCode ?? "",
             bomName: order.bomNameSnapshot,
-            bomModel: order.bomModelSnapshot,
             bomSpec: order.bomSpecSnapshot,
             rowVersion: Number(order.rowVersion),
         };

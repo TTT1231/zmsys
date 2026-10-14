@@ -81,7 +81,6 @@ export type StructureOperation =
           parentId: string | null;
           multi: boolean;
           qty: boolean;
-          isModel?: boolean;
           items?: Array<{ tempId: string; name: string }>;
       }
     | { type: "add_item"; tempId: string; groupId: string; name: string }
@@ -117,7 +116,6 @@ export interface DraftNodeInput {
     parentTempId?: string | null;
     multi?: boolean;
     qty?: boolean;
-    isModel?: boolean;
     items?: DraftItemInput[];
 }
 
@@ -157,7 +155,6 @@ export interface BomItemView {
 export interface Bom {
     code: string; // 编码（品类前缀 + 序号），如 XK2001 / KW001 / KWO001 / KD001
     name: string; // 品类：旋转XK2 / 旋转XK3 / 新微动 / 老微动 / 安全开关 / 跌倒开关
-    modelCode: string; // model 组选中项名称（品类无 model 组时为空串）
     items: BomItemView[]; // 选中物料集合（无数量，跌倒开关含微动物料）
     spec: string; // 摘要（"组名：物料名"以 " · " 连接）
     remark: string; // 建档备注（工艺差异，参与判重指纹）；空串 = 无备注

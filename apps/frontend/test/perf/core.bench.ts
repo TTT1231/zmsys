@@ -343,11 +343,9 @@ function buildBomPool(count: number) {
         const seq = (seqOf.get(def.prefix) ?? 0) + 1;
         seqOf.set(def.prefix, seq);
         const items = buildItems(def, rng, idOf);
-        const model = items.find(item => item.groupKey === "model");
         boms.push({
             code: `${def.prefix}${String(seq).padStart(3, "0")}`,
             name: def.name,
-            modelCode: model?.name ?? "",
             spec: items.map(item => `${item.groupName}：${item.name}`).join(" · "),
             remark: "",
             unit: "个",

@@ -348,10 +348,9 @@ describe("OrdersService.createOrder", () => {
         const stored = store.orders[0]!;
         expect(stored.customerNameSnapshot).toBe("深圳市智造电子");
         expect(stored.bomNameSnapshot).toBe("新微动");
-        // 冻结形态：{ items, modelCode, spec }，全部取自建档快照（无 model 组 → modelCode 为空）
+        // 冻结形态：{ items, spec }，全部取自建档快照；bom_model_snapshot 列废弃、新单恒空串
         expect(stored.bomModelSnapshot).toBe("");
         expect(stored.bomSpecSnapshot).toMatchObject({
-            modelCode: "",
             spec: "底座：二脚底座（无挡脚） · 支架：6.3支架：铜镀银",
             items: [
                 { materialId: "3101", groupName: "底座", name: "二脚底座（无挡脚）", position: 1 },
@@ -490,7 +489,6 @@ describe("OrdersService.updateOrder", () => {
         expect(stored.bomNameSnapshot).toBe("防水微动");
         // BOM 明细按新建档重冻（与 createOrder 同口径）
         expect(stored.bomSpecSnapshot).toMatchObject({
-            modelCode: "",
             spec: "底座：三脚底座（带挡脚）",
             items: [{ materialId: "3102", groupName: "底座", name: "三脚底座（带挡脚）", position: 1 }],
         });

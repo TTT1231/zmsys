@@ -160,24 +160,7 @@ describe("projectStructure", () => {
         ]);
     });
 
-    it("重复型号组 400；规则修改产出 multi/qty 前后值", () => {
-        expect(() =>
-            projectStructure(
-                base,
-                [
-                    {
-                        type: "add_group",
-                        tempId: "t",
-                        name: "型号2",
-                        parentId: null,
-                        multi: false,
-                        qty: false,
-                        isModel: true,
-                    },
-                ],
-                genId,
-            ),
-        ).toThrow(new BadRequestException("型号组（model）只能有一个，该品类已有型号组"));
+    it("规则修改产出 multi/qty 前后值", () => {
         const result = projectStructure(base, [{ type: "set_rules", groupId: "2002", multi: false, qty: true }], genId);
         expect(result.writes.updateGroups).toEqual([{ id: 2002n, data: { multi: false, qty: true } }]);
         expect(result.summary).toEqual([
@@ -242,7 +225,7 @@ describe("projectStructure", () => {
         expect(result.summary).toEqual([{ nodeType: "item", nodeId: "3005", name: "大", removed: true }]);
     });
 
-    it("v2 删分区连带子分组整支登记；删型号组后同批可再建型号组（键释放）", () => {
+    it("v2 删分区连带子分组整支登记；同批删组后新建分组派生新键", () => {
         const cascaded = projectStructure(base, [{ type: "remove", targetType: "section", targetId: "2600" }], genId);
         expect(cascaded.writes.deleteGroups).toEqual([
             { id: 2600n, kind: "SECTION" },
@@ -262,7 +245,6 @@ describe("projectStructure", () => {
                     parentId: null,
                     multi: false,
                     qty: false,
-                    isModel: true,
                 },
             ],
             genId,
@@ -270,7 +252,7 @@ describe("projectStructure", () => {
         expect(released.writes.deleteGroups).toEqual([{ id: 2001n, kind: "GROUP" }]);
         expect(released.writes.deleteItems).toEqual([3000n, 3001n, 3002n]);
         const replacement = released.afterTree.find(node => node.name === "新型号")!;
-        expect(replacement.groupKey).toBe("model");
+        expect(replacement.groupKey).toBe("g1");
     });
 
     it("v2 同批换名环链产出双向 name 前后值（写侧两阶段落库不撞 uk）", () => {
