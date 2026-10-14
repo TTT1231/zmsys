@@ -66,6 +66,8 @@ const PATHS: Record<string, string[]> = {
     "chevrons-right": ["M6.5 6 12 12l-5.5 6", "M12.5 6 18 12l-5.5 6"],
     "chevron-down": ["M6 9.5l6 5.5 6-5.5"],
     "chevron-up": ["M6 14.5l6-5.5 6 5.5"],
+    "arrow-up": ["M12 20V4", "m5 11 7-7 7 7"],
+    "arrow-down": ["M12 4v16", "m5 13 7 7 7-7"],
     /* 表头排序指示：未激活时上下双箭头，激活后换 chevron-up / chevron-down */
     sort: ["M8.5 9.5 12 6l3.5 3.5", "M8.5 14.5 12 18l3.5-3.5"],
     copy: ["M9 9h11v11H9z", "M5 15H4V4h11v1"],

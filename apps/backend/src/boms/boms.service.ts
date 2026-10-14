@@ -55,50 +55,51 @@ type CatalogNodeRow = MaterialGroup & {
 };
 
 /**
- * 目录树序：顶级节点（分区与根分组）按 sortOrder 混排，分区的启用分组紧随
- * （停用分区及其分组整支跳过；parentId 缺失/跨品类的分组防御性跳过）。
+ * 目录树序（DFS）：顶级节点（分区与根分组）按 sortOrder 混排，任一节点的子分组
+ * 紧随其后（分组可嵌套，分区只能为根）。enabledOnly 按「自身∧祖先启用」整支
+ * 跳过停用分支（建档可选集）；否则不滤 status（读取契约，停用照常下发）。
+ * parentId 成环/悬空的脏行按已访问跳过（写侧校验防环防悬空，读侧防御不中止）。
  * 列表输出与建档 position 分配使用同一顺序。
  */
-function orderedCatalog(groups: CatalogNodeRow[]): Array<{ isSection: boolean; node: CatalogNodeRow }> {
-    const nodes: Array<{ isSection: boolean; node: CatalogNodeRow }> = [];
-    const topLevel = groups.filter(group => group.parentId === null && group.status).sort(bySiblingOrder);
-    for (const node of topLevel) {
-        if (node.kind !== "SECTION") {
-            nodes.push({ isSection: false, node });
-            continue;
-        }
-        nodes.push({ isSection: true, node });
-        nodes.push(
-            ...groups
-                .filter(group => group.kind === "GROUP" && group.status && group.parentId === node.id)
-                .sort(bySiblingOrder)
-                .map(child => ({ isSection: false, node: child })),
-        );
+function walkCatalog(
+    groups: CatalogNodeRow[],
+    enabledOnly: boolean,
+): Array<{ isSection: boolean; node: CatalogNodeRow }> {
+    const byParent = new Map<bigint | null, CatalogNodeRow[]>();
+    for (const group of groups) {
+        byParent.set(group.parentId, [...(byParent.get(group.parentId) ?? []), group]);
     }
+    for (const siblings of byParent.values()) {
+        siblings.sort(bySiblingOrder);
+    }
+    const nodes: Array<{ isSection: boolean; node: CatalogNodeRow }> = [];
+    const visited = new Set<bigint>();
+    const visit = (parentId: bigint | null): void => {
+        for (const node of byParent.get(parentId) ?? []) {
+            if (visited.has(node.id)) {
+                continue;
+            }
+            visited.add(node.id);
+            if (enabledOnly && !node.status) {
+                continue;
+            }
+            nodes.push({ isSection: node.kind === "SECTION", node });
+            visit(node.id);
+        }
+    };
+    visit(null);
     return nodes;
 }
 
-/** 全量目录树序（读取契约用）：与 orderedCatalog 同一「顶级混排 + 分区子组紧随」
- * 遍历，但不滤 status——停用分区/分组及其物料照常下发（带 status:false 标记），
- * 供管理页展示与历史归属匹配；建档可选集仍由 loadCatalog（启用集）权威过滤。 */
-function orderedCatalogAll(groups: CatalogNodeRow[]): Array<{ isSection: boolean; node: CatalogNodeRow }> {
-    const nodes: Array<{ isSection: boolean; node: CatalogNodeRow }> = [];
-    const topLevel = groups.filter(group => group.parentId === null).sort(bySiblingOrder);
-    for (const node of topLevel) {
-        if (node.kind !== "SECTION") {
-            nodes.push({ isSection: false, node });
-            continue;
-        }
-        nodes.push({ isSection: true, node });
-        nodes.push(
-            ...groups
-                .filter(group => group.kind === "GROUP" && group.parentId === node.id)
-                .sort(bySiblingOrder)
-                .map(child => ({ isSection: false, node: child })),
-        );
-    }
-    return nodes;
-}
+/** 建档可选集的树序（启用分支整支参与；停用节点连同其后代整支跳过） */
+const orderedCatalog = (groups: CatalogNodeRow[]): Array<{ isSection: boolean; node: CatalogNodeRow }> =>
+    walkCatalog(groups, true);
+
+/** 全量目录树序（读取契约用）：同一 DFS 遍历但不滤 status——停用分区/分组及其
+ *  物料照常下发（带 status:false 标记），供管理页展示与历史归属匹配；建档可选集
+ *  仍由 loadCatalog（启用集）权威过滤。 */
+const orderedCatalogAll = (groups: CatalogNodeRow[]): Array<{ isSection: boolean; node: CatalogNodeRow }> =>
+    walkCatalog(groups, false);
 
 @Injectable()
 export class BomsService {
@@ -459,9 +460,9 @@ export class BomsService {
     }
 
     /**
-     * 建档可用的物料目录（树序 = 分区 → 组 → 物料的 sortOrder）：
-     * 品类/分区/分组/物料任一停用即整支不可用；分区缺失（跨品类挂接或
-     * 超两级目录）防御性跳过。目录锁跟随品类行锁，与建档同事务。
+     * 建档可用的物料目录（树序 = 递归 DFS 的 sortOrder）：
+     * 品类/分区/分组/物料任一停用即整支不可用；父链悬空或成环的脏行
+     * 防御性跳过。目录锁跟随品类行锁，与建档同事务。
      */
     private async loadCatalog(tx: Tx, categoryId: bigint): Promise<CatalogEntry[]> {
         // items 只取校验/建档所需列

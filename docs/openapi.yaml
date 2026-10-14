@@ -406,7 +406,7 @@ paths:
             tags: [bom-structure]
             operationId: applyBomStructure
             summary: 维护既有品类的目录结构（新增/隐藏/恢复/排序/规则/改名/移动/删除）
-            description: 受保护权限 `bom-structure:manage`，默认仅 super（super 可解锁后授予其他角色）。携带期望版本 expectedRowVersion 做乐观锁（与品类当前 row_version 不一致即 409「品类结构已被他人修改」）；服务端锁定本品类及结构伙伴品类（正/反向 child_categories 引用，id 升序）后重读校验：全树层级/无环/唯一性（分区与分组共享名称命名空间）、复合目录伙伴 groupKey 冲突、编码前缀不涉及。operations 为顺序应用的操作序列（十态，草稿节点用 tempId 关联），单次至多 200 条且必须产生实际变更。v2 新增 rename 改名 / move 跨父移动（分组换分区或根、物料换分组，均追加到目标末位） / remove 删除（分区连带子分组整支），受冻结边界引用守卫约束：被既有 BOM 明细引用（bom_item.material_id / group_key）的物料不能删除、改名、换组，被引用分组不能改名——400 带行数提示，请改走隐藏；分区名不进冻结快照，改名不受限。生效口径：结构变更只影响保存后新建的 BOM；已保存 BOM 及关联订单、出入库记录不会自动补充或修改（隐藏/删除不影响旧档案，旧 BOM 需要增加物料时请另建 BOM）。本次隐藏的物料仍被既有 BOM 明细引用时响应附带 hiddenUsageCount 行数提示（不阻断）。同幂等键同请求摘要重放原成功响应，同键异内容 409。
+            description: 受保护权限 `bom-structure:manage`，默认仅 super（super 可解锁后授予其他角色）。携带期望版本 expectedRowVersion 做乐观锁（与品类当前 row_version 不一致即 409「品类结构已被他人修改」）；服务端锁定本品类及结构伙伴品类（正/反向 child_categories 引用，id 升序）后重读校验：全树层级/无环/唯一性（分区与分组共享名称命名空间；层级 = 分支可见层数含物料层最多 5 层，分组可嵌套挂分组/分区/品类根）、复合目录伙伴 groupKey 冲突、编码前缀不涉及。operations 为顺序应用的操作序列（十态，草稿节点用 tempId 关联），单次至多 200 条且必须产生实际变更。v2 新增 rename 改名 / move 跨父移动（分组换分区、分组或根——移入自身或其后代静默忽略；物料换分组，均追加到目标末位） / remove 删除（分区/分组连带其下整支），受冻结边界引用守卫约束：被既有 BOM 明细引用（bom_item.material_id / group_key）的物料不能删除、改名、换组，被引用分组不能改名——400 带行数提示，请改走隐藏；分区名不进冻结快照，改名不受限。生效口径：结构变更只影响保存后新建的 BOM；已保存 BOM 及关联订单、出入库记录不会自动补充或修改（隐藏/删除不影响旧档案，旧 BOM 需要增加物料时请另建 BOM）。本次隐藏的物料仍被既有 BOM 明细引用时响应附带 hiddenUsageCount 行数提示（不阻断）。同幂等键同请求摘要重放原成功响应，同键异内容 409。
             parameters:
                 - $ref: "#/components/parameters/IdempotencyKey"
             requestBody:
@@ -1727,7 +1727,7 @@ components:
         BomCatalogNode:
             type: object
             required: [id, parentId, kind, name, key, multi, qty, items]
-            description: 目录树节点；分区（section）为纯展示节点（不挂物料、不提供全选），分组（group）挂可选物料。目录接口全量下发：停用节点/物料带 status=false 标记（启用省略），停用项仅供管理页展示与历史归属匹配，不可再选（可选 = 自身∧祖先启用）
+            description: 目录树节点；分区（section）为纯展示节点（不挂物料、不提供全选，只能为根），分组（group）挂可选物料、亦可挂子分组（parentId 关联，分支可见层数含物料层最多 5 层）。目录接口全量下发：停用节点/物料带 status=false 标记（启用省略），停用项仅供管理页展示与历史归属匹配，不可再选（可选 = 自身∧祖先启用）
             properties:
                 id: { type: string }
                 parentId: { type: [string, "null"] }

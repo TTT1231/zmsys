@@ -31,7 +31,7 @@ export interface Order {
     archiveReason?: string;
 }
 
-/** 目录节点：分区（section）为纯展示树节点（不挂物料、不提供全选），分组（group）挂可选物料。
+/** 目录节点：分区（section）为纯展示树节点（不挂物料、不提供全选），分组（group）可同时挂直属物料和子分组。
  * 目录接口全量下发（含停用节点/物料，status=false 标记）——停用项仅供管理页展示与
  * 历史归属匹配（bomComposition），新建 BOM 的可选集按「自身∧祖先启用」过滤；启用省略 status。 */
 export interface BomCatalogNode {
@@ -108,7 +108,7 @@ export interface DraftItemInput {
     name: string;
 }
 
-/** 新建品类草稿节点（平铺，tempId 关联分区父子与组内物料） */
+/** 新建品类草稿节点（平铺，tempId 关联多层父子与组内物料） */
 export interface DraftNodeInput {
     kind: "SECTION" | "GROUP";
     tempId: string;

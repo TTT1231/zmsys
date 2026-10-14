@@ -17,8 +17,9 @@ import {
 import { DraftItemDto, trim } from "./apply-structure.dto";
 
 /**
- * 新建品类的草稿节点（平铺形态，与目录契约一致；tempId 关联分区父子与组内物料）。
- * SECTION 纯展示；GROUP 挂根或分区（parentTempId），multi/qty 缺省按 false。
+ * 新建品类的草稿节点（平铺形态，与目录契约一致；tempId 关联多层父子与组内物料）。
+ * SECTION 纯展示且只能为根；GROUP 挂品类根、分区或另一分组（parentTempId），
+ * multi/qty 缺省按 false；分支可见层数含物料层 ≤5（校验器统一把关）。
  */
 export class DraftNodeDto {
     @IsIn(["SECTION", "GROUP"])
@@ -35,7 +36,7 @@ export class DraftNodeDto {
     @MaxLength(64)
     name!: string;
 
-    /** GROUP 专属：所属分区 tempId；null/省略 = 挂品类根 */
+    /** GROUP 专属：上级节点（分区/分组）tempId；null/省略 = 挂品类根 */
     @IsOptional()
     parentTempId?: string | null;
 

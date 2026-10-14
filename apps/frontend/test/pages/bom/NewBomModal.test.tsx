@@ -508,3 +508,81 @@ it("停用节点不进可选目录：隐藏分区整支消失不串块、隐藏�
     expect(screen.queryByText("停用分组物料")).not.toBeInTheDocument();
     expect(screen.queryByText("停用物料")).not.toBeInTheDocument();
 });
+
+it("新建 BOM 保持多层父子关系，父组直属物料与后代物料可同时选择，隐藏祖先整支过滤", async () => {
+    const category: BomCategory = {
+        key: "nested",
+        name: "嵌套品类",
+        rowVersion: 1,
+        codePrefix: "NT",
+        groups: [
+            {
+                id: "A",
+                parentId: null,
+                kind: "group",
+                name: "A",
+                key: "a",
+                multi: false,
+                qty: false,
+                items: [{ id: "c", name: "c" }],
+            },
+            { id: "B", parentId: "A", kind: "group", name: "B", key: "b", multi: false, qty: false, items: [] },
+            {
+                id: "D",
+                parentId: "B",
+                kind: "group",
+                name: "D",
+                key: "d",
+                multi: false,
+                qty: false,
+                items: [{ id: "e", name: "e" }],
+            },
+            {
+                id: "H",
+                parentId: null,
+                kind: "group",
+                name: "隐藏组",
+                key: "h",
+                multi: false,
+                qty: false,
+                status: false,
+                items: [],
+            },
+            {
+                id: "HB",
+                parentId: "H",
+                kind: "group",
+                name: "隐藏子组",
+                key: "hb",
+                multi: false,
+                qty: false,
+                items: [],
+            },
+            {
+                id: "HD",
+                parentId: "HB",
+                kind: "group",
+                name: "隐藏孙组",
+                key: "hd",
+                multi: false,
+                qty: false,
+                items: [{ id: "hidden", name: "隐藏物料" }],
+            },
+        ],
+    };
+    catalogRef.current = [category];
+    const user = userEvent.setup();
+    render(<NewBomModal open onClose={vi.fn()} />);
+    await pickCategory(user, "嵌套品类");
+    expect(screen.queryByRole("checkbox", { name: "隐藏物料" })).not.toBeInTheDocument();
+    await user.click(itemCheckbox("c"));
+    await user.click(itemCheckbox("e"));
+    await user.click(screen.getByRole("button", { name: "折叠A" }));
+    expect(screen.queryByRole("checkbox", { name: "e" })).not.toBeInTheDocument();
+    expect(screen.getByText("已选 2")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "展开A" }));
+    expect(itemCheckbox("c")).toBeChecked();
+    expect(itemCheckbox("e")).toBeChecked();
+    await user.click(screen.getByRole("button", { name: "保存 BOM" }));
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ materialItemIds: ["c", "e"] }), expect.any(Object));
+});

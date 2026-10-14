@@ -7,6 +7,9 @@ import type { BomCatalogNode, StructureOperation } from "@/api";
  * 草稿节点（draft）的删除走 ops 手术（连同其子草稿 op 一并摘除，等同从未存在），
  * 已保存节点的删除走 remove op（服务端按 bom_item 引用守卫拒绝被引用项）。
  */
+/** 编辑器最多五层；最后一层放物料，避免生成无法继续使用的空分组。 */
+export const MAX_TREE_DEPTH = 5;
+
 export interface ViewItem {
     id: string;
     name: string;
@@ -24,6 +27,7 @@ export interface ViewGroupNode {
     qty: boolean;
     status: boolean;
     items: ViewItem[];
+    groups?: ViewGroupNode[];
     draft?: boolean;
 }
 
@@ -38,6 +42,22 @@ export interface ViewSectionNode {
 
 export type ViewRoot = ViewSectionNode | ViewGroupNode;
 
+/** 同名的单项物料省去重复的分组外壳；数量规则不改变其展示身份。 */
+export function standaloneItemOf(group: ViewGroupNode): ViewItem | undefined {
+    return !group.groups?.length && !group.multi && group.items.length === 1 && group.items[0]?.name === group.name
+        ? group.items[0]
+        : undefined;
+}
+
+/** 与折叠同名单物料的展示一致，返回当前分支占用的可见层数。 */
+export function viewDepthOf(node: ViewRoot): number {
+    return Math.max(
+        1,
+        node.kind === "group" && node.items.length > 0 && !standaloneItemOf(node) ? 2 : 1,
+        ...viewChildrenOf(node).map(child => 1 + viewDepthOf(child)),
+    );
+}
+
 const groupOf = (node: BomCatalogNode): ViewGroupNode => ({
     kind: "group",
     id: node.id,
@@ -46,45 +66,60 @@ const groupOf = (node: BomCatalogNode): ViewGroupNode => ({
     multi: node.multi === true,
     qty: node.qty === true,
     status: node.status !== false,
+    groups: [],
     items: node.items.map(item => ({ id: item.id, name: item.name, status: item.status !== false })),
 });
 
 /** 目录契约的平铺 groups → 嵌套视图（分区带子组；跨品类悬空分组防御性按根展示） */
 export function viewTreeOf(groups: BomCatalogNode[]): ViewRoot[] {
-    const sections = new Map<string, ViewSectionNode>();
+    const nodes = new Map<string, ViewRoot>(
+        groups.map(node => [
+            node.id,
+            node.kind === "section"
+                ? { kind: "section", id: node.id, name: node.name, status: node.status !== false, groups: [] }
+                : groupOf(node),
+        ]),
+    );
     const roots: ViewRoot[] = [];
-    for (const node of groups) {
-        if (node.kind === "section") {
-            const section: ViewSectionNode = {
-                kind: "section",
-                id: node.id,
-                name: node.name,
-                status: node.status !== false,
-                groups: [],
-            };
-            sections.set(node.id, section);
-            roots.push(section);
-        } else if (node.parentId !== null && sections.has(node.parentId)) {
-            sections.get(node.parentId)!.groups.push(groupOf(node));
-        } else {
-            roots.push(groupOf(node));
-        }
+    for (const source of groups) {
+        const node = nodes.get(source.id)!;
+        const parent = source.parentId === null ? undefined : nodes.get(source.parentId);
+        if (node.kind === "group" && parent) (parent.groups ??= []).push(node);
+        else roots.push(node);
     }
     return roots;
 }
 
-const cloneTree = (roots: ViewRoot[]): ViewRoot[] =>
+export const viewChildrenOf = (node: ViewRoot): ViewGroupNode[] => node.groups ?? [];
+
+export function viewNodesOf(roots: readonly ViewRoot[]): ViewRoot[] {
+    return roots.flatMap(root => [root, ...viewNodesOf(viewChildrenOf(root))]);
+}
+
+export function viewPathOf(roots: readonly ViewRoot[], id: string): ViewRoot[] {
+    for (const root of roots) {
+        if (root.id === id) return [root];
+        if (root.kind === "group" && root.items.some(item => item.id === id)) return [root];
+        const childPath = viewPathOf(viewChildrenOf(root), id);
+        if (childPath.length) return [root, ...childPath];
+    }
+    return [];
+}
+
+const cloneTree = (roots: readonly ViewRoot[]): ViewRoot[] =>
     roots.map(root =>
         root.kind === "section"
-            ? {
+            ? { ...root, groups: cloneTree(root.groups) as ViewGroupNode[] }
+            : {
                   ...root,
-                  groups: root.groups.map(group => ({ ...group, items: group.items.map(item => ({ ...item })) })),
-              }
-            : { ...root, items: root.items.map(item => ({ ...item })) },
+                  groups: cloneTree(viewChildrenOf(root)) as ViewGroupNode[],
+                  items: root.items.map(item => ({ ...item })),
+              },
     );
 
 interface TreeIndex {
     roots: ViewRoot[];
+    nodeOf: (id: string) => ViewRoot | undefined;
     sectionOf: (id: string) => ViewSectionNode | undefined;
     groupOf: (id: string) => { group: ViewGroupNode; siblings: ViewGroupNode[] } | undefined;
     itemOf: (id: string) => { item: ViewItem; siblings: ViewItem[] } | undefined;
@@ -92,36 +127,25 @@ interface TreeIndex {
 
 const indexTree = (roots: ViewRoot[]): TreeIndex => ({
     roots,
+    nodeOf: id => viewNodesOf(roots).find(node => node.id === id),
     sectionOf: id => roots.find(root => root.kind === "section" && root.id === id) as ViewSectionNode | undefined,
     groupOf: id => {
-        for (const root of roots) {
-            if (root.kind === "group" && root.id === id) {
-                return { group: root, siblings: roots as ViewGroupNode[] };
+        const visit = (siblings: ViewRoot[]): { group: ViewGroupNode; siblings: ViewGroupNode[] } | undefined => {
+            for (const node of siblings) {
+                if (node.kind === "group" && node.id === id)
+                    return { group: node, siblings: siblings as ViewGroupNode[] };
+                const found = visit(viewChildrenOf(node));
+                if (found) return found;
             }
-            if (root.kind === "section") {
-                const group = root.groups.find(entry => entry.id === id);
-                if (group) {
-                    return { group, siblings: root.groups };
-                }
-            }
-        }
-        return undefined;
+            return undefined;
+        };
+        return visit(roots);
     },
     itemOf: id => {
-        for (const root of roots) {
-            if (root.kind === "group") {
-                const item = root.items.find(entry => entry.id === id);
-                if (item) {
-                    return { item, siblings: root.items };
-                }
-            } else {
-                for (const group of root.groups) {
-                    const item = group.items.find(entry => entry.id === id);
-                    if (item) {
-                        return { item, siblings: group.items };
-                    }
-                }
-            }
+        for (const node of viewNodesOf(roots)) {
+            if (node.kind !== "group") continue;
+            const item = node.items.find(entry => entry.id === id);
+            if (item) return { item, siblings: node.items };
         }
         return undefined;
     },
@@ -162,6 +186,7 @@ export function applyOpsToView(snapshot: ViewRoot[], operations: readonly Struct
                     qty: op.qty,
                     status: true,
                     draft: true,
+                    groups: [],
                     items: (op.items ?? []).map(item => ({
                         id: item.tempId,
                         name: item.name,
@@ -169,9 +194,9 @@ export function applyOpsToView(snapshot: ViewRoot[], operations: readonly Struct
                         draft: true,
                     })),
                 };
-                const section = op.parentId === null ? undefined : index.sectionOf(op.parentId);
-                if (section) {
-                    section.groups.push(group);
+                const parent = op.parentId === null ? undefined : index.nodeOf(op.parentId);
+                if (parent) {
+                    (parent.groups ??= []).push(group);
                 } else {
                     index.roots.push(group);
                 }
@@ -269,17 +294,20 @@ export function applyOpsToView(snapshot: ViewRoot[], operations: readonly Struct
                 if (!from) {
                     break;
                 }
-                const targetSection = op.parentId === null ? undefined : index.sectionOf(op.parentId);
-                if (op.parentId !== null && !targetSection) {
-                    break; // 目标不是分区（或不存在）：与后端 400 对齐，本地静默忽略
+                const targetParent = op.parentId === null ? undefined : index.nodeOf(op.parentId);
+                if (
+                    op.parentId !== null &&
+                    (!targetParent || viewNodesOf([from.group]).some(node => node.id === op.parentId))
+                ) {
+                    break; // 不存在或循环嵌套的目标：与后端校验对齐，本地静默忽略
                 }
                 const [moved] = from.siblings.splice(from.siblings.indexOf(from.group), 1);
                 if (!moved) {
                     break;
                 }
                 moved.parentId = op.parentId;
-                if (targetSection) {
-                    targetSection.groups.push(moved);
+                if (targetParent) {
+                    (targetParent.groups ??= []).push(moved);
                 } else {
                     index.roots.push(moved);
                 }
@@ -390,27 +418,15 @@ export function withoutDraftSubtree(
 
 /** 统计（编辑器头部的「X 个分组 · Y 项物料」口径：分组 = GROUP 节点，物料 = 叶子项） */
 export function statsOf(roots: readonly ViewRoot[]): { groups: number; materials: number } {
-    let groups = 0;
-    let materials = 0;
-    for (const root of roots) {
-        if (root.kind === "group") {
-            groups += 1;
-            materials += root.items.length;
-        } else {
-            for (const group of root.groups) {
-                groups += 1;
-                materials += group.items.length;
-            }
-        }
-    }
-    return { groups, materials };
+    const groups = viewNodesOf(roots).filter((node): node is ViewGroupNode => node.kind === "group");
+    return { groups: groups.length, materials: groups.reduce((sum, node) => sum + node.items.length, 0) };
 }
 
 export interface FlatRow {
     kind: "section" | "group" | "item";
     id: string;
     name: string;
-    /** item → 所属分组名；group → 所属分区名（根分组 null）；section → null */
+    /** item → 所属分组名；group → 所属父节点名（根分组 null）；section → null */
     holderName: string | null;
     /** 自身是否隐藏（不含祖先） */
     hidden: boolean;
@@ -422,97 +438,48 @@ export interface FlatRow {
     last: boolean;
 }
 
-/** 平铺行（树渲染与移动弹窗共用的遍历序：分区 → 其分组 → 物料） */
+/** 平铺行（树渲染与移动弹窗共用的遍历序：节点 → 直属物料 → 子分组） */
 export function flattenTree(roots: readonly ViewRoot[]): FlatRow[] {
     const rows: FlatRow[] = [];
-    const rootCount = roots.length;
-    roots.forEach((root, rootIndex) => {
-        if (root.kind === "group") {
+    const visit = (nodes: readonly ViewRoot[], holder: string | null, hidden: boolean) => {
+        nodes.forEach((node, index) => {
+            const inheritedHidden = hidden || !node.status;
             rows.push({
-                kind: "group",
-                id: root.id,
-                name: root.name,
-                holderName: null,
-                hidden: !root.status,
-                effectivelyHidden: !root.status,
-                draft: root.draft === true,
-                first: rootIndex === 0,
-                last: rootIndex === rootCount - 1,
+                kind: node.kind,
+                id: node.id,
+                name: node.name,
+                holderName: holder,
+                hidden: !node.status,
+                effectivelyHidden: inheritedHidden,
+                draft: node.draft === true,
+                first: index === 0,
+                last: index === nodes.length - 1,
             });
-            root.items.forEach((item, itemIndex) => {
-                rows.push({
-                    kind: "item",
-                    id: item.id,
-                    name: item.name,
-                    holderName: root.name,
-                    hidden: !item.status,
-                    effectivelyHidden: !root.status || !item.status,
-                    draft: item.draft === true,
-                    first: itemIndex === 0,
-                    last: itemIndex === root.items.length - 1,
-                });
-            });
-            return;
-        }
-        rows.push({
-            kind: "section",
-            id: root.id,
-            name: root.name,
-            holderName: null,
-            hidden: !root.status,
-            effectivelyHidden: !root.status,
-            draft: root.draft === true,
-            first: rootIndex === 0,
-            last: rootIndex === rootCount - 1,
+            if (node.kind === "group")
+                node.items.forEach((item, itemIndex) =>
+                    rows.push({
+                        kind: "item",
+                        id: item.id,
+                        name: item.name,
+                        holderName: node.name,
+                        hidden: !item.status,
+                        effectivelyHidden: inheritedHidden || !item.status,
+                        draft: item.draft === true,
+                        first: itemIndex === 0,
+                        last: itemIndex === node.items.length - 1,
+                    }),
+                );
+            visit(viewChildrenOf(node), node.name, inheritedHidden);
         });
-        const groupCount = root.groups.length;
-        root.groups.forEach((group, groupIndex) => {
-            rows.push({
-                kind: "group",
-                id: group.id,
-                name: group.name,
-                holderName: root.name,
-                hidden: !group.status,
-                effectivelyHidden: !root.status || !group.status,
-                draft: group.draft === true,
-                first: groupIndex === 0,
-                last: groupIndex === groupCount - 1,
-            });
-            group.items.forEach((item, itemIndex) => {
-                rows.push({
-                    kind: "item",
-                    id: item.id,
-                    name: item.name,
-                    holderName: group.name,
-                    hidden: !item.status,
-                    effectivelyHidden: !root.status || !group.status || !item.status,
-                    draft: item.draft === true,
-                    first: itemIndex === 0,
-                    last: itemIndex === group.items.length - 1,
-                });
-            });
-        });
-    });
+    };
+    visit(roots, null, false);
     return rows;
 }
 
 /** 同品类内分区与分组共享名称命名空间（与后端 uk_material_group_name 一致）；
  *  物料名按组内唯一校验。返回冲突名（null = 无冲突） */
 export function conflictingNodeName(roots: readonly ViewRoot[], name: string, exceptId?: string): string | null {
-    const taken = new Set<string>();
-    for (const root of roots) {
-        if (root.id !== exceptId) {
-            taken.add(root.name);
-        }
-        if (root.kind === "section") {
-            for (const group of root.groups) {
-                if (group.id !== exceptId) {
-                    taken.add(group.name);
-                }
-            }
-        }
-    }
-    return taken.has(name) ? name : null;
+    return viewNodesOf(roots).some(node => node.id !== exceptId && node.name === name) ? name : null;
 }
 
 /** 组内物料重名（新增/改名物料校验）；返回冲突名（null = 无冲突） */
@@ -522,15 +489,8 @@ export function conflictingItemName(
     name: string,
     exceptId?: string,
 ): string | null {
-    for (const root of roots) {
-        const groups = root.kind === "group" ? [root] : root.groups;
-        for (const group of groups) {
-            if (group.id !== groupId) {
-                continue;
-            }
-            const taken = group.items.some(item => item.name === name && item.id !== exceptId);
-            return taken ? name : null;
-        }
-    }
-    return null;
+    const group = viewNodesOf(roots).find(node => node.kind === "group" && node.id === groupId) as
+        | ViewGroupNode
+        | undefined;
+    return group?.items.some(item => item.name === name && item.id !== exceptId) ? name : null;
 }

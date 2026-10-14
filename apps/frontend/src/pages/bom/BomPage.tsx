@@ -11,7 +11,7 @@ import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyRow } from "@/components/ui/EmptyRow";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BomSpecs } from "@/components/bom/BomSpecs";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Icon } from "@/lib/icons";
 import { num } from "@/lib/format";
 import { formatDateTime } from "@/lib/date";
@@ -102,37 +102,39 @@ export function BomDetailModal({
     );
 }
 
-/* 目录树块：按接口下发的顺序分块——顶级节点（分区与根分组）依序穿插，
- * 分组的物料挂在前面最近的分区下；触点等后置分区自然排在末尾 */
+/* 目录平铺数据按 parentId 组装，保留根节点顺序；子分组由渲染器递归展开。 */
 interface CatalogBlock {
     section: BomCatalogNode | null;
     groups: BomCatalogNode[];
 }
 
-const catalogBlocksOf = (category: { groups: BomCatalogNode[] }): CatalogBlock[] => {
-    const blocks: CatalogBlock[] = [];
-    for (const node of category.groups) {
-        if (node.kind === "section") {
-            blocks.push({ section: node, groups: [] });
-        } else if (node.parentId === null) {
-            blocks.push({ section: null, groups: [node] });
-        } else {
-            blocks.at(-1)?.groups.push(node);
-        }
-    }
-    return blocks;
-};
+const catalogBlocksOf = (category: { groups: BomCatalogNode[] }): CatalogBlock[] =>
+    category.groups
+        .filter(node => node.parentId === null)
+        .map(node =>
+            node.kind === "section"
+                ? { section: node, groups: category.groups.filter(child => child.parentId === node.id) }
+                : { section: null, groups: [node] },
+        );
 
-/* 可选目录：过滤停用节点/物料后的品类形态（可选 = 自身∧祖先启用）。目录接口全量
- * 下发（停用项供管理页与历史归属匹配），此处必须先过滤再分块——catalogBlocksOf 的
- * 「子组挂前一个块」组装不识别祖先状态，未过滤的停用分区子组会串进上一个块。 */
+/* 可选 = 自身与所有祖先启用；从根遍历，停用或悬空的整支均不进入选料集合。 */
 const selectableCatalogOf = (category: BomCategory): BomCategory => {
-    const hiddenSections = new Set(category.groups.filter(group => group.status === false).map(group => group.id));
+    const children = new Map<string | null, BomCatalogNode[]>();
+    for (const node of category.groups) children.set(node.parentId, [...(children.get(node.parentId) ?? []), node]);
+    const enabled = new Set<string>();
+    const visit = (parentId: string | null) => {
+        for (const node of children.get(parentId) ?? []) {
+            if (node.status === false || enabled.has(node.id)) continue;
+            enabled.add(node.id);
+            visit(node.id);
+        }
+    };
+    visit(null);
     return {
         ...category,
         groups: category.groups
-            .filter(group => group.status !== false && !hiddenSections.has(group.parentId ?? ""))
-            .map(group => ({ ...group, items: group.items.filter(item => item.status !== false) })),
+            .filter(node => enabled.has(node.id))
+            .map(node => ({ ...node, items: node.items.filter(item => item.status !== false) })),
     };
 };
 
@@ -204,6 +206,13 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
     /* 合并树：本品类目录 + 子品类目录（跌倒开关 = 跌倒盖/底/钢球/翘板 + 微动开关物料嵌套在"微动开关"大类下） */
     const tipoverBlocks = useMemo(() => (selectableMain ? catalogBlocksOf(selectableMain) : []), [selectableMain]);
     const childBlocks = useMemo(() => (selectableChild ? catalogBlocksOf(selectableChild) : []), [selectableChild]);
+    const childrenByParent = useMemo(() => {
+        const children = new Map<string, BomCatalogNode[]>();
+        for (const node of [...(selectableMain?.groups ?? []), ...(selectableChild?.groups ?? [])]) {
+            if (node.parentId !== null) children.set(node.parentId, [...(children.get(node.parentId) ?? []), node]);
+        }
+        return children;
+    }, [selectableMain, selectableChild]);
     const catalogRows = useMemo(() => {
         const rows = [
             ...(selectableMain ? catalogRowsOf(selectableMain) : []),
@@ -400,7 +409,13 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
         );
     };
 
-    const renderGroup = (node: BomCatalogNode) => {
+    const selectedCountOf = (node: BomCatalogNode): number =>
+        node.items.filter(item => selectedIds.has(item.id)).length +
+        (childrenByParent.get(node.id) ?? []).reduce((sum, child) => sum + selectedCountOf(child), 0);
+
+    const renderGroup = (node: BomCatalogNode): ReactNode => {
+        const childGroups = childrenByParent.get(node.id) ?? [];
+        const totalSelected = selectedCountOf(node);
         const selectedCount = node.items.filter(item => selectedIds.has(item.id)).length;
         const allSelected = node.items.length > 0 && selectedCount === node.items.length;
         const nodeCollapsed = collapsed.has(node.id);
@@ -425,9 +440,13 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                     >
                         {node.name}
                     </button>
-                    {nodeCollapsed && selectedCount > 0 && (
+                    {nodeCollapsed && totalSelected > 0 && (
                         <span className="tnum shrink-0 rounded-full bg-primary-soft px-1.5 py-0.5 text-11 font-medium text-primary-strong">
-                            {node.multi ? `已选 ${selectedCount}` : node.qty ? `已选 · ×${selectedQty}` : "已选"}
+                            {childGroups.length > 0 || node.multi
+                                ? `已选 ${totalSelected}`
+                                : node.qty
+                                  ? `已选 · ×${selectedQty}`
+                                  : "已选"}
                         </span>
                     )}
                     {node.multi && node.items.length > 0 && (
@@ -442,7 +461,8 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                             onChange={() => toggleGroupAll(node)}
                         />
                     )}
-                    {!node.multi &&
+                    {node.items.length > 0 &&
+                        !node.multi &&
                         (node.qty ? (
                             <span className="shrink-0 rounded-full border border-warning/40 bg-warning-soft px-1.5 py-0.5 text-11 font-medium text-warning">
                                 单选
@@ -451,51 +471,60 @@ export function NewBomModal({ open, onClose }: { open: boolean; onClose: () => v
                             <span className="shrink-0 text-12 text-subtle">单选</span>
                         ))}
                 </div>
-                {!nodeCollapsed &&
-                    (node.items.length === 0 ? (
-                        <p className="border-t border-line px-3 py-1.5 text-13 text-subtle">暂无物料</p>
-                    ) : (
-                        <ul className="border-t border-line">
-                            {node.items.map(item => (
-                                <li key={item.id}>
-                                    <div className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 transition hover:bg-row-hover">
-                                        <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5">
-                                            <input
-                                                type="checkbox"
-                                                className="accent-primary"
-                                                checked={selectedIds.has(item.id)}
-                                                onChange={() => toggleItem(node, item.id)}
-                                            />
-                                            <span className="text-14 text-td wrap-anywhere">{item.name}</span>
-                                        </label>
-                                        {node.qty && selectedIds.has(item.id) && (
-                                            <div className="flex shrink-0 items-center gap-0.5">
-                                                <button
-                                                    type="button"
-                                                    aria-label={`${item.name} 数量减一`}
-                                                    onClick={() => changeQty(item.id, -1)}
-                                                    className="grid size-5 place-items-center rounded-md border border-line-strong bg-surface text-14 leading-none text-td transition hover:border-primary-border hover:bg-primary-soft hover:text-primary"
-                                                >
-                                                    −
-                                                </button>
-                                                <span className="tnum min-w-6 text-center text-13 font-semibold text-td">
-                                                    ×{quantities[item.id] ?? 1}
-                                                </span>
-                                                <button
-                                                    type="button"
-                                                    aria-label={`${item.name} 数量加一`}
-                                                    onClick={() => changeQty(item.id, 1)}
-                                                    className="grid size-5 place-items-center rounded-md border border-line-strong bg-surface text-14 leading-none text-td transition hover:border-primary-border hover:bg-primary-soft hover:text-primary"
-                                                >
-                                                    +
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                    ))}
+                {!nodeCollapsed && (
+                    <>
+                        {node.items.length === 0 && childGroups.length === 0 && (
+                            <p className="border-t border-line px-3 py-1.5 text-13 text-subtle">暂无物料</p>
+                        )}
+                        {node.items.length > 0 && (
+                            <ul className="border-t border-line">
+                                {node.items.map(item => (
+                                    <li key={item.id}>
+                                        <div className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 transition hover:bg-row-hover">
+                                            <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5">
+                                                <input
+                                                    type="checkbox"
+                                                    className="accent-primary"
+                                                    checked={selectedIds.has(item.id)}
+                                                    onChange={() => toggleItem(node, item.id)}
+                                                />
+                                                <span className="text-14 text-td wrap-anywhere">{item.name}</span>
+                                            </label>
+                                            {node.qty && selectedIds.has(item.id) && (
+                                                <div className="flex shrink-0 items-center gap-0.5">
+                                                    <button
+                                                        type="button"
+                                                        aria-label={`${item.name} 数量减一`}
+                                                        onClick={() => changeQty(item.id, -1)}
+                                                        className="grid size-5 place-items-center rounded-md border border-line-strong bg-surface text-14 leading-none text-td transition hover:border-primary-border hover:bg-primary-soft hover:text-primary"
+                                                    >
+                                                        −
+                                                    </button>
+                                                    <span className="tnum min-w-6 text-center text-13 font-semibold text-td">
+                                                        ×{quantities[item.id] ?? 1}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        aria-label={`${item.name} 数量加一`}
+                                                        onClick={() => changeQty(item.id, 1)}
+                                                        className="grid size-5 place-items-center rounded-md border border-line-strong bg-surface text-14 leading-none text-td transition hover:border-primary-border hover:bg-primary-soft hover:text-primary"
+                                                    >
+                                                        +
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                        {childGroups.length > 0 && (
+                            <div className="space-y-2 border-t border-line py-2 pr-2 pl-5">
+                                {childGroups.map(renderGroup)}
+                            </div>
+                        )}
+                    </>
+                )}
             </div>
         );
     };

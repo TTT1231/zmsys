@@ -1495,12 +1495,10 @@ html.dark .login-captcha-text {
     }
 }
 
-/* ── BOM 结构页（/product-structure）：树列栅格与缩进步长。
-   列宽与原型档位一致（分组/物料 | 多选 | 数量 | 操作），窄屏依次收紧；
-   行内其余样式全走 Tailwind 工具类，这里只放工具类表达不了的结构栅格。 ── */
+/* BOM 结构编辑区：列宽固定，层级线随递归深度连续连接。 */
 .bs-cols {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 62px 62px 164px;
+    grid-template-columns: minmax(0, 1fr) 48px 48px 176px;
     align-items: center;
     min-width: 0;
 }
@@ -1512,49 +1510,99 @@ html.dark .login-captcha-text {
 }
 .bs-tree {
     --bs-step: 24px;
-    padding: 0.5rem 0.5rem 0.75rem;
+    padding: 4px 8px 12px;
+}
+.bs-tree .node-row {
+    min-height: 36px;
+    cursor: pointer;
+    transition: background-color 120ms ease;
+}
+.bs-tree .node-row:hover {
+    background: var(--color-row-hover);
+}
+.bs-tree .node-row[data-selected="true"] {
+    background: var(--color-primary-soft);
+}
+.bs-entry-cell {
+    min-height: inherit;
+}
+.bs-indent {
+    position: relative;
+    width: var(--bs-step);
+    flex: none;
+    align-self: stretch;
+}
+.bs-indent-through::before,
+.bs-indent-branch::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    border-left: 1px solid var(--color-line-strong);
+}
+.bs-indent-branch::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: 0;
+    left: 50%;
+    border-top: 1px solid var(--color-line-strong);
+}
+.bs-indent-last::before {
+    bottom: 50%;
+}
+.bs-category-button:focus-visible,
+.bs-entry:focus-visible,
+.bs-switcher:focus-visible,
+.bs-icon-button:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
 }
 @media (max-width: 1180px) {
     .bs-cols {
-        grid-template-columns: minmax(0, 1fr) 48px 48px 150px;
+        grid-template-columns: minmax(0, 1fr) 40px 40px 156px;
     }
-    .bs-tree {
-        --bs-step: 20px;
+    .bs-tree .bs-icon-button {
+        width: 28px;
+        height: 28px;
     }
 }
-@media (max-width: 900px) {
+@media (max-width: 680px) {
     .bs-cols {
-        grid-template-columns: minmax(0, 1fr) 40px 40px 132px;
+        grid-template-columns: minmax(0, 1fr) 32px 32px 64px;
     }
     .bs-tree {
         --bs-step: 16px;
+        padding-inline: 4px;
     }
-}
-@media (max-width: 680px) {
-    .bs-cols {
-        grid-template-columns: minmax(0, 1fr) 34px 34px 96px;
+    .bs-tree .node-row {
+        min-height: 44px;
     }
-    .bs-tree {
-        --bs-step: 12px;
+    .bs-tree .bs-move,
+    .bs-tree .bs-visibility {
+        display: none;
+    }
+    .bs-tree .bs-icon-button {
+        width: 28px;
     }
 }
 
-/* BOM 结构树行尾操作：按钮随断点收紧（列宽 164/150/132/96px，最多 5 枚 32px 按钮
-   在 ≤1180 起溢出）；≤680 隐藏上移/下移（更多菜单语义上已可承载，原型同款取舍） */
-.bs-tree .bs-cols .node-row > button,
-.bs-tree .bs-cols .node-row > span > button {
-    width: 28px;
-    height: 28px;
-}
-@media (max-width: 900px) {
-    .bs-tree .bs-cols .node-row > button,
-    .bs-tree .bs-cols .node-row > span > button {
-        width: 24px;
-        height: 24px;
+@media (min-width: 1024px) {
+    #mainContent:has(.bs-page) {
+        padding-top: 12px;
+        padding-bottom: 12px;
+    }
+    .bs-workspace {
+        height: calc(100dvh - 100px);
+    }
+    [data-maximized] .bs-workspace {
+        height: calc(100dvh - 36px);
     }
 }
-@media (max-width: 680px) {
-    .bs-tree .bs-cols .node-row .bs-move {
-        display: none;
+
+@media (prefers-reduced-motion: reduce) {
+    .bs-tree .node-row {
+        transition: none;
     }
 }

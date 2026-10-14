@@ -1,5 +1,5 @@
-/* 目录结构校验器：层级契约（分区仅根/分组挂根或分区/物料挂分组）、无环、品类内
- * 唯一、model 唯一；复合目录伙伴键冲突与编码前缀数字延长校验。 */
+/* 目录结构校验器：层级契约（分区仅根/分组可嵌套且分支含物料层 ≤5/物料挂分组）、
+ * 无环、品类内唯一、组内物料名唯一；复合目录伙伴键冲突与编码前缀数字延长校验。 */
 import { describe, expect, it } from "vitest";
 import { BadRequestException } from "@nestjs/common";
 import {
@@ -48,19 +48,63 @@ describe("validateCatalogTree", () => {
         ).not.toThrow();
     });
 
-    it("分区挂子节点 / 分区带规则、分组挂分组、分组缺规则均 400", () => {
+    it("分区挂子节点 / 分区带规则 / 分组缺规则 400；分组挂分组合法", () => {
         expect(() =>
             validateCatalogTree([{ ...section("2600", "触点"), parentId: "2001" }, group("2001", "型号", "model")]),
         ).toThrow(new BadRequestException("分区「触点」只能作为根节点，不能挂在其他节点下"));
         expect(() =>
             validateCatalogTree([{ ...section("2600", "触点"), groupKey: "x", multi: false, qty: false }]),
         ).toThrow(new BadRequestException("分区「触点」不携带选择规则，也不能直接挂物料"));
+        // 分组挂分组（嵌套目录）合法，层级上限另测
         expect(() =>
             validateCatalogTree([group("2001", "型号", "model"), group("2002", "型号2", "model2", "2001")]),
-        ).toThrow(new BadRequestException("分组「型号2」只能挂在品类根或分区下（不支持多级嵌套）"));
+        ).not.toThrow();
         expect(() => validateCatalogTree([{ ...group("2002", "A面", "face-a"), multi: null }])).toThrow(
             new BadRequestException("分组「A面」缺少选择规则（groupKey/multi/qty）"),
         );
+    });
+
+    it("层级上限：分支可见层数（含物料层）≤5；同名单选折叠不占层、超限 400", () => {
+        const chain = (deepestItems: CatalogTreeNode["items"]): CatalogTreeNode[] => [
+            section("2600", "分区"),
+            group("2601", "一级", "g1", "2600"),
+            group("2602", "二级", "g2", "2601"),
+            { ...group("2603", "三级", "g3", "2602"), items: deepestItems },
+        ];
+        // 分区(1) + 分组(2,3,4) + 物料(5) = 5 层，合法
+        expect(() => chain([{ id: "3005", name: "物料", sortOrder: 0, status: true }])).not.toThrow();
+        // 空分组占第 5 层仍合法（与编辑器移动口径一致）；其内物料落到第 6 层 → 400
+        expect(() => validateCatalogTree([...chain([]), group("2604", "四级", "g4", "2603")])).not.toThrow();
+        expect(() =>
+            validateCatalogTree([
+                ...chain([]),
+                {
+                    ...group("2604", "四级", "g4", "2603"),
+                    items: [{ id: "3005", name: "物料", sortOrder: 0, status: true }],
+                },
+            ]),
+        ).toThrow(new BadRequestException("「分区」分支超过 5 层上限（含物料层），请减少嵌套"));
+        // 同名单选折叠：第 5 层分组内唯一与组同名的物料不额外占层，合法
+        expect(() =>
+            validateCatalogTree([
+                ...chain([]),
+                {
+                    ...group("2604", "四级", "g4", "2603"),
+                    items: [{ id: "3005", name: "四级", sortOrder: 0, status: true }],
+                },
+            ]),
+        ).not.toThrow();
+        // 折叠口径只认单选：多选组的同名唯一物料照常占层 → 400
+        expect(() =>
+            validateCatalogTree([
+                ...chain([]),
+                {
+                    ...group("2604", "四级", "g4", "2603"),
+                    multi: true,
+                    items: [{ id: "3005", name: "四级", sortOrder: 0, status: true }],
+                },
+            ]),
+        ).toThrow(BadRequestException);
     });
 
     it("悬空父引用 400（防跨品类挂接与误删引用）", () => {

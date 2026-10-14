@@ -1,5 +1,6 @@
 /* 结构操作投影器：写差分、变动摘要前后值、冗余操作无变更、草稿 tempId 链、
- * 边界移动容忍、键生成避开保留键与输入防御。 */
+ * 边界移动容忍、键生成避开保留键与输入防御；分组嵌套（挂任意父、循环移动
+ * 静默忽略、整支删除叶先于父）。 */
 import { describe, expect, it } from "vitest";
 import { BadRequestException } from "@nestjs/common";
 import { projectStructure, type StructureOperation } from "./catalog-projector";
@@ -174,7 +175,7 @@ describe("projectStructure", () => {
         ]);
     });
 
-    it("未知目标 / 重复草稿标识 / 分组挂分组 / 物料目标给成分组均 400", () => {
+    it("未知目标 / 重复草稿标识 / 物料目标给成分组均 400；分组挂分组合法", () => {
         expect(() => projectStructure(base, [{ type: "hide", targetType: "item", targetId: "nope" }], genId)).toThrow(
             BadRequestException,
         );
@@ -188,16 +189,112 @@ describe("projectStructure", () => {
                 genId,
             ),
         ).toThrow(new BadRequestException("草稿标识「dup」重复"));
-        expect(() =>
-            projectStructure(
-                base,
-                [{ type: "add_group", tempId: "t", name: "X", parentId: "2001", multi: false, qty: false }],
-                genId,
-            ),
-        ).toThrow(new BadRequestException("分组只能挂在品类根或分区下"));
+        // 分组挂分组（嵌套目录）：createGroups 差分带分组父 id
+        const nested = projectStructure(
+            base,
+            [{ type: "add_group", tempId: "t", name: "嵌套组", parentId: "2001", multi: false, qty: false }],
+            genId,
+        );
+        expect(nested.writes.createGroups.map(row => [row.name, row.parentId])).toEqual([["嵌套组", 2001n]]);
+        expect(nested.afterTree.find(node => node.name === "嵌套组")!.parentId).toBe("2001");
         expect(() => projectStructure(base, [{ type: "hide", targetType: "item", targetId: "2002" }], genId)).toThrow(
             new BadRequestException("目标节点不是物料"),
         );
+    });
+
+    it("嵌套目录：分组挂分组、循环移动静默忽略、移动进分组带归属摘要", () => {
+        const result = projectStructure(
+            base,
+            [
+                { type: "add_group", tempId: "t-l1", name: "一级壳", parentId: "2601", multi: false, qty: false },
+                {
+                    type: "add_group",
+                    tempId: "t-l2",
+                    name: "二级壳",
+                    parentId: "t-l1",
+                    multi: true,
+                    qty: false,
+                    items: [{ tempId: "t-i", name: "嵌套物料" }],
+                },
+                // 循环移动：把 2601（触点大小）移入自己的后代 t-l2 —— 静默忽略
+                { type: "move", targetType: "group", targetId: "2601", parentId: "t-l2" },
+            ],
+            genId,
+        );
+        const l1 = result.afterTree.find(node => node.name === "一级壳")!;
+        const l2 = result.afterTree.find(node => node.name === "二级壳")!;
+        expect(l1.parentId).toBe("2601");
+        expect(l2.parentId).toBe(l1.id);
+        // 循环移动未生效：触点大小仍挂分区 2600 下
+        expect(result.afterTree.find(node => node.id === "2601")!.parentId).toBe("2600");
+        expect(result.writes.createGroups.map(row => [row.name, row.parentId])).toEqual([
+            ["一级壳", 2601n],
+            ["二级壳", BigInt(l1.id)],
+        ]);
+        // 已存分组移入另一分组：parentId 差分 + 归属前后值摘要
+        const moved = projectStructure(
+            base,
+            [
+                { type: "add_group", tempId: "t-h", name: "壳", parentId: null, multi: false, qty: false },
+                { type: "move", targetType: "group", targetId: "2601", parentId: "t-h" },
+            ],
+            genId,
+        );
+        const holder = moved.afterTree.find(node => node.name === "壳")!;
+        // 移动前后都是父下唯一子节点（position 恒 1），差分只含改挂
+        expect(moved.writes.updateGroups).toEqual([{ id: 2601n, data: { parentId: BigInt(holder.id) } }]);
+        expect(moved.summary).toContainEqual({
+            nodeType: "group",
+            nodeId: "2601",
+            name: "触点大小",
+            before: { parent: "触点" },
+            after: { parent: "壳" },
+        });
+    });
+
+    it("嵌套删除：删分组连带多层子分组整支，删除序叶先于父", () => {
+        const planted = projectStructure(
+            base,
+            [
+                { type: "add_group", tempId: "t-l1", name: "一级壳", parentId: "2601", multi: false, qty: false },
+                {
+                    type: "add_group",
+                    tempId: "t-l2",
+                    name: "二级壳",
+                    parentId: "t-l1",
+                    multi: true,
+                    qty: false,
+                    items: [{ tempId: "t-i", name: "嵌套物料" }],
+                },
+            ],
+            genId,
+        );
+        const l1 = planted.afterTree.find(node => node.name === "一级壳")!;
+        const l2 = planted.afterTree.find(node => node.name === "二级壳")!;
+        const removed = projectStructure(
+            planted.afterTree,
+            [{ type: "remove", targetType: "group", targetId: "2601" }],
+            genId,
+        );
+        // 触点大小 + 一级壳 + 二级壳整支消失，叶先于父
+        expect(removed.writes.deleteGroups).toEqual([
+            { id: BigInt(l2.id), kind: "GROUP" },
+            { id: BigInt(l1.id), kind: "GROUP" },
+            { id: 2601n, kind: "GROUP" },
+        ]);
+        expect(removed.afterTree.some(node => node.name === "一级壳" || node.name === "二级壳")).toBe(false);
+        // 分区删除同样整支：连带其下分组（含嵌套支），删除序子先于父
+        const sectionRemoved = projectStructure(
+            planted.afterTree,
+            [{ type: "remove", targetType: "section", targetId: "2600" }],
+            genId,
+        );
+        expect(sectionRemoved.writes.deleteGroups).toEqual([
+            { id: BigInt(l2.id), kind: "GROUP" },
+            { id: BigInt(l1.id), kind: "GROUP" },
+            { id: 2601n, kind: "GROUP" },
+            { id: 2600n, kind: "SECTION" },
+        ]);
     });
 
     it("v2 移出后删组：物料只落改挂差分，不进 deleteItems/removedItemIds（被引用物料合法保留）", () => {
@@ -227,9 +324,10 @@ describe("projectStructure", () => {
 
     it("v2 删分区连带子分组整支登记；同批删组后新建分组派生新键", () => {
         const cascaded = projectStructure(base, [{ type: "remove", targetType: "section", targetId: "2600" }], genId);
+        // 删除序叶先于父（自引用外键 RESTRICT）
         expect(cascaded.writes.deleteGroups).toEqual([
-            { id: 2600n, kind: "SECTION" },
             { id: 2601n, kind: "GROUP" },
+            { id: 2600n, kind: "SECTION" },
         ]);
         expect(cascaded.writes.deleteItems).toEqual([3005n]);
         expect(cascaded.removedItemIds).toEqual([3005n]);

@@ -1,4 +1,11 @@
-import { useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import {
+    useRef,
+    useState,
+    type ButtonHTMLAttributes,
+    type KeyboardEvent,
+    type MouseEvent,
+    type ReactNode,
+} from "react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -9,19 +16,10 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Icon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
-import type { ViewGroupNode, ViewItem, ViewRoot, ViewSectionNode } from "./structureView";
-
-/**
- * 「BOM 结构」树编辑区（BOM结构原型.html 的最终版交互）：分区/分组/物料三级行，
- * 多选/数量两列规则开关（仅含物料的分组），行尾 上移/下移/不可选/添加/更多 操作；
- * 复合品类按分节渲染（共用结构 + 本品结构），节点可折叠（高度动画）。
- * 行为契约与页面层（BomStructurePage）通过 TreeActions 回调收口。
- */
+import { MAX_TREE_DEPTH, standaloneItemOf, viewChildrenOf, type ViewGroupNode, type ViewRoot } from "./structureView";
 
 export interface EditorSection {
-    /** 分节归属品类的 key（ops 路由与保存按品类收口） */
     categoryKey: string;
-    /** 分节标题（复合视图：跌倒开关类型 / 微动开关类型…）；单视图不渲染标题 */
     label: string;
     composite: boolean;
     tree: ViewRoot[];
@@ -33,7 +31,12 @@ export interface RowRef {
     id: string;
     name: string;
     draft: boolean;
+    /** 同名的单物料分组在编辑器中合为一行，操作仍保留完整目录归属。 */
+    materialItemId?: string;
 }
+
+export type AddKind = "material" | "group";
+export type AddTarget = { type: "root" } | { type: "section" | "group"; id: string };
 
 export interface TreeActions {
     toggleCollapse(id: string): void;
@@ -41,63 +44,12 @@ export interface TreeActions {
     setHidden(row: RowRef, hidden: boolean): void;
     reorder(row: RowRef, direction: "up" | "down"): void;
     setRules(categoryKey: string, groupId: string, multi: boolean, qty: boolean): void;
-    /** 新增分组/分区（target：品类根 或 指定分区下） */
-    openAddNode(categoryKey: string, target: { type: "root" } | { type: "section"; id: string }): void;
-    openAddItems(categoryKey: string, group: { id: string; name: string }): void;
+    openAddNode(categoryKey: string, target: AddTarget): void;
     openRename(row: RowRef): void;
     openMove(row: RowRef): void;
     openRemove(row: RowRef): void;
 }
 
-/* 折叠容器：高度动画（WAAPI，reduced-motion 直切）；hidden 卸载流以省渲染 */
-function Collapse({ open, children, className }: { open: boolean; children: ReactNode; className?: string }) {
-    const ref = useRef<HTMLDivElement>(null);
-    const firstRun = useRef(true);
-    useEffect(() => {
-        const element = ref.current;
-        if (!element) {
-            return;
-        }
-        if (firstRun.current) {
-            firstRun.current = false;
-            element.hidden = !open;
-            return;
-        }
-        const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        if (reduced || typeof element.animate !== "function") {
-            element.hidden = !open;
-            return;
-        }
-        if (open) {
-            const from = element.hidden ? 0 : element.getBoundingClientRect().height;
-            element.hidden = false;
-            const to = element.getBoundingClientRect().height;
-            const animation = element.animate([{ height: `${from}px` }, { height: `${to}px` }], {
-                duration: 180,
-                easing: "cubic-bezier(0.2, 0, 0, 1)",
-            });
-            animation.onfinish = () => animation.cancel();
-            return;
-        }
-        const from = element.getBoundingClientRect().height;
-        const animation = element.animate([{ height: `${from}px` }, { height: "0px" }], {
-            duration: 180,
-            easing: "cubic-bezier(0.2, 0, 0, 1)",
-        });
-        animation.onfinish = () => {
-            element.hidden = true;
-            animation.cancel();
-        };
-    }, [open]);
-    return (
-        <div ref={ref} className={cn("overflow-hidden", className)}>
-            {children}
-        </div>
-    );
-}
-
-/* 图标按钮 + Radix 提示（BOM 结构树行尾操作统一外观）。
-   rest 原样透传：DropdownMenuTrigger asChild 依赖它注入 ref 与指针事件 */
 function IconButton({
     icon,
     label,
@@ -109,17 +61,16 @@ function IconButton({
     icon: string;
     label: string;
     tip?: string;
-    className?: string;
 } & ButtonHTMLAttributes<HTMLButtonElement>) {
     const button = (
         <button
             type="button"
             data-action
             aria-label={label}
+            disabled={disabled}
             className={cn(
-                "inline-flex size-8 flex-none items-center justify-center rounded-md text-muted transition",
-                "hover:bg-primary-soft hover:text-primary-strong",
-                "disabled:cursor-not-allowed disabled:text-placeholder disabled:hover:bg-transparent disabled:hover:text-placeholder",
+                "bs-icon-button inline-flex size-8 flex-none items-center justify-center rounded-md text-muted transition-colors",
+                "hover:bg-primary-soft hover:text-primary-strong disabled:cursor-not-allowed disabled:opacity-35",
                 className,
             )}
             {...rest}
@@ -127,523 +78,420 @@ function IconButton({
             <Icon name={icon} size={15} />
         </button>
     );
-    if (!tip || disabled) {
-        return button;
-    }
-    return (
+    return tip && !disabled ? (
         <Tooltip>
             <TooltipTrigger asChild>{button}</TooltipTrigger>
             <TooltipContent>{tip}</TooltipContent>
         </Tooltip>
+    ) : (
+        button
     );
 }
 
-function Chip({ tone, children }: { tone: "muted" | "primary" | "warning"; children: ReactNode }) {
-    return (
-        <span
-            className={cn(
-                "flex-none rounded-[5px] px-1.5 py-px text-11 leading-4.5 whitespace-nowrap",
-                tone === "muted" && "bg-soft text-muted",
-                tone === "primary" && "bg-primary-soft text-primary-strong",
-                tone === "warning" && "bg-warning-soft text-warning",
-            )}
-        >
-            {children}
-        </span>
+interface TreeNode {
+    row: RowRef;
+    children: TreeNode[];
+    folder: boolean;
+    hidden: boolean;
+    ownHidden: boolean;
+    group?: ViewGroupNode;
+    first?: boolean;
+    last?: boolean;
+}
+
+interface NodeMenuTarget {
+    node: TreeNode;
+    depth: number;
+    first: boolean;
+    last: boolean;
+}
+
+type OpenNodeMenu = (target: NodeMenuTarget, event: MouseEvent<HTMLDivElement> | KeyboardEvent<HTMLDivElement>) => void;
+
+function nodesOf(tree: ViewRoot[], categoryKey: string): TreeNode[] {
+    const groupNode = (group: ViewGroupNode, ancestorHidden: boolean): TreeNode => {
+        const material = standaloneItemOf(group);
+        const ownHidden = !group.status || (material !== undefined && !material.status);
+        const hidden = ancestorHidden || ownHidden;
+        return {
+            row: {
+                categoryKey,
+                kind: "group",
+                id: group.id,
+                name: group.name,
+                draft: group.draft === true,
+                ...(material ? { materialItemId: material.id } : {}),
+            },
+            group,
+            folder: material === undefined,
+            ownHidden,
+            hidden,
+            children: material
+                ? []
+                : [
+                      ...group.items.map((item, index) => ({
+                          row: {
+                              categoryKey,
+                              kind: "item" as const,
+                              id: item.id,
+                              name: item.name,
+                              draft: item.draft === true,
+                          },
+                          folder: false,
+                          children: [],
+                          ownHidden: !item.status,
+                          hidden: hidden || !item.status,
+                          first: index === 0,
+                          last: index === group.items.length - 1,
+                      })),
+                      ...viewChildrenOf(group).map((child, index, siblings) => ({
+                          ...groupNode(child, hidden),
+                          first: index === 0,
+                          last: index === siblings.length - 1,
+                      })),
+                  ],
+        };
+    };
+    return tree.map(root =>
+        root.kind === "group"
+            ? groupNode(root, false)
+            : {
+                  row: { categoryKey, kind: "section", id: root.id, name: root.name, draft: root.draft === true },
+                  folder: true,
+                  hidden: !root.status,
+                  ownHidden: !root.status,
+                  children: root.groups.map(group => groupNode(group, !root.status)),
+              },
     );
 }
 
-const ruleCellDash = (
-    <span className="bs-rule flex items-center justify-center text-placeholder" aria-hidden>
-        —
-    </span>
-);
+const ruleDash = <span className="bs-rule text-placeholder" aria-hidden />;
 
-function RuleChecks({
-    group,
-    disabled,
-    onChange,
-}: {
-    group: ViewGroupNode;
-    disabled: boolean;
-    onChange: (multi: boolean, qty: boolean) => void;
-}) {
+function RuleChecks({ node, actions }: { node: TreeNode; actions: TreeActions }) {
+    const { group, row, hidden } = node;
+    if (!group || group.items.length === 0)
+        return (
+            <>
+                {ruleDash}
+                {ruleDash}
+            </>
+        );
     return (
         <>
-            <span className="bs-rule flex items-center justify-center">
-                <input
-                    type="checkbox"
-                    className="size-4 accent-primary"
-                    checked={group.multi}
-                    disabled={disabled}
-                    aria-label={`${group.name} · 多选`}
-                    onChange={event => onChange(event.target.checked, group.qty)}
-                />
+            <span className="bs-rule">
+                {!row.materialItemId && (
+                    <input
+                        type="checkbox"
+                        className="size-4 accent-primary"
+                        checked={group.multi}
+                        disabled={hidden}
+                        aria-label={`${group.name} · 多选`}
+                        onChange={event => actions.setRules(row.categoryKey, group.id, event.target.checked, group.qty)}
+                    />
+                )}
             </span>
-            <span className="bs-rule flex items-center justify-center">
+            <span className="bs-rule">
                 <input
                     type="checkbox"
                     className="size-4 accent-primary"
                     checked={group.qty}
-                    disabled={disabled}
+                    disabled={hidden}
                     aria-label={`${group.name} · 数量`}
-                    onChange={event => onChange(group.multi, event.target.checked)}
+                    onChange={event => actions.setRules(row.categoryKey, group.id, group.multi, event.target.checked)}
                 />
             </span>
         </>
     );
 }
 
-/* 树本体：分区 → 分组 → 物料 递归渲染 */
 export function StructureTree({
     sections,
     collapsed,
     selectedId,
     actions,
-    headerExtra,
 }: {
     sections: EditorSection[];
     collapsed: ReadonlySet<string>;
     selectedId: string | null;
     actions: TreeActions;
-    headerExtra?: ReactNode;
 }) {
+    const [menu, setMenu] = useState<(NodeMenuTarget & { x: number; y: number }) | null>(null);
+    const returnFocus = useRef<HTMLElement | null>(null);
+    const openMenu: OpenNodeMenu = (target, event) => {
+        if (!event.currentTarget.contains(event.target as Node)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const entry = event.currentTarget.querySelector<HTMLElement>("[data-entry]") ?? event.currentTarget;
+        returnFocus.current = entry;
+        const rect = entry.getBoundingClientRect();
+        const pointer = "clientX" in event && (event.clientX !== 0 || event.clientY !== 0);
+        actions.selectNode(target.node.row.id);
+        setMenu({ ...target, x: pointer ? event.clientX : rect.left + 16, y: pointer ? event.clientY : rect.bottom });
+    };
     return (
         <TooltipProvider delayDuration={250}>
             <div className="bs-tree min-h-0 flex-1 overflow-y-auto" data-tree-root>
-                {headerExtra}
                 {sections.map(section => (
-                    <StructureSection
+                    <section
                         key={section.categoryKey}
-                        section={section}
-                        collapsed={collapsed}
-                        selectedId={selectedId}
-                        actions={actions}
-                    />
+                        className="min-w-0"
+                        data-structure-category={section.categoryKey}
+                    >
+                        {section.composite && (
+                            <div className="flex min-h-10 items-center justify-between gap-3 px-2">
+                                <h3 className="text-13 font-semibold text-primary-strong">{section.label}</h3>
+                                <IconButton
+                                    icon="plus"
+                                    label={`添加内容：${section.label}`}
+                                    tip="添加物料或分组"
+                                    onClick={() => actions.openAddNode(section.categoryKey, { type: "root" })}
+                                />
+                            </div>
+                        )}
+                        {section.tree.length === 0 ? (
+                            <div className="flex min-h-32 items-center justify-center px-4 py-6 text-13 text-muted">
+                                暂无内容
+                            </div>
+                        ) : (
+                            <ul role="tree" aria-label={`${section.label}的分组与物料`}>
+                                {nodesOf(section.tree, section.categoryKey).map((node, index, nodes) => (
+                                    <NodeBranch
+                                        key={node.row.id}
+                                        node={node}
+                                        depth={0}
+                                        ancestorLines={[]}
+                                        first={index === 0}
+                                        last={index === nodes.length - 1}
+                                        collapsed={collapsed}
+                                        selectedId={selectedId}
+                                        actions={actions}
+                                        openMenu={openMenu}
+                                    />
+                                ))}
+                            </ul>
+                        )}
+                    </section>
                 ))}
+                <DropdownMenu
+                    modal={false}
+                    open={menu !== null}
+                    onOpenChange={open => {
+                        if (!open) setMenu(null);
+                    }}
+                >
+                    <DropdownMenuTrigger asChild>
+                        <button
+                            type="button"
+                            tabIndex={-1}
+                            aria-hidden
+                            className="pointer-events-none fixed size-px opacity-0"
+                            style={{ left: menu?.x ?? 0, top: menu?.y ?? 0 }}
+                        />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                        align="start"
+                        sideOffset={0}
+                        className="data-[state=open]:animate-none"
+                        onPointerDownOutside={event => {
+                            // 连续右键换行时菜单保持挂载，由紧随其后的 contextmenu 重新定位，
+                            // 避免每次右键都经历卸载/挂载（回焦 + 入场动画）造成的迟滞感
+                            const pointer = event.detail.originalEvent;
+                            if (
+                                pointer.button === 2 &&
+                                pointer.target instanceof Element &&
+                                pointer.target.closest("[data-node-row]")
+                            ) {
+                                event.preventDefault();
+                            }
+                        }}
+                        onKeyDown={event => event.stopPropagation()}
+                        onInteractOutside={() => {
+                            returnFocus.current = null;
+                        }}
+                        onCloseAutoFocus={event => {
+                            event.preventDefault();
+                            // 连续右键已打开另一个菜单时，不让旧菜单的延迟回焦打断它。
+                            if (!document.querySelector('[role="dialog"], [role="menu"]')) returnFocus.current?.focus();
+                        }}
+                    >
+                        {menu && <NodeMenuItems {...menu} actions={actions} />}
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
         </TooltipProvider>
     );
 }
 
-function StructureSection({
-    section,
+function NodeBranch({
+    node,
+    depth,
+    ancestorLines,
+    first,
+    last,
     collapsed,
     selectedId,
     actions,
+    openMenu,
 }: {
-    section: EditorSection;
+    node: TreeNode;
+    depth: number;
+    ancestorLines: boolean[];
+    first: boolean;
+    last: boolean;
     collapsed: ReadonlySet<string>;
     selectedId: string | null;
     actions: TreeActions;
+    openMenu: OpenNodeMenu;
 }) {
-    const { tree } = section;
+    const { row, folder } = node;
+    const expanded = !collapsed.has(row.id);
+    const selected = selectedId === row.id;
+    const menuTarget = { node, depth, first: node.first ?? first, last: node.last ?? last };
+    const openAdd = () =>
+        actions.openAddNode(row.categoryKey, { type: row.kind === "section" ? "section" : "group", id: row.id });
     return (
-        <section className="min-w-0" data-structure-category={section.categoryKey}>
-            {section.composite && (
-                <div className="flex min-h-9 items-center justify-between gap-3 px-3">
-                    <h3 className="text-13 font-semibold text-primary-strong">{section.label}</h3>
+        <li
+            role="treeitem"
+            aria-expanded={folder ? expanded : undefined}
+            aria-selected={selected}
+            aria-label={row.name}
+        >
+            <div
+                className="bs-cols node-row rounded-md"
+                data-selected={selected || undefined}
+                onClick={() => actions.selectNode(row.id)}
+                data-node-row={row.id}
+                data-depth={depth}
+                onContextMenu={event => openMenu(menuTarget, event)}
+                onKeyDown={event => {
+                    if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))
+                        openMenu(menuTarget, event);
+                }}
+            >
+                <div className="bs-entry-cell flex min-w-0 items-stretch pl-2">
+                    {ancestorLines.map((continuous, index) => (
+                        <span key={index} aria-hidden className={cn("bs-indent", continuous && "bs-indent-through")} />
+                    ))}
+                    {depth > 0 && (
+                        <span aria-hidden className={cn("bs-indent bs-indent-branch", last && "bs-indent-last")} />
+                    )}
+                    {folder ? (
+                        <button
+                            type="button"
+                            className="bs-switcher my-auto flex size-6 flex-none items-center justify-center rounded-md text-muted hover:bg-primary-soft hover:text-primary-strong"
+                            aria-label={`${expanded ? "收起" : "展开"}：${row.name}`}
+                            aria-expanded={expanded}
+                            onClick={() => actions.toggleCollapse(row.id)}
+                        >
+                            <Icon name={expanded ? "chevron-down" : "chevron-right"} size={13} />
+                        </button>
+                    ) : (
+                        <span aria-hidden className="w-6 flex-none" />
+                    )}
                     <button
                         type="button"
-                        onClick={() => actions.openAddNode(section.categoryKey, { type: "root" })}
-                        className="flex items-center gap-1 text-12 text-muted transition hover:text-primary-strong"
+                        data-entry
+                        title={row.name}
+                        aria-label={row.name}
+                        aria-pressed={selected}
+                        onFocus={() => actions.selectNode(row.id)}
+                        onClick={() => actions.selectNode(row.id)}
+                        onKeyDown={event => {
+                            if (folder && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+                                event.preventDefault();
+                                if ((event.key === "ArrowRight") !== expanded) actions.toggleCollapse(row.id);
+                            }
+                        }}
+                        className={cn(
+                            "bs-entry flex min-w-0 flex-1 items-center gap-2 rounded-md py-1.5 pr-2 text-left text-13 transition-colors",
+                            folder ? "font-medium text-ink" : "text-td",
+                            selected && "text-primary-strong",
+                            node.hidden && "text-muted",
+                        )}
                     >
-                        <Icon name="plus" size={14} />
-                        新增分组
+                        <Icon
+                            name={folder ? (expanded ? "folder-open" : "folder") : "box"}
+                            size={16}
+                            className={cn("flex-none", folder ? "text-muted" : "text-subtle")}
+                        />
+                        <span className="min-w-0 truncate">{row.name}</span>
+                        {row.draft && (
+                            <span className="flex-none rounded-md bg-primary-soft px-1 text-11 text-primary-strong">
+                                新增
+                            </span>
+                        )}
+                        {node.hidden && (
+                            <span className="flex-none rounded-md bg-soft px-1 text-11 text-muted">不可选</span>
+                        )}
                     </button>
                 </div>
-            )}
-            {tree.length === 0 ? (
-                <div className="flex min-h-26 flex-col items-center justify-center gap-2 px-4 py-4 text-13 text-muted">
-                    <strong className="font-normal">还没有分组</strong>
-                    {section.composite ? null : <p className="text-12">先新建一个分组，再添加物料或子分组</p>}
-                </div>
-            ) : (
-                <ul className="min-w-0" aria-label={`${section.label}的分组与物料`}>
-                    {tree.map((root, index) => (
-                        <li key={root.id} className="min-w-0">
-                            {root.kind === "section" ? (
-                                <SectionBranch
-                                    section={root}
-                                    categoryKey={section.categoryKey}
-                                    first={index === 0}
-                                    last={index === tree.length - 1}
-                                    collapsed={collapsed}
-                                    selectedId={selectedId}
-                                    actions={actions}
-                                />
-                            ) : (
-                                <GroupBranch
-                                    group={root}
-                                    ancestorHidden={false}
-                                    categoryKey={section.categoryKey}
-                                    first={index === 0}
-                                    last={index === tree.length - 1}
-                                    collapsed={collapsed}
-                                    selectedId={selectedId}
-                                    actions={actions}
-                                />
-                            )}
-                        </li>
-                    ))}
-                </ul>
-            )}
-        </section>
-    );
-}
-
-/* 分区行：折叠开关 + 文件夹图标 + 名称；规则列为 —；操作=上移/下移/不可选/添加分组/更多 */
-function SectionBranch({
-    section,
-    categoryKey,
-    first,
-    last,
-    collapsed,
-    selectedId,
-    actions,
-}: {
-    section: ViewSectionNode;
-    categoryKey: string;
-    first: boolean;
-    last: boolean;
-    collapsed: ReadonlySet<string>;
-    selectedId: string | null;
-    actions: TreeActions;
-}) {
-    const expanded = !collapsed.has(section.id);
-    const hidden = !section.status;
-    const row: RowRef = {
-        categoryKey,
-        kind: "section",
-        id: section.id,
-        name: section.name,
-        draft: section.draft === true,
-    };
-    return (
-        <>
-            <div className="bs-cols node-row min-h-11 py-0.5" data-node-row={section.id}>
-                <EntryButton
-                    indent={0}
-                    chevron
-                    expanded={expanded}
-                    icon={<Icon name={expanded ? "folder-open" : "folder"} size={16} />}
-                    name={section.name}
-                    muted={hidden}
-                    selected={selectedId === section.id}
-                    chips={
-                        <>
-                            {section.draft && <Chip tone="primary">新增</Chip>}
-                            {hidden && <Chip tone="muted">不可选</Chip>}
-                        </>
-                    }
-                    onActivate={() => {
-                        actions.toggleCollapse(section.id);
-                        actions.selectNode(section.id);
-                    }}
-                    onChevronKey={() => actions.toggleCollapse(section.id)}
-                />
-                {ruleCellDash}
-                {ruleCellDash}
-                <RowActions
-                    row={row}
-                    first={first}
-                    last={last}
-                    ownHidden={hidden}
-                    actions={actions}
-                    addLabel="添加分组"
-                    onAdd={() => actions.openAddNode(categoryKey, { type: "section", id: section.id })}
-                    canMove={false}
-                />
-            </div>
-            <Collapse open={expanded} className="relative">
-                <span aria-hidden className="absolute top-0 bottom-5 left-[20px] w-px bg-line-strong" />
-                <ul className="min-w-0 pl-0">
-                    {section.groups.map((group, index) => (
-                        <li key={group.id} className="min-w-0">
-                            <GroupBranch
-                                group={group}
-                                ancestorHidden={hidden}
-                                categoryKey={categoryKey}
-                                first={index === 0}
-                                last={index === section.groups.length - 1}
-                                collapsed={collapsed}
-                                selectedId={selectedId}
-                                actions={actions}
-                            />
-                        </li>
-                    ))}
-                    {section.groups.length === 0 && (
-                        <li className="py-1 pr-2 pb-2.5 text-12 text-muted" style={{ paddingLeft: "calc(45px)" }}>
-                            这里还没有内容 ·{" "}
-                            <button
-                                type="button"
-                                className="text-primary-strong hover:underline"
-                                onClick={() => actions.openAddNode(categoryKey, { type: "section", id: section.id })}
-                            >
-                                添加分组
-                            </button>
-                        </li>
-                    )}
-                </ul>
-            </Collapse>
-        </>
-    );
-}
-
-/* 分组行（根分组或分区内分组）：规则两列（含物料时）；操作含 添加物料/移动 */
-function GroupBranch({
-    group,
-    ancestorHidden,
-    categoryKey,
-    first,
-    last,
-    collapsed,
-    selectedId,
-    actions,
-}: {
-    group: ViewGroupNode;
-    ancestorHidden: boolean;
-    categoryKey: string;
-    first: boolean;
-    last: boolean;
-    collapsed: ReadonlySet<string>;
-    selectedId: string | null;
-    actions: TreeActions;
-}) {
-    const expanded = !collapsed.has(group.id);
-    const ownHidden = !group.status;
-    const hidden = ancestorHidden || ownHidden;
-    const row: RowRef = { categoryKey, kind: "group", id: group.id, name: group.name, draft: group.draft === true };
-    return (
-        <>
-            <div
-                className={cn("bs-cols node-row min-h-11 py-0.5", group.items.length === 0 && "font-medium")}
-                data-node-row={group.id}
-            >
-                <EntryButton
-                    indent={0}
-                    chevron
-                    expanded={expanded}
-                    icon={<Icon name={expanded ? "folder-open" : "folder"} size={16} />}
-                    name={group.name}
-                    muted={hidden}
-                    selected={selectedId === group.id}
-                    chips={
-                        <>
-                            {group.draft && <Chip tone="primary">新增</Chip>}
-                            {hidden && <Chip tone="muted">不可选</Chip>}
-                        </>
-                    }
-                    onActivate={() => {
-                        actions.toggleCollapse(group.id);
-                        actions.selectNode(group.id);
-                    }}
-                    onChevronKey={() => actions.toggleCollapse(group.id)}
-                />
-                {group.items.length > 0 ? (
-                    <RuleChecks
-                        group={group}
-                        disabled={hidden}
-                        onChange={(multi, qty) => actions.setRules(categoryKey, group.id, multi, qty)}
-                    />
+                <RuleChecks node={node} actions={actions} />
+                {folder ? (
+                    <RowActions {...menuTarget} actions={actions}>
+                        <IconButton
+                            icon="plus"
+                            label={`添加内容：${row.name}`}
+                            tip={depth >= MAX_TREE_DEPTH - 1 ? "最多添加 5 层" : "添加物料或分组"}
+                            disabled={depth >= MAX_TREE_DEPTH - 1}
+                            onClick={openAdd}
+                            className="bs-add text-primary-strong"
+                        />
+                    </RowActions>
                 ) : (
-                    <>
-                        {ruleCellDash}
-                        {ruleCellDash}
-                    </>
+                    // 物料行不设行内按钮，全部操作走右键菜单；空占位保持操作列对齐
+                    <span aria-hidden />
                 )}
-                <RowActions
-                    row={row}
-                    first={first}
-                    last={last}
-                    ownHidden={ownHidden}
-                    actions={actions}
-                    addLabel="添加物料"
-                    onAdd={() => actions.openAddItems(categoryKey, { id: group.id, name: group.name })}
-                    canMove
-                />
             </div>
-            <Collapse open={expanded} className="relative">
-                <span aria-hidden className="absolute top-0 bottom-5 left-[20px] w-px bg-line-strong" />
-                <ul className="min-w-0">
-                    {group.items.map((item, index) => (
-                        <li key={item.id} className="min-w-0">
-                            <ItemRow
-                                item={item}
-                                ancestorHidden={hidden}
-                                categoryKey={categoryKey}
-                                first={index === 0}
-                                last={index === group.items.length - 1}
-                                selectedId={selectedId}
-                                actions={actions}
-                            />
-                        </li>
+            {folder && (
+                <ul role="group" hidden={!expanded}>
+                    {node.children.map((child, index) => (
+                        <NodeBranch
+                            key={child.row.id}
+                            node={child}
+                            depth={depth + 1}
+                            ancestorLines={depth === 0 ? [] : [...ancestorLines, !last]}
+                            first={index === 0}
+                            last={index === node.children.length - 1}
+                            collapsed={collapsed}
+                            selectedId={selectedId}
+                            actions={actions}
+                            openMenu={openMenu}
+                        />
                     ))}
-                    {group.items.length === 0 && (
-                        <li className="py-1 pr-2 pb-2.5 text-12 text-muted" style={{ paddingLeft: "45px" }}>
-                            这里还没有内容 ·{" "}
-                            <button
-                                type="button"
-                                className="text-primary-strong hover:underline"
-                                onClick={() => actions.openAddItems(categoryKey, { id: group.id, name: group.name })}
-                            >
-                                添加物料
-                            </button>
+                    {node.children.length === 0 && (
+                        <li
+                            className="bs-empty-branch py-1.5 text-12 text-muted"
+                            style={{ paddingLeft: `calc(32px + var(--bs-step) * ${depth + 1})` }}
+                        >
+                            暂无内容
                         </li>
                     )}
                 </ul>
-            </Collapse>
-        </>
+            )}
+        </li>
     );
 }
 
-/* 物料行：不可选时禁用选择；操作含 移动/重命名/删除 */
-function ItemRow({
-    item,
-    ancestorHidden,
-    categoryKey,
-    first,
-    last,
-    selectedId,
-    actions,
-}: {
-    item: ViewItem;
-    ancestorHidden: boolean;
-    categoryKey: string;
-    first: boolean;
-    last: boolean;
-    selectedId: string | null;
-    actions: TreeActions;
-}) {
-    const ownHidden = !item.status;
-    const hidden = ancestorHidden || ownHidden;
-    const row: RowRef = { categoryKey, kind: "item", id: item.id, name: item.name, draft: item.draft === true };
-    return (
-        <div className="bs-cols node-row min-h-11 py-0.5" data-node-row={item.id}>
-            <EntryButton
-                indent={1}
-                icon={<Icon name="box" size={16} />}
-                name={item.name}
-                muted={hidden}
-                selected={selectedId === item.id}
-                disabled={hidden}
-                chips={
-                    <>
-                        {item.draft && <Chip tone="primary">新增</Chip>}
-                        {hidden && <Chip tone="muted">不可选</Chip>}
-                    </>
-                }
-                onActivate={() => actions.selectNode(item.id)}
-            />
-            {ruleCellDash}
-            {ruleCellDash}
-            <RowActions row={row} first={first} last={last} ownHidden={ownHidden} actions={actions} canMove />
-        </div>
-    );
-}
-
-/* 名称单元格整行按钮：缩进 + 折叠箭头/占位 + 图标 + 名称 + 角标 */
-function EntryButton({
-    indent,
-    chevron,
-    expanded,
-    icon,
-    name,
-    muted,
-    selected,
-    disabled,
-    chips,
-    onActivate,
-    onChevronKey,
-}: {
-    indent: number;
-    chevron?: boolean;
-    expanded?: boolean;
-    icon: ReactNode;
-    name: string;
-    muted: boolean;
-    selected: boolean;
-    disabled?: boolean;
-    chips: ReactNode;
-    onActivate: () => void;
-    onChevronKey?: (direction: "left" | "right") => void;
-}) {
-    return (
-        <button
-            type="button"
-            data-entry
-            title={name}
-            aria-label={name}
-            aria-expanded={chevron === true ? expanded === true : undefined}
-            aria-pressed={chevron === true ? undefined : selected}
-            disabled={disabled}
-            onClick={onActivate}
-            onKeyDown={event => {
-                if (chevron && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
-                    event.preventDefault();
-                    onChevronKey?.(event.key === "ArrowLeft" ? "left" : "right");
-                }
-            }}
-            className={cn(
-                "flex min-w-0 flex-1 items-center gap-2.5 rounded-[10px] px-3 py-2 text-left text-14 transition",
-                "min-h-10 text-td hover:bg-soft",
-                chevron !== true && selected && "bg-primary-soft font-semibold text-primary-strong",
-                muted && "text-muted",
-            )}
-            style={{ paddingLeft: `calc(12px + var(--bs-step) * ${indent})` }}
-        >
-            {indent > 0 && (
-                <span
-                    aria-hidden
-                    className="pointer-events-none relative hidden h-px w-[calc(var(--bs-step)-10px)] flex-none self-center bg-line-strong sm:block"
-                />
-            )}
-            {chevron === true ? (
-                <span
-                    aria-hidden
-                    className={cn(
-                        "flex size-4 flex-none items-center justify-center text-muted transition-transform",
-                        !expanded && "-rotate-90",
-                    )}
-                >
-                    <Icon name="chevron-down" size={15} />
-                </span>
-            ) : (
-                <span aria-hidden className="w-4 flex-none" />
-            )}
-            <span className="flex-none text-muted">{icon}</span>
-            <span className="flex min-w-0 flex-1 items-center gap-2">
-                <span className="truncate">{name}</span>
-                {chips}
-            </span>
-        </button>
-    );
-}
-
-/* 行尾操作：上移/下移/不可选切换/添加/更多（重命名·移动·删除） */
 function RowActions({
-    row,
+    node,
     first,
     last,
-    ownHidden,
+    depth,
     actions,
-    addLabel,
-    onAdd,
-    canMove,
+    children,
 }: {
-    row: RowRef;
+    node: TreeNode;
     first: boolean;
     last: boolean;
-    ownHidden: boolean;
+    depth: number;
     actions: TreeActions;
-    addLabel?: string;
-    onAdd?: () => void;
-    canMove: boolean;
+    children: ReactNode;
 }) {
+    const { row, ownHidden } = node;
     return (
-        <span className="flex min-w-0 items-center justify-end gap-0.5">
+        <span className="flex min-w-0 items-center justify-end gap-0.5 pr-1">
             <IconButton
-                icon="chevron-up"
+                icon="arrow-up"
                 label={`上移：${row.name}`}
                 tip="上移"
                 disabled={first}
@@ -651,7 +499,7 @@ function RowActions({
                 className="bs-move"
             />
             <IconButton
-                icon="chevron-down"
+                icon="arrow-down"
                 label={`下移：${row.name}`}
                 tip="下移"
                 disabled={last}
@@ -663,39 +511,69 @@ function RowActions({
                 label={`${ownHidden ? "恢复可选" : "设为不可选"}：${row.name}`}
                 tip={ownHidden ? "恢复可选" : "设为不可选"}
                 onClick={() => actions.setHidden(row, !ownHidden)}
-                className={ownHidden ? "text-warning" : undefined}
+                className="bs-visibility"
             />
-            {onAdd && (
-                <IconButton
-                    icon="plus"
-                    label={`${addLabel}：${row.name}`}
-                    tip={addLabel}
-                    onClick={onAdd}
-                    className="text-primary-strong"
-                />
-            )}
+            {children}
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <IconButton icon="more-v" label={`更多操作：${row.name}`} />
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => actions.openRename(row)}>
-                        <Icon name="edit" size={16} />
-                        重命名
-                    </DropdownMenuItem>
-                    {canMove && (
-                        <DropdownMenuItem onSelect={() => actions.openMove(row)}>
-                            <Icon name="move" size={16} />
-                            移动位置
-                        </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-danger" onSelect={() => actions.openRemove(row)}>
-                        <Icon name="trash" size={16} />
-                        删除
-                    </DropdownMenuItem>
+                <DropdownMenuContent align="end" onKeyDown={event => event.stopPropagation()}>
+                    <NodeMenuItems node={node} depth={depth} first={first} last={last} actions={actions} />
                 </DropdownMenuContent>
             </DropdownMenu>
         </span>
+    );
+}
+
+/** 右键与「更多」共用动作，按画面上的分组/物料身份显示入口。 */
+function NodeMenuItems({ node, first, last, depth, actions }: NodeMenuTarget & { actions: TreeActions }) {
+    const { row, ownHidden } = node;
+    return (
+        <>
+            {node.folder && (
+                <>
+                    <DropdownMenuItem
+                        disabled={depth >= MAX_TREE_DEPTH - 1}
+                        onSelect={() =>
+                            actions.openAddNode(row.categoryKey, {
+                                type: row.kind === "section" ? "section" : "group",
+                                id: row.id,
+                            })
+                        }
+                    >
+                        <Icon name="plus" size={16} />
+                        添加物料
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                </>
+            )}
+            <DropdownMenuItem disabled={first} onSelect={() => actions.reorder(row, "up")}>
+                <Icon name="arrow-up" size={16} />
+                上移
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={last} onSelect={() => actions.reorder(row, "down")}>
+                <Icon name="arrow-down" size={16} />
+                下移
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => actions.openRename(row)}>
+                <Icon name="edit" size={16} />
+                重命名
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={row.kind === "section"} onSelect={() => actions.openMove(row)}>
+                <Icon name="move" size={16} />
+                移动位置
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => actions.setHidden(row, !ownHidden)}>
+                <Icon name={ownHidden ? "eye-off" : "eye"} size={16} />
+                {ownHidden ? "恢复可选" : "设置为不可选"}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-danger" onSelect={() => actions.openRemove(row)}>
+                <Icon name="trash" size={16} />
+                删除
+            </DropdownMenuItem>
+        </>
     );
 }

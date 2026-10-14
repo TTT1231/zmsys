@@ -12,15 +12,12 @@ import type { CatalogTreeNode } from "./catalog-validator";
  * - 草稿节点（tempId）在投影时立即分配真实雪花 id 并登记映射，后续操作可按
  *   tempId 或已存 id 引用；隐藏/恢复只改自身 status，不级联改子节点（可选 =
  *   自身∧祖先启用）。
- * - rename 改名 / move 跨父移动（分组换分区或根、物料换分组，均追加到目标末位）/
- *   remove 删除（分区连带子分组整支）：基线物料被删除/改名/换组、基线分组被改名
+ * - rename 改名 / move 跨父移动（分组换分区/分组/根、物料换分组，均追加到目标末位；
+ *   分组移入自身或其后代与前端草稿投影对齐静默忽略，终态无环）/ remove 删除
+ *   （分区/分组连带其下整支）：基线物料被删除/改名/换组、基线分组被改名
  *   的信息单列输出，由服务层做 bom_item 引用守卫（被引用即 400，只能隐藏）。
  */
 
-/** 结构操作（discriminated union；DTO 校验后映射为本类型）。v2 增补：
- *  rename 改名（被既有 BOM 引用的物料/分组由服务层引用守卫拒绝）、move 跨父移动
- *  （分组换分区/根、物料换分组，追加到目标末位）、remove 删除（整支；同样受引用守卫，
- *  被引用时只能隐藏，见 db-scheme.md §5.4） */
 export type StructureOperation =
     | { type: "add_section"; tempId: string; name: string }
     | {
@@ -40,6 +37,11 @@ export type StructureOperation =
     | { type: "rename"; targetType: "section" | "group" | "item"; targetId: string; name: string }
     | { type: "move"; targetType: "group" | "item"; targetId: string; parentId: string | null }
     | { type: "remove"; targetType: "section" | "group" | "item"; targetId: string };
+
+/** 结构操作（discriminated union；DTO 校验后映射为本类型）。v2 增补：
+ *  rename 改名（被既有 BOM 引用的物料/分组由服务层引用守卫拒绝）、move 跨父移动
+ *  （分组换任意父节点、物料换分组，追加到目标末位）、remove 删除（整支；同样受
+ *  引用守卫，被引用时只能隐藏，见 db-scheme.md §5.4）。v3 分组可嵌套（≤5 层） */
 
 /** 变动节点摘要（op_log detail 的 operations 数组元素；只记差异，不复制整树） */
 export interface StructureChangeSummary {
@@ -84,7 +86,8 @@ export interface ProjectionResult {
             sortOrder: number;
         }>;
         createItems: Array<{ id: bigint; groupId: bigint; name: string; sortOrder: number }>;
-        /** 终态已消失的基线节点（带形态：写侧须分组先于分区删除，满足父外键 RESTRICT） */
+        /** 终态已消失的基线节点（带形态，按叶先于父排序：分组嵌套下 GROUP 父子可能
+         *  同批删除，服务侧逐行删除须满足自引用外键 RESTRICT） */
         deleteGroups: Array<{ id: bigint; kind: "SECTION" | "GROUP" }>;
         deleteItems: bigint[];
         updateGroups: Array<{
@@ -208,6 +211,22 @@ export function projectStructure(
             node.sortOrder = index;
         });
     };
+    /** 节点自身 + 全部后代（remove 整支删除与 move 循环判定共用；投影中途可能
+     *  出现环前的中间态，按 doomed 集扩散收敛不会死循环） */
+    const subtreeOf = (id: string): Set<string> => {
+        const doomed = new Set<string>([id]);
+        let grew = true;
+        while (grew) {
+            grew = false;
+            for (const entry of nodes.values()) {
+                if (entry.parentId !== null && doomed.has(entry.parentId) && !doomed.has(entry.id)) {
+                    doomed.add(entry.id);
+                    grew = true;
+                }
+            }
+        }
+        return doomed;
+    };
 
     for (const op of operations) {
         switch (op.type) {
@@ -231,10 +250,7 @@ export function projectStructure(
             }
             case "add_group": {
                 claimTemp(op.tempId);
-                const parentId = op.parentId === null ? null : resolve(op.parentId, "上级分区");
-                if (parentId !== null && nodes.get(parentId)!.kind !== "SECTION") {
-                    throw new BadRequestException("分组只能挂在品类根或分区下");
-                }
+                const parentId = op.parentId === null ? null : resolve(op.parentId, "上级节点");
                 const groupKey = genGroupKey();
                 const id = genId().toString();
                 tempToId.set(op.tempId, id);
@@ -356,9 +372,9 @@ export function projectStructure(
                 const nodeId = resolve(op.targetId, "分组");
                 const node = nodes.get(nodeId)!;
                 assertNodeKind(node, "group");
-                const parentId = op.parentId === null ? null : resolve(op.parentId, "目标分区");
-                if (parentId !== null && nodes.get(parentId)!.kind !== "SECTION") {
-                    throw new BadRequestException("分组只能挂在品类根或分区下");
+                const parentId = op.parentId === null ? null : resolve(op.parentId, "目标节点");
+                if (parentId !== null && subtreeOf(nodeId).has(parentId)) {
+                    break; // 移入自身或其后代 = 成环：与前端草稿投影对齐，静默忽略
                 }
                 node.parentId = parentId;
                 node.sortOrder = nextSortOrder(parentId);
@@ -374,31 +390,27 @@ export function projectStructure(
                 const nodeId = resolve(op.targetId, op.targetType === "section" ? "分区" : "分组");
                 const node = nodes.get(nodeId)!;
                 assertNodeKind(node, op.targetType);
-                if (node.kind === "SECTION") {
-                    // 分区只承载一层分组：连带其子分组整支移除（物料嵌在分组里随之消失）
-                    for (const child of [...nodes.values()].filter(entry => entry.parentId === nodeId)) {
-                        nodes.delete(child.id);
-                    }
+                // 分区/分组删除连带其下整支（分组可嵌套；物料嵌在分组里随之消失）
+                for (const id of subtreeOf(nodeId)) {
+                    nodes.delete(id);
                 }
-                nodes.delete(nodeId);
                 break;
             }
         }
     }
 
-    // 终态归一化：根（分区+分组混排）、各分区子组、各组内物料全部按当前次序重排
+    // 终态归一化：各父级（品类根 + 每个分区/分组）的子节点、各组内物料全部按当前次序重排
     reindexSiblings(null);
     for (const node of nodes.values()) {
-        if (node.kind === "SECTION") {
-            reindexSiblings(node.id);
-        } else {
+        reindexSiblings(node.id);
+        if (node.kind === "GROUP") {
             node.items.forEach((item, index) => {
                 item.sortOrder = index;
             });
         }
     }
 
-    // 基线位置（1 起始，供摘要的 position 前后值）
+    // 基线位置（1 起始，供摘要的 position 前后值）：品类根 + 每个基线节点的子集
     const basePositions = new Map<string, number>();
     const recordPositions = (parentId: string | null): void => {
         base.filter(node => node.parentId === parentId)
@@ -407,10 +419,7 @@ export function projectStructure(
                 basePositions.set(node.id, index + 1);
             });
     };
-    const baseRootParents: Array<string | null> = [
-        null,
-        ...base.filter(node => node.kind === "SECTION").map(node => node.id),
-    ];
+    const baseRootParents: Array<string | null> = [null, ...base.map(node => node.id)];
     for (const parent of baseRootParents) {
         recordPositions(parent);
     }
@@ -525,13 +534,28 @@ export function projectStructure(
         }
     }
 
-    // 基线节点终态消失 = 删除（分区连带子分组分别登记；物料的删除统一在下方
-    // 物料差分按终态定位登记——无论其原分组是否存续，避免「移出后删组」双重写）
-    for (const baseNode of base) {
-        if (nodes.has(baseNode.id)) {
-            continue;
+    // 基线节点终态消失 = 删除（分区/分组连带其下整支分别登记；物料的删除统一在
+    // 下方物料差分按终态定位登记——无论其原分组是否存续，避免「移出后删组」双重写）。
+    // 删除集按基线深度降序（叶先于父）：分组嵌套下 GROUP 父子可能同批删除，
+    // 服务侧逐行删除须满足自引用外键 RESTRICT；基线父链走深带已访问守卫（防脏行成环）
+    const baseDepthOf = new Map<string, number>();
+    for (const node of base) {
+        let depth = 0;
+        let cursor: CatalogTreeNode | undefined = node;
+        const walked = new Set<string>();
+        while (cursor && cursor.parentId !== null && !walked.has(cursor.id)) {
+            walked.add(cursor.id);
+            depth += 1;
+            cursor = baseNodes.get(cursor.parentId);
         }
-        writes.deleteGroups.push({ id: BigInt(baseNode.id), kind: baseNode.kind });
+        baseDepthOf.set(node.id, depth);
+    }
+    const doomedNodes = base.filter(baseNode => !nodes.has(baseNode.id));
+    writes.deleteGroups = doomedNodes
+        .slice()
+        .sort((a, b) => baseDepthOf.get(b.id)! - baseDepthOf.get(a.id)!)
+        .map(baseNode => ({ id: BigInt(baseNode.id), kind: baseNode.kind }));
+    for (const baseNode of doomedNodes) {
         summary.push({
             nodeType: baseNode.kind === "SECTION" ? "section" : "group",
             nodeId: baseNode.id,

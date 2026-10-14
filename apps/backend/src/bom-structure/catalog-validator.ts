@@ -3,11 +3,16 @@ import { BadRequestException } from "@nestjs/common";
 /**
  * 目录结构校验器（db-scheme.md §5.4）：apply 与新建品类共用的纯函数。
  * 层级契约：分区（SECTION）只能是根（parentId=null、无 key/multi/qty/items）；
- * 分组（GROUP）挂品类根或同品类分区，带 groupKey/multi/qty；物料是分组的叶子。
+ * 分组（GROUP）挂品类根、分区或另一分组（分组可嵌套），带 groupKey/multi/qty，
+ * 物料是分组的叶子；分支可见层数（分区/分组各一层、组内物料再占一层）≤5，
+ * 与前端结构编辑器 MAX_TREE_DEPTH 同口径。
  * 数据库 CHECK 只约束节点形态（SECTION 必根、GROUP 必有 key），父子归属、
  * 同品类、无环没有 SQL 约束——读取侧的防御性跳过不能代替写前校验：成环的行
  * 从根不可达，会让备份导出（backup-writer 递归遍历 + 行数自检）直接中止。
  */
+
+/** 目录分支可见层数上限（含物料层）：编辑器「最多添加 5 层」的后端权威口径 */
+const MAX_CATALOG_DEPTH = 5;
 
 /** 结构树节点（投影/校验共用的中间形态）：已存行与同批草稿统一表示 */
 export interface CatalogTreeNode {
@@ -39,21 +44,19 @@ export function validateCatalogTree(tree: readonly CatalogTreeNode[]): void {
             }
             continue;
         }
-        // GROUP：parent 必须是 null 或已存在的同品类分区（防跨品类挂接与悬空父引用）
+        // GROUP：parent 必须是 null 或已存在的同品类节点（分区/分组均可，防悬空父引用）
         if (node.parentId !== null) {
             const parent = nodes.get(node.parentId);
             if (!parent) {
                 throw new BadRequestException(`分组「${node.name}」的父节点不存在`);
-            }
-            if (parent.kind !== "SECTION") {
-                throw new BadRequestException(`分组「${node.name}」只能挂在品类根或分区下（不支持多级嵌套）`);
             }
         }
         if (node.groupKey === null || node.multi === null || node.qty === null) {
             throw new BadRequestException(`分组「${node.name}」缺少选择规则（groupKey/multi/qty）`);
         }
     }
-    // 无环：层级契约下 SECTION 必根、GROUP 至多两级，按父链走深兜底（写入前的最后防线）
+    // 无环：分组嵌套下 move 移入自身后代已在投影层静默忽略，这里按父链走深兜底
+    // （写入前的最后防线，成环行从根不可达会破坏读取与备份遍历）
     const seen = new Set<string>();
     for (const node of tree) {
         let cursor: CatalogTreeNode | undefined = node;
@@ -71,6 +74,34 @@ export function validateCatalogTree(tree: readonly CatalogTreeNode[]): void {
         }
         for (const id of path) {
             seen.add(id);
+        }
+    }
+    // 层级上限：任一根分支的可见层数 ≤ MAX_CATALOG_DEPTH。可见层数与前端
+    // structureView.viewDepthOf 同构（改动须两处同步）：分区/分组各占一层、分组内
+    // 物料再占一层；单选组内唯一与组同名的物料在编辑器折叠展示，不额外占层。
+    const byParent = new Map<string | null, CatalogTreeNode[]>();
+    for (const node of tree) {
+        byParent.set(node.parentId, [...(byParent.get(node.parentId) ?? []), node]);
+    }
+    const visibleDepthOf = (node: CatalogTreeNode): number => {
+        const children = byParent.get(node.id) ?? [];
+        const collapsed =
+            node.kind === "GROUP" &&
+            node.multi === false &&
+            children.length === 0 &&
+            node.items.length === 1 &&
+            node.items[0]!.name === node.name;
+        return Math.max(
+            1,
+            node.items.length > 0 && !collapsed ? 2 : 1,
+            ...children.map(child => 1 + visibleDepthOf(child)),
+        );
+    };
+    for (const root of tree.filter(node => node.parentId === null)) {
+        if (visibleDepthOf(root) > MAX_CATALOG_DEPTH) {
+            throw new BadRequestException(
+                `「${root.name}」分支超过 ${MAX_CATALOG_DEPTH} 层上限（含物料层），请减少嵌套`,
+            );
         }
     }
     // 品类内唯一：分区与分组共享名称命名空间（uk_material_group_name 覆盖两类节点）、

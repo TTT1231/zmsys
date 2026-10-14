@@ -217,7 +217,7 @@ function draftTreeOf(drafts: DraftNodeDto[], genId: () => bigint): CatalogTreeNo
         }
         const parentId = draft.parentTempId ? (tempToId.get(draft.parentTempId) ?? null) : null;
         if (draft.parentTempId && !parentId) {
-            throw new BadRequestException(`分组「${draft.name}」的上级分区不存在`);
+            throw new BadRequestException(`分组「${draft.name}」的上级节点不存在`);
         }
         const groupKey = (() => {
             let index = 1;
@@ -245,7 +245,7 @@ function draftTreeOf(drafts: DraftNodeDto[], genId: () => bigint): CatalogTreeNo
             })),
         };
     });
-    // sortOrder 按平铺数组序：根节点与各分区子组各自归一
+    // sortOrder 按平铺数组序：各父级（品类根 + 每个分区/分组）子节点各自归一
     const reindex = (parentId: string | null): void => {
         nodes
             .filter(node => node.parentId === parentId)
@@ -255,9 +255,7 @@ function draftTreeOf(drafts: DraftNodeDto[], genId: () => bigint): CatalogTreeNo
     };
     reindex(null);
     for (const node of nodes) {
-        if (node.kind === "SECTION") {
-            reindex(node.id);
-        }
+        reindex(node.id);
     }
     return nodes;
 }
@@ -632,14 +630,10 @@ export class BomStructureService {
                 },
             });
         }
-        // 3) 节点删行：分组（子）先于分区（父）——同一语句内父行先删必撞 RESTRICT
-        const doomedGroups = writes.deleteGroups.filter(row => row.kind === "GROUP").map(row => row.id);
-        const doomedSections = writes.deleteGroups.filter(row => row.kind === "SECTION").map(row => row.id);
-        if (doomedGroups.length > 0) {
-            await tx.materialGroup.deleteMany({ where: { id: { in: doomedGroups } } });
-        }
-        if (doomedSections.length > 0) {
-            await tx.materialGroup.deleteMany({ where: { id: { in: doomedSections } } });
+        // 3) 节点删行：投影器已按叶先于父排序（分组嵌套下 GROUP 父子可能同批删除，
+        //    自引用外键逐行检查须子行先删），按序逐行删除
+        for (const row of writes.deleteGroups) {
+            await tx.materialGroup.delete({ where: { id: row.id } });
         }
         // 4) 改名两阶段：先挪到行内唯一临时名（tmp-<id>，雪花 id 保证互异），再在阶段 6
         //    落最终名——同批换名/环链（A→B、B→A）在逐行更新下不会中间态撞唯一键
@@ -657,7 +651,8 @@ export class BomStructureService {
                 data: { name: `tmp-${update.id.toString()}`, updatedAt: now },
             });
         }
-        // 5) 新增（Map 序保证分区先于其下新分组，自引用外键逐行检查可通过）
+        // 5) 新增（Map 序保证父节点先于其下新分组——新增分组的父级要么是基线行
+        //    不在 createGroups，要么是同批更早新增的行；自引用外键逐行检查可通过）
         if (writes.createGroups.length > 0) {
             await tx.materialGroup.createMany({
                 data: writes.createGroups.map(group => ({ ...group, categoryId, createdAt: now })),

@@ -9,6 +9,7 @@ import {
     flattenTree,
     statsOf,
     viewTreeOf,
+    viewPathOf,
     withoutDraftSubtree,
 } from "@/pages/bom-structure/structureView";
 
@@ -128,6 +129,39 @@ describe("applyOpsToView v2 操作", () => {
             { type: "rename", targetType: "group", targetId: "g1", name: "壳体" },
         ]);
     });
+});
+
+it("多层目录按父引用重建、操作递归生效，隐藏祖先传递到直属及后代物料", () => {
+    const tree = viewTreeOf([
+        group("D", "D", "d", "B", [["e", "e"]]),
+        group("A", "A", "a", null, [["c", "c"]]),
+        group("B", "B", "b", "A", []),
+    ]);
+    expect(flattenTree(tree).map(row => row.id)).toEqual(["A", "c", "B", "D", "e"]);
+    expect(viewPathOf(tree, "e").map(node => node.name)).toEqual(["A", "B", "D"]);
+    const projected = applyOpsToView(tree, [
+        { type: "add_group", tempId: "F", name: "F", parentId: "B", multi: false, qty: false },
+        { type: "move", targetType: "group", targetId: "D", parentId: "F" },
+        { type: "add_item", tempId: "f", name: "f", groupId: "A" },
+        { type: "hide", targetType: "group", targetId: "A" },
+    ]);
+    expect(viewPathOf(projected, "e").map(node => node.name)).toEqual(["A", "B", "F", "D"]);
+    expect(statsOf(projected)).toEqual({ groups: 4, materials: 3 });
+    expect(conflictingNodeName(projected, "D")).toBe("D");
+    expect(conflictingItemName(projected, "D", "e")).toBe("e");
+    expect(
+        flattenTree(projected)
+            .filter(row => row.kind === "item")
+            .every(row => row.effectivelyHidden),
+    ).toBe(true);
+    expect(flattenTree(projected).find(row => row.id === "e")?.hidden).toBe(false);
+    const removed = applyOpsToView(projected, [{ type: "remove", targetType: "group", targetId: "B" }]);
+    expect(flattenTree(removed).map(row => row.id)).toEqual(["A", "c", "f"]);
+    expect(
+        flattenTree(applyOpsToView(tree, [{ type: "move", targetType: "group", targetId: "A", parentId: "D" }])).map(
+            row => row.id,
+        ),
+    ).toEqual(["A", "c", "B", "D", "e"]);
 });
 
 describe("重名校验与辅助", () => {

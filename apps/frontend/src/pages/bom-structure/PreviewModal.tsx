@@ -22,7 +22,7 @@ interface PreviewOption {
     disabled: boolean;
 }
 
-/** 分组块（含分区标题层级）；有效隐藏的整支不渲染，与建档可选集口径一致 */
+/** 分组的直属物料与子分组；祖先隐藏时整支不可选。 */
 function OptionGroup({
     group,
     sectionName,
@@ -39,7 +39,7 @@ function OptionGroup({
     onToggle: (group: ViewGroupNode, itemId: string) => void;
     onQty: (itemId: string, qty: number) => void;
 }) {
-    if (group.items.length === 0) {
+    if (group.items.length === 0 && !group.groups?.length) {
         return null;
     }
     const hidden = sectionHidden || !group.status;
@@ -55,54 +55,74 @@ function OptionGroup({
                     </span>
                 )}
             </h4>
-            <div className="mt-2 ml-1.5 grid gap-1.75 border-l border-line pl-3">
-                {group.items.map(item => {
-                    const disabled = hidden || !item.status;
-                    const checked = !disabled && selection.has(item.id);
-                    return (
-                        <label
-                            key={item.id}
-                            className={cn(
-                                "flex min-h-9 cursor-pointer items-center gap-2.25 rounded-btn border px-2.75 py-2 text-13 transition",
-                                checked
-                                    ? "border-primary-border bg-primary-soft"
-                                    : "border-line bg-surface hover:border-primary-border",
-                                disabled && "cursor-not-allowed opacity-70",
-                            )}
-                        >
-                            <input
-                                type={group.multi ? "checkbox" : "radio"}
-                                name={`preview-${group.id}`}
-                                className="size-4 accent-primary"
-                                checked={checked}
-                                disabled={disabled}
-                                onChange={() => onToggle(group, item.id)}
-                            />
-                            <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{item.name}</span>
-                            {disabled && <span className="text-11 text-muted">不可选</span>}
-                            {group.qty && (
-                                <span className="flex flex-none items-center gap-1 text-11 text-muted">
-                                    <input
-                                        type="number"
-                                        min={1}
-                                        max={99}
-                                        step={1}
-                                        className="w-12.5 rounded-[4px] border border-line-strong bg-surface px-1 py-0.5 text-center text-12 text-ink outline-none focus:border-primary disabled:border-line disabled:bg-soft disabled:text-placeholder"
-                                        value={selection.get(item.id) ?? 1}
-                                        disabled={!checked}
-                                        aria-label={`${item.name}数量`}
-                                        onChange={event => onQty(item.id, Number(event.target.value))}
-                                        onBlur={event =>
-                                            onQty(item.id, Math.min(99, Math.max(1, Number(event.target.value) || 1)))
-                                        }
-                                    />
-                                    个
-                                </span>
-                            )}
-                        </label>
-                    );
-                })}
-            </div>
+            {group.items.length > 0 && (
+                <div className="mt-2 ml-1.5 grid gap-1.75 border-l border-line pl-3">
+                    {group.items.map(item => {
+                        const disabled = hidden || !item.status;
+                        const checked = !disabled && selection.has(item.id);
+                        return (
+                            <label
+                                key={item.id}
+                                className={cn(
+                                    "flex min-h-9 cursor-pointer items-center gap-2.25 rounded-btn border px-2.75 py-2 text-13 transition",
+                                    checked
+                                        ? "border-primary-border bg-primary-soft"
+                                        : "border-line bg-surface hover:border-primary-border",
+                                    disabled && "cursor-not-allowed opacity-70",
+                                )}
+                            >
+                                <input
+                                    type={group.multi ? "checkbox" : "radio"}
+                                    name={`preview-${group.id}`}
+                                    className="size-4 accent-primary"
+                                    checked={checked}
+                                    disabled={disabled}
+                                    onChange={() => onToggle(group, item.id)}
+                                />
+                                <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{item.name}</span>
+                                {disabled && <span className="text-11 text-muted">不可选</span>}
+                                {group.qty && (
+                                    <span className="flex flex-none items-center gap-1 text-11 text-muted">
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            max={99}
+                                            step={1}
+                                            className="w-12.5 rounded-[4px] border border-line-strong bg-surface px-1 py-0.5 text-center text-12 text-ink outline-none focus:border-primary disabled:border-line disabled:bg-soft disabled:text-placeholder"
+                                            value={selection.get(item.id) ?? 1}
+                                            disabled={!checked}
+                                            aria-label={`${item.name}数量`}
+                                            onChange={event => onQty(item.id, Number(event.target.value))}
+                                            onBlur={event =>
+                                                onQty(
+                                                    item.id,
+                                                    Math.min(99, Math.max(1, Number(event.target.value) || 1)),
+                                                )
+                                            }
+                                        />
+                                        个
+                                    </span>
+                                )}
+                            </label>
+                        );
+                    })}
+                </div>
+            )}
+            {(group.groups?.length ?? 0) > 0 && (
+                <div className="mt-3 ml-1.5 border-l border-line pl-3">
+                    {(group.groups ?? []).map(child => (
+                        <OptionGroup
+                            key={child.id}
+                            group={child}
+                            sectionName={[sectionName, group.name].filter(Boolean).join(" / ")}
+                            sectionHidden={hidden}
+                            selection={selection}
+                            onToggle={onToggle}
+                            onQty={onQty}
+                        />
+                    ))}
+                </div>
+            )}
             <span className="sr-only">{sectionName}</span>
         </section>
     );
@@ -160,38 +180,26 @@ export function PreviewModal({
     /* 名称 → 选择行路径（已选列表展示用） */
     const nameOf = useMemo(() => {
         const map = new Map<string, PreviewOption>();
-        for (const section of sections) {
-            for (const root of section.tree) {
-                if (root.kind === "group") {
-                    for (const item of root.items) {
-                        map.set(item.id, {
-                            itemId: item.id,
-                            name: item.name,
-                            groupId: root.id,
-                            groupName: root.name,
-                            sectionName: null,
-                            multi: root.multi,
-                            qty: root.qty,
-                            disabled: !root.status || !item.status,
-                        });
-                    }
-                } else {
-                    for (const group of root.groups) {
-                        for (const item of group.items) {
-                            map.set(item.id, {
-                                itemId: item.id,
-                                name: item.name,
-                                groupId: group.id,
-                                groupName: group.name,
-                                sectionName: root.name,
-                                multi: group.multi,
-                                qty: group.qty,
-                                disabled: !root.status || !group.status || !item.status,
-                            });
-                        }
-                    }
+        const visit = (node: ViewRoot, ancestors: string[], ancestorHidden: boolean) => {
+            const hidden = ancestorHidden || !node.status;
+            if (node.kind === "group") {
+                for (const item of node.items) {
+                    map.set(item.id, {
+                        itemId: item.id,
+                        name: item.name,
+                        groupId: node.id,
+                        groupName: node.name,
+                        sectionName: ancestors.join(" / ") || null,
+                        multi: node.multi,
+                        qty: node.qty,
+                        disabled: hidden || !item.status,
+                    });
                 }
             }
+            for (const child of node.groups ?? []) visit(child, [...ancestors, node.name], hidden);
+        };
+        for (const section of sections) {
+            for (const root of section.tree) visit(root, [], false);
         }
         return map;
     }, [sections]);
