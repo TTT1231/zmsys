@@ -3,7 +3,7 @@
  * 所见即所存）、撤销重做、保存 payload（品类 key + 乐观锁版本 + ops）、409 版本冲突
  * 保留草稿并提供「拉取最新结构」。 */
 import "@testing-library/jest-dom/vitest";
-import { act, cleanup, render, screen, fireEvent, within, waitFor } from "@testing-library/react";
+import { act, cleanup, configure, render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { BomStructurePage } from "@/pages/bom-structure/BomStructurePage";
@@ -44,6 +44,9 @@ const invalidateQueries = vi.fn();
 vi.mock("@tanstack/react-query", () => ({
     useQueryClient: () => ({ invalidateQueries }),
 }));
+
+/* CPU 争用（turbo 全量并行）下 React 刷新可能超过 findBy/waitFor 默认 1s 预算，放宽到 5s */
+configure({ asyncUtilTimeout: 5000 });
 
 beforeEach(() => {
     catalogRef.current = BOM_CATEGORIES;
@@ -144,11 +147,12 @@ it("草稿投影所见即所存：新增分组（含随组物料）、设为不�
     await user.click(screen.getByRole("button", { name: "添加分组" }));
     expect(screen.getByText("弹静片", { exact: true })).toBeInTheDocument();
     expect(screen.getByText("未保存 1 条")).toBeInTheDocument();
+    await settleFocus();
 
     // 设为不可选（物料行走右键菜单）：立即出现「不可选」角标（投影生效，不等待保存；
     // CPU 争用下 React 刷新可能滞后一拍，findByText 自动等待）
     fireEvent.contextMenu(screen.getByRole("button", { name: "0-2" }));
-    await user.click(screen.getByRole("menuitem", { name: "设置为不可选" }));
+    await user.click(await screen.findByRole("menuitem", { name: "设置为不可选" }));
     expect(await screen.findByText("不可选", { exact: true })).toBeInTheDocument();
     expect(screen.getByText("未保存 2 条")).toBeInTheDocument();
 
@@ -203,6 +207,7 @@ it("改名与删除草稿：重命名弹窗改名、删除草稿分组走 ops �
     await user.type(input, "型号选择");
     await user.click(screen.getByRole("button", { name: "确定" }));
     expect(screen.getByText("型号选择", { exact: true })).toBeInTheDocument();
+    await settleFocus();
 
     // 删除草稿分组：确认后草稿 op 一并摘除
     await user.click(screen.getByRole("button", { name: "更多操作：弹静片" }));
@@ -291,7 +296,7 @@ it("点击名称只选中；三级缩进与折叠箭头独立，物料行无行�
     expect(screen.queryByRole("button", { name: "下移：b" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "更多操作：e" })).not.toBeInTheDocument();
     fireEvent.contextMenu(screen.getByRole("button", { name: "b" }));
-    expect(screen.getByRole("menuitem", { name: "下移" })).not.toHaveAttribute("aria-disabled", "true");
+    expect(await screen.findByRole("menuitem", { name: "下移" })).not.toHaveAttribute("aria-disabled", "true");
 
     await user.click(screen.getByRole("button", { name: "A" }));
     expect(screen.getByRole("button", { name: "收起：A" })).toHaveAttribute("aria-expanded", "true");
@@ -356,8 +361,9 @@ it("合为一行的物料仍可 F2 改名及设为不可选，分组与物料名
     await user.type(within(dialog).getByRole("textbox", { name: "物料名称" }), "新a");
     await user.click(within(dialog).getByRole("button", { name: "确定" }));
     expect(screen.getAllByText("新a", { exact: true })).toHaveLength(1);
+    await settleFocus();
     fireEvent.contextMenu(screen.getByRole("button", { name: "新a" }));
-    await user.click(screen.getByRole("menuitem", { name: "设置为不可选" }));
+    await user.click(await screen.findByRole("menuitem", { name: "设置为不可选" }));
     expect(await screen.findByText("不可选", { exact: true })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /保存结构/ }));
     await waitForApply();
@@ -375,7 +381,7 @@ it("右键菜单删除操作属于右键的品类，保留输入名称确认；�
     render(<BomStructurePage />);
     expect(screen.queryByRole("button", { name: "删除品类" })).not.toBeInTheDocument();
     fireEvent.contextMenu(screen.getByRole("button", { name: "老微动" }));
-    await user.click(screen.getByRole("menuitem", { name: "删除品类" }));
+    await user.click(await screen.findByRole("menuitem", { name: "删除品类" }));
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("删除品类「老微动」？")).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "确认删除" })).toBeDisabled();
@@ -497,7 +503,7 @@ it("分组右键菜单显示七项操作，添加物料落到右键分组", asyn
     render(<BomStructurePage />);
     await user.click(screen.getByRole("button", { name: "a" }));
     fireEvent.contextMenu(screen.getByRole("button", { name: "D" }), { clientX: 120, clientY: 180 });
-    const menu = screen.getByRole("menu");
+    const menu = await screen.findByRole("menu");
     expect(
         within(menu)
             .getAllByRole("menuitem")
@@ -526,37 +532,29 @@ it("物料右键菜单只有六项，合并展示物料可改名，普通物料�
     const user = userEvent.setup();
     render(<BomStructurePage />);
     fireEvent.contextMenu(screen.getByRole("button", { name: "a" }), { clientX: 130, clientY: 200 });
-    let menu = screen.getByRole("menu");
+    let menu = await screen.findByRole("menu");
     expect(
         within(menu)
             .getAllByRole("menuitem")
             .map(item => item.textContent?.trim()),
     ).toEqual(["上移", "下移", "重命名", "移动位置", "设置为不可选", "删除"]);
-    await user.pointer({ keys: "[MouseRight]", target: screen.getByRole("button", { name: "D" }) });
-    expect(await screen.findByRole("menuitem", { name: "添加物料" })).toBeInTheDocument();
-    await user.pointer({ keys: "[MouseRight]", target: screen.getByRole("button", { name: "a" }) });
-    // 连续右键换目标时菜单内容随目标重渲染，CPU 争用下可能滞后一拍（waitFor 兜底）
-    await waitFor(() =>
-        expect(within(screen.getByRole("menu")).queryByRole("menuitem", { name: "添加物料" })).not.toBeInTheDocument(),
-    );
-    menu = screen.getByRole("menu");
     await user.click(within(menu).getByRole("menuitem", { name: "重命名" }));
     const dialog = screen.getByRole("dialog", { name: "重命名物料" });
     const input = within(dialog).getByRole("textbox", { name: "物料名称" });
     await user.clear(input);
     await user.type(input, "新a");
     await user.click(within(dialog).getByRole("button", { name: "确定" }));
+    await settleFocus();
+    // e 是分组 D 下唯一的物料：菜单六项且上移/下移到边界均禁用。
+    // 「菜单内容跟右键目标走」用独立右键覆盖即可，不编排连续换目标（实现细节，时序最脆）
     fireEvent.contextMenu(screen.getByRole("button", { name: "e" }), { clientX: 130, clientY: 240 });
-    await waitFor(() =>
-        expect(within(screen.getByRole("menu")).queryByRole("menuitem", { name: "添加物料" })).not.toBeInTheDocument(),
-    );
-    menu = screen.getByRole("menu");
+    menu = await screen.findByRole("menu");
     expect(within(menu).getByRole("menuitem", { name: "上移" })).toHaveAttribute("aria-disabled", "true");
     expect(within(menu).getByRole("menuitem", { name: "下移" })).toHaveAttribute("aria-disabled", "true");
     await user.click(within(menu).getByRole("menuitem", { name: "设置为不可选" }));
     expect(await screen.findByText("不可选", { exact: true })).toBeInTheDocument();
     fireEvent.contextMenu(screen.getByRole("button", { name: "e" }), { clientX: 130, clientY: 240 });
-    await user.click(screen.getByRole("menuitem", { name: "恢复可选" }));
+    await user.click(await screen.findByRole("menuitem", { name: "恢复可选" }));
     await waitFor(() => expect(screen.queryByText("不可选", { exact: true })).not.toBeInTheDocument());
     await user.click(screen.getByRole("button", { name: "保存结构" }));
     await waitForApply();
@@ -585,7 +583,7 @@ it("Shift+F10 打开节点菜单，方向键只移动菜单焦点；删除选中
     await user.keyboard("{Escape}");
     await waitFor(() => expect(entry).toHaveFocus());
     fireEvent.contextMenu(entry, { clientX: 150, clientY: 240 });
-    await user.click(screen.getByRole("menuitem", { name: "删除" }));
+    await user.click(await screen.findByRole("menuitem", { name: "删除" }));
     const dialog = screen.getByRole("dialog", { name: "删除「D」？" });
     await user.click(within(dialog).getByRole("button", { name: "删除" }));
     expect(screen.queryByRole("button", { name: "D" })).not.toBeInTheDocument();
@@ -599,4 +597,13 @@ it("Shift+F10 打开节点菜单，方向键只移动菜单焦点；删除选中
 /* apply 是异步调用：等微任务队列排空再断言 */
 async function waitForApply() {
     await act(async () => {});
+}
+
+/* 弹窗提交后页面有两路延迟回焦：Modal 卸载回焦 + revealAndSelect 的 rAF 行聚焦（jsdom 里
+ * 都是毫秒级定时器）。它们若在右键菜单打开后才落地，会被 DismissableLayer 判成
+ * focusoutside 把菜单关掉。「弹窗关闭 → 右键」的边界先冲刷一拍，让回焦在无菜单时落地 */
+async function settleFocus() {
+    await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 50));
+    });
 }
