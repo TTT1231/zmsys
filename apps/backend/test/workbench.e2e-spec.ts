@@ -241,7 +241,6 @@ describe("工作台聚合 (e2e)", () => {
         expect(product).toMatchObject({
             code: BOM_CODE,
             category: "新微动",
-            model: "",
             spec: "底座：二脚底座有CB（无挡脚） · 按钮：8.5mm",
             unit: "个",
             stock: baseline.stock + 60,

@@ -4,7 +4,6 @@ import { addDays } from "../lib/date.ts";
 export interface WorkbenchProduct {
     code: string;
     category: string;
-    model: string;
     spec: string;
     unit: string;
     stock: number;

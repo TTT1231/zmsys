@@ -56,7 +56,6 @@ const ORDER_FIELDS: ReadonlyArray<FieldSpec<keyof OrderSnapshotCore>> = [
     },
     { key: "bomCode", label: "BOM 编码" },
     { key: "bomName", label: "成品名称" },
-    { key: "bomModel", label: "型号" },
 ];
 
 /** 入库快照字段目录（entrySnapshot 同构） */

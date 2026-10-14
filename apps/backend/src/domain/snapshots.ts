@@ -27,8 +27,7 @@ export type OrderSnapshotCore = {
     /** BOM 编码（关联码）：换 BOM 编辑的审计可见性——同品类换 BOM 时 bomName 不变，靠编码成行 */
     bomCode: string;
     bomName: string;
-    bomModel: string;
-    /** 订单建档冻结的 BOM 快照（items/modelCode/spec）；编辑换 BOM 时重冻 */
+    /** 订单建档冻结的 BOM 快照（items/spec）；编辑换 BOM 时重冻 */
     bomSpec: Prisma.JsonValue;
     rowVersion: number;
 };

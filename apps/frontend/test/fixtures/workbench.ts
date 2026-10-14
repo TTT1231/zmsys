@@ -38,10 +38,9 @@ const categories = [
 
 export function createWorkbenchDemo(asOf: string): WorkbenchData {
     const products = categories.flatMap((category, categoryIndex) =>
-        category.models.map((model, index) => ({
+        category.models.map((_, index) => ({
             code: `ZM${category.prefix}${String(index + 1).padStart(3, "0")}`,
             category: category.name,
-            model,
             spec: [
                 ["方向：正面 · 弹簧：0.5", "方向：反面 · 弹簧：0.55", "方向：正面 · A面：三脚银点"],
                 [

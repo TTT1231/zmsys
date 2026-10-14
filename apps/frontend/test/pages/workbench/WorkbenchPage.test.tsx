@@ -38,7 +38,7 @@ it("超级管理员看到四块图表和四张指标卡，其他角色不暴露�
     }
 });
 
-it("周期影响订单汇总与逾期卡片；型号和客户明细可通过键盘入口查看", async () => {
+it("周期影响订单汇总与逾期卡片；产品和客户明细可通过键盘入口查看", async () => {
     const user = userEvent.setup();
     render(<WorkbenchPage />);
     /* 指标卡数值为卡内唯一纯数字节点（小字如「3笔订单待交付」不匹配） */
@@ -54,12 +54,12 @@ it("周期影响订单汇总与逾期卡片；型号和客户明细可通过键�
     await user.click(screen.getByRole("button", { name: "累计" }));
     expect(overdueCount()).toBe(total);
     await user.click(screen.getByRole("button", { name: "旋转XK2" }));
-    expect(screen.getByRole("dialog", { name: "旋转XK2 · 型号与规格" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "旋转XK2 / 1-1" }));
-    expect(screen.getByRole("dialog", { name: "1-1 · 订单明细" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "旋转XK2 · 产品与规格" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "旋转XK2 / ZMXK2001" }));
+    expect(screen.getByRole("dialog", { name: "旋转XK2 · 订单明细" })).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toHaveFocus();
     await user.click(screen.getByRole("button", { name: "返回产品明细" }));
-    expect(screen.getByRole("dialog", { name: "旋转XK2 · 型号与规格" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "旋转XK2 · 产品与规格" })).toBeInTheDocument();
     await user.keyboard("{Escape}");
     await user.click(screen.getByRole("button", { name: "累计" }));
     await user.click(screen.getByRole("button", { name: "排行明细" }));
@@ -69,7 +69,7 @@ it("周期影响订单汇总与逾期卡片；型号和客户明细可通过键�
     expect(screen.getByRole("dialog").getAttribute("aria-label")).toContain("订单明细");
 });
 
-it("型号明细信息密度：标准只留编码，紧凑收起，宽松补规格全文", async () => {
+it("产品明细信息密度：标准只留编码，紧凑收起，宽松补规格全文", async () => {
     const user = userEvent.setup();
     render(<WorkbenchPage />);
     await user.click(screen.getByRole("button", { name: "新微动" }));

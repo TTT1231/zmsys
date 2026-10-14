@@ -84,11 +84,6 @@ export class StructureOperationDto {
     @IsBoolean()
     qty?: boolean;
 
-    /** add_group 专属：标记为型号组（groupKey=model，品类内至多一个） */
-    @IsOptional()
-    @IsBoolean()
-    isModel?: boolean;
-
     @IsOptional()
     @IsIn(["section", "group", "item"])
     targetType?: string;

@@ -47,11 +47,6 @@ export class DraftNodeDto {
     @IsBoolean()
     qty?: boolean;
 
-    /** 型号组标记（groupKey=model，品类内至多一个） */
-    @IsOptional()
-    @IsBoolean()
-    isModel?: boolean;
-
     @IsOptional()
     @IsArray()
     @ArrayMaxSize(200)

@@ -9,7 +9,7 @@ const snapshot: WorkbenchData = {
     asOf: "2026-10-08",
     unit: "个",
     movements: [],
-    products: [{ code: "KD001", category: "开关", model: "K1", spec: "二脚", stock: 50, unit: "个" }],
+    products: [{ code: "KD001", category: "开关", spec: "二脚", stock: 50, unit: "个" }],
     orders: [
         {
             no: "SO1",

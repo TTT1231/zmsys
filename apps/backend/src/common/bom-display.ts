@@ -47,10 +47,10 @@ export interface BomItemSnapshotInput {
     quantity?: number;
 }
 
-/** 订单 bom_spec_snapshot 的冻结形态（JSON 对象，满足列 CHECK） */
+/** 订单 bom_spec_snapshot 的冻结形态（JSON 对象，满足列 CHECK）；modelCode 字段已废弃——
+ *  存量 JSON 仍可能带有该键（冻结不动），新快照不再写入 */
 export interface BomItemsSnapshot {
     items: Array<BomItemSnapshotInput & { materialId: string; quantity: number }>;
-    modelCode: string;
     spec: string;
 }
 
@@ -60,7 +60,7 @@ const summaryPartOf = (item: { groupName: string; name: string; quantity?: numbe
     return `${item.groupName}：${item.name}${quantity > 1 ? ` ×${quantity}` : ""}`;
 };
 
-/** 由冻结明细构建快照：position 升序；modelCode 取 groupKey=model 的选中项 */
+/** 由冻结明细构建快照：position 升序；规格摘要 = 组名：物料（×N）拼接 */
 export function bomItemsSnapshotOf(items: readonly BomItemSnapshotInput[]): BomItemsSnapshot {
     const sorted = [...items]
         .sort((a, b) => a.position - b.position)
@@ -69,10 +69,8 @@ export function bomItemsSnapshotOf(items: readonly BomItemSnapshotInput[]): BomI
             materialId: item.materialId.toString(),
             quantity: item.quantity ?? 1,
         }));
-    const model = sorted.find(item => item.groupKey === "model");
     return {
         items: sorted,
-        modelCode: model?.name ?? "",
         spec: sorted.map(summaryPartOf).join(" · "),
     };
 }

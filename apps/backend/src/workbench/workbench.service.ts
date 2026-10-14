@@ -72,7 +72,6 @@ export class WorkbenchService {
             return {
                 code: row.bomCode,
                 category: row.category.name,
-                model: snapshot.modelCode,
                 spec: snapshot.spec,
                 unit: row.unit,
                 stock: stockByCode.get(row.bomCode) ?? 0,

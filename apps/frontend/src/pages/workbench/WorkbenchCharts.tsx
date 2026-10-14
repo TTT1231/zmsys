@@ -228,7 +228,7 @@ export function ProductProgressChart({
             </div>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
                 <div className="flex flex-wrap items-center gap-1 text-12 text-muted">
-                    <span className="mr-1">型号</span>
+                    <span className="mr-1">产品</span>
                     {categories.map(row => (
                         <Button
                             key={row.name}

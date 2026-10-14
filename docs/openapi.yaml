@@ -355,7 +355,7 @@ paths:
             tags: [boms]
             operationId: listBoms
             summary: BOM/成品档案列表
-            description: 权限 `bom:view`。明细、modelCode 与摘要全部取自建档冻结快照，不依赖当前目录。
+            description: 权限 `bom:view`。明细与摘要全部取自建档冻结快照，不依赖当前目录。
             responses:
                 "200":
                     description: 成功
@@ -430,7 +430,7 @@ paths:
             tags: [bom-structure]
             operationId: createBomCategory
             summary: 新建品类（名称 + 编码前缀 + 整棵草稿树，可选下属类型）
-            description: 受保护权限 `bom-structure:manage`，默认仅 super（super 可解锁后授予其他角色）。事务内锁定 bom_category 全部既有行（id 升序）串行化创建：校验品类名/编码前缀唯一，且前缀不得与既有前缀构成「前缀 + 纯数字尾差」的数字延长关系（XK2 与 XK21 拒绝；KW/KWO、XK3/XK3W 字母尾差合法——序列 padStart 不截断，数字延长会拼出相同 BOM 编码）。categoryKey 与分组 groupKey 由后端生成（isModel 标记型号组，品类内至多一个）。v2 新增可选 types（下属类型，至多 12 个，各带名称与前缀、同样参与唯一/数字延长校验）：创建后主品类登记 child_categories 成为复合品类，类型为停用的目录容器品类（永不取号、不进建档下拉），与既有 焊线/插线、新/老微动跌倒 容器同构。仍不开放品类改名、改 key/前缀、复合关系编辑与品类级停用。
+            description: 受保护权限 `bom-structure:manage`，默认仅 super（super 可解锁后授予其他角色）。事务内锁定 bom_category 全部既有行（id 升序）串行化创建：校验品类名/编码前缀唯一，且前缀不得与既有前缀构成「前缀 + 纯数字尾差」的数字延长关系（XK2 与 XK21 拒绝；KW/KWO、XK3/XK3W 字母尾差合法——序列 padStart 不截断，数字延长会拼出相同 BOM 编码）。categoryKey 与分组 groupKey 由后端生成（分组键依次派生 g1..；存量数据中的 model 键仅为旧数据兼容，无维护语义）。v2 新增可选 types（下属类型，至多 12 个，各带名称与前缀、同样参与唯一/数字延长校验）：创建后主品类登记 child_categories 成为复合品类，类型为停用的目录容器品类（永不取号、不进建档下拉），与既有 焊线/插线、新/老微动跌倒 容器同构。仍不开放品类改名、改 key/前缀、复合关系编辑与品类级停用。
             parameters:
                 - $ref: "#/components/parameters/IdempotencyKey"
             requestBody:
@@ -1745,7 +1745,6 @@ components:
                 groupId: { type: string, description: add_item/set_rules：已存分组 id 或同批草稿分组 tempId }
                 multi: { type: boolean }
                 qty: { type: boolean }
-                isModel: { type: boolean, description: add_group 专属：标记为型号组（groupKey=model，品类内至多一个） }
                 targetType: { type: string, enum: [section, group, item] }
                 targetId: { type: string, description: hide/restore/reorder/rename/move/remove：已存节点/物料 id 或同批草稿 tempId }
                 direction: { type: string, enum: [up, down] }
@@ -1795,7 +1794,6 @@ components:
                 parentTempId: { type: [string, "null"], description: GROUP 专属：所属分区 tempId；null/省略 = 挂品类根 }
                 multi: { type: boolean }
                 qty: { type: boolean }
-                isModel: { type: boolean, description: 型号组标记（groupKey=model，品类内至多一个） }
                 items: { type: array, maxItems: 200, items: { $ref: "#/components/schemas/DraftItem" } }
 
         CreateBomCategoryInput:
@@ -1855,11 +1853,10 @@ components:
 
         Bom:
             type: object
-            required: [code, name, modelCode, items, spec, remark, creator, created, unit]
+            required: [code, name, items, spec, remark, creator, created, unit]
             properties:
                 code: { type: string }
                 name: { type: string }
-                modelCode: { type: string, description: model 组选中项名称（品类无 model 组时为空串） }
                 items: { type: array, items: { $ref: "#/components/schemas/BomItemView" } }
                 spec: { type: string, description: "摘要（“组名：物料名 ×N”以 “ · ” 连接，数量 1 省略 ×N）" }
                 remark: { type: string, description: "建档备注（物料构成之外的工艺差异，参与判重指纹）；空串 = 无备注" }
@@ -2420,7 +2417,6 @@ components:
             properties:
                 code: { type: string }
                 category: { type: string }
-                model: { type: string, description: 型号组选中项（建档冻结快照，无则空串） }
                 spec: { type: string, description: “组名：物料名 ×N” 摘要，按冻结 position 排序 }
                 unit: { type: string }
                 stock: { type: integer, description: v_bom_stock 口径，无流水 BOM 为 0 }

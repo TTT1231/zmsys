@@ -138,7 +138,7 @@ export class BomsService {
 
     /**
      * BOM 档案列表（契约 bom:view）：全量返回（契约无分页），新建置顶。
-     * 明细、modelCode 与摘要全部取自建档冻结快照，不读当前目录。
+     * 明细与摘要全部取自建档冻结快照，不读当前目录。
      */
     async listBoms(): Promise<Bom[]> {
         const rows = await this.prisma.bomTable.findMany({
@@ -326,7 +326,6 @@ export class BomsService {
                 const bom: Bom = {
                     code: bomCode,
                     name: category.name,
-                    modelCode: snapshot.modelCode,
                     items: toBomItemViews(snapshot),
                     spec: snapshot.spec,
                     remark: dto.remark ?? "",
@@ -531,13 +530,12 @@ export class BomsService {
         };
     }
 
-    /** 契约 Bom 映射：created 为北京日；modelCode/spec/明细全部由冻结快照派生；remark 为建档备注 */
+    /** 契约 Bom 映射：created 为北京日；spec/明细全部由冻结快照派生；remark 为建档备注 */
     private toBom(row: BomRowWithItems): Bom {
         const snapshot = bomItemsSnapshotOf(row.items);
         return {
             code: row.bomCode,
             name: row.category.name,
-            modelCode: snapshot.modelCode,
             items: toBomItemViews(snapshot),
             spec: snapshot.spec,
             remark: row.remark,

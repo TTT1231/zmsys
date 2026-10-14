@@ -92,11 +92,6 @@ export function validateCatalogTree(tree: readonly CatalogTreeNode[]): void {
         }
         keys.set(node.groupKey!, node.name);
     }
-    // model 语义：型号组每品类至多一个（modelCode 取 groupKey=model 的选中项派生）
-    const modelGroups = tree.filter(node => node.kind === "GROUP" && node.groupKey === "model");
-    if (modelGroups.length > 1) {
-        throw new BadRequestException(`型号组（model）只能有一个，当前有 ${modelGroups.length} 个`);
-    }
     // 组内物料名唯一（uk_material_item_name 兜底前的友好错误）
     for (const node of tree) {
         const itemNames = new Set<string>();

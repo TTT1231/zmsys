@@ -21,13 +21,12 @@ export interface BomCategory {
     groups: BomCatalogNode[];
 }
 
-/** 契约 Bom：items 按建档 position 排序；modelCode 由 model 组选中项派生（无则 ""）；
+/** 契约 Bom：items 按建档 position 排序；
  * remark 为建档备注（工艺差异，参与判重指纹），空串 = 无备注；
  * creator 为建档人姓名（sys_user.name），created 为建档时刻 ISO 8601 */
 export interface Bom {
     code: string;
     name: string;
-    modelCode: string;
     items: BomItemView[];
     spec: string;
     remark: string;
