@@ -578,27 +578,11 @@ export function BomStructurePage() {
     /* 弹窗提交处理器（与 dialog 状态一一对应） */
     const dialogNode = dialog;
     const dialogTreeOf = (key: string) => treeOfCategory(key);
-    const hasModel = (key: string): boolean => {
-        const tree = treeOfCategory(key);
-        return (
-            tree.some(root => root.kind === "group" && root.isModel) ||
-            tree.some(root => root.kind === "section" && root.groups.some(group => group.isModel))
-        );
-    };
-
     return (
-        <div className="mx-auto w-full max-w-wrap-padding px-4 pb-8 pt-6 sm:px-6">
-            <header className="mb-4 flex flex-wrap items-end justify-between gap-4">
-                <div>
-                    <div className="text-13 font-semibold tracking-[0.08em] text-primary-strong">物料与 BOM</div>
-                    <h1 className="mt-1 text-[clamp(25px,2.2vw,32px)] leading-tight font-bold tracking-[-0.035em] text-ink">
-                        BOM 结构
-                    </h1>
-                    <p className="mt-1.5 max-w-160 text-14 text-muted">
-                        按分组整理物料，设置物料的选用规则。结构调整只影响之后新建的 BOM，已保存档案按建档快照显示。
-                    </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
+        <div className="mx-auto w-full max-w-wrap-padding px-4 pb-6 pt-4 sm:px-6">
+            <header className="mb-3 flex items-center justify-between gap-3">
+                <h1 className="text-15 font-semibold text-ink">BOM 结构</h1>
+                <div className="flex items-center gap-2">
                     <span className="mr-1 flex items-center gap-0.5 border-r border-line-strong pr-2">
                         <Button
                             iconOnly
@@ -638,7 +622,7 @@ export function BomStructurePage() {
                 </div>
             </header>
 
-            <div className="grid gap-4 lg:h-[calc(100dvh-262px)] lg:min-h-105 lg:grid-cols-[212px_minmax(0,1fr)]">
+            <div className="grid gap-4 lg:h-[calc(100dvh-128px)] lg:min-h-105 lg:grid-cols-[212px_minmax(0,1fr)]">
                 <aside
                     className="bs-category-panel flex min-h-0 flex-col rounded-panel border border-line bg-surface p-3 max-lg:max-h-48"
                     aria-label="品类导航"
@@ -910,9 +894,8 @@ export function BomStructurePage() {
                     categoryName={dialogNode.categoryName}
                     target={dialogNode.target}
                     tree={dialogTreeOf(dialogNode.categoryKey)}
-                    hasModelGroup={hasModel(dialogNode.categoryKey)}
                     onClose={() => setDialog(null)}
-                    onSubmit={(kind, name, isModel, items) => {
+                    onSubmit={(kind, name, items) => {
                         const tempId = uuid();
                         dispatch({
                             type: "append",
@@ -929,7 +912,6 @@ export function BomStructurePage() {
                                                   dialogNode.target.type === "section" ? dialogNode.target.id : null,
                                               multi: false,
                                               qty: false,
-                                              ...(isModel ? { isModel: true } : {}),
                                               ...(items.length > 0
                                                   ? { items: items.map(item => ({ tempId: uuid(), name: item })) }
                                                   : {}),

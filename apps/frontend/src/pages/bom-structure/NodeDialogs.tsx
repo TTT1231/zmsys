@@ -58,21 +58,18 @@ export function AddNodeModal({
     categoryName,
     target,
     tree,
-    hasModelGroup,
     onClose,
     onSubmit,
 }: {
     categoryName: string;
     target: { type: "root" } | { type: "section"; id: string };
     tree: readonly ViewRoot[];
-    hasModelGroup: boolean;
     onClose: () => void;
-    onSubmit: (kind: "SECTION" | "GROUP", name: string, isModel: boolean, items: string[]) => void;
+    onSubmit: (kind: "SECTION" | "GROUP", name: string, items: string[]) => void;
 }) {
     const atRoot = target.type === "root";
     const [kind, setKind] = useState<"SECTION" | "GROUP">("GROUP");
     const [name, setName] = useState("");
-    const [isModel, setIsModel] = useState(false);
     const [items, setItems] = useState("");
     const [error, setError] = useState("");
     const locationPath = atRoot ? categoryName : sectionPathOf(tree, target.id);
@@ -107,7 +104,7 @@ export function AddNodeModal({
                 return;
             }
         }
-        onSubmit(effectiveKind, trimmed, effectiveKind === "GROUP" && isModel, splitLines(items));
+        onSubmit(effectiveKind, trimmed, splitLines(items));
     };
 
     return (
@@ -174,16 +171,6 @@ export function AddNodeModal({
             </label>
             {effectiveKind === "GROUP" && (
                 <>
-                    <label className="mt-3 flex items-center gap-2 text-13 text-td">
-                        <input
-                            type="checkbox"
-                            className="size-4 accent-primary"
-                            checked={isModel}
-                            disabled={hasModelGroup}
-                            onChange={event => setIsModel(event.target.checked)}
-                        />
-                        型号组（选中项决定 BOM 型号；每品类至多一个{hasModelGroup ? "，已有型号组" : ""}）
-                    </label>
                     <label className="mt-3 block">
                         <span className="mb-1 block text-13 font-medium text-td">随组物料（可选）</span>
                         <textarea
