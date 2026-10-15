@@ -131,21 +131,21 @@ const localMigrations = (): string[] =>
         .sort();
 
 /** 前端产物自检：必须是 production 构建。曾因根 .env 的 NODE_ENV=development 污染
-    vite build（envDir 指向仓库根），DEV 守卫把更新检查等逻辑整段死代码消除、
-    bundle 含 jsxDEV 与源码绝对路径；build-id 缺失说明注入插件未生效 */
+    vite build（envDir 指向仓库根），DEV 守卫把更新检查等逻辑整段死代码消除、bundle
+    注入 jsxDEV 与源码绝对路径；build-id 缺失说明注入插件未生效。build-mode 由构建时
+    NODE_ENV 烙进产物（与 JSX 转换判定同源），故不再扫描 jsxDEV 字符串——
+    hast-util-to-jsx-runtime（react-markdown 依赖）的生产代码本就含该字符串，会误报 */
 const assertFrontendProdBuild = (): void => {
     const distDir = join(repoRoot, "apps", "frontend", "dist");
     const indexHtml = readFileSync(join(distDir, "index.html"), "utf8");
     if (!/<meta name="app-build-id" content="[^"]+"/.test(indexHtml)) {
         throw new Error("dist/index.html 缺少 app-build-id 构建标识（inject-app-build-id 插件未生效），已中止部署");
     }
-    for (const file of readdirSync(join(distDir, "assets"))) {
-        if (!file.endsWith(".js")) continue;
-        if (readFileSync(join(distDir, "assets", file), "utf8").includes("jsxDEV")) {
-            throw new Error(
-                `dist/assets/${file} 含 jsxDEV：前端以 development 模式构建（检查根 .env 的 NODE_ENV），已中止部署`,
-            );
-        }
+    const buildMode = indexHtml.match(/<meta name="app-build-mode" content="([^"]+)"/)?.[1];
+    if (buildMode !== "production") {
+        throw new Error(
+            `前端以 ${buildMode ?? "未知"} 模式构建（构建时 NODE_ENV 须为 production，检查根 .env），已中止部署`,
+        );
     }
 };
 

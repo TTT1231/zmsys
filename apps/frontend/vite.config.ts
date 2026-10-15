@@ -8,13 +8,19 @@ import { envSchema } from "./src/env.schema.ts";
 
 /* 构建标识：每次构建生成唯一值注入 index.html <meta name="app-build-id">。
    VersionCheck 运行时拉取线上 index.html 对比该标识判断是否发了新版本
-   （不比对 ETag/Last-Modified：部署链路保留 mtime 且体积可能不变，头不会变） */
-function appBuildId(): Plugin {
+   （不比对 ETag/Last-Modified：部署链路保留 mtime 且体积可能不变，头不会变）。
+   build-mode 记录构建时 NODE_ENV（优先于 mode：NODE_ENV 污染时 JSX 转换跟随它而非
+   mode），部署脚本据此拦截非 production 产物 */
+function appBuildId(mode: string): Plugin {
     const buildId = Date.now().toString(36);
+    const buildMode = process.env.NODE_ENV || mode;
     return {
         name: "inject-app-build-id",
         transformIndexHtml() {
-            return [{ tag: "meta", attrs: { name: "app-build-id", content: buildId } }];
+            return [
+                { tag: "meta", attrs: { name: "app-build-id", content: buildId } },
+                { tag: "meta", attrs: { name: "app-build-mode", content: buildMode } },
+            ];
         },
     };
 }
@@ -26,7 +32,7 @@ export default defineConfig(({ mode }) => {
     envSchema.parse(loadEnv(mode, fileURLToPath(new URL("../../", import.meta.url)), "VITE_"));
 
     return {
-        plugins: [react(), tailwindcss(), appBuildId()],
+        plugins: [react(), tailwindcss(), appBuildId(mode)],
         // env 统一在仓库根 .env（仅 VITE_ 前缀变量会暴露给客户端代码）
         envDir: "../../",
         resolve: {
