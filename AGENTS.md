@@ -11,6 +11,7 @@
 zmsys/
 ├── docs/
 │   ├── business/             # 业务文档
+│   ├── ai/                   # AI 助手 agent 文档（根文档/端点目录/操作指南）
 │   ├── db-scheme.md          # 决策数据设计文档
 │   ├── mysql-8-schema.sql    # 数据库约束文档
 │   ├── openapi.yaml          # api 文档
@@ -75,3 +76,4 @@ pnpm clean                    # 深度清理：递归删除 node_modules/dist/.t
 
 - [业务流程](./docs/business/process.md)
 - [角色划分](./docs/business/roles.md)
+- [系统操作指南（含各操作前置条件）](./docs/ai/operations.md)

@@ -348,3 +348,14 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 - `pnpm restore-database [--local] [--replace] [--yes] [--request-key <key>] <文件>`：--local 与容器同一薄入口（`apps/backend/src/system/restore-cli.ts`，进程 UTC 初始化，stdin 专用于备份字节）；默认远程＝一次 SSH → backend 镜像临时命令容器 `docker compose run --rm -T --no-deps backend node dist/system/restore-cli.js ...`，先检查 backend 已停、目标库与本地确认值一致，确认在本地外壳完成。**停写前提**（backend/其他写入进程已停、暂停部署迁移）不因 --yes 绕过。
 - `--reset-password <account>` 独立救援改密：不要求重跑恢复；停写后取得同一恢复锁，新密码经 stdin 隐藏传入（不走 argv、不记录），复用口令规则（6-128 位），更新 bcrypt/password_changed_at/token_version/row_version 并记用户变更日志。现有 users 重置接口禁止 super，本救援入口不沿用该限制。
 - `pnpm restore-drill` 对 `*_test` 双轨演练：replace 轨（自引用三层且子 id 小于父、幂等清理、字段还原、token_version、序列、凭证）+ merge 轨（补插/GREATEST/分歧回滚）+ 四项故障注入（同 key 回放、COMMIT 回执丢失核实、提交后崩溃凭证可查、回滚中重启后同 key 重跑）。
+
+## 11. AI 助手（对话代理与工作台）
+
+后端代理转发 OpenAI 兼容上游（`/chat/completions`），按登录人记账 token——纯前端转发做不到按人计量。上游地址/key/模型/启用态由超管在「AI 工作台」维护，存服务端。
+
+- **ai_provider_config（单行表，id 固定 1，CHECK 兜底）**：base_url VARCHAR(255)、api_key VARCHAR(512) ascii_bin、model VARCHAR(64)、enabled、updated_by FK→sys_user。api_key 只存服务端，读接口只回脱敏值（apiKeySet + 掩码）；写入经受保护权限 `menu:ai-workbench`（与菜单同码，可解锁下放）。**备份分类为运行态表**：永不入应用备份（明文 key 不随备份文件分发），replace 恢复不清理——恢复后系统级 AI 配置保持现状。残留风险：CLI 整库 dump（backup-database，含 DDL 的运维全量）仍含明文 key，备份文件按机密保管（与含口令哈希的备份同级别要求）。apiKey 空串=显式清除；省略=保留原值。
+- **ai_usage_log（追加型用量记账）**：id Snowflake、user_id FK→sys_user、model、prompt/completion/total_tokens、status ENUM(success,error)、error_message(500)、duration_ms、created_at；索引 (user_id, created_at DESC)、(created_at DESC)。每次对话代理请求一行；失败/断流记 error、token 记 0、error_message 标注用量未知/部分（不把未知记成确定零）。**备份分类归 system 组**（与 op_log 同类，随「系统与日志」分组导出）。
+- **配置审计**：设置变更与业务行同事务写 op_log(update_ai_config)——系统审计动作，不进系统日志业务时间线（同 db_backup/db_restore）；快照脱敏（变更字段名/是否轮换 key/启用态/host/模型），绝不写入 key 内容。
+- **对话约束**：messages ≤20 条 ×16k 字符（字符数限制；JSON 序列化字节仍受 Fastify 默认 1MiB 请求体上限约束，超限 413——异常转义编码可能放大体积，不承诺按字符数推导的字节上限）；上游 max_tokens 4096；超时 45s（非流式/流式统一，**低于恢复排空窗 60s**——在途 AI 请求不会阻塞恢复）；流式带 stream_options.include_usage 由后端嗅探记账，响应头发出后上游失败以 SSE `event: error` 收尾；客户端断线即中止上游。对话不纳入 Idempotency-Key 清单：重试=新请求新计费。
+- **agent 查询端点**（`/ai/agent/*`，全部只读）：文档清单/单篇（登录即可）；作废入库/出库薄查询（各域 view 码）；已删除审计=op_log `delete_*` 快照（`system-logs:view`，2026-10 起物理删除后唯一留存）。全业务数据不重造端点——`GET /workbench/overview`、`GET /workbench/relations` 与各域列表、`GET /system-logs` 直接复用。agent 数据边界＝登录用户本人页面可见。文档正文单一归属在仓库 docs/（ai/ 三篇 + business/ 复用三篇），运行时按 `cwd/../../docs` 解析，部署镜像经 Dockerfile.backend COPY（staging 与 dockerignore 同步放行）。
+
