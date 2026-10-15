@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { consumeAiStream } from "@/api/ai-chat";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { consumeAiStream, streamAiChat } from "@/api/ai-chat";
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("AI 流式响应", () => {
     it("中文跨字节与跨帧解析，并拼接分块工具参数", async () => {
@@ -30,5 +32,26 @@ describe("AI 流式响应", () => {
         await expect(
             consumeAiStream(new Response('data: {"choices":[{"delta":{"content":"部分回答"}}]}\n\n'), () => {}),
         ).rejects.toThrow("提前中断");
+    });
+    it("流中途发生网络错误时给出可读的提示", async () => {
+        const stream = new ReadableStream({
+            start(controller) {
+                controller.error(new TypeError("network error"));
+            },
+        });
+        await expect(consumeAiStream(new Response(stream), () => {})).rejects.toThrow("网络连接中断，请检查网络后重试");
+    });
+    it("请求网络不可达时给出可读的提示", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+        await expect(
+            streamAiChat([{ role: "user", content: "查询订单" }], [], new AbortController().signal, () => {}),
+        ).rejects.toThrow("网络连接失败，请检查网络后重试");
+    });
+    it("用户主动停止时保留中止原因", async () => {
+        const error = new DOMException("已停止", "AbortError");
+        vi.stubGlobal("fetch", vi.fn().mockRejectedValue(error));
+        await expect(
+            streamAiChat([{ role: "user", content: "查询订单" }], [], AbortSignal.abort(), () => {}),
+        ).rejects.toBe(error);
     });
 });

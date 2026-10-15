@@ -69,7 +69,9 @@ export async function consumeAiStream(
     };
     try {
         while (!done) {
-            const chunk = await reader.read();
+            const chunk = await reader.read().catch(() => {
+                throw new Error("网络连接中断，请检查网络后重试");
+            });
             pending += decoder.decode(chunk.value, { stream: !chunk.done });
             pending = pending.replace(/\r\n/g, "\n");
             let boundary: number;
@@ -111,6 +113,9 @@ export async function streamAiChat(
         },
         body,
         signal,
+    }).catch((error: unknown) => {
+        if (signal.aborted) throw error;
+        throw new ApiError("网络连接失败，请检查网络后重试", -1);
     });
     if (!response.ok) {
         let message =

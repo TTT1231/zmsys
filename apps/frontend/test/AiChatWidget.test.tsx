@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AiChatWidget from "@/components/ai/AiChatWidget";
 import { runChatAgent } from "@/components/ai/agent";
+import * as utils from "@/lib/utils";
 
 vi.mock("@/api/ai", () => ({
     fetchAiStatus: vi.fn().mockResolvedValue({ enabled: true, configured: true, model: "test-model" }),
@@ -32,6 +33,7 @@ beforeEach(() => {
 });
 afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
 });
 
@@ -54,7 +56,7 @@ describe("AI 聊天面板", () => {
     it.each(["回车", "发送按钮", "快捷提问"])("HTTP 环境缺少 randomUUID 时仍可通过%s发送", async method => {
         vi.mocked(runChatAgent).mockResolvedValue("发送成功");
         const user = await openChat();
-        const question = method === "快捷提问" ? "今天的成品入库情况" : "查询今天的入库";
+        const question = method === "快捷提问" ? "今天成品的出入库情况" : "查询今天的入库";
         if (method === "快捷提问") {
             await user.click(screen.getByRole("button", { name: question }));
         } else {
@@ -67,6 +69,53 @@ describe("AI 聊天面板", () => {
         expect(vi.mocked(runChatAgent).mock.calls[0]![0].history).toEqual([
             expect.objectContaining({ role: "user", content: question }),
         ]);
+    });
+
+    it("网络或服务请求失败时显示明确提示，点击重试才重新发送原问题", async () => {
+        vi.mocked(runChatAgent)
+            .mockRejectedValueOnce(new Error("网络连接失败，请检查网络后重试"))
+            .mockResolvedValueOnce("重试成功");
+        const user = await openChat();
+        await user.type(screen.getByRole("textbox", { name: "消息内容" }), "查订单");
+        await user.click(screen.getByRole("button", { name: "发送消息" }));
+        const alert = await screen.findByRole("alert");
+        expect(alert).toHaveTextContent("发送失败");
+        expect(alert).toHaveTextContent("网络连接失败，请检查网络后重试");
+        expect(runChatAgent).toHaveBeenCalledTimes(1);
+        expect(screen.queryByRole("button", { name: "停止生成" })).not.toBeInTheDocument();
+        await user.click(screen.getByRole("button", { name: "重试" }));
+        expect(await screen.findByText("重试成功")).toBeInTheDocument();
+        expect(runChatAgent).toHaveBeenCalledTimes(2);
+        expect(vi.mocked(runChatAgent).mock.calls[1]![0].history.at(-1)).toMatchObject({
+            role: "user",
+            content: "查订单",
+        });
+    });
+
+    it("回答途中断线时保留已有文字，并提示回答中断", async () => {
+        vi.mocked(runChatAgent).mockImplementation(async options => {
+            options.onText("已经收到的部分回答");
+            throw new Error("网络连接中断，请检查网络后重试");
+        });
+        const user = await openChat();
+        await user.type(screen.getByRole("textbox", { name: "消息内容" }), "查库存");
+        await user.keyboard("{Enter}");
+        expect(await screen.findByRole("alert")).toHaveTextContent("回答中断");
+        expect(screen.getByText("已经收到的部分回答")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
+    });
+
+    it("发送前出现异常也会提示失败，并保留尚未发送的输入", async () => {
+        const user = await openChat();
+        vi.spyOn(utils, "uuid").mockImplementationOnce(() => {
+            throw new Error("无法创建消息");
+        });
+        const input = screen.getByRole("textbox", { name: "消息内容" });
+        await user.type(input, "尚未发送的问题");
+        await user.keyboard("{Enter}");
+        expect(await screen.findByRole("alert")).toHaveTextContent("发送失败：无法创建消息");
+        expect(input).toHaveValue("尚未发送的问题");
+        expect(runChatAgent).not.toHaveBeenCalled();
     });
 
     it("刷新后恢复附件消息与失败回答时不会产生空正文或把失败当成功", async () => {

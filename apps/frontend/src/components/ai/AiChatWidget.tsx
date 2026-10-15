@@ -16,7 +16,7 @@ import { useSpeechInput } from "./useSpeechInput";
 import type { ChatAttachment, ChatSource } from "./types";
 import "./chat.css";
 
-const SUGGESTIONS = ["今天的成品入库情况", "哪些订单临近交期？", "当前成品库存有多少？", "出库登记错误怎么处理？"];
+const SUGGESTIONS = ["今天成品的出入库情况", "我如何调整BOM结构", "这个分析页怎么用的"];
 
 export default function AiChatWidget() {
     const { user, role, grant, can } = useApp();
@@ -171,7 +171,7 @@ export default function AiChatWidget() {
             if (seq === fileGeneration.current) setReading(false);
         }
     };
-    const send = (text = draft) => {
+    const send = async (text = draft) => {
         if (chat.busy || reading || speech.recording || !ready || (!text.trim() && !files.length)) return;
         const totalText =
             text.length +
@@ -183,10 +183,15 @@ export default function AiChatWidget() {
             return;
         }
         setError("");
-        setDraft("");
-        setFiles([]);
         follow.current = true;
-        void chat.send(text.trim(), files);
+        try {
+            const sending = chat.send(text.trim(), files);
+            setDraft("");
+            setFiles([]);
+            await sending;
+        } catch (cause) {
+            setError(cause instanceof Error ? `发送失败：${cause.message}` : "发送失败，请重试");
+        }
     };
     const startDrag = (event: PointerEvent<HTMLElement>) => {
         if (event.button !== 0 || (event.target as HTMLElement).closest("button") || window.innerWidth < 600) return;
@@ -326,9 +331,7 @@ export default function AiChatWidget() {
                         </span>
                         <div className="ai-chat-bubble ai-chat-bot">
                             <ChatMarkdown>
-                                {
-                                    "嗨，我是 **众茂AI**！可以帮你查询订单欠量、成品库存和出入库记录，也能解答系统操作问题。"
-                                }
+                                {"嗨，我是 **众茂AI**！可以帮你查询订单、库存等，也能解答系统操作问题"}
                             </ChatMarkdown>
                             <div className="mt-3 flex flex-wrap gap-2">
                                 {SUGGESTIONS.map(text => (
@@ -450,13 +453,22 @@ export default function AiChatWidget() {
                                             )}
                                             {(message.state === "stopped" || message.state === "error") && (
                                                 <div className="mt-2 text-12.5">
-                                                    <p
-                                                        className={
-                                                            message.state === "error" ? "text-danger" : "text-muted"
-                                                        }
-                                                    >
-                                                        {message.error ?? "已停止生成"}
-                                                    </p>
+                                                    {message.state === "error" ? (
+                                                        <div
+                                                            role="alert"
+                                                            className="rounded-input border border-danger/25 bg-danger-soft p-2.5 text-danger"
+                                                        >
+                                                            <p className="flex items-center gap-1.5 font-medium">
+                                                                <Icon name="alert" size={16} />
+                                                                {message.content ? "回答中断" : "发送失败"}
+                                                            </p>
+                                                            <p className="mt-1 wrap-anywhere">
+                                                                {message.error || "暂时无法连接 AI 服务，请稍后重试"}
+                                                            </p>
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-muted">已停止生成</p>
+                                                    )}
                                                     {message === lastMessage && (
                                                         <button
                                                             type="button"
@@ -467,7 +479,7 @@ export default function AiChatWidget() {
                                                                 void chat.retry();
                                                             }}
                                                         >
-                                                            重新回答
+                                                            {message.state === "error" ? "重试" : "重新回答"}
                                                         </button>
                                                     )}
                                                 </div>
