@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { availableTools, buildHistory, runChatAgent } from "@/components/ai/agent";
 import { fetchAiQuery, streamAiChat } from "@/api/ai-chat";
 
@@ -21,7 +21,11 @@ const call = (name = "listOrders", args = "{}") => ({
     toolCalls: [{ id: "call_1", type: "function" as const, function: { name, arguments: args } }],
 });
 
-beforeEach(() => vi.resetAllMocks());
+beforeEach(() => {
+    vi.resetAllMocks();
+    vi.stubGlobal("crypto", { getRandomValues: crypto.getRandomValues.bind(crypto) });
+});
+afterEach(() => vi.unstubAllGlobals());
 
 describe("AI 只读查询编排", () => {
     it("无业务权限时只有文档工具，关系查询须同时具备两个菜单权限", () => {

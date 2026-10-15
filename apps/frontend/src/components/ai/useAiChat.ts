@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchAiDocs } from "@/api/ai-chat";
+import { uuid } from "@/lib/utils";
 import { runChatAgent } from "./agent";
 import type { ChatAttachment, ChatMessage } from "./types";
 
@@ -13,7 +14,7 @@ function restore(key: string): ChatMessage[] {
             )
             .slice(-20)
             .map(message => ({
-                id: crypto.randomUUID(),
+                id: uuid(),
                 role: message.role,
                 content:
                     message.role === "user" && !message.content.trim()
@@ -67,7 +68,7 @@ export function useAiChat(options: {
         const controller = new AbortController();
         active.current = controller;
         const seq = ++generation.current;
-        const replyId = crypto.randomUUID();
+        const replyId = uuid();
         setMessages([...history, { id: replyId, role: "assistant", content: "", state: "streaming", sources: [] }]);
         setBusy(true);
         setProgress("正在准备对话…");
@@ -126,7 +127,7 @@ export function useAiChat(options: {
         busy,
         progress,
         send: (content: string, attachments: ChatAttachment[]) =>
-            run([...messages, { id: crypto.randomUUID(), role: "user", content, attachments }]),
+            run([...messages, { id: uuid(), role: "user", content, attachments }]),
         retry: () => {
             const lastUser = messages.findLastIndex(message => message.role === "user");
             if (lastUser >= 0) return run(messages.slice(0, lastUser + 1));

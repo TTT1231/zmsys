@@ -1,4 +1,5 @@
 import { fetchAiQuery, streamAiChat } from "@/api/ai-chat";
+import { uuid } from "@/lib/utils";
 import catalog from "./tool-catalog.json";
 import type { ChatMessage, ChatSource, ChatToolDefinition, ChatWireMessage } from "./types";
 
@@ -107,7 +108,7 @@ export async function runChatAgent(options: {
                 options.signal.throwIfAborted();
                 const queriedAt = new Date().toISOString();
                 if (entry.path !== "/ai/agent/docs/{topicId}")
-                    options.onSource({ id: crypto.randomUUID(), title: entry.title, queriedAt, filters: fields, data });
+                    options.onSource({ id: uuid(), title: entry.title, queriedAt, filters: fields, data });
                 const full = JSON.stringify({ queriedAt, data });
                 output =
                     full.length <= 15_000

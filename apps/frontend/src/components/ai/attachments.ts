@@ -1,3 +1,4 @@
+import { uuid } from "@/lib/utils";
 import type { ChatAttachment } from "./types";
 
 const TEXT_EXTENSIONS = new Set(["txt", "md", "csv", "json"]);
@@ -7,7 +8,7 @@ export const ATTACHMENT_ACCEPT = ".png,.jpg,.jpeg,.webp,.gif,.txt,.md,.csv,.json
 export async function readChatAttachment(file: File): Promise<ChatAttachment> {
     if (file.size > 10 * 1024 * 1024) throw new Error(`「${file.name}」超过 10MB，请选择较小的文件`);
     const extension = file.name.split(".").at(-1)?.toLowerCase() ?? "";
-    const base = { id: crypto.randomUUID(), name: file.name, size: file.size };
+    const base = { id: uuid(), name: file.name, size: file.size };
     if (TEXT_EXTENSIONS.has(extension)) {
         const content = await file.text();
         if (!content.trim()) throw new Error(`「${file.name}」没有可读取的文字`);

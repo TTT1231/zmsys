@@ -23,13 +23,17 @@ vi.mock("@/context/useApp", () => ({
 }));
 
 beforeEach(() => {
+    vi.stubGlobal("crypto", { getRandomValues: crypto.getRandomValues.bind(crypto) });
     sessionStorage.clear();
     vi.mocked(runChatAgent).mockReset();
     window.matchMedia = vi
         .fn()
         .mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() });
 });
-afterEach(cleanup);
+afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+});
 
 async function openChat() {
     const user = userEvent.setup();
@@ -47,6 +51,24 @@ async function openChat() {
 }
 
 describe("AI 聊天面板", () => {
+    it.each(["回车", "发送按钮", "快捷提问"])("HTTP 环境缺少 randomUUID 时仍可通过%s发送", async method => {
+        vi.mocked(runChatAgent).mockResolvedValue("发送成功");
+        const user = await openChat();
+        const question = method === "快捷提问" ? "今天的成品入库情况" : "查询今天的入库";
+        if (method === "快捷提问") {
+            await user.click(screen.getByRole("button", { name: question }));
+        } else {
+            await user.type(screen.getByRole("textbox", { name: "消息内容" }), question);
+            if (method === "回车") await user.keyboard("{Enter}");
+            else await user.click(screen.getByRole("button", { name: "发送消息" }));
+        }
+        expect(await screen.findByText("发送成功")).toBeInTheDocument();
+        expect(runChatAgent).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(runChatAgent).mock.calls[0]![0].history).toEqual([
+            expect.objectContaining({ role: "user", content: question }),
+        ]);
+    });
+
     it("刷新后恢复附件消息与失败回答时不会产生空正文或把失败当成功", async () => {
         sessionStorage.setItem(
             "zm-ai-chat:staff:staff:1",
