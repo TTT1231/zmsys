@@ -57,13 +57,13 @@ export const DEFAULT_AI_MODEL = "deepseek-flash";
 /** 对话代理限制（DTO 之外的服务端兜底）：
  *  - timeoutMs 45s 同时是非流式/流式的上游时限，须小于恢复维护的写排空窗 60s
  *    （system.service.ts DRAIN_TIMEOUT_MS），在途 AI 请求不会阻塞恢复；
- *  - maxMessages × messageMaxChars 是字符数限制；JSON 字节体积仍受 Fastify 默认
+ *  - maxMessages × messageMaxChars（40 条，容纳工具调用循环）是字符数限制；JSON 字节体积仍受 Fastify 默认
  *    1MiB bodyLimit 约束（超限 413），异常转义编码可放大体积，故不承诺由字符数
  *    推导的字节上限。 */
 export const AI_CHAT_LIMITS = {
     timeoutMs: 45_000,
     messageMaxChars: 16_000,
-    maxMessages: 20,
+    maxMessages: 40,
     /** 上游补全输出上限（控制单请求成本） */
     maxCompletionTokens: 4096,
 } as const;

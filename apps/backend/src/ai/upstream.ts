@@ -9,9 +9,19 @@ export interface ProviderRuntimeConfig {
     enabled: boolean;
 }
 
-/** 上游 /chat/completions 的最小响应结构（非流式） */
+/** 上游 /chat/completions 的最小响应结构（非流式；含工具调用） */
 export interface UpstreamChatPayload {
-    choices?: Array<{ message?: { content?: string }; finish_reason?: string | null }>;
+    choices?: Array<{
+        message?: {
+            content?: string | null;
+            tool_calls?: Array<{
+                id?: string;
+                type?: string;
+                function?: { name?: string; arguments?: string };
+            }>;
+        };
+        finish_reason?: string | null;
+    }>;
     usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
 }
 
@@ -49,19 +59,22 @@ export function upstreamFailureMessage(error: unknown): string {
     return `AI 上游连接失败：${error instanceof Error ? error.message : String(error)}`;
 }
 
-/** 上游 usage 数字段；usage 整体缺失时返回 null（区别于「真 0」——缺失由调用方按
- *  用量未知落账标注，不得当作确定零）。total 缺失时按 prompt+completion 补齐。 */
+/** 只接受非负安全整数；缺失或无效字段不视为已知的零。两项明细齐全时可推导 total。 */
 export function normalizeUsage(raw: UpstreamChatPayload["usage"] | undefined): AiChatUsage | null {
-    if (!raw) {
+    const tokenCount = (value: unknown): number | null =>
+        typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+    const prompt = tokenCount(raw?.prompt_tokens);
+    const completion = tokenCount(raw?.completion_tokens);
+    const total = tokenCount(raw?.total_tokens);
+    if (prompt === null && completion === null && total === null) {
         return null;
     }
-    const promptTokens = Math.max(0, Number(raw.prompt_tokens ?? 0) || 0);
-    const completionTokens = Math.max(0, Number(raw.completion_tokens ?? 0) || 0);
-    const total = Number(raw.total_tokens ?? 0);
+    const sum = (prompt ?? 0) + (completion ?? 0);
     return {
-        promptTokens,
-        completionTokens,
-        totalTokens: total > 0 ? total : promptTokens + completionTokens,
+        status: prompt !== null && completion !== null && (total === null || total === sum) ? "known" : "partial",
+        promptTokens: prompt ?? 0,
+        completionTokens: completion ?? 0,
+        totalTokens: Math.max(total ?? 0, sum),
     };
 }
 

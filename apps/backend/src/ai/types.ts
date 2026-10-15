@@ -88,9 +88,18 @@ export interface DeletedRecordPage {
 // ---------- 对话代理 ----------
 
 export interface AiChatUsage {
+    /** 缺失字段的数值为兼容占位；统计完整性由 status 表示，不能把未知当作确定零。 */
+    status: "known" | "partial" | "unknown";
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
+}
+
+/** 工具调用意图（OpenAI 兼容透传形态；前端 agent 编排执行后以 role=tool 消息回传） */
+export interface AiToolCall {
+    id: string;
+    type: "function";
+    function: { name: string; arguments: string };
 }
 
 /** POST /ai/chat（非流式信封返回）；流式走 /ai/chat/stream 的 SSE 直通（不走信封） */
@@ -99,6 +108,8 @@ export interface AiChatResult {
     model: string;
     finishReason: string | null;
     usage: AiChatUsage;
+    /** 上游决定调用工具时非空（与 content 互斥或并存）；流式响应经 SSE 帧透传 */
+    toolCalls?: AiToolCall[];
 }
 
 /** GET /ai/status：AI 面板状态点（不探测上游，只看本地配置态） */

@@ -1530,7 +1530,7 @@ paths:
                 登录即可（@AuthenticatedOnly）。读 AI 工作台单行配置转发 OpenAI 兼容上游
                 （固定 max_tokens 4096、超时 45s），按登录人记一行 ai_usage_log。未配置或
                 未启用返回 503（文案引导联系超管）；上游失败返回 502。不带 Idempotency-Key
-                ——重试即新请求新计费。请求体上限 20 条 × 16k 字符（字符数限制；
+                ——重试即新请求新计费。请求体上限 40 条 × 16k 字符（含工具调用循环消息；字符数限制；
                 JSON 字节体积仍受 Fastify 默认 1MiB bodyLimit 约束，超限 413）。
             requestBody:
                 required: true
@@ -1562,12 +1562,13 @@ paths:
             operationId: aiChatStream
             summary: AI 对话（流式 SSE 直通）
             description: |
-                登录即可。请求体与 /ai/chat 相同（20 条 × 16k 字符，字符数限制；字节体积
+                登录即可。请求体与 /ai/chat 相同（40 条 × 16k 字符，含工具调用循环；字符数限制；字节体积
                 受 Fastify 默认 1MiB bodyLimit 约束，超限 413）；响应为 text/event-stream
                 直通上游（不走 {code,data,message} 信封），请求带 stream_options.include_usage，
-                末尾 usage 帧由后端捕获记账。响应头发出前上游失败返回 502 信封；发出后
+                末尾 usage 帧由后端捕获记账，并在 [DONE] 前发出 event: usage（data 为 AiChatUsage，
+                status 区分 known/partial/unknown）。响应头发出前上游失败返回 502 信封；发出后
                 失败以 SSE `event: error`（data 为 {message}）收尾。客户端断线即中止上游
-                并按 error 记账（用量未知）。上游时限 45s（低于恢复排空窗 60s）。
+                并按 error 记账；已取得的用量保留，缺失或部分未知时写注记。上游时限 45s（低于恢复排空窗 60s）。
             requestBody:
                 required: true
                 content:
@@ -2981,13 +2982,70 @@ components:
                 messages:
                     type: array
                     minItems: 1
-                    maxItems: 20
+                    maxItems: 40
+                    description: 多轮对话 + 工具调用循环（assistant 携带 tool_calls、tool 回传结果）；上限 40 条 × 16k 字符（字符数限制，字节体积受 1MiB bodyLimit 约束，超限 413）
                     items:
                         type: object
-                        required: [role, content]
+                        required: [role]
                         properties:
-                            role: { type: string, enum: [system, user, assistant] }
-                            content: { type: string, minLength: 1, maxLength: 16000 }
+                            role: { type: string, enum: [system, user, assistant, tool] }
+                            content:
+                                description: 正文；assistant 带 tool_calls 时可省略；仅 user 支持文本与图片数组，总文本最多 16000 字符
+                                oneOf:
+                                    - { type: string, maxLength: 16000 }
+                                    - type: array
+                                      minItems: 1
+                                      maxItems: 6
+                                      items:
+                                          oneOf:
+                                              - type: object
+                                                required: [type, text]
+                                                properties:
+                                                    type: { const: text }
+                                                    text: { type: string, maxLength: 16000 }
+                                              - type: object
+                                                required: [type, image_url]
+                                                properties:
+                                                    type: { const: image_url }
+                                                    image_url:
+                                                        type: object
+                                                        required: [url]
+                                                        properties:
+                                                            url: { type: string, maxLength: 180000, pattern: '^data:image/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$' }
+                            tool_calls:
+                                type: array
+                                maxItems: 16
+                                description: role=assistant 的工具调用意图（上游产物原样回传）
+                                items:
+                                    type: object
+                                    required: [id, type, function]
+                                    properties:
+                                        id: { type: string, maxLength: 64 }
+                                        type: { type: string, const: function }
+                                        function:
+                                            type: object
+                                            required: [name]
+                                            properties:
+                                                name: { type: string, maxLength: 64 }
+                                                arguments: { type: string, maxLength: 16000, description: 工具参数 JSON 字符串 }
+                            tool_call_id: { type: string, maxLength: 64, description: role=tool 时对应的调用 id }
+                tools:
+                    type: array
+                    maxItems: 16
+                    description: 可注册的 function 工具目录（JSON Schema 参数定义原样透传）；省略则纯对话
+                    items:
+                        type: object
+                        required: [type, function]
+                        properties:
+                            type: { type: string, const: function }
+                            function:
+                                type: object
+                                required: [name]
+                                properties:
+                                    name: { type: string, maxLength: 64 }
+                                    description: { type: string, maxLength: 1024 }
+                                    parameters: { type: object, description: JSON Schema }
+                tool_choice: { description: "auto / none / required / {type:function,function:{name}}，原样透传" }
         AiChatResultEnvelope:
             allOf:
                 - $ref: "#/components/schemas/Envelope"
@@ -3001,10 +3059,26 @@ components:
                 model: { type: string }
                 finishReason: { type: [string, "null"] }
                 usage: { $ref: "#/components/schemas/AiChatUsage" }
+                toolCalls:
+                    type: array
+                    description: 上游决定调用工具时非空（流式经 SSE 帧透传 tool_call_chunks）
+                    items:
+                        type: object
+                        required: [id, type, function]
+                        properties:
+                            id: { type: string }
+                            type: { type: string, const: function }
+                            function:
+                                type: object
+                                required: [name, arguments]
+                                properties:
+                                    name: { type: string }
+                                    arguments: { type: string, description: 工具参数 JSON 字符串 }
         AiChatUsage:
             type: object
-            required: [promptTokens, completionTokens, totalTokens]
+            required: [status, promptTokens, completionTokens, totalTokens]
             properties:
+                status: { type: string, enum: [known, partial, unknown], description: 用量完整性；缺失字段的 0 只是兼容占位 }
                 promptTokens: { type: integer, minimum: 0 }
                 completionTokens: { type: integer, minimum: 0 }
                 totalTokens: { type: integer, minimum: 0 }

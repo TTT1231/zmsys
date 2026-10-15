@@ -105,8 +105,14 @@ export class AiAgentService {
     async listVoidedOutbound(query: VoidedOutboundQueryDto): Promise<VoidedOutboundPage> {
         const where = {
             state: "VOIDED" as const,
-            ...(query.orderNo ? { order: { orderNo: query.orderNo } } : {}),
-            ...(query.bomCode ? { order: { bom: { bomCode: query.bomCode } } } : {}),
+            ...(query.orderNo || query.bomCode
+                ? {
+                      order: {
+                          ...(query.orderNo ? { orderNo: query.orderNo } : {}),
+                          ...(query.bomCode ? { bom: { bomCode: query.bomCode } } : {}),
+                      },
+                  }
+                : {}),
             ...(query.keyword
                 ? {
                       OR: [

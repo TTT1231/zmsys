@@ -387,6 +387,19 @@ describe("AI 助手 (e2e)", () => {
 
     // ---------- 已删除审计 ----------
 
+    it("作废出库：订单号和 BOM 同时筛选时都必须匹配", async () => {
+        const matching = await get(`/ai/agent/voided/outbound?orderNo=${orderNo}&bomCode=${bomCode}`, superToken);
+        expect(matching.statusCode).toBe(200);
+        expect(
+            (matching.body.data as { items: Array<{ shipmentNo: string }> }).items.some(
+                row => row.shipmentNo === shipmentNo,
+            ),
+        ).toBe(true);
+        const mismatch = await get(`/ai/agent/voided/outbound?orderNo=ORDER_OTHER&bomCode=${bomCode}`, superToken);
+        expect(mismatch.statusCode).toBe(200);
+        expect(mismatch.body.data).toEqual({ items: [], total: 0 });
+    });
+
     it("已删除：delete_customer 快照可查，detail 为结构化快照", async () => {
         const res = await get(`/ai/agent/deleted?domain=customer&keyword=${customerCode}`, superToken);
         expect(res.statusCode).toBe(200);
@@ -508,6 +521,42 @@ describe("AI 助手 (e2e)", () => {
 
     // ---------- 对话代理 ----------
 
+    it("对话代理透传工具定义、工具调用和工具结果", async () => {
+        const messages = [
+            { role: "user", content: "ping" },
+            {
+                role: "assistant",
+                content: "",
+                tool_calls: [{ id: "call_1", type: "function", function: { name: "listOrders", arguments: "{}" } }],
+            },
+            { role: "tool", tool_call_id: "call_1", content: "[]" },
+        ];
+        const tools = [
+            { type: "function", function: { name: "listOrders", parameters: { type: "object", properties: {} } } },
+        ];
+        const result = await post(
+            "/ai/chat",
+            superToken,
+            { messages, tools, tool_choice: "auto" },
+            `ai-e2e-tools-${RUN}`,
+        );
+        expect(result.statusCode).toBe(200);
+        expect(lastUpstreamBody).toMatchObject({ messages, tools, tool_choice: "auto" });
+    });
+
+    it("HTTP 消息上限统一为 40 条，字节体积仍独立限制为 1MiB", async () => {
+        const messages = Array.from({ length: 40 }, () => ({ role: "user", content: "ping" }));
+        expect((await post("/ai/chat", superToken, { messages }, `ai-e2e-limit40-${RUN}`)).statusCode).toBe(200);
+        expect(
+            (await post("/ai/chat", superToken, { messages: [...messages, messages[0]] }, `ai-e2e-limit41-${RUN}`))
+                .statusCode,
+        ).toBe(400);
+        const oversized = Array.from({ length: 40 }, () => ({ role: "user", content: "中".repeat(16_000) }));
+        expect(
+            (await post("/ai/chat", superToken, { messages: oversized }, `ai-e2e-limit-bytes-${RUN}`)).statusCode,
+        ).toBe(413);
+    });
+
     it("非流式对话（staff）：转发参数正确、usage 记账归属 staff", async () => {
         lastUpstreamBody = null;
         const res = await post(
@@ -560,6 +609,7 @@ describe("AI 助手 (e2e)", () => {
         );
         expect(res.statusCode).toBe(200);
         expect((res.body.data as { usage: { totalTokens: number } }).usage.totalTokens).toBe(0);
+        expect((res.body.data as { usage: { status: string } }).usage.status).toBe("unknown");
         const unknownRow = await prisma.aiUsageLog.findFirst({
             where: { status: "success", errorMessage: { contains: "用量未知" } },
         });
