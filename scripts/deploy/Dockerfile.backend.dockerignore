@@ -14,3 +14,8 @@
 !packages/**
 !internal
 !internal/**
+# AI agent 文档：GET /ai/agent/docs 运行时读取（父目录链先解除排除；
+# 内容需各自的 /** 递归放行——无 /** 的目录规则不匹配其下文件，同 apps/backend/** 先例）
+!docs
+!docs/ai/**
+!docs/business/**

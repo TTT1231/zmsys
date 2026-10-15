@@ -48,6 +48,10 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
 COPY apps/backend/prisma/migrations ./apps/backend/prisma/migrations
 COPY apps/backend/prisma/seed.ts ./apps/backend/prisma/seed.ts
 
+# AI agent 文档（后端 /ai/agent/docs* 按仓库布局读 ../../docs，容器内解析为 /app/docs）
+COPY docs/ai docs/ai
+COPY docs/business docs/business
+
 # 本地已构建产物（dist/generated 里带 prisma client，运行时无需再 generate）
 COPY apps/backend/dist ./apps/backend/dist
 

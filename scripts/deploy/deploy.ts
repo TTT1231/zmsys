@@ -114,6 +114,11 @@ const assembleStaging = (): void => {
     copy(join("apps", "backend", "prisma"), join("apps", "backend", "prisma"));
     copy(join("apps", "backend", "dist"), join("apps", "backend", "dist"));
 
+    // AI agent 文档（GET /ai/agent/docs 运行时读 <cwd>/../../docs，容器内即 /app/docs）：
+    // 只带注册表引用的两个子目录，openapi/基线等开发契约不进运行镜像
+    copy(join("docs", "ai"), join("docs", "ai"));
+    copy(join("docs", "business"), join("docs", "business"));
+
     // frontend 静态产物
     copy(join("apps", "frontend", "dist"), join("apps", "frontend", "dist"));
 };

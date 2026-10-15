@@ -53,6 +53,8 @@ tags:
       description: 应用内数据库备份/恢复（默认仅超管，可解锁下放；含恢复任务查询）
     - name: system-logs
       description: 系统日志时间线聚合（默认仅超管，可在角色与权限授予其他角色）
+    - name: ai
+      description: AI 助手——agent 只读查询与按需文档、对话代理（后端转发+按人 token 记账）、AI 工作台配置与用量（受保护 menu:ai-workbench，默认仅超管，可解锁下放）
     - name: health
       description: 存活/就绪探针（无鉴权，供编排系统与冒烟脚本）
 
@@ -1079,7 +1081,7 @@ paths:
                 - name: domain
                   in: query
                   required: false
-                  schema: { type: string, enum: [customer, order, bom, inbound, outbound] }
+                  schema: { type: string, enum: [customer, order, bom, bom_structure, inbound, outbound] }
                 - name: action
                   in: query
                   required: false
@@ -1350,6 +1352,357 @@ paths:
                     content:
                         application/json:
                             schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+    /ai/agent/docs:
+        get:
+            tags: [ai]
+            operationId: getAiAgentDocs
+            summary: agent 文档清单（manifest）
+            description: |
+                登录即可（@AuthenticatedOnly）。返回根文档正文 root（常驻注入 system prompt，
+                含系统概览与「用户问什么 → 读哪篇」任务路由）与主题清单；主题正文按
+                GET /ai/agent/docs/{topicId} 按需拉取。文档正文单一归属在仓库 docs/
+                （docs/ai/ 三篇 + docs/business/ 复用三篇），不复制本契约的参数细节。
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/AiDocsManifestEnvelope" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "503": { $ref: "#/components/responses/Maintenance" }
+
+    /ai/agent/docs/{topicId}:
+        get:
+            tags: [ai]
+            operationId: getAiAgentDocTopic
+            summary: agent 单篇主题文档
+            description: |
+                登录即可。topicId 见 manifest：endpoints（查询端点目录与口径）、operations
+                （操作指南与前置条件）、process（业务流程）、roles（角色与权限）、analytics
+                （关系数据口径）。未知 topicId 返回 404。
+            parameters:
+                - name: topicId
+                  in: path
+                  required: true
+                  schema: { type: string, enum: [endpoints, operations, process, roles, analytics] }
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/AiDocContentEnvelope" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "404": { $ref: "#/components/responses/NotFound" }
+                "503": { $ref: "#/components/responses/Maintenance" }
+
+    /ai/agent/voided/inbound:
+        get:
+            tags: [ai]
+            operationId: listAiVoidedInbound
+            summary: 作废入库数据查询（agent）
+            description: |
+                权限 `inbound:view`（agent 与登录用户同权）。只返回 status=VOIDED 的入库
+                台账行，附作废人/作废时间/作废原因（取该单最后一条 VOID 变更日志，与删除
+                快照同源口径）；total 一并返回，超过 limit 时用 bomCode/keyword 收敛。
+                全量含作废的台账仍走 GET /inbound。
+            parameters:
+                - name: bomCode
+                  in: query
+                  required: false
+                  schema: { type: string, minLength: 1, maxLength: 32, description: BOM 编号精确匹配 }
+                - name: keyword
+                  in: query
+                  required: false
+                  schema: { type: string, minLength: 1, maxLength: 64, pattern: "^[!-~]+$", description: 关键词 LIKE（入库单号/BOM 编号；可打印 ASCII） }
+                - name: limit
+                  in: query
+                  required: false
+                  schema: { type: integer, minimum: 1, maximum: 200, default: 100 }
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/AiVoidedInboundPageEnvelope" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "503": { $ref: "#/components/responses/Maintenance" }
+
+    /ai/agent/voided/outbound:
+        get:
+            tags: [ai]
+            operationId: listAiVoidedOutbound
+            summary: 作废出库数据查询（agent）
+            description: |
+                权限 `outbound:view`（agent 与登录用户同权）。只返回 state=VOIDED 的出库单，
+                附单头作废三字段（voidedBy/voidedAt/voidReason）；客户/BOM 名称用下单时冻结
+                的订单快照。全量含作废的出库列表仍走 GET /outbound。
+            parameters:
+                - name: orderNo
+                  in: query
+                  required: false
+                  schema: { type: string, minLength: 1, maxLength: 24, description: 订单号精确匹配 }
+                - name: bomCode
+                  in: query
+                  required: false
+                  schema: { type: string, minLength: 1, maxLength: 32, description: BOM 编号精确匹配 }
+                - name: keyword
+                  in: query
+                  required: false
+                  schema: { type: string, minLength: 1, maxLength: 64, pattern: "^[!-~]+$", description: 关键词 LIKE（出库单号/订单号；可打印 ASCII） }
+                - name: limit
+                  in: query
+                  required: false
+                  schema: { type: integer, minimum: 1, maximum: 200, default: 100 }
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/AiVoidedOutboundPageEnvelope" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "503": { $ref: "#/components/responses/Maintenance" }
+
+    /ai/agent/deleted:
+        get:
+            tags: [ai]
+            operationId: listAiDeleted
+            summary: 已删除数据查询（op_log delete_* 快照，agent）
+            description: |
+                权限 `system-logs:view`（普通可授权码，默认仅超管持有，可在「角色与权限」
+                直接授予）。2026-10 起订单/出入库/BOM/客户删除均为物理删除，op_log 的
+                delete_* 快照是唯一留存；本端点返回原始 detail（删除前全量快照，区别于
+                GET /system-logs 的中文投影）。快照按保护口径不含手机号明文，但含
+                ownerAccount/createdBy 等账号名。分批为 (occurredAt,id) 复合游标
+                （加载更多语义，非翻页）；时间范围口径与 /system-logs 一致（北京日界）。
+            parameters:
+                - name: domain
+                  in: query
+                  required: false
+                  schema: { type: string, enum: [customer, order, bom, bom_structure, inbound, outbound] }
+                - name: keyword
+                  in: query
+                  required: false
+                  schema: { type: string, minLength: 1, maxLength: 64, pattern: "^[!-~]+$", description: 关键词 LIKE（目标编号；可打印 ASCII） }
+                - name: range
+                  in: query
+                  required: false
+                  schema: { type: string, enum: [today, 7d, 30d, custom], default: 30d }
+                - name: from
+                  in: query
+                  required: false
+                  schema: { type: string, format: date, description: range=custom 必填，包含当日 }
+                - name: to
+                  in: query
+                  required: false
+                  schema: { type: string, format: date, description: range=custom 必填，包含当日 }
+                - name: limit
+                  in: query
+                  required: false
+                  schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+                - name: beforeAt
+                  in: query
+                  required: false
+                  schema: { type: string, description: 游标——上一批末条 occurredAt（ISO 时刻） }
+                - name: beforeId
+                  in: query
+                  required: false
+                  schema: { type: string, pattern: "^[0-9]+$", description: 游标——上一批末条雪花 id（十进制串） }
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/AiDeletedPageEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "503": { $ref: "#/components/responses/Maintenance" }
+
+    /ai/chat:
+        post:
+            tags: [ai]
+            operationId: aiChat
+            summary: AI 对话（非流式，后端代理转发）
+            description: |
+                登录即可（@AuthenticatedOnly）。读 AI 工作台单行配置转发 OpenAI 兼容上游
+                （固定 max_tokens 4096、超时 45s），按登录人记一行 ai_usage_log。未配置或
+                未启用返回 503（文案引导联系超管）；上游失败返回 502。不带 Idempotency-Key
+                ——重试即新请求新计费。请求体上限 20 条 × 16k 字符（字符数限制；
+                JSON 字节体积仍受 Fastify 默认 1MiB bodyLimit 约束，超限 413）。
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/AiChatInput" }
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/AiChatResultEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "502":
+                    description: 上游失败
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+                "503":
+                    description: 未配置/未启用，或恢复维护中
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+    /ai/chat/stream:
+        post:
+            tags: [ai]
+            operationId: aiChatStream
+            summary: AI 对话（流式 SSE 直通）
+            description: |
+                登录即可。请求体与 /ai/chat 相同（20 条 × 16k 字符，字符数限制；字节体积
+                受 Fastify 默认 1MiB bodyLimit 约束，超限 413）；响应为 text/event-stream
+                直通上游（不走 {code,data,message} 信封），请求带 stream_options.include_usage，
+                末尾 usage 帧由后端捕获记账。响应头发出前上游失败返回 502 信封；发出后
+                失败以 SSE `event: error`（data 为 {message}）收尾。客户端断线即中止上游
+                并按 error 记账（用量未知）。上游时限 45s（低于恢复排空窗 60s）。
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/AiChatInput" }
+            responses:
+                "200":
+                    description: "SSE 流（data: {...} 增量帧 + data: [DONE]；错误时 event: error）"
+                    content:
+                        text/event-stream:
+                            schema: { type: string }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "502":
+                    description: 上游失败（响应头未发出时）
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+                "503":
+                    description: 未配置/未启用，或恢复维护中
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+    /ai/status:
+        get:
+            tags: [ai]
+            operationId: aiStatus
+            summary: AI 服务状态（面板状态点）
+            description: |
+                登录即可。只看本地配置态（enabled/configured/model），不探测上游；
+                供 AI 面板状态点展示。configured = baseUrl 与 apiKey 均已配置。
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/AiStatusEnvelope" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "503": { $ref: "#/components/responses/Maintenance" }
+
+    /ai/admin/settings:
+        get:
+            tags: [ai]
+            operationId: getAiSettings
+            summary: AI 工作台配置读取
+            description: |
+                受保护权限 `menu:ai-workbench`，默认仅 super（可解锁下放后授予其他角色；
+                与前端菜单同码，解锁后页面/API 一致生效）。api_key 永不透出原文，
+                只返回 apiKeySet 与脱敏 apiKeyMasked。
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/AiSettingsViewEnvelope" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+        put:
+            tags: [ai]
+            operationId: updateAiSettings
+            summary: AI 工作台配置保存（部分更新）
+            description: |
+                受保护权限 `menu:ai-workbench`。省略字段保持原值；apiKey 空串 = 显式清除；
+                首次配置必须给 baseUrl + apiKey（否则 400）。变更与业务行同事务写
+                op_log(update_ai_config) 审计——快照脱敏，只记变更字段名/启用态/host/模型，
+                绝不写入 key 内容。
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema: { $ref: "#/components/schemas/AiSettingsUpdateInput" }
+            responses:
+                "200":
+                    description: 保存后的配置视图（同 GET）
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/AiSettingsViewEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "503": { $ref: "#/components/responses/Maintenance" }
+
+    /ai/admin/test:
+        post:
+            tags: [ai]
+            operationId: testAiConnection
+            summary: AI 上游连通测试
+            description: |
+                受保护权限 `menu:ai-workbench`。以 max_tokens=1 的最小补全探测已保存配置
+                （15s 超时）；诊断请求不写 ai_usage_log。未保存 baseUrl+apiKey 时 400。
+                ok=false 时 message 携带上游状态码或网络错误摘要。
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/AiTestResultEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "503": { $ref: "#/components/responses/Maintenance" }
+
+    /ai/admin/usage:
+        get:
+            tags: [ai]
+            operationId: getAiUsage
+            summary: AI 用量统计（按人/按日聚合）
+            description: |
+                受保护权限 `menu:ai-workbench`。按人聚合（账号/姓名/角色/请求数/三类 token/
+                最近使用，按 totalTokens 降序）+ 汇总 + 按日趋势（北京日界）。失败请求计入
+                requests 但 token 记 0（用量未知，见 error 口径）。
+            parameters:
+                - name: range
+                  in: query
+                  required: false
+                  schema: { type: string, enum: [today, 7d, 30d, custom], default: 30d }
+                - name: from
+                  in: query
+                  required: false
+                  schema: { type: string, format: date, description: range=custom 必填，包含当日 }
+                - name: to
+                  in: query
+                  required: false
+                  schema: { type: string, format: date, description: range=custom 必填，包含当日 }
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/AiUsageSummaryEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "503": { $ref: "#/components/responses/Maintenance" }
 
 components:
     securitySchemes:
@@ -2441,7 +2794,7 @@ components:
                     properties:
                         name: { type: string, description: 操作人姓名（op_log 来源为快照；其余来源为当前姓名） }
                         role: { type: string, description: 角色 code（super/admin/warehouse/sales/staff） }
-                domain: { type: string, enum: [customer, order, bom, inbound, outbound] }
+                domain: { type: string, enum: [customer, order, bom, bom_structure, inbound, outbound] }
                 action: { type: string, enum: [create, edit, transfer, archive, unarchive, delete, void, ship, adjust] }
                 targetCode: { type: string, description: 订单号/客户编码/BOM 编码/单号 }
                 targetName: { type: [string, "null"], description: 目标名称快照；无名称路径的事件为 null }
@@ -2507,3 +2860,243 @@ components:
                 - $ref: "#/components/schemas/Envelope"
                 - type: object
                   properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/HealthStatus" }, message: { const: ok } }
+        AiDocsManifestEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/AiDocsManifest" }, message: { const: ok } }
+        AiDocsManifest:
+            type: object
+            required: [root, topics]
+            properties:
+                root: { type: string, description: 根文档 markdown 正文（常驻注入 system prompt） }
+                topics: { type: array, items: { $ref: "#/components/schemas/AiDocTopicMeta" } }
+        AiDocTopicMeta:
+            type: object
+            required: [id, title, whenToUse]
+            properties:
+                id: { type: string, enum: [endpoints, operations, process, roles, analytics] }
+                title: { type: string }
+                whenToUse: { type: string, description: 何时读这篇（任务路由提示） }
+        AiDocContentEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/AiDocContent" }, message: { const: ok } }
+        AiDocContent:
+            type: object
+            required: [id, title, markdown]
+            properties:
+                id: { type: string }
+                title: { type: string }
+                markdown: { type: string }
+        AiVoidedInboundPageEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/AiVoidedInboundPage" }, message: { const: ok } }
+        AiVoidedInboundPage:
+            type: object
+            required: [items, total]
+            properties:
+                items: { type: array, items: { $ref: "#/components/schemas/AiVoidedInboundItem" } }
+                total: { type: integer, description: 筛选条件下的作废总数（不受 limit 截断） }
+        AiVoidedInboundItem:
+            type: object
+            required: [id, entryNo, bomCode, bomName, qty, businessDate, remark, status, voidedBy, voidedAt, voidReason]
+            properties:
+                id: { type: string, pattern: "^[0-9]+$" }
+                entryNo: { type: string }
+                bomCode: { type: string }
+                bomName: { type: string, description: 品类名（bom.category.name） }
+                qty: { type: integer, minimum: 1 }
+                businessDate: { type: string, format: date }
+                remark: { type: string }
+                status: { type: string, const: voided }
+                voidedBy: { type: string, description: 作废人姓名（最后一条 VOID 日志操作人） }
+                voidedAt: { type: string, format: date-time }
+                voidReason: { type: [string, "null"], description: 作废原因（无 VOID 日志时为 null） }
+        AiVoidedOutboundPageEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/AiVoidedOutboundPage" }, message: { const: ok } }
+        AiVoidedOutboundPage:
+            type: object
+            required: [items, total]
+            properties:
+                items: { type: array, items: { $ref: "#/components/schemas/AiVoidedOutboundItem" } }
+                total: { type: integer }
+        AiVoidedOutboundItem:
+            type: object
+            required: [id, shipmentNo, orderNo, customerName, bomCode, bomName, qty, businessDate, status, voidedBy, voidedAt, voidReason]
+            properties:
+                id: { type: string, pattern: "^[0-9]+$" }
+                shipmentNo: { type: string }
+                orderNo: { type: string }
+                customerName: { type: string, description: 下单时冻结的客户名快照 }
+                bomCode: { type: string }
+                bomName: { type: string, description: 下单时冻结的成品名快照 }
+                qty: { type: integer, minimum: 1, description: 出库数量（original_qty） }
+                businessDate: { type: string, format: date }
+                status: { type: string, const: voided }
+                voidedBy: { type: string }
+                voidedAt: { type: string, format: date-time }
+                voidReason: { type: [string, "null"] }
+        AiDeletedPageEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/AiDeletedPage" }, message: { const: ok } }
+        AiDeletedPage:
+            type: object
+            required: [items, nextCursor]
+            properties:
+                items: { type: array, items: { $ref: "#/components/schemas/AiDeletedRecordItem" } }
+                nextCursor:
+                    oneOf:
+                        - $ref: "#/components/schemas/SystemLogCursor"
+                        - value: { type: "null" }
+                    description: 取本批末条；还有下一批时非空，否则 null（与 /system-logs 同款复合游标）
+        AiDeletedRecordItem:
+            type: object
+            required: [id, occurredAt, action, domain, targetCode, operator, detail]
+            properties:
+                id: { type: string, pattern: "^[0-9]+$" }
+                occurredAt: { type: string, format: date-time }
+                action: { type: string, enum: [delete_order, delete_inbound, delete_outbound, delete_bom, delete_customer, delete_bom_category] }
+                domain: { type: string, enum: [customer, order, bom, bom_structure, inbound, outbound] }
+                targetCode: { type: string, description: 订单号/单号/编码 }
+                operator:
+                    type: object
+                    required: [name, role]
+                    properties:
+                        name: { type: string, description: 操作人姓名快照 }
+                        role: { type: string, description: 角色 code 快照 }
+                detail: { description: 删除前全量快照（结构因动作而异，见 src/domain/snapshots.ts；不含手机号明文） }
+        AiChatInput:
+            type: object
+            required: [messages]
+            properties:
+                messages:
+                    type: array
+                    minItems: 1
+                    maxItems: 20
+                    items:
+                        type: object
+                        required: [role, content]
+                        properties:
+                            role: { type: string, enum: [system, user, assistant] }
+                            content: { type: string, minLength: 1, maxLength: 16000 }
+        AiChatResultEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/AiChatResult" }, message: { const: ok } }
+        AiChatResult:
+            type: object
+            required: [content, model, finishReason, usage]
+            properties:
+                content: { type: string }
+                model: { type: string }
+                finishReason: { type: [string, "null"] }
+                usage: { $ref: "#/components/schemas/AiChatUsage" }
+        AiChatUsage:
+            type: object
+            required: [promptTokens, completionTokens, totalTokens]
+            properties:
+                promptTokens: { type: integer, minimum: 0 }
+                completionTokens: { type: integer, minimum: 0 }
+                totalTokens: { type: integer, minimum: 0 }
+        AiStatusEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/AiStatus" }, message: { const: ok } }
+        AiStatus:
+            type: object
+            required: [enabled, configured, model]
+            properties:
+                enabled: { type: boolean }
+                configured: { type: boolean, description: baseUrl 与 apiKey 均已配置 }
+                model: { type: string }
+        AiSettingsViewEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/AiSettingsView" }, message: { const: ok } }
+        AiSettingsView:
+            type: object
+            required: [baseUrl, model, enabled, apiKeySet, apiKeyMasked, updatedAt, updatedByName]
+            properties:
+                baseUrl: { type: string }
+                model: { type: string }
+                enabled: { type: boolean }
+                apiKeySet: { type: boolean, description: 是否已配置 key }
+                apiKeyMasked: { type: [string, "null"], description: 脱敏（如 sk-••••abcd）；未配置为 null }
+                updatedAt: { type: [string, "null"], format: date-time }
+                updatedByName: { type: [string, "null"] }
+        AiSettingsUpdateInput:
+            type: object
+            description: 部分更新——省略保持原值；apiKey 空串=清除；首次配置 baseUrl+apiKey 必填
+            properties:
+                baseUrl: { type: string, minLength: 1, maxLength: 255, pattern: "^https?://", description: OpenAI 兼容上游服务地址（http/https） }
+                apiKey: { type: string, minLength: 0, maxLength: 512 }
+                model: { type: string, minLength: 1, maxLength: 64 }
+                enabled: { type: boolean }
+        AiTestResultEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/AiTestResult" }, message: { const: ok } }
+        AiTestResult:
+            type: object
+            required: [ok, latencyMs, message, model]
+            properties:
+                ok: { type: boolean }
+                latencyMs: { type: integer, minimum: 0 }
+                message: { type: string }
+                model: { type: [string, "null"] }
+        AiUsageSummaryEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/AiUsageSummary" }, message: { const: ok } }
+        AiUsageSummary:
+            type: object
+            required: [from, to, totals, users, byDay]
+            properties:
+                from: { type: string, format: date-time, description: 窗口起点（UTC 时刻，北京日界换算） }
+                to: { type: string, format: date-time, description: 窗口终点（不含） }
+                totals:
+                    type: object
+                    required: [requests, successRequests, errorRequests, promptTokens, completionTokens, totalTokens]
+                    properties:
+                        requests: { type: integer, minimum: 0 }
+                        successRequests: { type: integer, minimum: 0 }
+                        errorRequests: { type: integer, minimum: 0 }
+                        promptTokens: { type: integer, minimum: 0 }
+                        completionTokens: { type: integer, minimum: 0 }
+                        totalTokens: { type: integer, minimum: 0 }
+                users: { type: array, items: { $ref: "#/components/schemas/AiUsageUserRow" } }
+                byDay: { type: array, items: { $ref: "#/components/schemas/AiUsageDayRow" } }
+        AiUsageUserRow:
+            type: object
+            required: [userId, account, name, role, requests, promptTokens, completionTokens, totalTokens, lastUsedAt]
+            properties:
+                userId: { type: string, pattern: "^[0-9]+$" }
+                account: { type: string }
+                name: { type: string }
+                role: { type: string }
+                requests: { type: integer, minimum: 0 }
+                promptTokens: { type: integer, minimum: 0 }
+                completionTokens: { type: integer, minimum: 0 }
+                totalTokens: { type: integer, minimum: 0 }
+                lastUsedAt: { type: [string, "null"], format: date-time }
+        AiUsageDayRow:
+            type: object
+            required: [date, requests, totalTokens]
+            properties:
+                date: { type: string, description: 北京日期 yyyy-MM-dd }
+                requests: { type: integer, minimum: 0 }
+                totalTokens: { type: integer, minimum: 0 }
