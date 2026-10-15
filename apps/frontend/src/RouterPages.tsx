@@ -44,3 +44,6 @@ export const RestorePage = lazy(() => import("./pages/system/RestorePage").then(
 export const SystemLogsPage = lazy(() =>
     import("./pages/system-logs/SystemLogsPage").then(m => ({ default: m.SystemLogsPage })),
 );
+export const AiWorkbenchPage = lazy(() =>
+    import("./pages/ai/AiWorkbenchPage").then(m => ({ default: m.AiWorkbenchPage })),
+);

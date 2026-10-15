@@ -624,3 +624,68 @@ export interface RestoreJob {
     createdAt: string;
     finishedAt: string | null;
 }
+
+/* ---------- AI 工作台 / 对话代理（契约 ai tag） ---------- */
+
+export interface AiStatus {
+    enabled: boolean;
+    configured: boolean;
+    model: string;
+}
+
+export interface AiSettingsView {
+    baseUrl: string;
+    model: string;
+    enabled: boolean;
+    apiKeySet: boolean;
+    apiKeyMasked: string | null;
+    updatedAt: string | null;
+    updatedByName: string | null;
+}
+
+export interface AiSettingsUpdateInput {
+    baseUrl?: string;
+    apiKey?: string;
+    model?: string;
+    enabled?: boolean;
+}
+
+export interface AiTestResult {
+    ok: boolean;
+    latencyMs: number;
+    message: string;
+    model: string | null;
+}
+
+export interface AiUsageUserRow {
+    userId: string;
+    account: string;
+    name: string;
+    role: string;
+    requests: number;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    lastUsedAt: string | null;
+}
+
+export interface AiUsageDayRow {
+    date: string;
+    requests: number;
+    totalTokens: number;
+}
+
+export interface AiUsageSummary {
+    from: string;
+    to: string;
+    totals: {
+        requests: number;
+        successRequests: number;
+        errorRequests: number;
+        promptTokens: number;
+        completionTokens: number;
+        totalTokens: number;
+    };
+    users: AiUsageUserRow[];
+    byDay: AiUsageDayRow[];
+}

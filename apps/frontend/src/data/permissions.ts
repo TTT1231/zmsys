@@ -83,7 +83,7 @@ export const MENU_CATALOG: MenuNode[] = [
         onlyFor: ["warehouse"],
         note: "审计记录：业务创建、订单变更、入库修正、库存调整、出库作废及负责人移交均保留操作人与时间，不可删除、不可篡改。",
     },
-    /* 系统组：用户与权限、数据库备份与恢复为受保护菜单（默认仅超管，可解锁下放）；
+    /* 系统组：用户与权限、数据库备份与恢复、AI 工作台为受保护菜单（默认仅超管，可解锁下放）；
      * 系统日志为可授权菜单（默认仅超管，照分析页口径可在角色编辑器勾选授予） */
     {
         key: "permissions",
@@ -120,6 +120,15 @@ export const MENU_CATALOG: MenuNode[] = [
         icon: "log",
         group: "系统",
         to: "/system-logs",
+    },
+    /* AI 工作台：菜单级权限（menu:ai-workbench，同后端 AI 管理接口同码），不加操作码 */
+    {
+        key: "ai-workbench",
+        label: "AI 工作台",
+        icon: "spark",
+        group: "系统",
+        to: "/ai-workbench",
+        protected: true,
     },
 ];
 

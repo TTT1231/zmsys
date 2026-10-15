@@ -7,6 +7,7 @@ import { ErrorPage, RouterErrorPage } from "./pages/error/ErrorPage";
 /* 懒加载页面组件单独成文件(RouterPages.tsx):本文件还要导出 router 实例,
    混放组件定义会破坏 React Fast Refresh */
 import {
+    AiWorkbenchPage,
     AnalyticsPage,
     ArchivedOrdersPage,
     BackupPage,
@@ -63,6 +64,7 @@ export const router = createBrowserRouter([
                     { path: "/system/backup", element: <BackupPage /> },
                     { path: "/system/restore", element: <RestorePage /> },
                     { path: "/system-logs", element: <SystemLogsPage /> },
+                    { path: "/ai-workbench", element: <AiWorkbenchPage /> },
                     { path: "*", element: <ErrorPage kind="not-found" /> },
                 ],
             },

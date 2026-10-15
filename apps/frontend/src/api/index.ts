@@ -32,3 +32,4 @@ export {
 } from "./permissions";
 export { fetchBackupCatalog, runBackup, previewRestore, runRestore, fetchRestoreJobByKey } from "./system";
 export { fetchSystemLogs } from "./system-logs";
+export * from "./ai";
