@@ -1,0 +1,486 @@
+{
+    "limits": {
+        "timeoutMs": 45000,
+        "messageMaxChars": 16000,
+        "maxMessages": 40,
+        "maxCompletionTokens": 4096
+    },
+    "tools": [
+        {
+            "path": "/ai/agent/docs/{topicId}",
+            "title": "操作说明",
+            "permissions": [],
+            "pathParams": ["topicId"],
+            "tool": {
+                "type": "function",
+                "function": {
+                    "name": "getAiAgentDocTopic",
+                    "description": "agent 单篇主题文档。登录即可。topicId 见 manifest：endpoints（查询端点目录与口径）、operations （操作指南与前置条件）、process（业务流程）、roles（角色与权限）、analytics （关系数据口径）。未知 topicId 返回 404。 ",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "topicId": {
+                                "type": "string",
+                                "enum": ["endpoints", "operations", "process", "roles", "analytics"]
+                            }
+                        },
+                        "required": ["topicId"],
+                        "additionalProperties": false
+                    }
+                }
+            }
+        },
+        {
+            "path": "/workbench/overview",
+            "title": "工作台总览",
+            "permissions": ["menu:workbench"],
+            "pathParams": [],
+            "tool": {
+                "type": "function",
+                "function": {
+                    "name": "getWorkbenchOverview",
+                    "description": "工作台经营总览聚合。需菜单权限 `menu:workbench`（super 直通）。角色被收回「工作台」后返回 403， 前端登录改为落地其授权内第一个页面。返回工作台读模型：products 含 v_bom_stock 实时库存，orders 的 shipped 为 v_order_outbound_qty 净额（无流水订单缺行按 0）， movements 按业务日聚合有效入库与出库净额（含作废冲销）；库存调整计入库存 但不出现在出入库趋势。周期汇总、交付风险、客户排行与趋势分桶由前端派生。 ",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                        "additionalProperties": false
+                    }
+                }
+            }
+        },
+        {
+            "path": "/workbench/relations",
+            "title": "业务关系",
+            "permissions": ["menu:analytics", "menu:workbench"],
+            "pathParams": [],
+            "tool": {
+                "type": "function",
+                "function": {
+                    "name": "getWorkbenchRelations",
+                    "description": "分析页及 agent 共用的业务关系聚合。同时需要 menu:analytics 和 menu:workbench（super 直通），沿用 Bearer JWT。 返回可直接渲染的 nodes/edges；nodes.facts 为 agent 可计算的原始字段，properties 为中文展示字段。 单据、有效出库净额与当前库存在同一只读事务内顺序读取（READ COMMITTED，各语句独立快照）。 日期含首尾：订单按 orderDate，出入库按 businessDate；范围内出库引用的历史订单也保留。 status=all 时还纳入范围内仅有入库、没有订单的 BOM；指定 orderNo/customerCode 时不混入无关 BOM。 completed 表示累计有效出库 >= 订单数量，含已交满归档单；archived 表示归档，可能尚未交满，两组可重叠。 已删除订单/单据物理消失不返回；作废未删单据保留 voided 标记，qty 是原登记量，不是有效出库量。 order.facts.shipped 与 bom.facts.stock 为当前全生命周期净额（统一视图口径），不是区间流水合计或期末历史库存。 counts 为日期/编号条件下各状态订单数；typeCounts 为状态筛选后、类型筛选前的节点数。 summary 在类型筛选前计算，按单位分组；已归档订单 pendingQty=0，unshippedQty 仍保留历史未发量。 types 限定返回实体类型，边只在两端都返回时保留；facts 中被过滤的引用 ID 可以不出现在 nodes 中。 未传 start/end 不限日期，前端默认近30天。建议 agent 带日期或业务编号缩小范围。 过载保护：日期/编号条件下候选订单最多1000条，所选BOM最多1000条，入库/出库各最多1000条，类型筛选前关联节点最多1500个。 超限返回400并提示缩短日期或按业务编号查询，不截断成功数据或统计；候选订单上限覆盖所有状态，隐藏类型不绕过上限。 ",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "status": {
+                                "type": "string",
+                                "enum": ["open", "completed", "archived", "all"],
+                                "default": "open",
+                                "description": "订单范围；open 为未完成未归档。"
+                            },
+                            "start": {
+                                "type": "string",
+                                "format": "date"
+                            },
+                            "end": {
+                                "type": "string",
+                                "format": "date"
+                            },
+                            "types": {
+                                "type": "string",
+                                "example": "bom,customer,order",
+                                "description": "逗号分隔 bom/customer/order/inbound/outbound/person；不传为六类，空串为不显示任何类型。"
+                            },
+                            "orderNo": {
+                                "type": "string",
+                                "maxLength": 24,
+                                "description": "精确订单号。"
+                            },
+                            "bomCode": {
+                                "type": "string",
+                                "maxLength": 32
+                            },
+                            "customerCode": {
+                                "type": "string",
+                                "maxLength": 24
+                            }
+                        },
+                        "required": [],
+                        "additionalProperties": false
+                    }
+                }
+            }
+        },
+        {
+            "path": "/orders",
+            "title": "销售订单",
+            "permissions": ["orders:view"],
+            "pathParams": [],
+            "tool": {
+                "type": "function",
+                "function": {
+                    "name": "listOrders",
+                    "description": "销售订单列表。权限 `orders:view`。归档订单仍返回用于历史审计。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                        "additionalProperties": false
+                    }
+                }
+            }
+        },
+        {
+            "path": "/customers",
+            "title": "客户档案",
+            "permissions": ["customers:view"],
+            "pathParams": [],
+            "tool": {
+                "type": "function",
+                "function": {
+                    "name": "listCustomers",
+                    "description": "客户档案列表。权限 `customers:view`，仅 super/admin/sales。手机号只返回掩码；合作状态按近 6 个日历月的活动订单派生。完整手机号仅 GET /customers/{code}/phone 提供。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                        "additionalProperties": false
+                    }
+                }
+            }
+        },
+        {
+            "path": "/boms",
+            "title": "物料与 BOM",
+            "permissions": ["bom:view"],
+            "pathParams": [],
+            "tool": {
+                "type": "function",
+                "function": {
+                    "name": "listBoms",
+                    "description": "BOM/成品档案列表。权限 `bom:view`。明细与摘要全部取自建档冻结快照，不依赖当前目录。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                        "additionalProperties": false
+                    }
+                }
+            }
+        },
+        {
+            "path": "/bom-stocks",
+            "title": "成品库存",
+            "permissions": ["bom:view"],
+            "pathParams": [],
+            "tool": {
+                "type": "function",
+                "function": {
+                    "name": "listBomStocks",
+                    "description": "BOM 当前库存余量聚合。权限 `bom:view`。口径同 v_bom_stock：有效入库 + 库存调整 − 全部出库单的台账事件（作废单正向+冲销行等额相抵）；仅返回存在流水的 bomCode，无流水者由前端按 0 展示。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                        "additionalProperties": false
+                    }
+                }
+            }
+        },
+        {
+            "path": "/bom-stocks/{code}/ledger",
+            "title": "库存流水",
+            "permissions": ["bom:view"],
+            "pathParams": ["code"],
+            "tool": {
+                "type": "function",
+                "function": {
+                    "name": "getBomStockLedger",
+                    "description": "BOM 出入库流水与逐笔结余。权限 `bom:view`。入库仅展示有效（ACTIVE）单，库存调整全部展示；出库展示全部单据的全部事件，作废单的正向与冲销行成对出现（冲销行备注展示作废原因），按业务日升序计算逐笔结余。`stockQty` 与末笔 `balance` 及 v_bom_stock 恒等。BOM 不存在返回 404；存在但无有效流水返回空 flows 与 stockQty 0。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "code": {
+                                "type": "string",
+                                "pattern": "^(XK3W|XK3P|XK2|XK3|KWO|KW|AQ|KD|KQ)[0-9]{3,}$",
+                                "description": "品类前缀 + 至少 3 位序号，前缀 XK2/XK3/KW/KWO/AQ/KD/KQ/XK3W/XK3P，如 XK2001、KW001、KWO001、AQ001、KD001、KQ001"
+                            }
+                        },
+                        "required": ["code"],
+                        "additionalProperties": false
+                    }
+                }
+            }
+        },
+        {
+            "path": "/inbound",
+            "title": "成品入库",
+            "permissions": ["inbound:view"],
+            "pathParams": [],
+            "tool": {
+                "type": "function",
+                "function": {
+                    "name": "listInbound",
+                    "description": "入库台账。权限 `inbound:view`。包含 active/voided，便于审计。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                        "additionalProperties": false
+                    }
+                }
+            }
+        },
+        {
+            "path": "/outbound",
+            "title": "成品出库",
+            "permissions": ["outbound:view"],
+            "pathParams": [],
+            "tool": {
+                "type": "function",
+                "function": {
+                    "name": "listOutbound",
+                    "description": "出库单列表。权限 `outbound:view`。返回 registered/voided 单头；原数量事件和冲销事件不被改删。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                        "additionalProperties": false
+                    }
+                }
+            }
+        },
+        {
+            "path": "/stock-adjustments",
+            "title": "库存调整",
+            "permissions": ["inbound:view"],
+            "pathParams": [],
+            "tool": {
+                "type": "function",
+                "function": {
+                    "name": "listStockAdjustments",
+                    "description": "不可变库存调整列表。权限 `inbound:view`。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                        "additionalProperties": false
+                    }
+                }
+            }
+        },
+        {
+            "path": "/system-logs",
+            "title": "系统日志",
+            "permissions": ["system-logs:view"],
+            "pathParams": [],
+            "tool": {
+                "type": "function",
+                "function": {
+                    "name": "listSystemLogs",
+                    "description": "系统日志时间线（分批追加）。权限 `system-logs:view`（普通可授权码，默认仅超管，可在角色与权限直接授予其他角色）。聚合四来源为统一业务事件流：op_log （订单创建/归档/归档回退/删除、客户创建/编辑/负责人移交（含离岗批量移交）、BOM 创建/删除、入库创建/作废/删除、出库登记发货/作废/删除）、 sales_order_change_log（仅 UPDATE 的编辑明细）、inbound_change_log（仅 UPDATE 的当天修正）、stock_adjustment（库存调整，domain=inbound、 action=adjust）。同表的 db_backup/db_restore 是系统审计动作，不进入此业务时间线。 上述业务动作在当前留存策略下全量覆盖——订单/入库的编辑明细日志随 订单删除而消失，属有限留存而非永久历史审计。 分批为 (occurredAt, id) 复合游标（加载更多语义）：首批不带游标，后续 携带上一批 nextCursor 的 at+id；两批无重叠、合集与全量一致。雪花 id 以 十进制字符串往返（超 ±2^53 精度），不能 Number 解析。 关键词匹配操作人姓名、目标编号、目标名称三项（LIKE）。名称命中依赖 快照存在——存量 create_order/ship 等旧日志无名称快照，按名称搜不到属 预期降级；按编号/操作人仍可命中，不做历史回填。时间范围按北京日界： today 为今天，7d/30d 均含今天共 N 个自然日，custom 含起止日期。 操作人筛选（operator）按用户账号精确匹配（姓名可重名故不用姓名）： 账号先解析为用户 id，四个来源表均按 operator_id 过滤，跨 op_log / change_log / stock_adjustment 一致生效；账号不存在返回 400。 ",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "domain": {
+                                "type": "string",
+                                "enum": ["customer", "order", "bom", "bom_structure", "inbound", "outbound"]
+                            },
+                            "action": {
+                                "type": "string",
+                                "enum": [
+                                    "create",
+                                    "edit",
+                                    "transfer",
+                                    "archive",
+                                    "unarchive",
+                                    "delete",
+                                    "void",
+                                    "ship",
+                                    "adjust"
+                                ]
+                            },
+                            "operator": {
+                                "type": "string",
+                                "maxLength": 64,
+                                "description": "操作人账号（精确匹配，四来源统一按 operator_id 过滤）"
+                            },
+                            "range": {
+                                "type": "string",
+                                "enum": ["today", "7d", "30d", "custom"],
+                                "default": "today"
+                            },
+                            "from": {
+                                "type": "string",
+                                "format": "date",
+                                "description": "自定义范围开始（含，北京日界）"
+                            },
+                            "to": {
+                                "type": "string",
+                                "format": "date",
+                                "description": "自定义范围结束（含）"
+                            },
+                            "keyword": {
+                                "type": "string",
+                                "maxLength": 64,
+                                "description": "操作人、编号或名称"
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 100,
+                                "default": 20
+                            },
+                            "beforeAt": {
+                                "type": "string",
+                                "description": "游标：上一批末条 occurredAt（ISO 时刻）"
+                            },
+                            "beforeId": {
+                                "type": "string",
+                                "pattern": "^[0-9]+$",
+                                "description": "游标：上一批末条雪花 id（十进制串）"
+                            }
+                        },
+                        "required": [],
+                        "additionalProperties": false
+                    }
+                }
+            }
+        },
+        {
+            "path": "/ai/agent/voided/inbound",
+            "title": "作废入库",
+            "permissions": ["inbound:view"],
+            "pathParams": [],
+            "tool": {
+                "type": "function",
+                "function": {
+                    "name": "listAiVoidedInbound",
+                    "description": "作废入库数据查询（agent）。权限 `inbound:view`（agent 与登录用户同权）。只返回 status=VOIDED 的入库 台账行，附作废人/作废时间/作废原因（取该单最后一条 VOID 变更日志，与删除 快照同源口径）；total 一并返回，超过 limit 时用 bomCode/keyword 收敛。 全量含作废的台账仍走 GET /inbound。 ",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "bomCode": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 32,
+                                "description": "BOM 编号精确匹配"
+                            },
+                            "keyword": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64,
+                                "pattern": "^[!-~]+$",
+                                "description": "关键词 LIKE（入库单号/BOM 编号；可打印 ASCII）"
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 200,
+                                "default": 100
+                            }
+                        },
+                        "required": [],
+                        "additionalProperties": false
+                    }
+                }
+            }
+        },
+        {
+            "path": "/ai/agent/voided/outbound",
+            "title": "作废出库",
+            "permissions": ["outbound:view"],
+            "pathParams": [],
+            "tool": {
+                "type": "function",
+                "function": {
+                    "name": "listAiVoidedOutbound",
+                    "description": "作废出库数据查询（agent）。权限 `outbound:view`（agent 与登录用户同权）。只返回 state=VOIDED 的出库单， 附单头作废三字段（voidedBy/voidedAt/voidReason）；客户/BOM 名称用下单时冻结 的订单快照。全量含作废的出库列表仍走 GET /outbound。 ",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "orderNo": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 24,
+                                "description": "订单号精确匹配"
+                            },
+                            "bomCode": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 32,
+                                "description": "BOM 编号精确匹配"
+                            },
+                            "keyword": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64,
+                                "pattern": "^[!-~]+$",
+                                "description": "关键词 LIKE（出库单号/订单号；可打印 ASCII）"
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 200,
+                                "default": 100
+                            }
+                        },
+                        "required": [],
+                        "additionalProperties": false
+                    }
+                }
+            }
+        },
+        {
+            "path": "/ai/agent/deleted",
+            "title": "删除审计",
+            "permissions": ["system-logs:view"],
+            "pathParams": [],
+            "tool": {
+                "type": "function",
+                "function": {
+                    "name": "listAiDeleted",
+                    "description": "已删除数据查询（op_log delete_* 快照，agent）。权限 `system-logs:view`（普通可授权码，默认仅超管持有，可在「角色与权限」 直接授予）。2026-10 起订单/出入库/BOM/客户删除均为物理删除，op_log 的 delete_* 快照是唯一留存；本端点返回原始 detail（删除前全量快照，区别于 GET /system-logs 的中文投影）。快照按保护口径不含手机号明文，但含 ownerAccount/createdBy 等账号名。分批为 (occurredAt,id) 复合游标 （加载更多语义，非翻页）；时间范围口径与 /system-logs 一致（北京日界）。 ",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "domain": {
+                                "type": "string",
+                                "enum": ["customer", "order", "bom", "bom_structure", "inbound", "outbound"]
+                            },
+                            "keyword": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64,
+                                "pattern": "^[!-~]+$",
+                                "description": "关键词 LIKE（目标编号；可打印 ASCII）"
+                            },
+                            "range": {
+                                "type": "string",
+                                "enum": ["today", "7d", "30d", "custom"],
+                                "default": "30d"
+                            },
+                            "from": {
+                                "type": "string",
+                                "format": "date",
+                                "description": "range=custom 必填，包含当日"
+                            },
+                            "to": {
+                                "type": "string",
+                                "format": "date",
+                                "description": "range=custom 必填，包含当日"
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 100,
+                                "default": 50
+                            },
+                            "beforeAt": {
+                                "type": "string",
+                                "description": "游标——上一批末条 occurredAt（ISO 时刻）"
+                            },
+                            "beforeId": {
+                                "type": "string",
+                                "pattern": "^[0-9]+$",
+                                "description": "游标——上一批末条雪花 id（十进制串）"
+                            }
+                        },
+                        "required": [],
+                        "additionalProperties": false
+                    }
+                }
+            }
+        }
+    ]
+}

@@ -28,7 +28,7 @@ export function AiWorkbenchPage() {
 
     return (
         <div className="flex w-full flex-col gap-6 p-5 lg:p-7">
-            <PageHeading title="AI 工作台" description="AI 对话代理的服务配置与用量统计（仅超级管理员）" />
+            <PageHeading title="AI 工作台" description="AI 对话服务配置与用量统计" />
             {settings.isLoading ? (
                 <PageLoading className="py-16" />
             ) : settings.isError ? (
@@ -278,6 +278,9 @@ function UsageCard() {
                                 </div>
                             ))}
                         </div>
+                        <p className="text-12 text-muted">
+                            仅汇总上游已返回的用量；缺失或部分未知的用量未完整计入，统计值可能低于实际消耗。
+                        </p>
                         <div className="overflow-x-auto rounded-input border border-line">
                             <table className="data-table w-full min-w-[820px] text-13">
                                 <thead>

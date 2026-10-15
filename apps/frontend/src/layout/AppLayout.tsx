@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 import { ROLE_META, useApp, type Role } from "@/context/useApp";
 import { ContentMaximizeContext } from "@/context/useContentMaximize";
@@ -9,6 +9,8 @@ import { useLayoutFlags } from "@/components/layout/useLayoutFlags";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { GlobalWatermark } from "@/components/ui/Watermark";
 import { AppContentErrorBoundary, ErrorPage } from "@/pages/error/ErrorPage";
+
+const AiChatWidget = lazy(() => import("@/components/ai/AiChatWidget"));
 
 // 工作台标题随登录角色；其余页面标题取菜单字典（含仓管在订单页的「待发货订单」别名）
 function resolveTitle(pathname: string, role: Role) {
@@ -162,6 +164,11 @@ export function AppLayout() {
             )}
             {!maximized && <MobileBottomNav onOpenDrawer={() => setDrawerPath(location.pathname)} />}
             {user && <GlobalWatermark text={user.name} subtle={location.pathname === "/analytics"} />}
+            {user && (
+                <Suspense fallback={null}>
+                    <AiChatWidget key={`${user.account}:${role}:${grant.version}`} />
+                </Suspense>
+            )}
         </ContentMaximizeContext.Provider>
     );
 }
