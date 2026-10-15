@@ -41,6 +41,7 @@ vi.mock("@/data/queries", () => ({
     useWbView: () => ({ snap: snapshot, isLoading: false, refreshing: false }),
     useWbRefresh: () => ({ refresh: vi.fn() }),
     useUnarchiveOrder: () => ({ mutate: vi.fn(), isPending: false }),
+    useDeleteCustomer: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock("@/components/ui/toastContexts", () => ({ useToast: () => vi.fn() }));
 afterEach(cleanup);

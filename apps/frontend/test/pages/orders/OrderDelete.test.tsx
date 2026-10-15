@@ -22,6 +22,7 @@ vi.mock("@/data/queries", () => ({
     useArchiveOrder: () => ({ mutate: vi.fn(), isPending: false }),
     useUnarchiveOrder: () => ({ mutate: vi.fn(), isPending: false }),
     useDeleteOrder: () => ({ mutate: deleteMutate, isPending: false }),
+    useDeleteCustomer: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 /* 一件未发的新订单与已发 200/300 的旧订单同列，验证可见性按发货量区分；

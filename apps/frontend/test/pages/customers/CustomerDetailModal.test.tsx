@@ -11,6 +11,7 @@ import type { Customer, Order, Snapshot } from "@/api";
 /* 嵌套订单详情会调用归档回退 mutation（默认 can=false 不渲染按钮，仅 hook 挂载） */
 vi.mock("@/data/queries", () => ({
     useUnarchiveOrder: () => ({ mutate: vi.fn(), isPending: false }),
+    useDeleteCustomer: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 afterEach(cleanup);

@@ -41,6 +41,7 @@ vi.mock("@/data/queries", () => ({
     useVoidInbound: () => ({ mutate: state.void, isPending: false }),
     useDeleteOutbound: () => ({ mutate: state.del, isPending: false }),
     useDeleteInbound: () => ({ mutate: state.del, isPending: false }),
+    useDeleteCustomer: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 afterEach(() => {
     cleanup();
