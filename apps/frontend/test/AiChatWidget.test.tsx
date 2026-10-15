@@ -53,6 +53,53 @@ async function openChat() {
 }
 
 describe("AI 聊天面板", () => {
+    it("思考和处理步骤可展开，与回答正文分开展示", async () => {
+        const pending = Promise.withResolvers<string>();
+        vi.mocked(runChatAgent).mockImplementation(options => {
+            options.onReasoning?.("正在核对今天的记录");
+            options.onProgress("正在查询成品入库…");
+            return pending.promise;
+        });
+        const user = await openChat();
+        await user.type(screen.getByRole("textbox", { name: "消息内容" }), "今天入库");
+        await user.keyboard("{Enter}");
+        await user.click(await screen.findByText("正在思考"));
+        expect(screen.getByText("正在核对今天的记录").closest("details")).toHaveAttribute("open");
+        expect(screen.getByText("正在查询成品入库…", { selector: "li" })).toBeInTheDocument();
+        await act(async () => pending.resolve("今天入库12"));
+        expect(await screen.findByText("今天入库12")).toBeInTheDocument();
+        expect(screen.getByText("思考过程")).toBeInTheDocument();
+    });
+    it("轻轻向上翻后继续输出也不会抢回底部", async () => {
+        const pending = Promise.withResolvers<string>();
+        let onText: ((text: string) => void) | undefined;
+        vi.mocked(runChatAgent).mockImplementation(options => {
+            onText = options.onText;
+            return pending.promise;
+        });
+        const user = await openChat();
+        await user.type(screen.getByRole("textbox", { name: "消息内容" }), "长回答");
+        await user.keyboard("{Enter}");
+        await waitFor(() => expect(onText).toBeDefined());
+        const body = screen.getByRole("region", { name: "对话内容" });
+        let height = 2000;
+        Object.defineProperties(body, {
+            scrollHeight: { configurable: true, get: () => height },
+            clientHeight: { configurable: true, value: 500 },
+        });
+        body.scrollTop = 1500;
+        fireEvent.scroll(body);
+        fireEvent.wheel(body, { deltaY: -5 });
+        body.scrollTop = 1495;
+        fireEvent.scroll(body);
+        height = 2400;
+        await act(async () => onText?.("新增的回答文字"));
+        await screen.findByText("新增的回答文字");
+        expect(body.scrollTop).toBe(1495);
+        expect(screen.getByRole("button", { name: "回到底部" })).toBeInTheDocument();
+        await act(async () => pending.resolve("回答完成"));
+        expect(body.scrollTop).toBe(1495);
+    });
     it.each(["回车", "发送按钮", "快捷提问"])("HTTP 环境缺少 randomUUID 时仍可通过%s发送", async method => {
         vi.mocked(runChatAgent).mockResolvedValue("发送成功");
         const user = await openChat();
@@ -194,7 +241,7 @@ describe("AI 聊天面板", () => {
         expect(screen.queryByText("旧问题")).not.toBeInTheDocument();
     });
 
-    it("中文输入法确认文字时不误发送，查询结果可打开来源", async () => {
+    it("中文输入法确认文字时不误发送，回答不再显示来源记录按钮", async () => {
         vi.mocked(runChatAgent).mockImplementation(async options => {
             options.onSource({
                 id: "source",
@@ -211,8 +258,7 @@ describe("AI 聊天面板", () => {
         fireEvent.keyDown(input, { key: "Enter", keyCode: 229, isComposing: true });
         expect(runChatAgent).not.toHaveBeenCalled();
         await user.click(screen.getByRole("button", { name: "发送消息" }));
-        await user.click(await screen.findByRole("button", { name: "查看销售订单" }));
-        expect(screen.getByRole("dialog", { name: "销售订单 · 来源记录" })).toBeInTheDocument();
-        expect(screen.getByRole("cell", { name: "ORDER_A" })).toBeInTheDocument();
+        expect(await screen.findByText("查询成功")).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "查看销售订单" })).not.toBeInTheDocument();
     });
 });

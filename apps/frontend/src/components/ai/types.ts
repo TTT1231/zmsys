@@ -7,6 +7,7 @@ export interface ToolCall {
 export interface ChatWireMessage {
     role: "system" | "user" | "assistant" | "tool";
     content?: string | ContentPart[];
+    reasoning_content?: string;
     tool_calls?: ToolCall[];
     tool_call_id?: string;
 }
@@ -39,6 +40,10 @@ export interface ChatMessage {
     sources?: ChatSource[];
     error?: string;
     historical?: boolean;
+    reasoning?: string;
+    steps?: string[];
+    /** 当前轮实际发给模型的 assistant/tool 消息；只留内存，不写浏览器存储。 */
+    context?: ChatWireMessage[];
 }
 export interface ChatToolDefinition {
     type: "function";

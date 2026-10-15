@@ -18,6 +18,7 @@
         "china-division": "^2.7.0",
         "clsx": "^2.1.1",
         "echarts": "^6.1.0",
+        "mermaid": "^12.2.0",
         "react": "^19.2.8",
         "react-dom": "^19.2.8",
         "react-markdown": "^10.1.0",

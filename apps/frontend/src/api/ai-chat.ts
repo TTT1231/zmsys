@@ -17,13 +17,21 @@ export function fetchAiQuery(path: string, signal: AbortSignal): Promise<unknown
 export async function consumeAiStream(
     response: Response,
     onText: (text: string) => void,
-): Promise<{ content: string; toolCalls: ToolCall[]; usage?: ChatUsage; finishReason: string | null }> {
+    onReasoning?: (text: string) => void,
+): Promise<{
+    content: string;
+    reasoning: string;
+    toolCalls: ToolCall[];
+    usage?: ChatUsage;
+    finishReason: string | null;
+}> {
     if (!response.body) throw new Error("AI 未返回响应内容，请重试");
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     const calls = new Map<number, ToolCall>();
     let pending = "";
     let content = "";
+    let reasoning = "";
     let usage: ChatUsage | undefined;
     let finishReason: string | null = null;
     let done = false;
@@ -52,6 +60,10 @@ export async function consumeAiStream(
         const choice = payload.choices?.[0];
         if (choice?.finish_reason) finishReason = choice.finish_reason;
         const delta = choice?.delta;
+        if (typeof delta?.reasoning_content === "string") {
+            reasoning += delta.reasoning_content;
+            onReasoning?.(reasoning);
+        }
         if (typeof delta?.content === "string") {
             content += delta.content;
             onText(content);
@@ -88,7 +100,7 @@ export async function consumeAiStream(
         if (!done) throw new Error("AI 连接提前中断，请重试");
         const toolCalls = [...calls.entries()].sort(([a], [b]) => a - b).map(([, call]) => call);
         if (toolCalls.some(call => !call.id || !call.function.name)) throw new Error("AI 查询指令不完整，请重试");
-        return { content, toolCalls, usage, finishReason };
+        return { content, reasoning, toolCalls, usage, finishReason };
     } finally {
         await reader.cancel().catch(() => {});
         reader.releaseLock();
@@ -100,6 +112,7 @@ export async function streamAiChat(
     tools: ChatToolDefinition[],
     signal: AbortSignal,
     onText: (text: string) => void,
+    onReasoning?: (text: string) => void,
 ) {
     const body = JSON.stringify({ messages, tools });
     if (new TextEncoder().encode(body).byteLength > 1_000_000)
@@ -131,5 +144,5 @@ export async function streamAiChat(
         }
         throw new ApiError(message, response.status);
     }
-    return consumeAiStream(response, onText);
+    return consumeAiStream(response, onText, onReasoning);
 }

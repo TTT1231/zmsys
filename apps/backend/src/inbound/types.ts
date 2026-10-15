@@ -3,6 +3,7 @@ export interface InboundRow {
     no: string;
     bomCode: string;
     qty: number;
+    unit?: string;
     date: string;
     time: string;
     inspector: string;

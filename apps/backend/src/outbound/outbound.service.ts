@@ -61,9 +61,17 @@ export class OutboundService {
     async listOutbound(): Promise<OutboundRow[]> {
         const rows = await this.prisma.outboundShipment.findMany({
             orderBy: [{ registeredAt: "desc" }, { id: "desc" }],
-            include: SHIPMENT_INCLUDE,
+            include: {
+                ...SHIPMENT_INCLUDE,
+                order: {
+                    select: {
+                        ...SHIPMENT_INCLUDE.order.select,
+                        bom: { select: { bomCode: true, unit: true } },
+                    },
+                },
+            },
         });
-        return rows.map(row => this.toOutboundRow(row));
+        return rows.map(row => ({ ...this.toOutboundRow(row), unit: row.order.bom.unit }));
     }
 
     /**

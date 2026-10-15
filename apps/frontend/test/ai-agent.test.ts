@@ -17,6 +17,7 @@ const base = () => ({
 });
 const call = (name = "listOrders", args = "{}") => ({
     content: "",
+    reasoning: "",
     finishReason: "tool_calls",
     toolCalls: [{ id: "call_1", type: "function" as const, function: { name, arguments: args } }],
 });
@@ -28,6 +29,39 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("AI 只读查询编排", () => {
+    it("工具续轮原样回传思考，并保留本轮完整消息供追问", async () => {
+        stream.mockResolvedValueOnce({ ...call(), reasoning: "需要查订单" }).mockResolvedValueOnce({
+            content: "订单已核对",
+            reasoning: "已取得记录",
+            toolCalls: [],
+            finishReason: "stop",
+        });
+        query.mockResolvedValue([{ orderNo: "ORDER_A", qty: 5 }]);
+        const onContext = vi.fn();
+        await runChatAgent({ ...base(), onContext });
+        expect(stream.mock.calls[1]![0]).toContainEqual(
+            expect.objectContaining({ role: "assistant", reasoning_content: "需要查订单" }),
+        );
+        expect(onContext.mock.calls[0]![0].map((message: any) => message.role)).toEqual([
+            "assistant",
+            "tool",
+            "assistant",
+        ]);
+        expect(onContext.mock.calls[0]![0].at(-1).reasoning_content).toBe("已取得记录");
+    });
+    it("业务日期在完整列表上筛选，缓存请求不被日期参数拆散", async () => {
+        stream
+            .mockResolvedValueOnce(call("listInbound", '{"start":"2026-10-15","end":"2026-10-15"}'))
+            .mockResolvedValueOnce({ content: "今天入库5", reasoning: "", toolCalls: [], finishReason: "stop" });
+        query.mockResolvedValue([
+            { no: "RK1", date: "2026-10-15", qty: 5, status: "active" },
+            { no: "RK2", date: "2026-10-14", qty: 100, status: "active" },
+        ]);
+        await runChatAgent(base());
+        expect(query).toHaveBeenCalledWith("/inbound", expect.any(AbortSignal));
+        const output = JSON.parse(stream.mock.calls[1]![0].at(-1)!.content as string);
+        expect(output.data.summary.inboundQty).toBe(5);
+    });
     it("无业务权限时只有文档工具，关系查询须同时具备两个菜单权限", () => {
         expect(availableTools(() => false).map(entry => entry.tool.function.name)).toEqual(["getAiAgentDocTopic"]);
         expect(
@@ -47,7 +81,7 @@ describe("AI 只读查询编排", () => {
     it("查询使用登录客户端，返回工具结果后继续回答并保存来源", async () => {
         stream
             .mockResolvedValueOnce(call())
-            .mockResolvedValueOnce({ content: "订单共一条", toolCalls: [], finishReason: "stop" });
+            .mockResolvedValueOnce({ content: "订单共一条", reasoning: "", toolCalls: [], finishReason: "stop" });
         query.mockResolvedValue([{ orderNo: "ORDER_A", qty: 10 }]);
         const options = base();
         expect(await runChatAgent(options)).toBe("订单共一条");
@@ -60,25 +94,25 @@ describe("AI 只读查询编排", () => {
     it("未知工具或私自拼接参数不会执行接口", async () => {
         stream
             .mockResolvedValueOnce(call("deleteOrder"))
-            .mockResolvedValueOnce({ content: "不能执行", toolCalls: [], finishReason: "stop" });
+            .mockResolvedValueOnce({ content: "不能执行", reasoning: "", toolCalls: [], finishReason: "stop" });
         await runChatAgent(base());
         expect(query).not.toHaveBeenCalled();
         stream
             .mockResolvedValueOnce(call("listAiVoidedOutbound", '{"page":2}'))
-            .mockResolvedValueOnce({ content: "不能续页", toolCalls: [], finishReason: "stop" });
+            .mockResolvedValueOnce({ content: "不能续页", reasoning: "", toolCalls: [], finishReason: "stop" });
         await runChatAgent(base());
         expect(query).not.toHaveBeenCalled();
     });
-    it("结果过大时明确告诉模型截断，来源仍保留完整数据", async () => {
+    it("长备注压缩不再切断 JSON，完整统计与原始记录仍保留", async () => {
         stream
             .mockResolvedValueOnce(call())
-            .mockResolvedValueOnce({ content: "结果不完整", toolCalls: [], finishReason: "stop" });
+            .mockResolvedValueOnce({ content: "结果不完整", reasoning: "", toolCalls: [], finishReason: "stop" });
         query.mockResolvedValue([{ remark: "数据".repeat(10_000) }]);
         const options = base();
         await runChatAgent(options);
         const output = JSON.parse(stream.mock.calls[1]![0].at(-1)!.content as string);
-        expect(output.truncated).toBe(true);
-        expect(output.preview.length).toBeLessThanOrEqual(12_000);
+        expect(output.data.summaryComplete).toBe(true);
+        expect(output.data.records[0].remark.length).toBeLessThanOrEqual(601);
         expect(options.onSource).toHaveBeenCalledWith(
             expect.objectContaining({ data: [{ remark: "数据".repeat(10_000) }] }),
         );

@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { fetchAiDocs } from "@/api/ai-chat";
 import { uuid } from "@/lib/utils";
 import { runChatAgent } from "./agent";
 import type { ChatAttachment, ChatMessage } from "./types";
+import { AI_QUERY_STALE_MS, aiQueryKey, queryAiData } from "./query-cache";
 
 function restore(key: string): ChatMessage[] {
     try {
@@ -34,11 +36,22 @@ export function useAiChat(options: {
     can: (code: string) => boolean;
     onSettled: () => void;
 }) {
+    const queryClient = useQueryClient();
     const [messages, setMessages] = useState(() => restore(options.storageKey));
     const [busy, setBusy] = useState(false);
     const [progress, setProgress] = useState("");
     const active = useRef<AbortController | null>(null);
     const generation = useRef(0);
+
+    useEffect(
+        () =>
+            queryClient.getMutationCache().subscribe(event => {
+                if (event.type === "updated" && event.action.type === "success") {
+                    void queryClient.invalidateQueries({ queryKey: aiQueryKey(options.storageKey) });
+                }
+            }),
+        [queryClient, options.storageKey],
+    );
 
     useEffect(
         () => () => {
@@ -69,7 +82,10 @@ export function useAiChat(options: {
         active.current = controller;
         const seq = ++generation.current;
         const replyId = uuid();
-        setMessages([...history, { id: replyId, role: "assistant", content: "", state: "streaming", sources: [] }]);
+        setMessages([
+            ...history,
+            { id: replyId, role: "assistant", content: "", state: "streaming", sources: [], steps: ["正在准备对话…"] },
+        ]);
         setBusy(true);
         setProgress("正在准备对话…");
         const update = (patch: Partial<ChatMessage>) => {
@@ -78,8 +94,27 @@ export function useAiChat(options: {
                 current.map(message => (message.id === replyId ? { ...message, ...patch } : message)),
             );
         };
+        let pending: Partial<ChatMessage> = {};
+        let frame: number | undefined;
+        const flush = () => {
+            if (frame !== undefined) cancelAnimationFrame(frame);
+            frame = undefined;
+            if (Object.keys(pending).length) update(pending);
+            pending = {};
+        };
+        const schedule = (patch: Partial<ChatMessage>) => {
+            pending = { ...pending, ...patch };
+            if (typeof requestAnimationFrame !== "function") flush();
+            else frame ??= requestAnimationFrame(flush);
+        };
         try {
-            const docs = await fetchAiDocs(controller.signal);
+            const docs = await queryClient.fetchQuery({
+                queryKey: [...aiQueryKey(options.storageKey), "manifest"],
+                queryFn: () => fetchAiDocs(controller.signal),
+                staleTime: AI_QUERY_STALE_MS,
+                gcTime: AI_QUERY_STALE_MS,
+                retry: false,
+            });
             controller.signal.throwIfAborted();
             const content = await runChatAgent({
                 root: docs.root,
@@ -87,9 +122,20 @@ export function useAiChat(options: {
                 identity: options.identity,
                 can: options.can,
                 signal: controller.signal,
-                onText: text => update({ content: text }),
+                onText: text => schedule({ content: text }),
+                onReasoning: reasoning => schedule({ reasoning }),
+                onContext: context => update({ context }),
+                query: (path, signal, fresh) => queryAiData(queryClient, options.storageKey, path, signal, fresh),
                 onProgress: text => {
-                    if (generation.current === seq) setProgress(text);
+                    if (generation.current !== seq) return;
+                    setProgress(text);
+                    setMessages(current =>
+                        current.map(message =>
+                            message.id === replyId && message.steps?.at(-1) !== text
+                                ? { ...message, steps: [...(message.steps ?? []), text] }
+                                : message,
+                        ),
+                    );
                 },
                 onSource: source => {
                     if (generation.current !== seq) return;
@@ -102,8 +148,10 @@ export function useAiChat(options: {
                     );
                 },
             });
+            flush();
             update({ content, state: "complete" });
         } catch (error) {
+            flush();
             update({
                 state: controller.signal.aborted ? "stopped" : "error",
                 error: controller.signal.aborted
@@ -113,6 +161,7 @@ export function useAiChat(options: {
                       : "AI 暂时无法回答，请重试",
             });
         } finally {
+            if (frame !== undefined) cancelAnimationFrame(frame);
             if (generation.current === seq) {
                 active.current = null;
                 setBusy(false);

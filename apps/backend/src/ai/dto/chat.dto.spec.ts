@@ -8,6 +8,16 @@ import { ChatRequestDto } from "./chat.dto";
 const errors = (messages: unknown[]) => validateSync(plainToInstance(ChatRequestDto, { messages }));
 
 describe("AI 对话输入", () => {
+    it("接受有界的原始思考字段，续轮校验不会剥掉它", () => {
+        const dto = plainToInstance(ChatRequestDto, {
+            messages: [{ role: "assistant", content: "回答", reasoning_content: "已核对记录" }],
+        });
+        expect(validateSync(dto, { whitelist: true, forbidNonWhitelisted: true })).toHaveLength(0);
+        expect(dto.messages[0]!.reasoning_content).toBe("已核对记录");
+        expect(
+            errors([{ role: "assistant", content: "回答", reasoning_content: "字".repeat(16_001) }]),
+        ).not.toHaveLength(0);
+    });
     it("40 条可通过，超过统一常量时拒绝", () => {
         const messages = Array.from({ length: AI_CHAT_LIMITS.maxMessages }, () => ({ role: "user", content: "问题" }));
         expect(errors(messages)).toHaveLength(0);

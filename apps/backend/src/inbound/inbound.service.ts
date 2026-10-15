@@ -55,12 +55,12 @@ export class InboundService {
         const rows = await this.prisma.inboundLedger.findMany({
             orderBy: [{ createdAt: "desc" }, { id: "desc" }],
             include: {
-                bom: { select: { bomCode: true } },
+                bom: { select: { bomCode: true, unit: true } },
                 operator: { select: { name: true } },
                 updater: { select: { name: true } },
             },
         });
-        return rows.map(row => this.toInboundRow(row));
+        return rows.map(row => ({ ...this.toInboundRow(row), unit: row.bom.unit }));
     }
 
     /**

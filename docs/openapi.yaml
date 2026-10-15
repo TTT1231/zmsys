@@ -1378,14 +1378,14 @@ paths:
             operationId: getAiAgentDocTopic
             summary: agent 单篇主题文档
             description: |
-                登录即可。topicId 见 manifest：endpoints（查询端点目录与口径）、operations
+                登录即可。topicId 见 manifest：user-guide（日常操作说明）、endpoints（查询端点目录与口径）、operations
                 （操作指南与前置条件）、process（业务流程）、roles（角色与权限）、analytics
                 （关系数据口径）。未知 topicId 返回 404。
             parameters:
                 - name: topicId
                   in: path
                   required: true
-                  schema: { type: string, enum: [endpoints, operations, process, roles, analytics] }
+                  schema: { type: string, enum: [user-guide, endpoints, operations, process, roles, analytics] }
             responses:
                 "200":
                     description: 成功
@@ -2307,6 +2307,7 @@ components:
                 no: { type: string }
                 bomCode: { type: string }
                 qty: { type: integer, minimum: 1 }
+                unit: { type: string, description: 成品计量单位，列表查询返回 }
                 date: { type: string, format: date }
                 time: { type: string }
                 inspector: { type: string }
@@ -2381,6 +2382,7 @@ components:
                 customerCode: { type: string }
                 bomCode: { type: string }
                 qty: { type: integer, minimum: 1 }
+                unit: { type: string, description: 成品计量单位，列表查询返回 }
                 date: { type: string, format: date }
                 time: { type: string }
                 operator: { type: string }
@@ -2876,7 +2878,7 @@ components:
             type: object
             required: [id, title, whenToUse]
             properties:
-                id: { type: string, enum: [endpoints, operations, process, roles, analytics] }
+                id: { type: string, enum: [user-guide, endpoints, operations, process, roles, analytics] }
                 title: { type: string }
                 whenToUse: { type: string, description: 何时读这篇（任务路由提示） }
         AiDocContentEnvelope:
@@ -3012,6 +3014,7 @@ components:
                                                         required: [url]
                                                         properties:
                                                             url: { type: string, maxLength: 180000, pattern: '^data:image/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$' }
+                            reasoning_content: { type: string, maxLength: 16000, description: 思考模型返回的原始思考内容；工具调用续轮原样回传，与正文分开显示 }
                             tool_calls:
                                 type: array
                                 maxItems: 16

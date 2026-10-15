@@ -82,6 +82,12 @@ export class ChatMessageDto {
     })
     content?: string | ChatContentPart[];
 
+    /** 思考模型在工具调用续轮时需要原样回传；不作为回答正文。 */
+    @IsOptional()
+    @IsString()
+    @Length(0, AI_CHAT_LIMITS.messageMaxChars)
+    reasoning_content?: string;
+
     /** role=assistant 的工具调用意图（透传上游产物） */
     @IsOptional()
     @IsArray()

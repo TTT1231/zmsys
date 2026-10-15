@@ -19,6 +19,12 @@ export const AI_DOC_ROOT_FILE = "ai/agent-guide.md";
 
 export const AI_DOC_TOPICS: readonly AiDocTopic[] = [
     {
+        id: "user-guide",
+        title: "日常操作说明",
+        whenToUse: "用户问怎么操作、BOM结构怎么调整、分析页怎么用、怎么删除订单时首先读取",
+        file: "ai/user-guide.md",
+    },
+    {
         id: "endpoints",
         title: "AI 查询端点目录",
         whenToUse: "需要查业务数据、作废数据、删除审计或系统日志，选接口、看口径与权限约束时",

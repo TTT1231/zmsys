@@ -15,13 +15,13 @@
                 "type": "function",
                 "function": {
                     "name": "getAiAgentDocTopic",
-                    "description": "agent 单篇主题文档。登录即可。topicId 见 manifest：endpoints（查询端点目录与口径）、operations （操作指南与前置条件）、process（业务流程）、roles（角色与权限）、analytics （关系数据口径）。未知 topicId 返回 404。 ",
+                    "description": "agent 单篇主题文档。登录即可。topicId 见 manifest：user-guide（日常操作说明）、endpoints（查询端点目录与口径）、operations （操作指南与前置条件）、process（业务流程）、roles（角色与权限）、analytics （关系数据口径）。未知 topicId 返回 404。 ",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "topicId": {
                                 "type": "string",
-                                "enum": ["endpoints", "operations", "process", "roles", "analytics"]
+                                "enum": ["user-guide", "endpoints", "operations", "process", "roles", "analytics"]
                             }
                         },
                         "required": ["topicId"],

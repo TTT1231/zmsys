@@ -282,7 +282,11 @@ export class AiChatService {
     ): Promise<Response> {
         const body: Record<string, unknown> = {
             model: config.model,
-            messages: dto.messages,
+            messages: dto.messages.map(message =>
+                config.model.startsWith("deepseek") && message.role === "assistant"
+                    ? { reasoning_content: "", ...message }
+                    : message,
+            ),
             max_tokens: AI_CHAT_LIMITS.maxCompletionTokens,
         };
         if (dto.tools?.length) {

@@ -4,6 +4,23 @@ import { consumeAiStream, streamAiChat } from "@/api/ai-chat";
 afterEach(() => vi.unstubAllGlobals());
 
 describe("AI 流式响应", () => {
+    it("思考与回答分别逐段更新，不把思考混进正文", async () => {
+        const text = vi.fn();
+        const reasoning = vi.fn();
+        const data =
+            [
+                { choices: [{ delta: { reasoning_content: "先核对" } }] },
+                { choices: [{ delta: { reasoning_content: "今天的记录" } }] },
+                { choices: [{ delta: { content: "今天入库 12" } }] },
+            ]
+                .map(frame => `data: ${JSON.stringify(frame)}\n\n`)
+                .join("") + "data: [DONE]\n\n";
+        const result = await consumeAiStream(new Response(data), text, reasoning);
+        expect(result.reasoning).toBe("先核对今天的记录");
+        expect(result.content).toBe("今天入库 12");
+        expect(reasoning).toHaveBeenNthCalledWith(1, "先核对");
+        expect(text).toHaveBeenCalledWith("今天入库 12");
+    });
     it("中文跨字节与跨帧解析，并拼接分块工具参数", async () => {
         const data =
             'data: {"choices":[{"delta":{"content":"成品库存"}}]}\r\n\r\ndata: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"listOrders","arguments":"{"}}]}}]}\n\ndata: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"}"}}]},"finish_reason":"tool_calls"}]}\n\nevent: usage\ndata: {"status":"unknown","totalTokens":0,"promptTokens":0,"completionTokens":0}\n\ndata: [DONE]\n\n';

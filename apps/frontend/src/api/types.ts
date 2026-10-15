@@ -215,6 +215,7 @@ export interface InboundRow {
     no: string;
     bomCode: string;
     qty: number;
+    unit?: string;
     date: string;
     time: string;
     inspector: string;
@@ -233,6 +234,7 @@ export interface OutboundRow {
     customerCode: string;
     bomCode: string;
     qty: number;
+    unit?: string;
     date: string;
     time: string;
     operator: string;

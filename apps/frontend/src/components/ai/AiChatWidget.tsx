@@ -13,6 +13,7 @@ import { ChatMarkdown } from "./ChatMarkdown";
 import { SourceRecords } from "./SourceRecords";
 import { useAiChat } from "./useAiChat";
 import { useSpeechInput } from "./useSpeechInput";
+import { ThinkingPanel } from "./ThinkingPanel";
 import type { ChatAttachment, ChatSource } from "./types";
 import "./chat.css";
 
@@ -41,6 +42,8 @@ export default function AiChatWidget() {
     const fileInput = useRef<HTMLInputElement>(null);
     const body = useRef<HTMLDivElement>(null);
     const follow = useRef(true);
+    const lastScrollTop = useRef(0);
+    const touchY = useRef(0);
     const fileGeneration = useRef(0);
     const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
     const dropDepth = useRef(0);
@@ -65,6 +68,28 @@ export default function AiChatWidget() {
         retry: false,
     });
     const ready = Boolean(status.data?.enabled && status.data.configured);
+    const pauseFollow = () => {
+        if (!body.current || body.current.scrollHeight <= body.current.clientHeight + 8) return;
+        follow.current = false;
+        setShowDown(true);
+    };
+
+    useEffect(() => {
+        const viewport = window.visualViewport;
+        const sync = () => {
+            panel.current?.style.setProperty("--ai-viewport-height", `${viewport?.height ?? window.innerHeight}px`);
+            panel.current?.style.setProperty("--ai-viewport-top", `${viewport?.offsetTop ?? 0}px`);
+        };
+        sync();
+        viewport?.addEventListener("resize", sync);
+        viewport?.addEventListener("scroll", sync);
+        window.addEventListener("resize", sync);
+        return () => {
+            viewport?.removeEventListener("resize", sync);
+            viewport?.removeEventListener("scroll", sync);
+            window.removeEventListener("resize", sync);
+        };
+    }, []);
 
     const setPanelOpen = (value: boolean) => {
         isOpen.current = value;
@@ -140,8 +165,28 @@ export default function AiChatWidget() {
         };
     }, [open, source, preview, confirmClear, speech.stop]);
     useLayoutEffect(() => {
-        if (open && follow.current && body.current) body.current.scrollTop = body.current.scrollHeight;
+        if (open && follow.current && body.current) {
+            body.current.scrollTop = body.current.scrollHeight;
+            lastScrollTop.current = body.current.scrollTop;
+            setShowDown(false);
+        } else if (open && body.current) {
+            setShowDown(body.current.scrollHeight - body.current.scrollTop - body.current.clientHeight > 24);
+        }
     }, [chat.messages, chat.progress, open]);
+    useEffect(() => {
+        if (!open || !body.current || typeof ResizeObserver === "undefined") return;
+        const element = body.current;
+        const observer = new ResizeObserver(() => {
+            if (follow.current) {
+                element.scrollTop = element.scrollHeight;
+                lastScrollTop.current = element.scrollTop;
+            }
+        });
+        observer.observe(element);
+        const log = element.querySelector('[role="log"]');
+        if (log) observer.observe(log);
+        return () => observer.disconnect();
+    }, [open]);
     useLayoutEffect(() => {
         if (!textarea.current) return;
         textarea.current.style.height = "auto";
@@ -318,11 +363,34 @@ export default function AiChatWidget() {
                 </header>
                 <div
                     ref={body}
-                    className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3.5 pt-4 pb-2"
+                    className="ai-chat-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-3.5 pt-4 pb-2"
+                    role="region"
+                    aria-label="对话内容"
+                    tabIndex={0}
+                    onWheel={event => {
+                        if (event.deltaY < 0) pauseFollow();
+                    }}
+                    onPointerDown={() => {
+                        if (chat.busy) pauseFollow();
+                    }}
+                    onTouchStart={event => {
+                        touchY.current = event.touches[0]?.clientY ?? 0;
+                    }}
+                    onTouchMove={event => {
+                        const y = event.touches[0]?.clientY ?? touchY.current;
+                        if (y > touchY.current + 1) pauseFollow();
+                        touchY.current = y;
+                    }}
+                    onKeyDown={event => {
+                        if (["ArrowUp", "PageUp", "Home"].includes(event.key)) pauseFollow();
+                    }}
                     onScroll={() => {
                         const element = body.current!;
-                        follow.current = element.scrollHeight - element.scrollTop - element.clientHeight < 100;
-                        setShowDown(!follow.current);
+                        const gap = element.scrollHeight - element.scrollTop - element.clientHeight;
+                        if (element.scrollTop < lastScrollTop.current - 1) follow.current = false;
+                        else if (gap <= 4) follow.current = true;
+                        lastScrollTop.current = element.scrollTop;
+                        setShowDown(!follow.current && gap > 24);
                     }}
                 >
                     <div className="ai-chat-message">
@@ -394,7 +462,9 @@ export default function AiChatWidget() {
                                     </span>
                                 )}
                                 <div
-                                    className={`ai-chat-bubble ${message.role === "user" ? "ai-chat-user" : "ai-chat-bot"}`}
+                                    className={
+                                        message.role === "user" ? "ai-chat-bubble ai-chat-user" : "ai-chat-assistant"
+                                    }
                                 >
                                     {Boolean(message.attachments?.length) && (
                                         <div className="mb-2 flex flex-wrap gap-2">
@@ -434,79 +504,54 @@ export default function AiChatWidget() {
                                         <p className="whitespace-pre-wrap wrap-anywhere">{message.content}</p>
                                     ) : (
                                         <>
-                                            {message.content ? (
-                                                <ChatMarkdown>{message.content}</ChatMarkdown>
-                                            ) : message.state === "streaming" ? (
-                                                <span className="ai-chat-typing" aria-hidden="true">
-                                                    <i />
-                                                    <i />
-                                                    <i />
-                                                </span>
-                                            ) : null}
-                                            {message.state === "streaming" && message === lastMessage && (
-                                                <p className="mt-2 text-11 text-muted">{chat.progress}</p>
-                                            )}
-                                            {message.historical && (
-                                                <p className="mt-2 text-11 text-muted">
-                                                    历史对话，当前业务数据请重新查询。
-                                                </p>
-                                            )}
-                                            {(message.state === "stopped" || message.state === "error") && (
-                                                <div className="mt-2 text-12.5">
-                                                    {message.state === "error" ? (
-                                                        <div
-                                                            role="alert"
-                                                            className="rounded-input border border-danger/25 bg-danger-soft p-2.5 text-danger"
-                                                        >
-                                                            <p className="flex items-center gap-1.5 font-medium">
-                                                                <Icon name="alert" size={16} />
-                                                                {message.content ? "回答中断" : "发送失败"}
-                                                            </p>
-                                                            <p className="mt-1 wrap-anywhere">
-                                                                {message.error || "暂时无法连接 AI 服务，请稍后重试"}
-                                                            </p>
+                                            <ThinkingPanel
+                                                reasoning={message.reasoning}
+                                                steps={message.steps}
+                                                busy={message.state === "streaming"}
+                                            />
+                                            {(message.content ||
+                                                message.state === "error" ||
+                                                message.state === "stopped") && (
+                                                <div className="ai-chat-bubble ai-chat-bot">
+                                                    {message.content && (
+                                                        <ChatMarkdown streaming={message.state === "streaming"}>
+                                                            {message.content}
+                                                        </ChatMarkdown>
+                                                    )}
+                                                    {(message.state === "stopped" || message.state === "error") && (
+                                                        <div className="mt-2 text-12.5">
+                                                            {message.state === "error" ? (
+                                                                <div
+                                                                    role="alert"
+                                                                    className="rounded-input border border-danger/25 bg-danger-soft p-2.5 text-danger"
+                                                                >
+                                                                    <p className="flex items-center gap-1.5 font-medium">
+                                                                        <Icon name="alert" size={16} />
+                                                                        {message.content ? "回答中断" : "发送失败"}
+                                                                    </p>
+                                                                    <p className="mt-1 wrap-anywhere">
+                                                                        {message.error ||
+                                                                            "暂时无法连接 AI 服务，请稍后重试"}
+                                                                    </p>
+                                                                </div>
+                                                            ) : (
+                                                                <p className="text-muted">已停止生成</p>
+                                                            )}
+                                                            {message === lastMessage && (
+                                                                <button
+                                                                    type="button"
+                                                                    className="ai-chat-chip mt-2"
+                                                                    disabled={chat.busy || !ready}
+                                                                    onClick={() => {
+                                                                        follow.current = true;
+                                                                        void chat.retry();
+                                                                    }}
+                                                                >
+                                                                    {message.state === "error" ? "重试" : "重新回答"}
+                                                                </button>
+                                                            )}
                                                         </div>
-                                                    ) : (
-                                                        <p className="text-muted">已停止生成</p>
                                                     )}
-                                                    {message === lastMessage && (
-                                                        <button
-                                                            type="button"
-                                                            className="ai-chat-chip mt-2"
-                                                            disabled={chat.busy || !ready}
-                                                            onClick={() => {
-                                                                follow.current = true;
-                                                                void chat.retry();
-                                                            }}
-                                                        >
-                                                            {message.state === "error" ? "重试" : "重新回答"}
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            )}
-                                            {Boolean(message.sources?.length) && (
-                                                <div className="mt-3 border-t border-line pt-2">
-                                                    <p className="text-11 text-muted">
-                                                        查询于{" "}
-                                                        {new Date(
-                                                            message.sources!.at(-1)!.queriedAt,
-                                                        ).toLocaleTimeString("zh-CN", {
-                                                            timeZone: "Asia/Shanghai",
-                                                            hour12: false,
-                                                        })}
-                                                    </p>
-                                                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                                                        {message.sources!.map(item => (
-                                                            <button
-                                                                key={item.id}
-                                                                type="button"
-                                                                className="ai-chat-chip rounded-md"
-                                                                onClick={() => setSource(item)}
-                                                            >
-                                                                查看{item.title}
-                                                            </button>
-                                                        ))}
-                                                    </div>
                                                 </div>
                                             )}
                                         </>

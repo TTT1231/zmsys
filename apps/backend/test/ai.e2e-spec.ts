@@ -333,7 +333,7 @@ describe("AI 助手 (e2e)", () => {
 
     // ---------- agent 文档 ----------
 
-    it("文档清单：root 非空 + 五个主题", async () => {
+    it("文档清单：root 非空 + 六个主题", async () => {
         const res = await get("/ai/agent/docs", superToken);
         expect(res.statusCode).toBe(200);
         const data = res.body.data as { root: string; topics: Array<{ id: string }> };
@@ -344,6 +344,7 @@ describe("AI 助手 (e2e)", () => {
             "operations",
             "process",
             "roles",
+            "user-guide",
         ]);
     });
 
@@ -351,8 +352,24 @@ describe("AI 助手 (e2e)", () => {
         const res = await get("/ai/agent/docs/operations", staffToken);
         expect(res.statusCode).toBe(200);
         expect((res.body.data as { markdown: string }).markdown.length).toBeGreaterThan(0);
+        const guide = await get("/ai/agent/docs/user-guide", staffToken);
+        expect(guide.statusCode).toBe(200);
+        expect((guide.body.data as { markdown: string }).markdown).toContain("```mermaid");
         const missing = await get("/ai/agent/docs/nope", superToken);
         expect(missing.statusCode).toBe(404);
+    });
+
+    it("入库和出库列表带实际成品计量单位，供 AI 准确汇总", async () => {
+        const inbound = await get("/inbound", superToken);
+        const outbound = await get("/outbound", superToken);
+        expect(inbound.statusCode).toBe(200);
+        expect(outbound.statusCode).toBe(200);
+        const inboundRow = (inbound.body.data as Array<{ no: string; unit: string }>).find(row => row.no === entryNo);
+        const outboundRow = (outbound.body.data as Array<{ no: string; unit: string }>).find(
+            row => row.no === shipmentNo,
+        );
+        expect(inboundRow?.unit).toBe("个");
+        expect(outboundRow?.unit).toBe("个");
     });
 
     // ---------- 作废查询 ----------
@@ -527,6 +544,7 @@ describe("AI 助手 (e2e)", () => {
             {
                 role: "assistant",
                 content: "",
+                reasoning_content: "先查询订单，再根据查询结果回答。",
                 tool_calls: [{ id: "call_1", type: "function", function: { name: "listOrders", arguments: "{}" } }],
             },
             { role: "tool", tool_call_id: "call_1", content: "[]" },
