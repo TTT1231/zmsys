@@ -1,0 +1,96 @@
+/** OpenAI 兼容上游的共用工具（chat 代理与连通测试共用；模块内共享层） */
+import type { AiChatUsage } from "./types";
+
+/** 运行时配置（ai_provider_config 单行的内存形态） */
+export interface ProviderRuntimeConfig {
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+    enabled: boolean;
+}
+
+/** 上游 /chat/completions 的最小响应结构（非流式） */
+export interface UpstreamChatPayload {
+    choices?: Array<{ message?: { content?: string }; finish_reason?: string | null }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+}
+
+/** SSE 直通的响应头（Nginx 不缓冲，逐块下发） */
+export const SSE_HEADERS: Readonly<Record<string, string>> = {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache",
+    "x-accel-buffering": "no",
+};
+
+export const chatCompletionsUrl = (baseUrl: string): string => `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
+
+/** 上游错误响应 → 中文错误文案（截断至 300 字符，防止错误页超长） */
+export async function readUpstreamError(response: Response): Promise<string> {
+    const status = response.status;
+    let detail = "";
+    try {
+        const text = (await response.text()).slice(0, 300);
+        try {
+            const parsed = JSON.parse(text) as { error?: { message?: string } };
+            detail = parsed.error?.message ?? text;
+        } catch {
+            detail = text;
+        }
+    } catch {
+        // 读不到 body 时只报状态码
+    }
+    return detail ? `AI 上游返回 HTTP ${status}：${detail}` : `AI 上游返回 HTTP ${status}`;
+}
+
+export function upstreamFailureMessage(error: unknown): string {
+    if (error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError")) {
+        return "AI 上游请求超时或被中止";
+    }
+    return `AI 上游连接失败：${error instanceof Error ? error.message : String(error)}`;
+}
+
+/** 上游 usage 数字段；usage 整体缺失时返回 null（区别于「真 0」——缺失由调用方按
+ *  用量未知落账标注，不得当作确定零）。total 缺失时按 prompt+completion 补齐。 */
+export function normalizeUsage(raw: UpstreamChatPayload["usage"] | undefined): AiChatUsage | null {
+    if (!raw) {
+        return null;
+    }
+    const promptTokens = Math.max(0, Number(raw.prompt_tokens ?? 0) || 0);
+    const completionTokens = Math.max(0, Number(raw.completion_tokens ?? 0) || 0);
+    const total = Number(raw.total_tokens ?? 0);
+    return {
+        promptTokens,
+        completionTokens,
+        totalTokens: total > 0 ? total : promptTokens + completionTokens,
+    };
+}
+
+/**
+ * SSE 流式嗅探：解析完整行的 data: 载荷，捕获 usage（OpenAI 兼容流在末尾
+ * stream_options.include_usage=true 时会补一帧含 usage 的 chunk）。
+ * 返回未完成的跨块残行，供下一块续接；无法解析的行静默忽略。
+ */
+export const sniffSseUsage = (pending: string, capture: (usage: AiChatUsage) => void): string => {
+    const lines = pending.split("\n");
+    const rest = lines.pop() ?? "";
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) {
+            continue;
+        }
+        const payload = trimmed.slice(5).trim();
+        if (!payload || payload === "[DONE]") {
+            continue;
+        }
+        try {
+            const parsed = JSON.parse(payload) as UpstreamChatPayload;
+            const usage = normalizeUsage(parsed.usage);
+            if (usage) {
+                capture(usage);
+            }
+        } catch {
+            // 非 JSON 行（上游注释心跳等）忽略
+        }
+    }
+    return rest;
+};
