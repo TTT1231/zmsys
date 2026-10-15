@@ -238,6 +238,21 @@ export type BomStructureUpdateEventDetail = {
     hiddenUsage?: number;
 };
 
+/** update_ai_config：AI 工作台配置变更审计（系统审计动作，不进时间线）。
+ *  脱敏契约：绝不写入 api_key 内容——apiKeyChanged 只记"是否变更"，不记值 */
+export type UpdateAiConfigEventDetail = {
+    /** 本次变更的字段名列表（baseUrl/model/enabled/apiKey 的子集） */
+    fields: string[];
+    /** key 被设置/轮换/清除（不记值） */
+    apiKeyChanged: boolean;
+    /** 变更后启用态 */
+    enabled: boolean;
+    /** 变更后 baseUrl 的 host（追溯配错用，不含路径与查询串） */
+    baseUrlHost: string;
+    /** 变更后模型 */
+    model: string;
+};
+
 /** 动作 → detail 形态映射；未登记的动作（create_bom/delete_bom 契约响应、
  *  db_backup/db_restore 系统审计）保持宽松 Prisma.InputJsonValue——读侧仅
  *  消费其稳定子集（name/spec/remark 等），新增动作应优先登记到此处 */
@@ -258,4 +273,5 @@ export type OpLogDetailOf = {
     create_bom_category: BomCategoryCreateEventDetail;
     update_bom_structure: BomStructureUpdateEventDetail;
     delete_bom_category: BomCategoryDeleteEventDetail;
+    update_ai_config: UpdateAiConfigEventDetail;
 };

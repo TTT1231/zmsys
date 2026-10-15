@@ -73,6 +73,9 @@ export const PERMISSIONS = {
     SYSTEM_RESTORE_RUN: "system-restore:run", // 受保护
     // ---- 系统日志（可授权动作，默认仅超管，不播普通角色授权行）----
     SYSTEM_LOGS_VIEW: "system-logs:view",
+    // ---- AI 工作台（受保护菜单，默认仅 super；admin API 与菜单同码，解锁下放后页面/API 一致生效；
+    //      对话/agent 查询不挂新码，沿用各域 view 码）----
+    MENU_AI_WORKBENCH: "menu:ai-workbench",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

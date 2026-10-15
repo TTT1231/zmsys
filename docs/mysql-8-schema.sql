@@ -179,7 +179,8 @@ INSERT INTO sys_permission (code, kind, menu_key, action_id, label, protected) V
     ('menu:system-restore', 'MENU', 'system-restore', NULL, '恢复', 1),
     ('system-backup:run', 'ACTION', 'system-backup', 'run', '执行备份', 1),
     ('system-restore:run', 'ACTION', 'system-restore', 'run', '执行恢复', 1),
-    ('system-logs:view', 'ACTION', 'system-logs', 'view', '查看', 0);
+    ('system-logs:view', 'ACTION', 'system-logs', 'view', '查看', 0),
+    ('menu:ai-workbench', 'MENU', 'ai-workbench', NULL, 'AI 工作台', 1);
 
 -- BOM 结构在线维护（db-scheme.md §5.4）：超管专属，protected=1 且不播普通角色 BOOTSTRAP 行
 INSERT INTO sys_permission (code, kind, menu_key, action_id, label, protected) VALUES
@@ -1395,7 +1396,8 @@ CREATE TABLE op_log (
         'void_outbound', 'delete_outbound',
         'create_bom', 'update_customer',
         'db_backup', 'db_restore',
-        'create_bom_category', 'update_bom_structure', 'delete_customer'
+        'create_bom_category', 'update_bom_structure', 'delete_bom_category', 'delete_customer',
+        'update_ai_config'
     ) NOT NULL,
     target_type VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     target_id BIGINT NOT NULL,
@@ -1431,6 +1433,44 @@ CREATE TABLE sys_restore_job (
     UNIQUE KEY uk_sys_restore_job_request (request_key),
     KEY idx_sys_restore_job_created (created_at DESC),
     CONSTRAINT ck_sys_restore_job_sha CHECK (file_sha256 REGEXP '^[0-9a-f]{64}$')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- AI 对话代理配置（单行表，见 db-scheme.md §11）：仅超管在 AI 工作台维护；api_key 只存
+-- 服务端且读接口不透出原文；备份分类为运行态表——永不入应用备份，replace 恢复不清理
+CREATE TABLE ai_provider_config (
+    id TINYINT UNSIGNED NOT NULL,
+    base_url VARCHAR(255) NOT NULL,
+    api_key VARCHAR(512) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    model VARCHAR(64) NOT NULL,
+    enabled TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    updated_by BIGINT NOT NULL,
+    created_at DATETIME(3) NOT NULL,
+    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    CONSTRAINT fk_ai_provider_config_updated_by FOREIGN KEY (updated_by) REFERENCES sys_user (id)
+        ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT ck_ai_provider_config_singleton CHECK (id = 1),
+    CONSTRAINT ck_ai_provider_config_enabled CHECK (enabled IN (0, 1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- AI 对话用量记账：每次对话代理请求一行（成功与上游失败都记，失败 token 为 0、用量未知在
+-- error_message 标注），按登录人归属；备份分类归 system 组（与 op_log 同类）。追加型日志表
+CREATE TABLE ai_usage_log (
+    id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    model VARCHAR(64) NOT NULL,
+    prompt_tokens INT UNSIGNED NOT NULL DEFAULT 0,
+    completion_tokens INT UNSIGNED NOT NULL DEFAULT 0,
+    total_tokens INT UNSIGNED NOT NULL DEFAULT 0,
+    status ENUM('success', 'error') NOT NULL,
+    error_message VARCHAR(500) NULL,
+    duration_ms INT UNSIGNED NOT NULL DEFAULT 0,
+    created_at DATETIME(3) NOT NULL,
+    PRIMARY KEY (id),
+    KEY idx_ai_usage_user_time (user_id, created_at DESC),
+    KEY idx_ai_usage_time (created_at DESC),
+    CONSTRAINT fk_ai_usage_user FOREIGN KEY (user_id) REFERENCES sys_user (id)
+        ON DELETE RESTRICT ON UPDATE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 生产运行账号权限原则（实际账号名由部署环境替换）：

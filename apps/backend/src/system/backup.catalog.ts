@@ -69,13 +69,19 @@ export const BACKUP_GROUPS: readonly BackupGroupDef[] = [
     {
         key: "system",
         label: "系统与日志",
-        tables: ["op_log"],
+        tables: ["op_log", "ai_usage_log"],
         dependsOn: ["users"],
     },
 ] as const;
 
-/** 运行态表：永不入备份（目录数据 + 幂等/恢复凭证） */
-export const RUNTIME_TABLES: readonly string[] = ["sys_permission", "api_idempotency", "sys_restore_job"];
+/** 运行态表：永不入备份（目录数据 + 幂等/恢复凭证 + 含明文 key 的 AI 配置——
+ *  ai_provider_config 不随备份文件分发，replace 恢复不清理，恢复后配置保持现状） */
+export const RUNTIME_TABLES: readonly string[] = [
+    "sys_permission",
+    "api_idempotency",
+    "sys_restore_job",
+    "ai_provider_config",
+];
 
 /** replace 模式执行前可清理的运行表（api_idempotency 是可重建的幂等占位） */
 export const CLEANABLE_RUNTIME_TABLES: readonly string[] = ["api_idempotency"];

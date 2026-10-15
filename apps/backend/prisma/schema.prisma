@@ -134,6 +134,7 @@ enum OpLogAction {
   update_bom_structure
   delete_bom_category
   delete_customer
+  update_ai_config
 }
 
 /// 固定角色目录；grant_version 是整组授权的乐观锁版本
@@ -189,6 +190,8 @@ model SysUser {
   outboundLedgerEntries OutboundLedger[]       @relation("OutboundLedgerOperator")
   outboundStateLogs     OutboundStateLog[]     @relation("OutboundStateOperator")
   opLogs                OpLog[]                @relation("OpLogOperator")
+  aiConfigUpdates       AiProviderConfig[]     @relation("AiConfigUpdater")
+  aiUsages              AiUsageLog[]           @relation("AiUsageUser")
 
   @@index([roleCode, status])
   @@map("sys_user")
@@ -733,6 +736,49 @@ model SysRestoreJob {
   @@unique([requestKey], map: "uk_sys_restore_job_request")
   @@index([createdAt(sort: Desc)], map: "idx_sys_restore_job_created")
   @@map("sys_restore_job")
+}
+
+/// ai_usage_log.status：成功请求与上游失败都记账（失败行 token 记 0，用量未知在 error_message 标注）
+enum AiUsageStatus {
+  success
+  error
+}
+
+/// AI 对话代理配置：单行表（id 固定 1，CHECK 约束兜底），由超管在 AI 工作台维护。
+/// api_key 仅存服务端，任何读接口不透出原文（脱敏后返回）；备份分类为运行态表，
+/// 永不入应用备份（明文 key 不随备份文件分发），replace 恢复亦不清理
+model AiProviderConfig {
+  id        Int      @id @db.UnsignedTinyInt
+  baseUrl   String   @map("base_url") @db.VarChar(255)
+  apiKey    String   @map("api_key") @db.VarChar(512)
+  model     String   @db.VarChar(64)
+  enabled   Boolean  @default(false)
+  updatedBy BigInt   @map("updated_by")
+  createdAt DateTime @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.DateTime(3)
+  updater   SysUser  @relation("AiConfigUpdater", fields: [updatedBy], references: [id])
+
+  @@map("ai_provider_config")
+}
+
+/// AI 对话用量记账：每次对话代理请求一行（按登录人归属），AI 工作台按人/按日聚合展示；
+/// 备份分类归 system 组（与 op_log 同类）
+model AiUsageLog {
+  id               BigInt        @id
+  userId           BigInt        @map("user_id")
+  model            String        @db.VarChar(64)
+  promptTokens     Int           @default(0) @map("prompt_tokens") @db.UnsignedInt
+  completionTokens Int           @default(0) @map("completion_tokens") @db.UnsignedInt
+  totalTokens      Int           @default(0) @map("total_tokens") @db.UnsignedInt
+  status           AiUsageStatus
+  errorMessage     String?       @map("error_message") @db.VarChar(500)
+  durationMs       Int           @default(0) @map("duration_ms") @db.UnsignedInt
+  createdAt        DateTime      @map("created_at") @db.DateTime(3)
+  user             SysUser       @relation("AiUsageUser", fields: [userId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)], map: "idx_ai_usage_user_time")
+  @@index([createdAt(sort: Desc)], map: "idx_ai_usage_time")
+  @@map("ai_usage_log")
 }
 
 /// 出库有效净额的事件级判据（迁移 20260946000000，SQL SECURITY INVOKER）：

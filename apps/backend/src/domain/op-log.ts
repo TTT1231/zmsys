@@ -32,12 +32,13 @@ export type OpLogAction =
     | "create_bom_category"
     | "update_bom_structure"
     | "delete_bom_category"
-    | "delete_customer";
+    | "delete_customer"
+    | "update_ai_config";
 
-/** 进入系统日志业务时间线的动作（db_backup/db_restore 为系统审计，不进时间线）；
- *  新增 OpLogAction 后必须显式归类：登记到 system-logs 的域映射（加入本别名）
- *  或明确留作审计动作——两侧编译期都会强制这一决策 */
-export type TimelineOpLogAction = Exclude<OpLogAction, "db_backup" | "db_restore">;
+/** 进入系统日志业务时间线的动作（db_backup/db_restore/update_ai_config 为系统审计，
+ *  不进时间线）；新增 OpLogAction 后必须显式归类：登记到 system-logs 的域映射
+ *  （加入本别名）或明确留作审计动作——两侧编译期都会强制这一决策 */
+export type TimelineOpLogAction = Exclude<OpLogAction, "db_backup" | "db_restore" | "update_ai_config">;
 
 export interface RecordOpLogParams<A extends OpLogAction = OpLogAction> {
     action: A;
