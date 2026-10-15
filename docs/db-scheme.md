@@ -59,21 +59,21 @@
 
 ## 2. 全表并发策略
 
-| 操作               | 并发控制                                                                                                                    |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| 客户编辑           | `WHERE id=? AND row_version=?`，成功后版本 `+1`；0 行受影响返回 409                                                         |
-| 订单编辑           | 固定先锁 BOM，再锁订单；换客户/BOM 时按 id 升序同锁新旧两个 BOM；校验 `row_version`、累计已发与出库单引用；成功后版本 `+1`  |
-| 订单删除           | 仅超级管理员；固定先锁 BOM，再锁订单；校验 `row_version`、累计已发为 0 且无任何出库单引用；同事务删除变更日志并写 `op_log`  |
-| 用户编辑/启停      | 锁目标用户；若销售离岗，按 id 顺序锁接任销售及其全部客户，批量移交、记录历史、更新用户必须同事务                            |
-| 角色授权           | 锁 `sys_role`；请求携带 `grant_version`；替换授权、写前后快照日志、版本 `+1` 同事务                                         |
-| BOM 新建           | 锁主品类与 `child_categories` 全部子品类行（id 升序）后重读；锁内完成子选校验、目录校验、指纹判重与取号（序列行锁见 §1.3） |
+| 操作               | 并发控制                                                                                                                                                                                                    |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 客户编辑           | `WHERE id=? AND row_version=?`，成功后版本 `+1`；0 行受影响返回 409                                                                                                                                         |
+| 订单编辑           | 固定先锁 BOM，再锁订单；换客户/BOM 时按 id 升序同锁新旧两个 BOM；校验 `row_version`、累计已发与出库单引用；成功后版本 `+1`                                                                                  |
+| 订单删除           | 仅超级管理员；固定先锁 BOM，再锁订单；校验 `row_version`、累计已发为 0 且无任何出库单引用；同事务删除变更日志并写 `op_log`                                                                                  |
+| 用户编辑/启停      | 锁目标用户；若销售离岗，按 id 顺序锁接任销售及其全部客户，批量移交、记录历史、更新用户必须同事务                                                                                                            |
+| 角色授权           | 锁 `sys_role`；请求携带 `grant_version`；替换授权、写前后快照日志、版本 `+1` 同事务                                                                                                                         |
+| BOM 新建           | 锁主品类与 `child_categories` 全部子品类行（id 升序）后重读；锁内完成子选校验、目录校验、指纹判重与取号（序列行锁见 §1.3）                                                                                  |
 | BOM 结构维护       | 仅超级管理员；锁目标品类及其结构伙伴品类（正/反向 `child_categories` 引用，id 升序）后重读；校验 `row_version` 乐观锁、全树合法性与伙伴 groupKey 冲突；差分写入、`row_version+1`、同事务写 `op_log`（§5.4） |
-| BOM 品类新建       | 仅超级管理员；锁 `bom_category` 全部既有行（id 升序）串行化创建；校验名称/前缀唯一与编码前缀数字延长冲突（§5.4）；整树一次插入并写 `op_log` |
-| BOM 删除           | 仅超级管理员；锁 BOM 行；校验无订单引用且无入库/调整流水；同事务删除明细与主行并写 `op_log`                                 |
-| 入库新增/当天修改  | 按 id 升序锁修改前后的 BOM，再锁入库行；校验北京时间录入日、版本与修改后的库存，更新入库并写前后快照日志                    |
-| 跨日库存调整       | 仅超级管理员；锁 BOM，校验调整后库存非负，追加不可变的调整单                                                                |
-| 出库登记/作废      | 锁 BOM、订单、出库单头；聚合校验、单头、数量流水与操作日志同事务，冲销只追加新事件                                          |
-| 登录/个人资料/改密 | 个人姓名只做单字段原子更新；改密锁用户并递增 `token_version` 与 `row_version`，旧 JWT 立即失效，客户端清除 token 并重新登录 |
+| BOM 品类新建       | 仅超级管理员；锁 `bom_category` 全部既有行（id 升序）串行化创建；校验名称/前缀唯一与编码前缀数字延长冲突（§5.4）；整树一次插入并写 `op_log`                                                                 |
+| BOM 删除           | 仅超级管理员；锁 BOM 行；校验无订单引用且无入库/调整流水；同事务删除明细与主行并写 `op_log`                                                                                                                 |
+| 入库新增/当天修改  | 按 id 升序锁修改前后的 BOM，再锁入库行；校验北京时间录入日、版本与修改后的库存，更新入库并写前后快照日志                                                                                                    |
+| 跨日库存调整       | 仅超级管理员；锁 BOM，校验调整后库存非负，追加不可变的调整单                                                                                                                                                |
+| 出库登记/作废      | 锁 BOM、订单、出库单头；聚合校验、单头、数量流水与操作日志同事务，冲销只追加新事件                                                                                                                          |
+| 登录/个人资料/改密 | 个人姓名只做单字段原子更新；改密锁用户并递增 `token_version` 与 `row_version`，旧 JWT 立即失效，客户端清除 token 并重新登录                                                                                 |
 
 所有需要多行锁的流程都按“BOM → 订单 → 流水”“用户 id 升序 → 客户 id 升序”的固定顺序取锁，降低死锁概率。发生死锁时只能重试整个事务，不能只重试最后一条 SQL。
 
@@ -87,20 +87,20 @@
 
 ### 3.2 `sys_user`
 
-| 字段                  | 语义与约束                                                |
-| --------------------- | --------------------------------------------------------- |
-| `id`                  | Snowflake 主键                                            |
-| `account`             | 唯一、不可修改，3–64 位字母/数字/下划线                  |
-| `password_hash`       | Argon2id/bcrypt 等强哈希，最长 255；绝不保存或返回明文    |
-| `name`                | 1–20 个 Unicode 字符                                     |
-| `role_code`           | 外键到 `sys_role.code`                                    |
-| `status`              | 1 启用、0 停用                                            |
-| `token_version`       | JWT 失效版本；停用、角色变更、改密、管理员重置密码时递增  |
-| `row_version`         | 用户资料与状态的乐观锁版本                                |
-| `password_changed_at` | 可空，最近一次密码修改时间（自助改密与 §10.5 救援改密时更新）   |
-| `last_login_at`       | 可空，成功登录后更新                                      |
-| `created_at`          | 创建时间，UTC `DATETIME(3)`，新建用户时写入               |
-| `updated_at`          | 非空，最近一次资料/状态/密码变更时间，Prisma 层变更时刷新 |
+| 字段                  | 语义与约束                                                    |
+| --------------------- | ------------------------------------------------------------- |
+| `id`                  | Snowflake 主键                                                |
+| `account`             | 唯一、不可修改，3–64 位字母/数字/下划线                       |
+| `password_hash`       | Argon2id/bcrypt 等强哈希，最长 255；绝不保存或返回明文        |
+| `name`                | 1–20 个 Unicode 字符                                          |
+| `role_code`           | 外键到 `sys_role.code`                                        |
+| `status`              | 1 启用、0 停用                                                |
+| `token_version`       | JWT 失效版本；停用、角色变更、改密、管理员重置密码时递增      |
+| `row_version`         | 用户资料与状态的乐观锁版本                                    |
+| `password_changed_at` | 可空，最近一次密码修改时间（自助改密与 §10.5 救援改密时更新） |
+| `last_login_at`       | 可空，成功登录后更新                                          |
+| `created_at`          | 创建时间，UTC `DATETIME(3)`，新建用户时写入                   |
+| `updated_at`          | 非空，最近一次资料/状态/密码变更时间，Prisma 层变更时刷新     |
 
 规则：
 
@@ -201,8 +201,6 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 - **边界**：不开放品类改名/改 key/改前缀、既有 `child_categories` 复合关系编辑、品类级 `status` 切换；节点级改名/移动/删除见 apply 的引用守卫（被引用即拒，替代口径仍是「新增 + 旧项隐藏」）；隐藏父节点不级联改子节点状态（可选 = 自身∧祖先启用，恢复分区≠恢复子项）。
 - **审计与时间线**：`create_bom_category`（归一 create）、`update_bom_structure`（归一 edit）入 bom 域；系统日志「编辑」筛选含结构维护。隐藏物料仍被既有 BOM 明细引用时，apply 响应附 `hiddenUsageCount` 行数提示（不阻断——隐藏不影响旧档案）。
 
-
-
 ## 6. 销售订单
 
 ### 6.1 `sales_order_table`
@@ -219,7 +217,7 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
     - 归档期间为受限终态：不可修改（含备注）、不可删除、禁止新增正向出库；剩余欠量（若有）随之关闭，不再计入待交付、可发量与工作台活跃统计，历史需求与客户排名仍全额保留。
     - 归档同时冻结依赖链（审计口径）：该订单的出库单不可作废（作废会回退已发净额）亦不可删除（含归档前已作废的单，删除即物理清理、立即断审计链）；归档单永不删除，其 BOM 引用持续存在，被引用 BOM 不可删除（5.2 引用计数不过滤订单状态）。
     - 归档单从销售订单页移入归档订单页（`menu:archived-orders`，普通菜单），仅供查询；`sales_order_change_log` 记 `ARCHIVE` 事件（request_key 必填、reason 可空），`op_log(action=archive_order)` 记里程碑与归档后快照。
-- 归档回退（受保护权限 `orders:unarchive`，仅 `super` 且仅归档操作人本人）：归档人把误归档的订单退回 `ACTIVE`，订单返回销售订单页恢复编辑/发货：
+- 归档回退（受保护权限 `orders:unarchive`，默认仅 `super`，可解锁下放；须为当前这次归档的操作人本人）：归档人把误归档的订单退回 `ACTIVE`，订单返回销售订单页恢复编辑/发货：
     - 归档人判等在服务层强校验（`archived_by` 与操作人判等，`super` 同样受限，非归档人 403）；前端按钮（归档订单详情）按 `archived_by_account` 与登录账号判等隐藏，后端权威校验同口径。
     - 无时间窗限制；回退时归档三要素随回退清空（`ck_sales_order_archive` 强制非 ARCHIVED 态三者全 NULL），归档与回退语境由 `ARCHIVE`/`UNARCHIVE` 日志快照保留；`sales_order_change_log` 记 `UNARCHIVE` 事件（request_key 必填、reason 可空），`op_log(action=unarchive_order)` 记里程碑与回退后快照。
     - 回退后订单恢复可修改/可发货/可删除，出库单恢复可作废/删除，可发量重新纳入该订单；再次归档时新归档人接替回退权。回退与编辑、出库登记、作废竞争同一订单锁（先 BOM 后订单），先提交者生效。
@@ -275,7 +273,7 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 
 - 仓管/超级管理员登记时，在同一事务创建 `outbound_shipment(state=REGISTERED)` 和一条正向 `outbound_ledger`，库存和订单累计已发立即生效。
 - 作废是唯一逆向操作：仓管或超级管理员对 `REGISTERED` 单填写作废原因，事务追加等额负向冲销流水并将单头置为 `VOIDED`，库存与订单净额随之恢复；已作废单不能重复作废；作废另在 `op_log` 记 `void_outbound`。
-- 未删除的已作废出库单不可修改；客户退货必须走后续销售退货入库，原出库事实永久保留。
+- 未删除的已作废出库单不可修改；真实客户退货不撤销原出库事实。当前系统没有销售退货流程，退货、验收与库存入账方式须在线下确认。
 - **删除已作废单（2026-09 起；2026-10 起物理删除）**：权限 `outbound:delete`（默认授仓管，非受保护）。仅 `VOIDED` 可删（作废时已追加冲销、订单已发量已恢复）；所属订单已归档则 409（删除即物理清理、立即断归档审计链，含归档前已作废的单）。删除 = 同事务按外键顺序连带 `outbound_state_log` 与 `NORMAL`+`CORRECTION` 数量流水同删（先删 CORRECTION 再删 NORMAL，自引用外键顺序）再删单头，不递增 `row_version`、不写状态日志；`op_log` 记 `delete_outbound` 与删除前快照（含原始发货备注、登记人/时点、作废原因），登记发货的 `ship` 日志也冻结原始备注。零和冲销对不改变任何统计与订单已发。出库单删除后，关联订单在净发货为零时可立即删除（见 6.1）。
 
 同一出库单的有效出库量等于其 `outbound_ledger Σqty_delta`，不得小于 0。冲销事件必须引用原正向事件；原数量事件永不更新或删除。
@@ -285,7 +283,7 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 - 未发货不要了：由超级管理员直接删除订单（须净发货为 0 且关联出库单均已删除）。
 - 已部分发货后不要了：由超级管理员归档结案，剩余欠量随归档关闭。
 - 已登记未作废的出库单需要回退数量：先由仓管/超级管理员作废对应出库单，再删除订单。
-- 已离库后客户因质量等原因退货：走销售退货入库，不撤销原出库。
+- 已离库后客户因质量等原因退货：线下确认退货、验收与库存入账方式，系统目前不支持销售退货及欠量重算，不撤销真实原出库。
 
 ## 8. 日志与不可篡改性
 
@@ -353,9 +351,12 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 
 后端代理转发 OpenAI 兼容上游（`/chat/completions`），按登录人记账 token——纯前端转发做不到按人计量。上游地址/key/模型/启用态由超管在「AI 工作台」维护，存服务端。
 
-- **ai_provider_config（单行表，id 固定 1，CHECK 兜底）**：base_url VARCHAR(255)、api_key VARCHAR(512) ascii_bin、model VARCHAR(64)、enabled、updated_by FK→sys_user。api_key 只存服务端，读接口只回脱敏值（apiKeySet + 掩码）；写入经受保护权限 `menu:ai-workbench`（与菜单同码，可解锁下放）。**备份分类为运行态表**：永不入应用备份（明文 key 不随备份文件分发），replace 恢复不清理——恢复后系统级 AI 配置保持现状。残留风险：CLI 整库 dump（backup-database，含 DDL 的运维全量）仍含明文 key，备份文件按机密保管（与含口令哈希的备份同级别要求）。apiKey 空串=显式清除；省略=保留原值。
-- **ai_usage_log（追加型用量记账）**：id Snowflake、user_id FK→sys_user、model、prompt/completion/total_tokens、status ENUM(success,error)、error_message(500)、duration_ms、created_at；索引 (user_id, created_at DESC)、(created_at DESC)。每次对话代理请求一行；失败/断流记 error、token 记 0、error_message 标注用量未知/部分（不把未知记成确定零）。**备份分类归 system 组**（与 op_log 同类，随「系统与日志」分组导出）。
-- **配置审计**：设置变更与业务行同事务写 op_log(update_ai_config)——系统审计动作，不进系统日志业务时间线（同 db_backup/db_restore）；快照脱敏（变更字段名/是否轮换 key/启用态/host/模型），绝不写入 key 内容。
-- **对话约束**：messages ≤20 条 ×16k 字符（字符数限制；JSON 序列化字节仍受 Fastify 默认 1MiB 请求体上限约束，超限 413——异常转义编码可能放大体积，不承诺按字符数推导的字节上限）；上游 max_tokens 4096；超时 45s（非流式/流式统一，**低于恢复排空窗 60s**——在途 AI 请求不会阻塞恢复）；流式带 stream_options.include_usage 由后端嗅探记账，响应头发出后上游失败以 SSE `event: error` 收尾；客户端断线即中止上游。对话不纳入 Idempotency-Key 清单：重试=新请求新计费。
-- **agent 查询端点**（`/ai/agent/*`，全部只读）：文档清单/单篇（登录即可）；作废入库/出库薄查询（各域 view 码）；已删除审计=op_log `delete_*` 快照（`system-logs:view`，2026-10 起物理删除后唯一留存）。全业务数据不重造端点——`GET /workbench/overview`、`GET /workbench/relations` 与各域列表、`GET /system-logs` 直接复用。agent 数据边界＝登录用户本人页面可见。文档正文单一归属在仓库 docs/（ai/ 三篇 + business/ 复用三篇），运行时按 `cwd/../../docs` 解析，部署镜像经 Dockerfile.backend COPY（staging 与 dockerignore 同步放行）。
+前端「众茂AI」为登录后的浮动聊天面板，支持流式回答、停止与显式重试、展开阅读、拖动及来源记录查看。收起面板不停止生成，完成时显示未读提示；退出或权限版本变化会卸载当前会话并中止请求。当前标签页的文字历史按账号、角色和授权版本隔离保存；刷新后需重新添加附件、重新查询业务数据。
 
+业务工具全部为现有 GET 端点，按实时菜单/操作授权筛选，后端继续独立校验；对话只能查询和解释操作，不能执行写操作。工具参数由 `docs/openapi.yaml` 生成到前端目录；修改相关查询契约后运行 `pnpm --filter zmsysbackend exec tsx scripts/generate-ai-tools.ts`，可加 `--check` 检查是否同步。附件最多 5 个、单个原文件不超过 10MB；文本与问题合计最多 16000 字符，图片压缩后以 OpenAI 兼容图片内容发送，识别能力取决于所配模型。语音输入使用浏览器语音识别能力，不支持或失败时明确提示，允许继续文字输入。
+
+- **ai_provider_config（单行表，id 固定 1，CHECK 兜底）**：base_url VARCHAR(255)、api_key VARCHAR(512) ascii_bin、model VARCHAR(64)、enabled、updated_by FK→sys_user。api_key 只存服务端，读接口只回脱敏值（apiKeySet + 掩码）；写入经受保护权限 `menu:ai-workbench`（与菜单同码，可解锁下放）。**备份分类为运行态表**：永不入应用备份（明文 key 不随备份文件分发），replace 恢复不清理——恢复后系统级 AI 配置保持现状。残留风险：CLI 整库 dump（backup-database，含 DDL 的运维全量）仍含明文 key，备份文件按机密保管（与含口令哈希的备份同级别要求）。apiKey 空串=显式清除；省略=保留原值。
+- **ai_usage_log（追加型用量记账）**：id Snowflake、user_id FK→sys_user、model、prompt/completion/total_tokens、status ENUM(success,error)、error_message(500)、duration_ms、created_at；索引 (user_id, created_at DESC)、(created_at DESC)。每次对话代理请求一行；失败/断流记 error，已取得的用量保留；缺失字段以 0 占位，error_message 标注用量未知/部分未知。HTTP usage.status 与流式 event: usage 同步区分 known/partial/unknown，不把未知当作确定零。**备份分类归 system 组**（与 op_log 同类，随「系统与日志」分组导出）。
+- **配置审计**：设置变更与业务行同事务写 op_log(update_ai_config)——系统审计动作，不进系统日志业务时间线（同 db_backup/db_restore）；快照脱敏（变更字段名/是否轮换 key/启用态/host/模型），绝不写入 key 内容。
+- **对话约束**：messages ≤40 条 ×16k 字符（含工具调用循环的 assistant/tool 消息；字符数限制；JSON 序列化字节仍受 Fastify 默认 1MiB 请求体上限约束，超限 413——异常转义编码可能放大体积，不承诺按字符数推导的字节上限）；上游 max_tokens 4096；超时 45s（非流式/流式统一，**低于恢复排空窗 60s**——在途 AI 请求不会阻塞恢复）；流式带 stream_options.include_usage 由后端嗅探记账，响应头发出后上游失败以 SSE `event: error` 收尾；客户端断线即中止上游。对话不纳入 Idempotency-Key 清单：重试=新请求新计费。
+- **agent 查询端点**（`/ai/agent/*`，全部只读）：文档清单/单篇（登录即可）；作废入库/出库薄查询（各域 view 码）；已删除审计=op_log `delete_*` 快照（`system-logs:view`，2026-10 起物理删除后唯一留存）。全业务数据不重造端点——`GET /workbench/overview`、`GET /workbench/relations` 与各域列表、`GET /system-logs` 直接复用。agent 数据边界＝登录用户本人页面可见。文档正文单一归属在仓库 docs/（ai/ 三篇 + business/ 复用三篇），运行时按 `cwd/../../docs` 解析，部署镜像经 Dockerfile.backend COPY（staging 与 dockerignore 同步放行）。
