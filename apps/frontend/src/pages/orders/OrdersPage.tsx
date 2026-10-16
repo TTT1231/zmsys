@@ -35,7 +35,6 @@ import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { CustomerCell, DateCell, QtyCell } from "@/components/ui/cells";
 import { SortTh } from "@/components/ui/SortTh";
-import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import {
     DndContext,
     PointerSensor,
@@ -858,6 +857,8 @@ export function OrdersPage() {
     const [searchParams] = useSearchParams();
     const [statusFilter, setStatusFilter] = useState("全部状态");
     const [categoryFilter, setCategoryFilter] = useState("全部品类");
+    // 移动端完成度二段筛选（替代桌面六态状态筛选：窄屏装不下，也用不上细分状态）
+    const [mobileDone, setMobileDone] = useState<"all" | "open" | "done">("all");
     const [dateStart, setDateStart] = useState("");
     const [dateEnd, setDateEnd] = useState("");
     // 列排序默认升序：默认按订单号；仓管视角默认交货日期（按交期备货）。
@@ -935,6 +936,9 @@ export function OrdersPage() {
             if (taskFilter === "ready" && (row?.maxShip ?? 0) <= 0) return false;
             if (statusFilter !== "全部状态" && (row?.status ?? orderStatusOfMax(order, 0)).label !== statusFilter)
                 return false;
+            // 移动端完成度二段筛选（未完成 = 仍有待交；已完成 = 已全部交付）
+            if (mobileDone === "open" && remainingOf(order) <= 0) return false;
+            if (mobileDone === "done" && remainingOf(order) > 0) return false;
             if (categoryFilter !== "全部品类" && bomCategory.get(order.bomCode) !== categoryFilter) return false;
             if (dateStart && order.deliverDate < dateStart) return false;
             if (dateEnd && order.deliverDate > dateEnd) return false;
@@ -946,7 +950,18 @@ export function OrdersPage() {
             }
             return true;
         });
-    }, [orders, keyword, taskFilter, statusFilter, categoryFilter, dateStart, dateEnd, derived, bomCategory]);
+    }, [
+        orders,
+        keyword,
+        taskFilter,
+        statusFilter,
+        mobileDone,
+        categoryFilter,
+        dateStart,
+        dateEnd,
+        derived,
+        bomCategory,
+    ]);
 
     const sorted = useMemo(() => {
         if (!sort) return filtered; // 取消排序：数据顺序，手动行序接管显示
@@ -976,6 +991,15 @@ export function OrdersPage() {
     }, [sorted, sort, manualOrder]);
 
     const pageRows = ordered.slice((page - 1) * pageSize, page * pageSize);
+    /* 移动端卡片视图：固定按创建时间降序（最新在前），不提供排序入口——
+       桌面排序状态（拖拽手动序/表头排序）只服务表格视图，卡片不跟随 */
+    const mobilePageRows = useMemo(
+        () =>
+            [...filtered]
+                .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.orderNo.localeCompare(a.orderNo))
+                .slice((page - 1) * pageSize, page * pageSize),
+        [filtered, page, pageSize],
+    );
     const dateFilterActive = !!dateStart || !!dateEnd;
     const filtersActive =
         dateFilterActive || !!keyword.trim() || statusFilter !== "全部状态" || categoryFilter !== "全部品类";
@@ -1215,6 +1239,38 @@ export function OrdersPage() {
                             </div>
                         }
                     >
+                        {/* 移动端完成度二段筛选（桌面六态状态/品类筛选与排序下拉不进移动端） */}
+                        <div
+                            className="flex w-full items-center gap-1 rounded-btn border border-line bg-soft p-1 lg:hidden"
+                            role="group"
+                            aria-label="按完成度筛选"
+                        >
+                            {(
+                                [
+                                    ["all", "全部"],
+                                    ["open", "未完成"],
+                                    ["done", "已完成"],
+                                ] as const
+                            ).map(([key, label]) => {
+                                const active = mobileDone === key;
+                                return (
+                                    <button
+                                        type="button"
+                                        key={key}
+                                        aria-pressed={active}
+                                        onClick={() => {
+                                            setMobileDone(key);
+                                            setPage(1);
+                                        }}
+                                        className={`min-h-9 flex-1 rounded-lg px-3 text-13 font-semibold transition ${
+                                            active ? "bg-surface text-ink shadow-xs" : "text-muted"
+                                        }`}
+                                    >
+                                        {label}
+                                    </button>
+                                );
+                            })}
+                        </div>
                         <ToolbarSelect
                             value={statusFilter}
                             onChange={value => {
@@ -1224,6 +1280,7 @@ export function OrdersPage() {
                             }}
                             label="按状态筛选"
                             options={STATUS_OPTIONS}
+                            className="max-lg:hidden"
                         />
                         <ToolbarSelect
                             value={categoryFilter}
@@ -1234,15 +1291,7 @@ export function OrdersPage() {
                             }}
                             label="按品类筛选"
                             options={["全部品类", ...categories]}
-                        />
-                        <MobileSortSelect
-                            columns={ORDER_SORT_COLUMNS}
-                            value={sort}
-                            onChange={next => {
-                                setSort(next);
-                                setManualOrder(null); // 与桌面表头一致：重新选择排序（含回到默认顺序）即作废手动序
-                            }}
-                            noneLabel="默认顺序"
+                            className="max-lg:hidden"
                         />
                         <DateRangeFilter
                             start={dateStart}
@@ -1258,8 +1307,8 @@ export function OrdersPage() {
                     </ListToolbar>
 
                     <div className="mobile-records">
-                        <ListState loading={isLoading} empty={!pageRows.length}>
-                            {pageRows.map(order => (
+                        <ListState loading={isLoading} empty={!mobilePageRows.length}>
+                            {mobilePageRows.map(order => (
                                 <OrderTaskCard
                                     key={order.orderNo}
                                     order={order}

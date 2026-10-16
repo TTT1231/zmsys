@@ -35,11 +35,13 @@ export function ListToolbar({
                 />
             </label>
             {children}
+            {/* 清空条件仅桌面保留：移动端筛选已收敛为少数几个控件（各有就地复位入口，
+                如交期面板的"清除"），再占一行"清空条件"得不偿失 */}
             <Button
                 variant="link"
                 onClick={onClear}
                 disabled={!filtersActive}
-                className="min-h-10 px-1 text-muted hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
+                className="max-lg:hidden min-h-10 px-1 text-muted hover:text-primary-strong disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle"
             >
                 清空条件
             </Button>

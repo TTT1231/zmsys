@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { Order } from "@/api";
 import { useSnap } from "@/context/useSnap";
-import { BomCell } from "@/components/bom/BomCell";
+import { BomInlineDetail } from "@/components/bom/BomCell";
 import { bomByCode, maxShipOf, orderStatusOfMax, remainingOf, stockOf, type DerivedOrders } from "@/data/views";
 import { num } from "@/lib/format";
 import { formatDateTime, todayIso } from "@/lib/date";
@@ -121,7 +121,13 @@ export function OrderTaskCard({
                 </>
             }
         >
-            <BomCell categories={snap.bomCategories} bom={bom} bomCode={order.bomCode} />
+            {/* BOM 详情完整内联（免"查看物料"二次弹窗）；订单备注低频，有才显示 */}
+            <BomInlineDetail categories={snap.bomCategories} bom={bom} bomCode={order.bomCode} />
+            {!!order.remark.trim() && (
+                <p className="mt-2 whitespace-pre-wrap text-13 leading-5 text-td">
+                    订单备注：<span className="font-medium">{order.remark}</span>
+                </p>
+            )}
             <div className="mt-3 flex flex-col gap-1.5 border-t border-line pt-3">
                 <CardField label="交货日期" value={order.deliverDate} />
                 <CardField label="已发 / 订单" value={`${num(order.outbound)} / ${num(order.qty)} 个`} />

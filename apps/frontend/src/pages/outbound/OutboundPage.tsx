@@ -9,7 +9,7 @@ import { RecordFields, RecordProduct, RecordSummary } from "@/components/busines
 import { DangerNote } from "@/components/business/DangerNote";
 import { VoidReasonModal } from "@/components/business/VoidReasonModal";
 import { CustomerDetailModal } from "@/pages/customers/CustomersPage";
-import { BomCell } from "@/components/bom/BomCell";
+import { BomCell, BomInlineDetail } from "@/components/bom/BomCell";
 import { BomRemarkNote } from "@/components/bom/BomRemarkNote";
 import { RemarkCell } from "@/components/ui/RemarkCell";
 import { useMemo, useState } from "react";
@@ -27,7 +27,6 @@ import { Modal } from "@/components/ui/Modal";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { CustomerCell, QtyCell } from "@/components/ui/cells";
 import { SortTh } from "@/components/ui/SortTh";
-import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { makeLedgerSort, nextSortState, type LedgerSortKey, type SortState } from "@/lib/tableSort";
 import { DateField, TextArea, TextField } from "@/components/ui/Field";
 import { useCreateOutbound, useDeleteOutbound, useVoidOutbound, useWbRefresh, useWbView } from "@/data/queries";
@@ -487,6 +486,17 @@ export function OutboundPage() {
 
     const sorted = useMemo(() => ledgerSort.sortRows(filtered, sort), [filtered, sort]);
     const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize);
+    /* 移动端卡片视图：固定按出库时间倒序（最新出库在前，同日按登记时间与单号细化），
+       排序入口不进移动端 */
+    const mobilePageRows = useMemo(
+        () =>
+            [...filtered]
+                .sort(
+                    (a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time) || b.no.localeCompare(a.no),
+                )
+                .slice((page - 1) * pageSize, page * pageSize),
+        [filtered, page, pageSize],
+    );
     const canRegister = can("outbound:ship");
     const canVoid = can("outbound:void");
     const canDeleteVoided = can("outbound:delete");
@@ -558,18 +568,11 @@ export function OutboundPage() {
                             label="按操作人筛选"
                             options={["全部操作人", ...operators]}
                         />
-                        <MobileSortSelect
-                            columns={ledgerSort.columns}
-                            value={sort}
-                            onChange={next => {
-                                if (next) setSort(next);
-                            }}
-                        />
                     </ListToolbar>
 
                     <div className="mobile-records">
-                        <ListState loading={isLoading} empty={!pageRows.length}>
-                            {pageRows.map(row => {
+                        <ListState loading={isLoading} empty={!mobilePageRows.length}>
+                            {mobilePageRows.map(row => {
                                 const bom = bomIndex.get(row.bomCode);
                                 return (
                                     <RecordCard
@@ -588,11 +591,12 @@ export function OutboundPage() {
                                             </Button>
                                         }
                                     >
-                                        <BomCell categories={snap.bomCategories} bom={bom} bomCode={row.bomCode} />
-                                        {/* 有工艺差异才挂警示条，与入库台账移动卡片一致 */}
-                                        {!!bom?.remark?.trim() && (
-                                            <BomRemarkNote remark={bom.remark} className="mt-2" />
-                                        )}
+                                        {/* BOM 详情完整内联（含工艺差异警示条，空值不占位） */}
+                                        <BomInlineDetail
+                                            categories={snap.bomCategories}
+                                            bom={bom}
+                                            bomCode={row.bomCode}
+                                        />
                                         <div className="mt-2 flex flex-col gap-1.5">
                                             <CardField label="出库数量" value={`${num(row.qty)} 个`} strong />
                                             <CardField label="出库日期" value={row.date} />

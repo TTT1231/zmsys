@@ -1,4 +1,4 @@
-import { BomCell } from "@/components/bom/BomCell";
+import { BomCell, BomInlineDetail } from "@/components/bom/BomCell";
 import { DangerNote } from "@/components/business/DangerNote";
 import { RemarkCell } from "@/components/ui/RemarkCell";
 import { DataTable } from "@/components/ui/DataTable";
@@ -993,7 +993,9 @@ export function BomPage() {
                                         </Button>
                                     }
                                 >
-                                    <BomCell
+                                    {/* 完整物料构成内联（标题已是编码+品类，身份行省略）；
+                                        备注由内联详情的条件警示条呈现，不再单列"—"占位 */}
+                                    <BomInlineDetail
                                         categories={categoriesQuery.data}
                                         bom={bom}
                                         bomCode={bom.code}
@@ -1006,7 +1008,6 @@ export function BomPage() {
                                                 stocksQuery.data ? `${num(stocksQuery.data[bom.code] ?? 0)} 个` : "—"
                                             }
                                         />
-                                        <CardField label="备注" value={bom.remark || "—"} />
                                         <CardField label="创建人" value={bom.creator} />
                                         <CardField label="创建时间" value={formatDateTime(bom.created)} />
                                     </div>

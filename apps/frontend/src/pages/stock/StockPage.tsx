@@ -14,7 +14,7 @@ import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
 import { Button, TableLink } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
-import { BomCell } from "@/components/bom/BomCell";
+import { BomCell, BomInlineDetail } from "@/components/bom/BomCell";
 import { RemarkCell } from "@/components/ui/RemarkCell";
 import { BomSpecs } from "@/components/bom/BomSpecs";
 import { BomRemarkNote } from "@/components/bom/BomRemarkNote";
@@ -37,18 +37,6 @@ interface StockRow {
 }
 
 const EMPTY_ROWS: StockRow[] = [];
-
-/** BOM 备注：同构成不同备注 = 不同 BOM，沿用警示色突出工艺差异（同成品入库台账） */
-function BomRemarkText({ remark }: { remark?: string }) {
-    const text = remark?.trim();
-    return text ? (
-        <span className="wrap-break-word font-medium text-warning" title={text}>
-            {text}
-        </span>
-    ) : (
-        <span className="text-subtle">—</span>
-    );
-}
 
 const FLOW_TYPE_LABEL: Record<StockFlowRow["type"], string> = {
     in: "入库",
@@ -337,8 +325,10 @@ export function StockPage() {
                                     </Button>
                                 }
                             >
-                                <div className="grid grid-cols-2 gap-2">
-                                    <CardField label="BOM 备注" value={<BomRemarkText remark={row.remark} />} />
+                                {/* BOM 详情完整内联（分组芯片铺开 + 备注有才显示），
+                                    免去逐卡点"查看详情"才能看构成与备注 */}
+                                <BomInlineDetail bom={row.bom} bomCode={row.code} categories={categoriesQuery.data} />
+                                <div className="mt-2 flex flex-col gap-1.5">
                                     <CardField label="当前库存" value={`${num(row.stock)} 个`} strong />
                                 </div>
                             </RecordCard>
