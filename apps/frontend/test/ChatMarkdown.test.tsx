@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ChatMarkdown } from "@/components/ai/ChatMarkdown";
 
@@ -43,4 +43,14 @@ it("拒绝覆盖安全设置和外部链接，不显示图形源代码", async (
     );
     expect(await screen.findByText("流程图暂时无法显示，请按文字步骤操作。")).toBeInTheDocument();
     expect(renderer.render).not.toHaveBeenCalled();
+});
+it("点击流程图可放大预览", async () => {
+    render(<ChatMarkdown>{"```mermaid\nflowchart TD\nA[打开订单] --> B[确认删除]\n```"}</ChatMarkdown>);
+    const canvas = await screen.findByRole("img", { name: "操作流程图" });
+    await waitFor(() => expect(canvas.querySelector("svg")).not.toBeNull());
+    fireEvent.click(canvas);
+    const dialog = await screen.findByRole("dialog", { name: "操作流程图" });
+    expect(dialog.querySelector(".ai-flowchart-zoom svg")).not.toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "关闭" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 });

@@ -1,10 +1,15 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
+import { Icon } from "@/lib/icons";
+import { Modal } from "@/components/ui/Modal";
 
 export function Flowchart({ code, pending }: { code: string; pending: boolean }) {
     const id = useId().replace(/[^a-zA-Z0-9]/g, "");
-    const container = useRef<HTMLDivElement>(null);
     const [error, setError] = useState(false);
     const [revision, setRevision] = useState(0);
+    const [svg, setSvg] = useState("");
+    const [zoom, setZoom] = useState(false);
+    // React 19 按 prop 对象引用比较 dangerouslySetInnerHTML，稳定对象避免重渲染时重建已显示的图形。
+    const svgHtml = useMemo(() => ({ __html: svg }), [svg]);
     useEffect(() => {
         const observer = new MutationObserver(() => setRevision(value => value + 1));
         observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
@@ -34,7 +39,7 @@ export function Flowchart({ code, pending }: { code: string; pending: boolean })
                     maxEdges: 40,
                 });
                 const rendered = await mermaid.render(`ai-flow-${id}-${revision}`, code);
-                if (!cancelled && container.current) container.current.innerHTML = rendered.svg;
+                if (!cancelled) setSvg(rendered.svg);
             })
             .catch(() => {
                 if (!cancelled) setError(true);
@@ -45,19 +50,39 @@ export function Flowchart({ code, pending }: { code: string; pending: boolean })
     }, [code, id, pending, revision]);
     return (
         <figure className="ai-flowchart" aria-label="操作流程图">
-            <figcaption>操作流程</figcaption>
+            <figcaption>
+                <span>操作流程</span>
+                {!pending && !error && svg && (
+                    <button
+                        type="button"
+                        className="ai-flowchart-view"
+                        aria-label="放大查看流程图"
+                        title="放大查看"
+                        onClick={() => setZoom(true)}
+                    >
+                        <Icon name="maximize" size={14} />
+                    </button>
+                )}
+            </figcaption>
             {pending ? (
                 <p role="status">正在绘制流程图…</p>
             ) : error ? (
                 <p>流程图暂时无法显示，请按文字步骤操作。</p>
             ) : null}
             <div
-                ref={container}
                 className="ai-flowchart-canvas"
                 role="img"
                 aria-label="操作流程图"
-                hidden={pending || error}
+                title="放大查看"
+                hidden={pending || error || !svg}
+                onClick={() => setZoom(true)}
+                dangerouslySetInnerHTML={svgHtml}
             />
+            {zoom && (
+                <Modal open onClose={() => setZoom(false)} title="操作流程图" width={900}>
+                    <div className="ai-flowchart-zoom" dangerouslySetInnerHTML={svgHtml} />
+                </Modal>
+            )}
         </figure>
     );
 }

@@ -144,6 +144,16 @@
 .ai-chat-thinking > summary::-webkit-details-marker {
     display: none;
 }
+.ai-chat-status {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: fit-content;
+    min-height: 36px;
+    padding: 6px 4px;
+    color: var(--color-muted);
+    font-size: 12.5px;
+}
 .ai-thinking-chevron {
     flex-shrink: 0;
     transition: transform 0.15s;
@@ -180,10 +190,30 @@
     overflow: hidden;
 }
 .ai-flowchart figcaption {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     padding: 8px 10px;
     border-bottom: 1px solid var(--color-line);
     font-size: 12px;
     color: var(--color-muted);
+}
+.ai-flowchart-view {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 3px 7px;
+    border: 1px solid var(--color-line);
+    border-radius: 6px;
+    color: var(--color-muted);
+    background: var(--color-surface);
+    cursor: pointer;
+}
+.ai-flowchart-view:hover {
+    color: var(--color-ink);
+    border-color: var(--color-line-strong);
 }
 .ai-flowchart > p {
     padding: 12px;
@@ -193,11 +223,23 @@
     overflow-x: auto;
     padding: 12px 8px;
 }
+.ai-flowchart-canvas:not([hidden]) {
+    cursor: zoom-in;
+}
 .ai-flowchart-canvas svg {
     display: block;
     max-width: 100%;
     height: auto;
     margin: 0 auto;
+}
+.ai-flowchart-zoom {
+    overflow: auto;
+}
+.ai-flowchart-zoom svg {
+    display: block;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
 }
 .ai-chat-bot {
     max-width: calc(100% - 34px);
@@ -388,7 +430,8 @@
     .ai-chat-bubble {
         font-size: 15px;
     }
-    .ai-chat-thinking > summary {
+    .ai-chat-thinking > summary,
+    .ai-chat-status {
         min-height: 44px;
     }
 }

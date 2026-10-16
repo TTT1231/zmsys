@@ -53,7 +53,7 @@ async function openChat() {
 }
 
 describe("AI 聊天面板", () => {
-    it("思考和处理步骤可展开，与回答正文分开展示", async () => {
+    it("思考中只显示当前状态，完成后可展开查看步骤", async () => {
         const pending = Promise.withResolvers<string>();
         vi.mocked(runChatAgent).mockImplementation(options => {
             options.onReasoning?.("正在核对今天的记录");
@@ -65,10 +65,27 @@ describe("AI 聊天面板", () => {
         await user.keyboard("{Enter}");
         await user.click(await screen.findByText("正在思考"));
         expect(screen.getByText("正在核对今天的记录").closest("details")).toHaveAttribute("open");
-        expect(screen.getByText("正在查询成品入库…", { selector: "li" })).toBeInTheDocument();
+        expect(screen.queryByText("正在查询成品入库…", { selector: "li" })).not.toBeInTheDocument();
         await act(async () => pending.resolve("今天入库12"));
         expect(await screen.findByText("今天入库12")).toBeInTheDocument();
         expect(screen.getByText("思考过程")).toBeInTheDocument();
+        expect(screen.getByText("正在查询成品入库…", { selector: "li" })).toBeInTheDocument();
+    });
+    it("没有思考文字时思考中仅显示单行状态，完成后可展开处理步骤", async () => {
+        const pending = Promise.withResolvers<string>();
+        vi.mocked(runChatAgent).mockImplementation(options => {
+            options.onProgress("正在查询成品入库…");
+            return pending.promise;
+        });
+        const user = await openChat();
+        await user.type(screen.getByRole("textbox", { name: "消息内容" }), "今天入库");
+        await user.keyboard("{Enter}");
+        expect(await screen.findByText("正在查询成品入库…", { selector: ".ai-chat-status span" })).toBeInTheDocument();
+        expect(document.querySelector(".ai-chat-thinking")).toBeNull();
+        await act(async () => pending.resolve("今天入库12"));
+        expect(await screen.findByText("今天入库12")).toBeInTheDocument();
+        expect(screen.getByText("处理过程")).toBeInTheDocument();
+        expect(screen.getByText("正在查询成品入库…", { selector: "li" })).toBeInTheDocument();
     });
     it("轻轻向上翻后继续输出也不会抢回底部", async () => {
         const pending = Promise.withResolvers<string>();
