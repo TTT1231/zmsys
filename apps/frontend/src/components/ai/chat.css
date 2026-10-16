@@ -1,15 +1,18 @@
 .ai-chat-fab {
     position: fixed;
     right: 16px;
-    top: 50%;
-    transform: translateY(-50%);
+    /* 只沿右缘垂直移动（滑动变阻器）：垂直位置由拖拽直写 --fab-y（px），
+       默认视口垂直居中；transform 不参与 transition，指针走多快跟多快 */
+    top: 0;
+    transform: translateY(var(--fab-y, calc(50vh - 27px)));
     width: 54px;
     height: 54px;
     z-index: 45;
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
+    cursor: grab;
+    touch-action: none;
     border: 0;
     border-radius: 50%;
     color: white;
@@ -24,6 +27,11 @@
 }
 .ai-chat-fab:active {
     scale: 0.96;
+}
+.ai-chat-fab.is-fab-dragging {
+    cursor: grabbing;
+    transition: none;
+    box-shadow: 0 14px 34px color-mix(in srgb, var(--color-primary) 55%, transparent);
 }
 .ai-chat-panel {
     position: fixed;

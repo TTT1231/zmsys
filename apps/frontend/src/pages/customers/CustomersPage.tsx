@@ -22,7 +22,6 @@ import { CustomerCell } from "@/components/ui/cells";
 import { DangerNote } from "@/components/business/DangerNote";
 import { OrderDetailModal } from "@/pages/orders/OrdersPage";
 import { SortTh } from "@/components/ui/SortTh";
-import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { nextSortState, type SortState } from "@/lib/tableSort";
 import { SelectField, TextField } from "@/components/ui/Field";
 import { RegionCascader, type RegionValue } from "@/components/ui/RegionCascader";
@@ -44,13 +43,8 @@ const AVATAR_TONES = [
     "bg-accent-soft text-accent",
 ];
 
-/* 可排序列：最近下单（日期）/ 累计订单 / 待交数量；桌面表头与移动端排序下拉共用 */
+/* 可排序列：最近下单（日期）/ 累计订单 / 待交数量（桌面表头交互排序用） */
 type CustomerSortKey = "lastOrderDate" | "orderCount" | "pendingQty";
-const CUSTOMER_SORT_COLUMNS: Array<{ key: CustomerSortKey; label: string }> = [
-    { key: "lastOrderDate", label: "最近下单" },
-    { key: "orderCount", label: "累计订单" },
-    { key: "pendingQty", label: "待交数量" },
-];
 
 /* 新建 / 编辑客户共用表单弹窗（编辑时传 customer 初值；电话留空表示不修改） */
 function CustomerFormModal({ customer, onClose }: { customer: Customer | null; onClose: () => void }) {
@@ -496,6 +490,22 @@ export function CustomersPage() {
     }, [rows, sort]);
 
     const pageRows = sortedRows.slice((page - 1) * pageSize, page * pageSize);
+    /* 移动端卡片视图：固定最近下单降序（未下单仍排最后），移动端不提供排序/状态筛选入口 */
+    const mobilePageRows = useMemo(
+        () =>
+            [...rows]
+                .sort((a, b) => {
+                    if (a.lastOrderDate === "—" || b.lastOrderDate === "—") {
+                        if (a.lastOrderDate === b.lastOrderDate) return a.customer.code.localeCompare(b.customer.code);
+                        return a.lastOrderDate === "—" ? 1 : -1;
+                    }
+                    return (
+                        b.lastOrderDate.localeCompare(a.lastOrderDate) || a.customer.code.localeCompare(b.customer.code)
+                    );
+                })
+                .slice((page - 1) * pageSize, page * pageSize),
+        [rows, page, pageSize],
+    );
 
     const applySort = (key: CustomerSortKey) => setSort(current => nextSortState(current, key));
 
@@ -545,6 +555,7 @@ export function CustomersPage() {
                             </TableHeaderActions>
                         }
                     >
+                        {/* 合作状态筛选仅桌面：移动端按最近下单降序浏览即可，不进筛选 */}
                         <ToolbarSelect
                             value={statusFilter}
                             onChange={value => {
@@ -553,19 +564,13 @@ export function CustomersPage() {
                             }}
                             label="按合作状态筛选"
                             options={["全部状态", "合作中", "待跟进"]}
-                        />
-                        <MobileSortSelect
-                            columns={CUSTOMER_SORT_COLUMNS}
-                            value={sort}
-                            onChange={next => {
-                                if (next) setSort(next);
-                            }}
+                            className="max-lg:hidden"
                         />
                     </ListToolbar>
 
                     <div className="mobile-records">
-                        <ListState loading={isLoading} empty={!pageRows.length}>
-                            {pageRows.map(({ customer, orderCount, pendingQty }) => (
+                        <ListState loading={isLoading} empty={!mobilePageRows.length}>
+                            {mobilePageRows.map(({ customer, orderCount, pendingQty }) => (
                                 <RecordCard
                                     key={customer.code}
                                     title={customer.name}

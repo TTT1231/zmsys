@@ -21,7 +21,6 @@ import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { QtyCell } from "@/components/ui/cells";
 import { SortTh } from "@/components/ui/SortTh";
-import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { makeLedgerSort, nextSortState, type LedgerSortKey, type SortState } from "@/lib/tableSort";
 import { TextArea, TextField } from "@/components/ui/Field";
 import { SelectMenuField } from "@/components/ui/SelectMenuField";
@@ -41,7 +40,7 @@ import { bomByCode, bomIndexOf } from "@/data/views";
 import { beijingDateOf, beijingTodayIso, todayIso } from "@/lib/date";
 import { useToast } from "@/components/ui/toastContexts";
 
-import { BomCell } from "@/components/bom/BomCell";
+import { BomCell, BomInlineDetail } from "@/components/bom/BomCell";
 import { RemarkCell } from "@/components/ui/RemarkCell";
 import { BomPicker } from "@/components/bom/BomPicker";
 import { BomRemarkNote } from "@/components/bom/BomRemarkNote";
@@ -490,6 +489,14 @@ export function InboundPage() {
 
     const sorted = useMemo(() => ledgerSort.sortRows(filtered, sort), [filtered, sort]);
     const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize);
+    /* 移动端卡片视图：固定按登记时间倒序（最新入库在前），排序入口不进移动端 */
+    const mobilePageRows = useMemo(
+        () =>
+            [...filtered]
+                .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.no.localeCompare(a.no))
+                .slice((page - 1) * pageSize, page * pageSize),
+        [filtered, page, pageSize],
+    );
     const canRegister = can("inbound:register");
     const canVoidToday = can("inbound:edit");
     const canDeleteVoided = can("inbound:delete");
@@ -570,18 +577,11 @@ export function InboundPage() {
                             label="按登记人筛选"
                             options={["全部登记人", ...inspectors]}
                         />
-                        <MobileSortSelect
-                            columns={ledgerSort.columns}
-                            value={sort}
-                            onChange={next => {
-                                if (next) setSort(next);
-                            }}
-                        />
                     </ListToolbar>
 
                     <div className="mobile-records">
-                        <ListState loading={isLoading} empty={!pageRows.length}>
-                            {pageRows.map(row => {
+                        <ListState loading={isLoading} empty={!mobilePageRows.length}>
+                            {mobilePageRows.map(row => {
                                 const bom = bomIndex.get(row.bomCode);
                                 return (
                                     <RecordCard
@@ -600,11 +600,12 @@ export function InboundPage() {
                                             </Button>
                                         }
                                     >
-                                        <BomCell categories={snap.bomCategories} bom={bom} bomCode={row.bomCode} />
-                                        {/* 有工艺差异才挂警示条，与桌面表格「空值低调、非空警示」一致 */}
-                                        {!!bom?.remark?.trim() && (
-                                            <BomRemarkNote remark={bom.remark} className="mt-2" />
-                                        )}
+                                        {/* BOM 详情完整内联（含工艺差异警示条，空值不占位） */}
+                                        <BomInlineDetail
+                                            categories={snap.bomCategories}
+                                            bom={bom}
+                                            bomCode={row.bomCode}
+                                        />
                                         <div className="mt-2 flex flex-col gap-1.5">
                                             <CardField label="入库数量" value={`${num(row.qty)} 个`} strong />
                                             <CardField label="登记人" value={row.inspector} />

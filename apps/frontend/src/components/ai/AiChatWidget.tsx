@@ -48,6 +48,13 @@ export default function AiChatWidget() {
     const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
     const dropDepth = useRef(0);
     const voiceBase = useRef("");
+    /* FAB 沿右缘垂直拖动（滑动变阻器，移动端+Web 同一套）：位置直写 CSS 变量
+       --fab-y（不经 React 状态，逐帧零重渲染），松手持久化到 localStorage；
+       位移超阈值才算拖动，否则放行点击开关面板 */
+    const FAB_SIZE = 54;
+    const fabY = useRef<number | null>(null);
+    const fabDrag = useRef({ active: false, startY: 0, baseY: 0, moved: false });
+    const suppressFabClick = useRef(false);
     const chat = useAiChat({
         storageKey: `zm-ai-chat:${user!.account}:${role}:${grant.version}`,
         identity: `${user!.name}（${user!.account}）`,
@@ -90,6 +97,62 @@ export default function AiChatWidget() {
             window.removeEventListener("resize", sync);
         };
     }, []);
+    /* FAB 垂直位置：恢复持久化值（无记录则视口居中），视口变化时夹回安全区间 */
+    const clampFabY = (y: number) => {
+        const viewport = window.visualViewport;
+        const top = viewport?.offsetTop ?? 0;
+        const height = viewport?.height ?? window.innerHeight;
+        return Math.max(top + 8, Math.min(y, top + height - FAB_SIZE - 8));
+    };
+    const applyFabY = (y: number) => {
+        fabY.current = y;
+        launcher.current?.style.setProperty("--fab-y", `${y}px`);
+    };
+    useEffect(() => {
+        const stored = Number(localStorage.getItem("zm-ai-fab-y"));
+        const initial =
+            Number.isFinite(stored) && stored > 0
+                ? stored
+                : (window.visualViewport?.height ?? window.innerHeight) / 2 - FAB_SIZE / 2;
+        applyFabY(clampFabY(initial));
+        const onViewport = () => {
+            if (fabY.current !== null) applyFabY(clampFabY(fabY.current));
+        };
+        window.addEventListener("resize", onViewport);
+        window.visualViewport?.addEventListener("resize", onViewport);
+        return () => {
+            window.removeEventListener("resize", onViewport);
+            window.visualViewport?.removeEventListener("resize", onViewport);
+        };
+    }, []);
+    const onFabPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+        if (event.button !== 0) return;
+        const rect = launcher.current?.getBoundingClientRect();
+        if (!rect) return;
+        fabDrag.current = { active: true, startY: event.clientY, baseY: rect.top, moved: false };
+        // jsdom 与个别旧浏览器没有 setPointerCapture：捕获失败只影响指针移出按钮后的事件流，
+        // 拖动本身靠 move/up 兜底，这里可缺席
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+    };
+    const onFabPointerMove = (event: PointerEvent<HTMLButtonElement>) => {
+        const dragState = fabDrag.current;
+        if (!dragState.active) return;
+        const dy = event.clientY - dragState.startY;
+        if (!dragState.moved && Math.abs(dy) < 3) return;
+        dragState.moved = true;
+        launcher.current?.classList.add("is-fab-dragging");
+        applyFabY(clampFabY(dragState.baseY + dy));
+    };
+    const onFabPointerEnd = () => {
+        const dragState = fabDrag.current;
+        if (dragState.active && dragState.moved) {
+            // 拖动落定后的 pointerup 会紧跟一次 click，吞掉避免误开面板
+            suppressFabClick.current = true;
+            if (fabY.current !== null) localStorage.setItem("zm-ai-fab-y", String(Math.round(fabY.current)));
+        }
+        fabDrag.current = { active: false, startY: 0, baseY: 0, moved: false };
+        launcher.current?.classList.remove("is-fab-dragging");
+    };
 
     const setPanelOpen = (value: boolean) => {
         isOpen.current = value;
@@ -263,9 +326,20 @@ export default function AiChatWidget() {
                 type="button"
                 className={`ai-chat-fab ${open ? "is-open" : ""}`}
                 aria-label={open ? "收起众茂AI" : unread ? "打开众茂AI，有新回答" : "打开众茂AI"}
+                title="按住可沿屏幕右缘上下移动"
                 aria-expanded={open}
                 aria-controls="zm-ai-panel"
-                onClick={() => setPanelOpen(!open)}
+                onClick={() => {
+                    if (suppressFabClick.current) {
+                        suppressFabClick.current = false;
+                        return;
+                    }
+                    setPanelOpen(!open);
+                }}
+                onPointerDown={onFabPointerDown}
+                onPointerMove={onFabPointerMove}
+                onPointerUp={onFabPointerEnd}
+                onPointerCancel={onFabPointerEnd}
             >
                 <Icon name="spark" size={26} />
                 {unread && (

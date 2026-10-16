@@ -1,23 +1,7 @@
 import type { ReactNode } from "react";
 
+/** 工具栏收纳区，仅桌面（lg+）渲染。移动端原本收纳的只有"刷新"一项，
+ *  单为它铺一层"更多"下拉菜单占一行空间不划算；刷新交给浏览器下拉刷新。 */
 export function ToolbarMore({ children }: { children: ReactNode }) {
-    return (
-        <>
-            <div className="hidden items-center gap-2 lg:flex">{children}</div>
-            <details className="toolbar-more relative ml-auto lg:hidden">
-                <summary className="flex min-h-11 cursor-pointer list-none items-center rounded-btn border border-line px-3 text-14 text-muted">
-                    更多
-                </summary>
-                <div
-                    className="absolute right-0 top-full z-20 mt-2 flex min-w-35 flex-col gap-2 rounded-xl border border-line bg-surface p-2 shadow-modal"
-                    onClick={event => {
-                        if ((event.target as HTMLElement).closest("button"))
-                            event.currentTarget.closest("details")?.removeAttribute("open");
-                    }}
-                >
-                    {children}
-                </div>
-            </details>
-        </>
-    );
+    return <div className="hidden items-center gap-2 lg:flex">{children}</div>;
 }

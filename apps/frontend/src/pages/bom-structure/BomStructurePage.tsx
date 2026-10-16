@@ -637,7 +637,7 @@ export function BomStructurePage() {
                 />
 
                 <section
-                    className="flex min-h-0 flex-col rounded-card border border-line bg-surface shadow-card max-lg:h-[70dvh] max-lg:min-h-105"
+                    className="flex min-h-0 min-w-0 flex-col rounded-card border border-line bg-surface shadow-card max-lg:h-[70dvh] max-lg:min-h-105"
                     aria-label="BOM 结构编辑区"
                     tabIndex={-1}
                 >
@@ -684,7 +684,9 @@ export function BomStructurePage() {
                                         {pendingCount > 0 ? `未保存 ${pendingCount} 条` : "已保存"}
                                     </span>
                                 </div>
-                                <TableHeaderActions className="bs-header-actions flex-wrap justify-end">
+                                {/* min-w-0 + max-lg:shrink：动作区在移动端允许收缩到容器宽，
+                                    内部 flex-wrap 才能生效分两行；否则按单行 max-content 宽溢出视口 */}
+                                <TableHeaderActions className="bs-header-actions min-w-0 max-lg:shrink flex-wrap justify-end">
                                     <span className="flex items-center gap-0.5 border-r border-line-strong pr-2">
                                         <Button
                                             iconOnly
@@ -702,7 +704,7 @@ export function BomStructurePage() {
                                                     return next;
                                                 })
                                             }
-                                            className="size-8"
+                                            className="size-8 max-lg:size-11"
                                         />
                                         <Button
                                             iconOnly
@@ -722,7 +724,7 @@ export function BomStructurePage() {
                                                     return next;
                                                 })
                                             }
-                                            className="size-8"
+                                            className="size-8 max-lg:size-11"
                                         />
                                     </span>
                                     <span className="mr-1 flex items-center gap-0.5 border-r border-line-strong pr-2">
@@ -733,7 +735,7 @@ export function BomStructurePage() {
                                             title="撤销 · Ctrl+Z"
                                             disabled={saving || state.past.length === 0}
                                             onClick={undo}
-                                            className="size-9"
+                                            className="size-9 max-lg:size-11"
                                         />
                                         <Button
                                             iconOnly
@@ -742,7 +744,7 @@ export function BomStructurePage() {
                                             title="重做 · Ctrl+Shift+Z"
                                             disabled={saving || state.future.length === 0}
                                             onClick={redo}
-                                            className="size-9"
+                                            className="size-9 max-lg:size-11"
                                         />
                                     </span>
                                     <Button
