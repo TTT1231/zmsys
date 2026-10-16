@@ -578,11 +578,7 @@ export default function AiChatWidget() {
                                         <p className="whitespace-pre-wrap wrap-anywhere">{message.content}</p>
                                     ) : (
                                         <>
-                                            <ThinkingPanel
-                                                reasoning={message.reasoning}
-                                                steps={message.steps}
-                                                busy={message.state === "streaming"}
-                                            />
+                                            <ThinkingPanel busy={message.state === "streaming"} />
                                             {(message.content ||
                                                 message.state === "error" ||
                                                 message.state === "stopped") && (

@@ -82,10 +82,7 @@ export function useAiChat(options: {
         active.current = controller;
         const seq = ++generation.current;
         const replyId = uuid();
-        setMessages([
-            ...history,
-            { id: replyId, role: "assistant", content: "", state: "streaming", sources: [], steps: ["正在准备对话…"] },
-        ]);
+        setMessages([...history, { id: replyId, role: "assistant", content: "", state: "streaming", sources: [] }]);
         setBusy(true);
         setProgress("正在准备对话…");
         const update = (patch: Partial<ChatMessage>) => {
@@ -123,19 +120,11 @@ export function useAiChat(options: {
                 can: options.can,
                 signal: controller.signal,
                 onText: text => schedule({ content: text }),
-                onReasoning: reasoning => schedule({ reasoning }),
                 onContext: context => update({ context }),
                 query: (path, signal, fresh) => queryAiData(queryClient, options.storageKey, path, signal, fresh),
                 onProgress: text => {
                     if (generation.current !== seq) return;
                     setProgress(text);
-                    setMessages(current =>
-                        current.map(message =>
-                            message.id === replyId && message.steps?.at(-1) !== text
-                                ? { ...message, steps: [...(message.steps ?? []), text] }
-                                : message,
-                        ),
-                    );
                 },
                 onSource: source => {
                     if (generation.current !== seq) return;
