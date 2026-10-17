@@ -34,6 +34,9 @@ export const SSE_HEADERS: Readonly<Record<string, string>> = {
 
 export const chatCompletionsUrl = (baseUrl: string): string => `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
 
+/** 上游 /user/balance（DeepSeek 余额查询；OpenAI 兼容生态里的 DeepSeek 扩展端点） */
+export const balanceUrl = (baseUrl: string): string => `${baseUrl.replace(/\/+$/, "")}/user/balance`;
+
 /** 上游错误响应 → 中文错误文案（截断至 300 字符，防止错误页超长） */
 export async function readUpstreamError(response: Response): Promise<string> {
     const status = response.status;

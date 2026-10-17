@@ -1,5 +1,12 @@
 import { requestClient } from "@/http";
-import type { AiSettingsUpdateInput, AiSettingsView, AiStatus, AiTestResult, AiUsageSummary } from "./types";
+import type {
+    AiBalanceInfo,
+    AiSettingsUpdateInput,
+    AiSettingsView,
+    AiStatus,
+    AiTestResult,
+    AiUsageSummary,
+} from "./types";
 
 /** AI 面板状态点（登录即可）：只看本地配置态，不探测上游 */
 export function fetchAiStatus(): Promise<AiStatus> {
@@ -21,7 +28,12 @@ export function testAiConnection(): Promise<AiTestResult> {
     return requestClient.post<AiTestResult>("/ai/admin/test");
 }
 
-/** AI 用量统计（按人 / 按日聚合）；range=custom 时 from/to 含当日 */
+/** AI 上游账户余额（DeepSeek /user/balance 转发，单位元）；未保存配置时后端 400 */
+export function fetchAiBalance(): Promise<AiBalanceInfo> {
+    return requestClient.get<AiBalanceInfo>("/ai/admin/balance");
+}
+
+/** AI 用量统计（按人聚合消耗金额）；range=custom 时 from/to 含当日 */
 export function fetchAiUsage(query: {
     range: "today" | "7d" | "30d" | "custom";
     from?: string;

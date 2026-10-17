@@ -8,8 +8,7 @@ import { PageHeading } from "@/components/ui/PageHeading";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { Switch } from "@/components/ui/Switch";
 import { useToast } from "@/components/ui/toastContexts";
-import { fetchAiSettings, fetchAiUsage, testAiConnection, updateAiSettings } from "@/api";
-import { num } from "@/lib/format";
+import { fetchAiBalance, fetchAiSettings, fetchAiUsage, testAiConnection, updateAiSettings } from "@/api";
 import type { AiSettingsView } from "@/api";
 
 const RANGE_OPTIONS = [
@@ -151,7 +150,7 @@ function SettingsCard({ settings }: { settings: AiSettingsView }) {
     );
 }
 
-/* ---------- 卡片二：使用情况 ---------- */
+/* ---------- 卡片二：使用情况（账户余额 + 成员用量金额） ---------- */
 
 function UsageCard() {
     // 默认最近 30 天；custom 草稿经「应用范围」生效（照系统日志页的时间范围处理）
@@ -167,11 +166,20 @@ function UsageCard() {
         queryKey: ["ai-usage", range, range === "custom" ? applied : null],
         queryFn: () => fetchAiUsage({ range, from: applied?.from, to: applied?.to }),
         enabled: !pendingCustom,
+        // 切换范围时保留上一份数据直到新数据到达，区块不塌陷
+        placeholderData: prev => prev,
     });
-    const totals = usage.data?.totals;
+    // 账户余额独立于时间范围；「刷新余额」= refetch 上游实时值
+    const balance = useQuery({ queryKey: ["ai-balance"], queryFn: fetchAiBalance });
+
     const users = usage.data?.users ?? [];
-    const byDay = usage.data?.byDay ?? [];
-    const maxDayTokens = byDay.reduce((max, day) => Math.max(max, day.totalTokens), 0);
+    const currentAmount = usage.data?.totals.amount ?? 0;
+    const rangeNote =
+        range === "custom"
+            ? applied
+                ? `${applied.from} ~ ${applied.to}`
+                : "自定义"
+            : (RANGE_OPTIONS.find(option => option.value === range)?.label ?? "");
 
     const applyCustomRange = () => {
         if (!draftFrom || !draftTo || draftFrom > draftTo) {
@@ -257,48 +265,70 @@ function UsageCard() {
                     </div>
                 ) : (
                     <>
-                        <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
-                            <div className="rounded-card border border-line bg-panel px-4 py-3">
-                                <span className="block text-12 text-muted">总请求</span>
-                                <strong className="tnum text-20 font-bold text-ink">
-                                    {num(totals?.requests ?? 0)}
-                                </strong>
-                                <span className="block text-12 text-subtle">
-                                    成功 {num(totals?.successRequests ?? 0)} / 失败 {num(totals?.errorRequests ?? 0)}
+                        <div className="flex flex-wrap items-center gap-x-9 gap-y-4 rounded-card border border-primary-border bg-primary-soft px-6 py-5">
+                            <div className="flex flex-col gap-1">
+                                <span className="text-12 text-muted">账户余额</span>
+                                <span className="tnum flex items-baseline gap-0.5 text-26 font-bold text-ink">
+                                    {balance.isLoading ? (
+                                        <span className="inline-block h-7 w-24 animate-pulse rounded-md bg-primary-border" />
+                                    ) : balance.isError ? (
+                                        <span className="text-15 font-medium text-muted" title={balance.error?.message}>
+                                            获取失败，可点击右侧刷新重试
+                                        </span>
+                                    ) : (
+                                        <>
+                                            <span className="text-15 font-semibold text-primary">¥</span>
+                                            {balance.data!.totalBalance.toFixed(2)}
+                                        </>
+                                    )}
                                 </span>
                             </div>
-                            {[
-                                { label: "输入 tokens", value: totals?.promptTokens ?? 0 },
-                                { label: "输出 tokens", value: totals?.completionTokens ?? 0 },
-                                { label: "总 tokens", value: totals?.totalTokens ?? 0 },
-                            ].map(stat => (
-                                <div key={stat.label} className="rounded-card border border-line bg-panel px-4 py-3">
-                                    <span className="block text-12 text-muted">{stat.label}</span>
-                                    <strong className="tnum text-20 font-bold text-ink">{num(stat.value)}</strong>
-                                </div>
-                            ))}
+                            <div className="flex flex-col gap-1 sm:border-l sm:border-primary-border sm:pl-9">
+                                <span className="text-12 text-muted">
+                                    当前使用 <span className="text-subtle">（{rangeNote}）</span>
+                                </span>
+                                <span className="tnum flex items-baseline gap-0.5 text-26 font-bold text-ink">
+                                    <span className="text-15 font-semibold text-primary">¥</span>
+                                    {currentAmount.toFixed(2)}
+                                </span>
+                            </div>
+                            <div className="ml-auto flex items-center gap-3">
+                                {balance.data && (
+                                    <span
+                                        className={`inline-flex h-6.5 items-center gap-1.5 rounded-full px-3 text-12 font-semibold ${
+                                            balance.data.isAvailable
+                                                ? "bg-success-soft text-success"
+                                                : "bg-warning-soft text-warning"
+                                        }`}
+                                    >
+                                        <span className="size-1.5 rounded-full bg-current" />
+                                        {balance.data.isAvailable ? "账户可用" : "余额不足"}
+                                    </span>
+                                )}
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled={balance.isFetching}
+                                    onClick={() => void balance.refetch()}
+                                >
+                                    {balance.isFetching ? "刷新中…" : "刷新余额"}
+                                </Button>
+                            </div>
                         </div>
-                        <p className="text-12 text-muted">
-                            仅汇总上游已返回的用量；缺失或部分未知的用量未完整计入，统计值可能低于实际消耗。
-                        </p>
                         <div className="overflow-x-auto rounded-input border border-line">
-                            <table className="data-table w-full min-w-[820px] text-13">
+                            <table className="data-table w-full text-13">
                                 <thead>
                                     <tr className="text-left text-13 text-muted">
                                         <th>账号</th>
                                         <th>姓名</th>
-                                        <th>角色</th>
-                                        <th className="text-right">请求数</th>
-                                        <th className="text-right">输入 tokens</th>
-                                        <th className="text-right">输出 tokens</th>
-                                        <th className="text-right">总 tokens</th>
+                                        <th className="text-right">使用量</th>
                                         <th className="text-right">最近使用</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {users.length === 0 ? (
                                         <tr className="row-empty">
-                                            <td colSpan={8} className="py-10 text-center text-14 text-muted">
+                                            <td colSpan={4} className="py-10 text-center text-14 text-muted">
                                                 暂无使用记录
                                             </td>
                                         </tr>
@@ -307,11 +337,9 @@ function UsageCard() {
                                             <tr key={row.userId}>
                                                 <td className="tnum whitespace-nowrap">{row.account}</td>
                                                 <td className="whitespace-nowrap">{row.name}</td>
-                                                <td>{row.role}</td>
-                                                <td className="tnum text-right">{num(row.requests)}</td>
-                                                <td className="tnum text-right">{num(row.promptTokens)}</td>
-                                                <td className="tnum text-right">{num(row.completionTokens)}</td>
-                                                <td className="tnum text-right">{num(row.totalTokens)}</td>
+                                                <td className="tnum whitespace-nowrap text-right font-semibold text-ink">
+                                                    ¥{row.amount.toFixed(2)}
+                                                </td>
                                                 <td className="tnum whitespace-nowrap text-right">
                                                     {row.lastUsedAt ? minuteOf(row.lastUsedAt) : "—"}
                                                 </td>
@@ -321,29 +349,6 @@ function UsageCard() {
                                 </tbody>
                             </table>
                         </div>
-                        {byDay.length > 0 && (
-                            <div className="flex flex-col gap-2">
-                                <h3 className="text-14 font-semibold text-ink">按日趋势</h3>
-                                {byDay.map(day => (
-                                    <div key={day.date} className="flex items-center gap-3">
-                                        <span className="tnum w-20 shrink-0 text-12 text-muted">{day.date}</span>
-                                        <span className="h-4 min-w-0 flex-1 overflow-hidden rounded-sm bg-soft">
-                                            <span
-                                                className="block h-full rounded-sm bg-primary"
-                                                style={{
-                                                    width: `${
-                                                        maxDayTokens > 0 ? (day.totalTokens / maxDayTokens) * 100 : 0
-                                                    }%`,
-                                                }}
-                                            />
-                                        </span>
-                                        <span className="tnum w-20 shrink-0 text-right text-12 text-td">
-                                            {num(day.totalTokens)}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
                     </>
                 )}
             </div>

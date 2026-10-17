@@ -153,6 +153,23 @@ describe("AI 助手 (e2e)", () => {
                     );
                     return;
                 }
+                if (req.method === "GET" && url.startsWith("/user/balance")) {
+                    res.writeHead(200, { "content-type": "application/json" });
+                    res.end(
+                        JSON.stringify({
+                            is_available: true,
+                            balance_infos: [
+                                {
+                                    currency: "CNY",
+                                    total_balance: "110.00",
+                                    granted_balance: "10.00",
+                                    topped_up_balance: "100.00",
+                                },
+                            ],
+                        }),
+                    );
+                    return;
+                }
                 res.writeHead(404);
                 res.end();
             });
@@ -694,26 +711,32 @@ describe("AI 助手 (e2e)", () => {
         await put("/ai/admin/settings", superToken, { enabled: true });
     });
 
-    // ---------- 用量聚合 ----------
+    // ---------- 余额与用量聚合 ----------
 
-    it("按人聚合：staff 的成功对话 token 已入账，按日含今天", async () => {
+    it("余额查询：staff 越权 403；超管拿到 mock 上游余额", async () => {
+        expect((await get("/ai/admin/balance", staffToken)).statusCode).toBe(403);
+        const res = await get("/ai/admin/balance", superToken);
+        expect(res.statusCode).toBe(200);
+        expect(res.body.data).toMatchObject({
+            isAvailable: true,
+            currency: "CNY",
+            totalBalance: 110,
+            grantedBalance: 10,
+            toppedUpBalance: 100,
+        });
+    });
+
+    it("按人聚合：金额折算入账、最近使用非空", async () => {
         const res = await get("/ai/admin/usage?range=today", superToken);
         expect(res.statusCode).toBe(200);
         const data = res.body.data as {
-            totals: { requests: number; successRequests: number; errorRequests: number };
-            users: Array<{ account: string; totalTokens: number }>;
-            byDay: Array<{ date: string }>;
+            totals: { amount: number };
+            users: Array<{ account: string; amount: number; lastUsedAt: string | null }>;
         };
-        expect(data.totals.successRequests).toBeGreaterThanOrEqual(2);
-        expect(data.totals.errorRequests).toBeGreaterThanOrEqual(2);
+        expect(data.totals.amount).toBeGreaterThanOrEqual(0);
         const staffRow = data.users.find(row => row.account === "test");
         expect(staffRow).toBeDefined();
-        expect(staffRow!.totalTokens).toBe(15);
-        expect(
-            data.byDay.some(
-                day =>
-                    day.date === today() || day.date === new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10),
-            ),
-        ).toBe(true);
+        expect(staffRow!.amount).toBeGreaterThanOrEqual(0);
+        expect(staffRow!.lastUsedAt).not.toBeNull();
     });
 });

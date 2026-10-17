@@ -659,35 +659,28 @@ export interface AiTestResult {
     model: string | null;
 }
 
+export interface AiBalanceInfo {
+    /** 上游口径：账户余额是否足以继续调用 */
+    isAvailable: boolean;
+    currency: string;
+    /** 总可用余额（元；充值 + 未过期赠送） */
+    totalBalance: number;
+    grantedBalance: number;
+    toppedUpBalance: number;
+}
+
 export interface AiUsageUserRow {
     userId: string;
     account: string;
     name: string;
-    role: string;
-    requests: number;
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
+    /** 时间范围内消耗金额（元；按模型单价折算的估算值，保留 4 位小数，展示两位） */
+    amount: number;
     lastUsedAt: string | null;
-}
-
-export interface AiUsageDayRow {
-    date: string;
-    requests: number;
-    totalTokens: number;
 }
 
 export interface AiUsageSummary {
     from: string;
     to: string;
-    totals: {
-        requests: number;
-        successRequests: number;
-        errorRequests: number;
-        promptTokens: number;
-        completionTokens: number;
-        totalTokens: number;
-    };
+    totals: { amount: number };
     users: AiUsageUserRow[];
-    byDay: AiUsageDayRow[];
 }

@@ -1672,15 +1672,40 @@ paths:
                 "403": { $ref: "#/components/responses/Forbidden" }
                 "503": { $ref: "#/components/responses/Maintenance" }
 
+    /ai/admin/balance:
+        get:
+            tags: [ai]
+            operationId: getAiBalance
+            summary: AI 上游账户余额
+            description: |
+                受保护权限 `menu:ai-workbench`。转发上游 /user/balance（DeepSeek 余额端点，
+                10s 超时），金额单位元。未保存 baseUrl+apiKey 时 400；上游非 2xx 或网络
+                异常 502（message 携带上游摘要）。
+            responses:
+                "200":
+                    description: 成功
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/AiBalanceInfoEnvelope" }
+                "400": { $ref: "#/components/responses/BadRequest" }
+                "401": { $ref: "#/components/responses/Unauthorized" }
+                "403": { $ref: "#/components/responses/Forbidden" }
+                "502":
+                    description: 上游失败
+                    content:
+                        application/json:
+                            schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+                "503": { $ref: "#/components/responses/Maintenance" }
+
     /ai/admin/usage:
         get:
             tags: [ai]
             operationId: getAiUsage
-            summary: AI 用量统计（按人/按日聚合）
+            summary: AI 用量统计（按人聚合消耗金额）
             description: |
-                受保护权限 `menu:ai-workbench`。按人聚合（账号/姓名/角色/请求数/三类 token/
-                最近使用，按 totalTokens 降序）+ 汇总 + 按日趋势（北京日界）。失败请求计入
-                requests 但 token 记 0（用量未知，见 error 口径）。
+                受保护权限 `menu:ai-workbench`。按人聚合（账号/姓名/消耗金额/最近使用，
+                按金额降序）+ 汇总。金额按模型单价（cache miss、峰谷均值）折算为估算值，
+                与实际扣费略有出入；失败请求 token 记 0（用量未知，见 error 口径）。
             parameters:
                 - name: range
                   in: query
@@ -3134,6 +3159,21 @@ components:
                 latencyMs: { type: integer, minimum: 0 }
                 message: { type: string }
                 model: { type: [string, "null"] }
+        AiBalanceInfoEnvelope:
+            allOf:
+                - $ref: "#/components/schemas/Envelope"
+                - type: object
+                  properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/AiBalanceInfo" }, message: { const: ok } }
+        AiBalanceInfo:
+            type: object
+            description: 上游 /user/balance 转发（金额单位：元）
+            required: [isAvailable, currency, totalBalance, grantedBalance, toppedUpBalance]
+            properties:
+                isAvailable: { type: boolean, description: 上游口径：账户余额是否足以继续调用 }
+                currency: { type: string, description: 如 CNY }
+                totalBalance: { type: number, description: 总可用余额（充值 + 未过期赠送） }
+                grantedBalance: { type: number, description: 未过期赠送余额 }
+                toppedUpBalance: { type: number, description: 充值余额 }
         AiUsageSummaryEnvelope:
             allOf:
                 - $ref: "#/components/schemas/Envelope"
@@ -3141,39 +3181,22 @@ components:
                   properties: { code: { const: 0 }, data: { $ref: "#/components/schemas/AiUsageSummary" }, message: { const: ok } }
         AiUsageSummary:
             type: object
-            required: [from, to, totals, users, byDay]
+            required: [from, to, totals, users]
             properties:
                 from: { type: string, format: date-time, description: 窗口起点（UTC 时刻，北京日界换算） }
                 to: { type: string, format: date-time, description: 窗口终点（不含） }
                 totals:
                     type: object
-                    required: [requests, successRequests, errorRequests, promptTokens, completionTokens, totalTokens]
+                    required: [amount]
                     properties:
-                        requests: { type: integer, minimum: 0 }
-                        successRequests: { type: integer, minimum: 0 }
-                        errorRequests: { type: integer, minimum: 0 }
-                        promptTokens: { type: integer, minimum: 0 }
-                        completionTokens: { type: integer, minimum: 0 }
-                        totalTokens: { type: integer, minimum: 0 }
+                        amount: { type: number, description: 时间范围内消耗金额（元；估算值，保留 4 位小数） }
                 users: { type: array, items: { $ref: "#/components/schemas/AiUsageUserRow" } }
-                byDay: { type: array, items: { $ref: "#/components/schemas/AiUsageDayRow" } }
         AiUsageUserRow:
             type: object
-            required: [userId, account, name, role, requests, promptTokens, completionTokens, totalTokens, lastUsedAt]
+            required: [userId, account, name, amount, lastUsedAt]
             properties:
                 userId: { type: string, pattern: "^[0-9]+$" }
                 account: { type: string }
                 name: { type: string }
-                role: { type: string }
-                requests: { type: integer, minimum: 0 }
-                promptTokens: { type: integer, minimum: 0 }
-                completionTokens: { type: integer, minimum: 0 }
-                totalTokens: { type: integer, minimum: 0 }
+                amount: { type: number, description: 消耗金额（元；按模型单价折算的估算值，保留 4 位小数） }
                 lastUsedAt: { type: [string, "null"], format: date-time }
-        AiUsageDayRow:
-            type: object
-            required: [date, requests, totalTokens]
-            properties:
-                date: { type: string, description: 北京日期 yyyy-MM-dd }
-                requests: { type: integer, minimum: 0 }
-                totalTokens: { type: integer, minimum: 0 }

@@ -34,6 +34,12 @@ export class AiAdminController {
         return this.adminService.testConnection();
     }
 
+    @Get("balance")
+    @Permissions([PERMISSIONS.MENU_AI_WORKBENCH], "无权管理 AI 工作台")
+    async getBalance() {
+        return this.adminService.getBalance();
+    }
+
     @Get("usage")
     @Permissions([PERMISSIONS.MENU_AI_WORKBENCH], "无权管理 AI 工作台")
     async getUsage(@Query() query: AiUsageQueryDto) {
