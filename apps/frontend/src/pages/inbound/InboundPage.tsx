@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { DataTable } from "@/components/ui/DataTable";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListToolbar } from "@/components/ui/ListToolbar";
+import { MobileListControls } from "@/components/ui/MobileListControls";
+import { useRememberedListState } from "@/context/useListView";
 import { ToolbarSelect } from "@/components/ui/ToolbarSelect";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyRow } from "@/components/ui/EmptyRow";
@@ -442,10 +444,10 @@ export function InboundPage() {
     const voidRequest = useVoidInbound();
     const deleteRequest = useDeleteInbound();
     const toast = useToast();
-    const [category, setCategory] = useState("全部品类");
-    const [statusFilter, setStatusFilter] = useState("全部状态");
+    const [category, setCategory] = useRememberedListState("category", "全部品类");
+    const [statusFilter, setStatusFilter] = useRememberedListState("status", "全部状态");
     // 按检验登记人筛：看单个人的全部入库记录（选项来自台账里实际出现过的登记人）
-    const [inspectorFilter, setInspectorFilter] = useState("全部登记人");
+    const [inspectorFilter, setInspectorFilter] = useRememberedListState("operator", "全部登记人");
     // 列排序默认升序：默认按入库日期（同日以单号稳定排序）
     const [sort, setSort] = useState<SortState<LedgerSortKey>>({ key: "date", dir: "asc" });
     const {
@@ -532,9 +534,57 @@ export function InboundPage() {
                     <ListToolbar
                         keyword={keyword}
                         onKeywordChange={onKeywordChange}
-                        placeholder="单号 / BOM / 登记人"
+                        placeholder="入库单号、BOM 编码或登记人"
                         onClear={clearFilters}
                         filtersActive={filtersActive}
+                        mobileContent={
+                            <MobileListControls
+                                fields={[
+                                    {
+                                        key: "status",
+                                        label: "状态",
+                                        value: statusFilter,
+                                        defaultValue: "全部状态",
+                                        options: ["全部状态", "已入库", "已作废"],
+                                        onChange: value => {
+                                            setStatusFilter(value);
+                                            setPage(1);
+                                        },
+                                    },
+                                    {
+                                        key: "category",
+                                        label: "品类",
+                                        value: category,
+                                        defaultValue: "全部品类",
+                                        options: ["全部品类", ...categories],
+                                        onChange: value => {
+                                            setCategory(value);
+                                            setPage(1);
+                                        },
+                                    },
+                                ]}
+                                more={[
+                                    {
+                                        key: "operator",
+                                        label: "登记人",
+                                        value: inspectorFilter,
+                                        defaultValue: "全部登记人",
+                                        options: ["全部登记人", ...inspectors],
+                                        onChange: value => {
+                                            setInspectorFilter(value);
+                                            setPage(1);
+                                        },
+                                    },
+                                ]}
+                                action={
+                                    canRegister && (
+                                        <Button onClick={() => setNewOpen(true)} className="px-3">
+                                            入库
+                                        </Button>
+                                    )
+                                }
+                            />
+                        }
                         trailing={
                             <TableHeaderActions className="ml-auto">
                                 <ToolbarMore>
@@ -544,7 +594,7 @@ export function InboundPage() {
                                 </ToolbarMore>
                                 {canRegister && (
                                     <Button icon="inbound" onClick={() => setNewOpen(true)}>
-                                        检验入库
+                                        入库
                                     </Button>
                                 )}
                             </TableHeaderActions>

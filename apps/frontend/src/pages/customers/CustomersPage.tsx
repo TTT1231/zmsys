@@ -2,6 +2,8 @@ import { regionText, cleanAddressPart } from "@/lib/address";
 import { DataTable } from "@/components/ui/DataTable";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListToolbar } from "@/components/ui/ListToolbar";
+import { MobileListControls } from "@/components/ui/MobileListControls";
+import { useRememberedListState } from "@/context/useListView";
 import { ToolbarSelect } from "@/components/ui/ToolbarSelect";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyRow } from "@/components/ui/EmptyRow";
@@ -430,7 +432,7 @@ export function CustomersPage() {
     const { snap, isLoading, refreshing: overlay } = useWbView();
     const { refresh } = useWbRefresh();
     const [searchParams, setSearchParams] = useSearchParams();
-    const [statusFilter, setStatusFilter] = useState("全部状态");
+    const [statusFilter, setStatusFilter] = useRememberedListState("status", "全部状态");
     // 列排序默认升序：默认按最近下单
     const [sort, setSort] = useState<SortState<CustomerSortKey>>({ key: "lastOrderDate", dir: "asc" });
     const { keyword, setKeyword, onKeywordChange, page, setPage, pageSize, onPageSizeChange, tableScrollRef } =
@@ -537,9 +539,37 @@ export function CustomersPage() {
                     <ListToolbar
                         keyword={keyword}
                         onKeywordChange={onKeywordChange}
-                        placeholder="公司名 / BOM"
+                        placeholder="客户名或客户编号"
                         onClear={clearFilters}
                         filtersActive={filtersActive}
+                        mobileContent={
+                            <MobileListControls
+                                fields={[
+                                    {
+                                        key: "status",
+                                        label: "状态",
+                                        value: statusFilter,
+                                        defaultValue: "全部状态",
+                                        options: ["全部状态", "合作中", "待跟进"],
+                                        onChange: value => {
+                                            setStatusFilter(value);
+                                            setPage(1);
+                                        },
+                                    },
+                                ]}
+                                action={
+                                    canCreate && (
+                                        <Button
+                                            onClick={() => setFormTarget("new")}
+                                            className="px-3"
+                                            aria-label="新建客户"
+                                        >
+                                            新建
+                                        </Button>
+                                    )
+                                }
+                            />
+                        }
                         trailing={
                             <TableHeaderActions className="ml-auto">
                                 <ToolbarMore>
@@ -555,7 +585,6 @@ export function CustomersPage() {
                             </TableHeaderActions>
                         }
                     >
-                        {/* 合作状态筛选仅桌面：移动端按最近下单降序浏览即可，不进筛选 */}
                         <ToolbarSelect
                             value={statusFilter}
                             onChange={value => {

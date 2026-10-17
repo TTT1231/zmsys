@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/lib/icons";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
+import { ListToolbar } from "@/components/ui/ListToolbar";
+import { MobileListControls } from "@/components/ui/MobileListControls";
+import { ToolbarSelect } from "@/components/ui/ToolbarSelect";
+import { useRememberedListState } from "@/context/useListView";
+import { useIsMobile } from "@/lib/useIsMobile";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { PageLoading } from "@/components/ui/PageLoading";
@@ -141,7 +146,7 @@ const ACTION_META: Record<SystemLogAction, ActionMeta> = {
 };
 
 const ACTION_OPTIONS: Array<{ value: string; label: string }> = [
-    { value: "all", label: "全部操作" },
+    { value: "all", label: "操作" },
     ...Object.entries(ACTION_META).map(([value, meta]) => ({ value, label: meta.label })),
 ];
 
@@ -249,20 +254,20 @@ function linkCodeOf(linkDomain: SystemLogDomain, change: SystemLogChange, index:
 /* ---------- 页面 ---------- */
 
 export function SystemLogsPage() {
-    const [tab, setTab] = useState<DomainKey>("all");
-    const [keyword, setKeyword] = useState("");
-    const [action, setAction] = useState("all");
-    // 操作人为用户账号（姓名可重名）；候选来自聚合快照 users（本页仅 super 可达，
-    // 其快照必含 users），含已停用账号——历史操作仍需可按人追溯
-    const [operator, setOperator] = useState("all");
-    // 默认最近 7 天（审计日志业界惯例：GitHub 默认近 3 个月，无人只默认当天）
-    const [range, setRange] = useState<"today" | "7d" | "30d" | "custom">("7d");
+    const isMobile = useIsMobile();
+    const [tab, setTab] = useRememberedListState<DomainKey>("domain", "all");
+    const [keyword, setKeyword] = useRememberedListState("keyword", "");
+    const [action, setAction] = useRememberedListState("action", "all");
+    // 操作人按账号筛选以区分同名用户；停用账号仍可用于追溯历史。
+    const [operator, setOperator] = useRememberedListState("operator", "all");
+    const [range, setRange] = useRememberedListState<"today" | "7d" | "30d" | "custom">("range", "7d");
     // custom 延迟生效：草稿仅在点「应用范围」或 Enter 时并入 applied
-    const [draftFrom, setDraftFrom] = useState("");
-    const [draftTo, setDraftTo] = useState("");
-    const [applied, setApplied] = useState<{ from: string; to: string } | null>(null);
+    const [draftFrom, setDraftFrom] = useRememberedListState("dateFrom", "");
+    const [draftTo, setDraftTo] = useRememberedListState("dateTo", "");
+    const [applied, setApplied] = useRememberedListState<{ from: string; to: string } | null>("dateRange", null);
     const [dateError, setDateError] = useState("");
     const debouncedKeyword = useDebouncedValue(keyword);
+    const appliedKeyword = isMobile ? keyword : debouncedKeyword;
     // 业务详情弹窗数据源：全量聚合快照（与搜索页同源共享 React Query 缓存）
     const { snap } = useWbView();
     const liveIndex = useMemo(() => indexSnapshot(snap), [snap]);
@@ -277,10 +282,10 @@ export function SystemLogsPage() {
             ...(operator !== "all" ? { operator } : {}),
             range,
             ...(range === "custom" && applied ? { from: applied.from, to: applied.to } : {}),
-            ...(debouncedKeyword.trim() ? { keyword: debouncedKeyword.trim() } : {}),
+            ...(appliedKeyword.trim() ? { keyword: appliedKeyword.trim() } : {}),
             limit: 20,
         }),
-        [tab, action, operator, range, applied, debouncedKeyword],
+        [tab, action, operator, range, applied, appliedKeyword],
     );
     const {
         data,
@@ -315,6 +320,17 @@ export function SystemLogsPage() {
         setApplied(null);
         setDateError("");
     };
+    const operatorOptions = [
+        { value: "all", label: "登记人" },
+        ...snap.users.map(user => ({
+            value: user.account,
+            label: `${user.name}（${user.account}）${user.active ? "" : "· 已停用"}`,
+        })),
+    ];
+    const mobileRangeOptions = RANGE_OPTIONS.map(option => ({
+        ...option,
+        label: option.label.replace("最近 ", "近").replace(" 天", "天").replace("自定义范围", "自定义"),
+    }));
 
     // 按北京日分组（保持服务端降序）；相邻同日事件归入同组（依赖查询结果引用而非派生数组）
     const groups = useMemo(() => {
@@ -332,59 +348,131 @@ export function SystemLogsPage() {
         <div className="flex flex-col gap-5">
             <h1 className="sr-only">系统日志</h1>
             <section className="overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
-                {/* 筛选分两行：业务域 tab 独占一行（6 个 tab 挤一行会换行错乱），
-                    搜索与下拉在第二行 */}
-                <div className="list-card-primary">
-                    <div className="task-tabs flex flex-wrap gap-1" aria-label="业务类型筛选">
-                        {DOMAIN_TABS.map(item => (
-                            <button
-                                type="button"
-                                key={item.key}
-                                aria-pressed={tab === item.key}
-                                onClick={() => setTab(item.key)}
-                            >
-                                {item.label}
-                            </button>
-                        ))}
+                <div className="hidden lg:block">
+                    <div className="list-card-primary">
+                        <div className="task-tabs flex flex-wrap gap-1" aria-label="业务类型筛选">
+                            {DOMAIN_TABS.map(item => (
+                                <button
+                                    type="button"
+                                    key={item.key}
+                                    aria-pressed={tab === item.key}
+                                    onClick={() => setTab(item.key)}
+                                >
+                                    {item.label}
+                                </button>
+                            ))}
+                        </div>
+                        <TableHeaderActions className="ml-auto" />
                     </div>
-                    <TableHeaderActions className="ml-auto" />
                 </div>
-                <div className="list-toolbar flex flex-wrap items-center gap-2.5 border-b border-line bg-linear-to-b from-surface to-panel px-5 py-3">
-                    <label className="flex h-10 min-w-45 flex-1 items-center gap-2 rounded-btn border border-line-strong bg-surface px-3 lg:max-w-90">
-                        <Icon name="search" size={15} className="text-subtle" />
-                        <input
-                            value={keyword}
-                            onChange={event => setKeyword(event.target.value)}
-                            placeholder="操作人、编号或名称"
-                            aria-label="关键词"
-                            className="w-full bg-transparent text-14 text-ink outline-none placeholder:text-subtle"
+                <ListToolbar
+                    keyword={keyword}
+                    onKeywordChange={setKeyword}
+                    placeholder="登记人、单据编号或名称"
+                    searchLabel="关键词"
+                    clearLabel="重置"
+                    onClear={reset}
+                    filtersActive={
+                        !!keyword.trim() || tab !== "all" || action !== "all" || operator !== "all" || range !== "7d"
+                    }
+                    mobileContent={
+                        <MobileListControls
+                            fields={[
+                                {
+                                    key: "domain",
+                                    label: "业务类型",
+                                    value: tab,
+                                    defaultValue: "all",
+                                    options: DOMAIN_TABS.map(item => ({
+                                        value: item.key,
+                                        label: item.key === "all" ? "业务" : item.label,
+                                    })),
+                                    onChange: value => setTab(value as DomainKey),
+                                },
+                                {
+                                    key: "range",
+                                    label: "时间",
+                                    value: range,
+                                    defaultValue: "7d",
+                                    options: mobileRangeOptions,
+                                    openPanelValue: "custom",
+                                    onChange: value => {
+                                        setRange(value as typeof range);
+                                        setDateError("");
+                                    },
+                                },
+                            ]}
+                            more={[
+                                {
+                                    key: "action",
+                                    label: "操作",
+                                    value: action,
+                                    defaultValue: "all",
+                                    options: ACTION_OPTIONS,
+                                    onChange: setAction,
+                                },
+                                {
+                                    key: "operator",
+                                    label: "登记人",
+                                    value: operator,
+                                    defaultValue: "all",
+                                    options: operatorOptions,
+                                    onChange: setOperator,
+                                },
+                                {
+                                    key: "range",
+                                    label: "时间",
+                                    value: range,
+                                    defaultValue: "7d",
+                                    options: RANGE_OPTIONS,
+                                    summary: false,
+                                    onChange: value => setRange(value as typeof range),
+                                },
+                                {
+                                    key: "from",
+                                    label: "开始日期",
+                                    value: applied?.from ?? "",
+                                    defaultValue: "",
+                                    type: "date",
+                                    visibleWhen: { key: "range", value: "custom" },
+                                    onChange: () => {
+                                        setRange("7d");
+                                        setApplied(null);
+                                    },
+                                },
+                                {
+                                    key: "to",
+                                    label: "结束日期",
+                                    value: applied?.to ?? "",
+                                    defaultValue: "",
+                                    type: "date",
+                                    visibleWhen: { key: "range", value: "custom" },
+                                    onChange: () => {
+                                        setRange("7d");
+                                        setApplied(null);
+                                    },
+                                },
+                            ]}
+                            validate={draft =>
+                                draft.range === "custom" && (!draft.from || !draft.to || draft.from > draft.to)
+                                    ? "请选择开始和结束日期，开始日期不能晚于结束日期。"
+                                    : undefined
+                            }
+                            onApply={draft => {
+                                if (draft.domain) setTab(draft.domain as DomainKey);
+                                setAction(draft.action!);
+                                setOperator(draft.operator!);
+                                setRange(draft.range as typeof range);
+                                setDraftFrom(draft.from!);
+                                setDraftTo(draft.to!);
+                                setApplied(draft.range === "custom" ? { from: draft.from!, to: draft.to! } : null);
+                                setDateError("");
+                            }}
                         />
-                    </label>
-                    <select
-                        value={action}
-                        onChange={event => setAction(event.target.value)}
-                        aria-label="操作类型"
-                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
-                    >
-                        {ACTION_OPTIONS.map(option => (
-                            <option key={option.value} value={option.value}>
-                                {option.label}
-                            </option>
-                        ))}
-                    </select>
-                    <select
-                        value={operator}
-                        onChange={event => setOperator(event.target.value)}
-                        aria-label="操作人"
-                        className="h-10 rounded-btn border border-line-strong bg-surface px-3 text-14 text-ink"
-                    >
-                        <option value="all">全部操作人</option>
-                        {snap.users.map(user => (
-                            <option key={user.account} value={user.account}>
-                                {`${user.name}（${user.account}）${user.active ? "" : "· 已停用"}`}
-                            </option>
-                        ))}
-                    </select>
+                    }
+                >
+                    <ToolbarSelect value={action} onChange={setAction} label="操作类型" options={ACTION_OPTIONS} />
+                    <ToolbarSelect value={operator} onChange={setOperator} label="操作人" options={operatorOptions} />
                     <select
                         value={range}
                         onChange={event => {
@@ -400,13 +488,10 @@ export function SystemLogsPage() {
                             </option>
                         ))}
                     </select>
-                    <Button variant="link" onClick={reset} className="min-h-10 px-1 hover:text-primary">
-                        重置
-                    </Button>
-                </div>
+                </ListToolbar>
 
                 {range === "custom" && (
-                    <div className="border-b border-line bg-soft/60 px-5 py-3">
+                    <div className="hidden border-b border-line bg-soft/60 px-5 py-3 lg:block">
                         <div className="grid items-end gap-2.5 md:grid-cols-[minmax(0,190px)_minmax(0,190px)_auto]">
                             <label className="flex flex-col gap-1 text-13 font-medium text-td">
                                 开始日期

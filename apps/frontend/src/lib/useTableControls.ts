@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { useRememberedListState } from "@/context/useListView";
 
 /** 列表页控件状态机：关键字 / 分页 / 滚动区回顶 / 深链弹窗（各列表页共用）。
  *  筛选值（品类/状态/人员/日期段）各页语义不同，仍由页面自持，变更后回第 1 页
@@ -18,7 +19,7 @@ export function useTableControls(
 ) {
     const { deepLinkNew, initialKeyword = "", scrollReset = true, resetKey } = opts;
     const [searchParams, setSearchParams] = useSearchParams();
-    const [keyword, setKeyword] = useState(initialKeyword);
+    const [keyword, setKeyword] = useRememberedListState("keyword", initialKeyword, searchParams.has("q"));
     // 输入即筛并回第 1 页：结果集变小后原页码可能越界
     const onKeywordChange = (value: string) => {
         setKeyword(value);

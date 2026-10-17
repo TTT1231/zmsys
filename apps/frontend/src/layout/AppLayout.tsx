@@ -3,6 +3,7 @@ import { Navigate, Outlet, useLocation } from "react-router";
 import { ROLE_META, useApp, type Role } from "@/context/useApp";
 import { ContentMaximizeContext } from "@/context/useContentMaximize";
 import { usePreferences } from "@/context/usePreferences";
+import { ListViewProvider } from "@/context/ListViewProvider";
 import { MENU_CATALOG, menuLabelFor } from "@/data/permissions";
 import { MobileBottomNav, Sidebar, Topbar } from "@/components/layout/Shell";
 import { useLayoutFlags } from "@/components/layout/useLayoutFlags";
@@ -110,7 +111,7 @@ export function AppLayout() {
             className={
                 maximized
                     ? "mx-auto flex w-full min-w-0 flex-1 flex-col overflow-hidden p-3 lg:p-4"
-                    : "mx-auto w-full min-w-0 flex-1 px-[clamp(16px,2vw,32px)] pt-6 pb-[calc(76px+env(safe-area-inset-bottom))] lg:pb-8"
+                    : "mx-auto w-full min-w-0 flex-1 px-[clamp(16px,2vw,32px)] pt-3 pb-[calc(76px+env(safe-area-inset-bottom))] lg:pt-6 lg:pb-8"
             }
         >
             {accessDenied ? (
@@ -130,45 +131,47 @@ export function AppLayout() {
 
     return (
         <ContentMaximizeContext.Provider value={maximizeValue}>
-            {headerFull ? (
-                // 骨架 B：通栏顶栏（水平 / 侧边导航 / 混合垂直 / 混合双列），侧栏从顶栏下方开始。
-                // Sidebar 始终渲染：水平模式仅桌面隐藏（lg:hidden），移动端抽屉仍由它承载
-                <div
-                    className={maximized ? "flex h-dvh flex-col overflow-hidden" : "flex min-h-dvh flex-col"}
-                    data-maximized={maximized || undefined}
-                >
-                    <Topbar
-                        variant="full"
-                        showMenu={headerMenu}
-                        showCollapse={showSidebar}
-                        showBrand={sidebarForm !== "mixed"}
-                        {...topbarProps}
-                    />
-                    <div className="flex min-w-0 flex-1">
-                        <Sidebar form={sidebarForm} belowHeader {...sidebarProps} />
-                        {mainElement}
+            <ListViewProvider key={`${user?.account}:${role}:${grant.version}`}>
+                {headerFull ? (
+                    // 骨架 B：通栏顶栏（水平 / 侧边导航 / 混合垂直 / 混合双列），侧栏从顶栏下方开始。
+                    // Sidebar 始终渲染：水平模式仅桌面隐藏（lg:hidden），移动端抽屉仍由它承载
+                    <div
+                        className={maximized ? "flex h-dvh flex-col overflow-hidden" : "flex min-h-dvh flex-col"}
+                        data-maximized={maximized || undefined}
+                    >
+                        <Topbar
+                            variant="full"
+                            showMenu={headerMenu}
+                            showCollapse={showSidebar}
+                            showBrand={sidebarForm !== "mixed"}
+                            {...topbarProps}
+                        />
+                        <div className="flex min-w-0 flex-1">
+                            <Sidebar form={sidebarForm} belowHeader {...sidebarProps} />
+                            {mainElement}
+                        </div>
                     </div>
-                </div>
-            ) : (
-                // 骨架 A（现状）：侧栏全高，顶栏只在内容区上方
-                <div
-                    className={maximized ? "flex h-dvh overflow-hidden" : "flex min-h-dvh"}
-                    data-maximized={maximized || undefined}
-                >
-                    <Sidebar form={sidebarForm} {...sidebarProps} />
-                    <div className="flex min-w-0 flex-1 flex-col">
-                        <Topbar {...topbarProps} />
-                        {mainElement}
+                ) : (
+                    // 骨架 A（现状）：侧栏全高，顶栏只在内容区上方
+                    <div
+                        className={maximized ? "flex h-dvh overflow-hidden" : "flex min-h-dvh"}
+                        data-maximized={maximized || undefined}
+                    >
+                        <Sidebar form={sidebarForm} {...sidebarProps} />
+                        <div className="flex min-w-0 flex-1 flex-col">
+                            <Topbar {...topbarProps} />
+                            {mainElement}
+                        </div>
                     </div>
-                </div>
-            )}
-            {!maximized && <MobileBottomNav onOpenDrawer={() => setDrawerPath(location.pathname)} />}
-            {user && <GlobalWatermark text={user.name} subtle={location.pathname === "/analytics"} />}
-            {user && (
-                <Suspense fallback={null}>
-                    <AiChatWidget key={`${user.account}:${role}:${grant.version}`} />
-                </Suspense>
-            )}
+                )}
+                {!maximized && <MobileBottomNav onOpenDrawer={() => setDrawerPath(location.pathname)} />}
+                {user && <GlobalWatermark text={user.name} subtle={location.pathname === "/analytics"} />}
+                {user && (
+                    <Suspense fallback={null}>
+                        <AiChatWidget key={`${user.account}:${role}:${grant.version}`} />
+                    </Suspense>
+                )}
+            </ListViewProvider>
         </ContentMaximizeContext.Provider>
     );
 }

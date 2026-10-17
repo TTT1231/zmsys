@@ -142,7 +142,7 @@ it("BOM 编码与库存数量可排序（升/降两态循环）", () => {
 
 it("搜索按编码/品类/备注过滤", () => {
     renderPage();
-    const input = screen.getByPlaceholderText("BOM 编码 / 品类 / 备注");
+    const input = screen.getByRole("textbox", { name: "搜索内容" });
     fireEvent.change(input, { target: { value: "琴键" } });
     const table = screen.getByRole("table");
     expect(table).toHaveTextContent(otherBom.code);

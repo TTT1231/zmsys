@@ -17,6 +17,7 @@ import type { SidebarForm } from "./useLayoutFlags";
 import { UserMenu } from "./UserMenu";
 import { useFullscreen } from "./useFullscreen";
 import { useThemeToggle } from "./useThemeToggle";
+import { MobileListSearch } from "./MobileListSearch";
 
 /* 侧边栏导航：由「登录用户角色 + 授权 + 运行时受保护码」生成（见 data/permissions.ts） */
 function useNavSections(): NavSection[] {
@@ -181,10 +182,10 @@ export function Sidebar({ collapsed, open, onClose, maximized = false, form, bel
 
 /* 移动端底部导航：入口按菜单授权过滤（工作台被收回时不占首格，客户档案等未授权模块不可达） */
 export function MobileBottomNav({ onOpenDrawer }: { onOpenDrawer: () => void }) {
-    const { role, grant } = useApp();
+    const { grant } = useApp();
     const centerItems: Array<{ key: string; label: string; icon: string; to: string; end?: boolean }> = [
         { key: "workbench", label: "工作台", icon: "grid", to: "/workbench", end: true },
-        { key: "orders", label: role === "warehouse" ? "待发货" : "订单", icon: "order", to: "/orders" },
+        { key: "orders", label: "订单", icon: "order", to: "/orders" },
         { key: "customers", label: "客户", icon: "contacts", to: "/customers" },
         { key: "inbound", label: "入库", icon: "inbound", to: "/inbound" },
         { key: "outbound", label: "出库", icon: "outbound", to: "/outbound" },
@@ -266,7 +267,7 @@ export function Topbar({
     const sections = useNavSections();
 
     /* 顶栏图标按钮的 iconOnly 覆写：触屏档 44px 命中区保底 + 按压缩放反馈（本体样式在 Button iconOnly） */
-    const iconBtn = "max-lg:min-h-[44px] max-lg:min-w-[44px] active:scale-90";
+    const iconBtn = "active:scale-90";
 
     return (
         <>
@@ -274,10 +275,16 @@ export function Topbar({
                 vben 的 sticky 头部同样如此（hidden 态只动画 transform，maximize 时高度直接归零）。
                 sticky 会把负 margin clamp 回 top 约束，margin 过渡方案对 sticky 头部无效 */}
             <header
-                className={`sticky top-0 z-30 flex shrink-0 items-center justify-between gap-4 overflow-hidden border-line bg-surface/88 px-4 backdrop-blur-[18px] saturate-150 sm:px-6 ${maximized ? "h-0 border-b-0" : "h-16 border-b"}`}
+                className={`sticky top-0 z-30 flex shrink-0 items-center justify-between gap-1 overflow-hidden border-line bg-surface/88 px-3 backdrop-blur-[18px] saturate-150 lg:gap-4 lg:px-6 ${maximized ? "h-0 border-b-0" : "h-16 border-b"}`}
             >
-                <div className={`flex min-w-0 flex-1 items-center gap-3 ${maximized ? "pointer-events-none" : ""}`}>
-                    {variant === "full" && showBrand && <BrandMark withText />}
+                <div
+                    className={`flex min-w-0 flex-1 items-center gap-1 lg:gap-3 ${maximized ? "pointer-events-none" : ""}`}
+                >
+                    {variant === "full" && showBrand && (
+                        <span className="hidden lg:block">
+                            <BrandMark withText />
+                        </span>
+                    )}
 
                     <Button
                         iconOnly
@@ -306,7 +313,7 @@ export function Topbar({
                         key={`mobile-${routeKey}`}
                         className="animate-breadcrumb-enter block truncate text-15 font-semibold text-ink lg:hidden"
                     >
-                        {title}
+                        {routeKey === "/orders" ? "销售订单" : title}
                     </strong>
                     {showMenu ? (
                         <HeaderMenu sections={sections} />
@@ -336,7 +343,7 @@ export function Topbar({
                 </div>
 
                 <div
-                    className={`flex shrink-0 items-center gap-1.5 sm:gap-2.5 ${maximized ? "pointer-events-none" : ""}`}
+                    className={`flex shrink-0 items-center gap-0.5 lg:gap-2.5 ${maximized ? "pointer-events-none" : ""}`}
                 >
                     <TooltipProvider delayDuration={250}>
                         <Tooltip>
@@ -346,7 +353,7 @@ export function Topbar({
                                     aria-label="偏好设置"
                                     onClick={() => setPrefsOpen(true)}
                                     tabIndex={maximized ? -1 : 0}
-                                    className={iconBtn}
+                                    className={`${iconBtn} hidden lg:flex`}
                                 >
                                     <Icon name="settings" size={20} />
                                 </Button>
@@ -360,7 +367,7 @@ export function Topbar({
                                     aria-label="主题"
                                     onClick={toggleTheme}
                                     tabIndex={maximized ? -1 : 0}
-                                    className={iconBtn}
+                                    className={`${iconBtn} hidden lg:flex`}
                                 >
                                     <Icon name={isDark ? "sun" : "moon"} size={20} />
                                 </Button>
@@ -389,7 +396,7 @@ export function Topbar({
                                         aria-label="全屏"
                                         onClick={toggle}
                                         tabIndex={maximized ? -1 : 0}
-                                        className={`${iconBtn} hidden sm:flex`}
+                                        className={`${iconBtn} hidden lg:flex`}
                                     >
                                         <Icon name={isFullscreen ? "minimize" : "maximize"} size={20} />
                                     </Button>
@@ -398,7 +405,8 @@ export function Topbar({
                             </Tooltip>
                         )}
                     </TooltipProvider>
-                    <UserMenu />
+                    <UserMenu onOpenPreferences={() => setPrefsOpen(true)} />
+                    <MobileListSearch />
                 </div>
             </header>
             <PreferencesDrawer open={prefsOpen} onClose={() => setPrefsOpen(false)} />

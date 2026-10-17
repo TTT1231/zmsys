@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { DataTable } from "@/components/ui/DataTable";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListToolbar } from "@/components/ui/ListToolbar";
+import { MobileListControls } from "@/components/ui/MobileListControls";
+import { useRememberedListState } from "@/context/useListView";
 import { ToolbarSelect } from "@/components/ui/ToolbarSelect";
 import { ListState, RecordCard, CardField } from "@/components/ui/MobileList";
 import { EmptyRow } from "@/components/ui/EmptyRow";
@@ -433,10 +435,10 @@ export function OutboundPage() {
     const voidRequest = useVoidOutbound();
     const deleteRequest = useDeleteOutbound();
     const toast = useToast();
-    const [category, setCategory] = useState("全部品类");
-    const [statusFilter, setStatusFilter] = useState("全部状态");
+    const [category, setCategory] = useRememberedListState("category", "全部品类");
+    const [statusFilter, setStatusFilter] = useRememberedListState("status", "全部状态");
     // 按操作人筛：看单个人的全部出库记录（选项来自台账里实际出现过的操作人）
-    const [operatorFilter, setOperatorFilter] = useState("全部操作人");
+    const [operatorFilter, setOperatorFilter] = useRememberedListState("operator", "全部操作人");
     // 列排序默认升序：默认按出库日期（同日以单号稳定排序）
     const [sort, setSort] = useState<SortState<LedgerSortKey>>({ key: "date", dir: "asc" });
     const {
@@ -523,9 +525,57 @@ export function OutboundPage() {
                     <ListToolbar
                         keyword={keyword}
                         onKeywordChange={onKeywordChange}
-                        placeholder="单号 / 订单 / 客户 / BOM"
+                        placeholder="出库单号、订单号、客户名或 BOM 编码"
                         onClear={clearFilters}
                         filtersActive={filtersActive}
+                        mobileContent={
+                            <MobileListControls
+                                fields={[
+                                    {
+                                        key: "status",
+                                        label: "状态",
+                                        value: statusFilter,
+                                        defaultValue: "全部状态",
+                                        options: ["全部状态", "已登记", "已作废"],
+                                        onChange: value => {
+                                            setStatusFilter(value);
+                                            setPage(1);
+                                        },
+                                    },
+                                    {
+                                        key: "category",
+                                        label: "品类",
+                                        value: category,
+                                        defaultValue: "全部品类",
+                                        options: ["全部品类", ...categories],
+                                        onChange: value => {
+                                            setCategory(value);
+                                            setPage(1);
+                                        },
+                                    },
+                                ]}
+                                more={[
+                                    {
+                                        key: "operator",
+                                        label: "登记人",
+                                        value: operatorFilter,
+                                        defaultValue: "全部操作人",
+                                        options: ["全部操作人", ...operators],
+                                        onChange: value => {
+                                            setOperatorFilter(value);
+                                            setPage(1);
+                                        },
+                                    },
+                                ]}
+                                action={
+                                    canRegister && (
+                                        <Button onClick={() => setNewOpen(true)} className="px-3">
+                                            出库
+                                        </Button>
+                                    )
+                                }
+                            />
+                        }
                         trailing={
                             <TableHeaderActions className="ml-auto">
                                 <ToolbarMore>
@@ -535,7 +585,7 @@ export function OutboundPage() {
                                 </ToolbarMore>
                                 {canRegister && (
                                     <Button icon="truck" onClick={() => setNewOpen(true)}>
-                                        登记发货
+                                        出库
                                     </Button>
                                 )}
                             </TableHeaderActions>

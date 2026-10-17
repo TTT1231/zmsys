@@ -630,6 +630,25 @@ html.dark::view-transition-new(root) {
     border-bottom: 1px solid var(--color-line);
     background: linear-gradient(to bottom, var(--color-surface), var(--color-panel));
 }
+
+/* 手机列表仅保留常用条件和主操作，次要条件通过带文字的「筛选」面板设置。 */
+.mobile-list-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    border-bottom: 1px solid var(--color-line);
+    padding: 10px;
+}
+.mobile-list-controls > select {
+    flex: 1 1 68px;
+    width: 0;
+    min-width: 68px;
+    max-width: 100%;
+}
+.mobile-list-controls > button {
+    flex-shrink: 0;
+}
 .table-task-tabs {
     display: inline-flex;
     min-width: 0;
@@ -697,7 +716,7 @@ button:active:not(:disabled) {
         background: var(--color-canvas);
     }
     #mainContent {
-        padding-top: 16px;
+        padding-top: 12px;
     }
     .page-heading {
         gap: 12px;

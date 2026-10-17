@@ -26,6 +26,8 @@ import { Icon } from "@/lib/icons";
 import { num } from "@/lib/format";
 import { useApp } from "@/context/useApp";
 import { useTableControls } from "@/lib/useTableControls";
+import { useIsMobile } from "@/lib/useIsMobile";
+import { useRememberedListState } from "@/context/useListView";
 import { SnapProvider } from "@/context/snap";
 import { useSnap } from "@/context/useSnap";
 import { TableHeaderActions } from "@/components/ui/TableHeaderActions";
@@ -852,15 +854,16 @@ export function OrderDetailModal({
 
 export function OrdersPage() {
     const { role, can } = useApp();
+    const isMobile = useIsMobile();
     const { snap, isLoading, refreshing: overlay } = useWbView();
     const { refresh } = useWbRefresh();
     const [searchParams] = useSearchParams();
-    const [statusFilter, setStatusFilter] = useState("全部状态");
-    const [categoryFilter, setCategoryFilter] = useState("全部品类");
-    // 移动端完成度二段筛选（替代桌面六态状态筛选：窄屏装不下，也用不上细分状态）
-    const [mobileDone, setMobileDone] = useState<"all" | "open" | "done">("all");
-    const [dateStart, setDateStart] = useState("");
-    const [dateEnd, setDateEnd] = useState("");
+    const [statusFilter, setStatusFilter] = useRememberedListState("status", "全部状态");
+    const [categoryFilter, setCategoryFilter] = useRememberedListState("category", "全部品类");
+    // 移动端仅按完成度筛选，与桌面快捷任务、细分状态和交期条件分别生效。
+    const [mobileDone, setMobileDone] = useRememberedListState<"all" | "open" | "done">("completion", "all");
+    const [dateStart, setDateStart] = useRememberedListState("dateStart", "");
+    const [dateEnd, setDateEnd] = useRememberedListState("dateEnd", "");
     // 列排序默认升序：默认按订单号；仓管视角默认交货日期（按交期备货）。
     // 三态循环（升→降→取消）：点表头即按所选序重排一次；拖拽手动序会暂停当前排序，重新点表头才恢复
     const [sort, setSort] = useState<SortState<OrderSortKey> | null>(() => ({
@@ -903,7 +906,11 @@ export function OrdersPage() {
         window.setTimeout(() => cells.forEach(td => td.classList.remove("row-just-moved")), 500);
     };
     const [ship, setShip] = useState<string | null>(null);
-    const [taskFilter, setTaskFilter] = useState(searchParams.get("task") ?? (role === "warehouse" ? "ready" : "all"));
+    const [taskFilter, setTaskFilter] = useRememberedListState(
+        "task",
+        searchParams.get("task") ?? (role === "warehouse" ? "ready" : "all"),
+        searchParams.has("task"),
+    );
     const [detail, setDetail] = useState<Order | null>(null);
     const [editing, setEditing] = useState<Order | null>(null);
     // “客户/备注”列点客户名打开客户档案详情；存编码渲染时回捞，刷新后数据保持同步
@@ -930,18 +937,20 @@ export function OrdersPage() {
     const filtered = useMemo(() => {
         const kw = keyword.trim().toLowerCase();
         return orders.filter(order => {
-            if (taskFilter === "pending" && remainingOf(order) <= 0) return false;
             // 可发量/状态读一次派生的预计算行；不在分配行内（已交满）按可发 0 判状态
             const row = derived.byOrderNo.get(order.orderNo);
-            if (taskFilter === "ready" && (row?.maxShip ?? 0) <= 0) return false;
-            if (statusFilter !== "全部状态" && (row?.status ?? orderStatusOfMax(order, 0)).label !== statusFilter)
-                return false;
-            // 移动端完成度二段筛选（未完成 = 仍有待交；已完成 = 已全部交付）
-            if (mobileDone === "open" && remainingOf(order) <= 0) return false;
-            if (mobileDone === "done" && remainingOf(order) > 0) return false;
-            if (categoryFilter !== "全部品类" && bomCategory.get(order.bomCode) !== categoryFilter) return false;
-            if (dateStart && order.deliverDate < dateStart) return false;
-            if (dateEnd && order.deliverDate > dateEnd) return false;
+            if (isMobile) {
+                if (mobileDone === "open" && remainingOf(order) <= 0) return false;
+                if (mobileDone === "done" && remainingOf(order) > 0) return false;
+            } else {
+                if (taskFilter === "pending" && remainingOf(order) <= 0) return false;
+                if (taskFilter === "ready" && (row?.maxShip ?? 0) <= 0) return false;
+                if (statusFilter !== "全部状态" && (row?.status ?? orderStatusOfMax(order, 0)).label !== statusFilter)
+                    return false;
+                if (categoryFilter !== "全部品类" && bomCategory.get(order.bomCode) !== categoryFilter) return false;
+                if (dateStart && order.deliverDate < dateStart) return false;
+                if (dateEnd && order.deliverDate > dateEnd) return false;
+            }
             if (kw) {
                 const bom = derived.bomIndex.get(order.bomCode);
                 const text =
@@ -961,6 +970,7 @@ export function OrdersPage() {
         dateEnd,
         derived,
         bomCategory,
+        isMobile,
     ]);
 
     const sorted = useMemo(() => {
@@ -1003,7 +1013,7 @@ export function OrdersPage() {
     const dateFilterActive = !!dateStart || !!dateEnd;
     const filtersActive =
         dateFilterActive || !!keyword.trim() || statusFilter !== "全部状态" || categoryFilter !== "全部品类";
-    /* 交期快捷区间：手机上免滚原生日期选择器（today 声明在派生 memo 处，两处共用） */
+    /* 桌面交期快捷区间；移动端不展示、不参与筛选。 */
     const monthStart = monthStartOf(today);
     const quickRanges = [
         { label: "近 7 天", start: addDays(today, -6), end: today },
@@ -1182,44 +1192,76 @@ export function OrdersPage() {
     return (
         <SnapProvider snap={snap}>
             <div className="flex flex-col gap-5">
-                <h1 className="sr-only">{role === "warehouse" ? "待发货订单" : "销售订单"}</h1>
+                <h1 className="sr-only">{!isMobile && role === "warehouse" ? "待发货订单" : "销售订单"}</h1>
 
                 <section className="relative overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
                     {overlay && <LoadingOverlay />}
-                    <div className="list-card-primary">
-                        <div className="table-task-tabs" aria-label="订单快捷筛选">
-                            {[
-                                { key: "all", label: "全部", count: counts.total },
-                                { key: "pending", label: "待交付", count: counts.unfinished },
-                                { key: "ready", label: "可发货", count: counts.ready },
-                            ].map(item => (
-                                <button
-                                    type="button"
-                                    key={item.key}
-                                    aria-pressed={taskFilter === item.key}
-                                    onClick={() => {
-                                        setTaskFilter(item.key);
-                                        setStatusFilter("全部状态");
-                                        setManualOrder(null);
-                                        setPage(1);
-                                    }}
-                                >
-                                    {item.label} <strong>{item.count}</strong>
-                                </button>
-                            ))}
-                        </div>
-                        <TableHeaderActions className="ml-auto">
+                    <div className="lg:hidden">
+                        <div className="mobile-list-controls">
+                            <div className="table-task-tabs flex-1" role="group" aria-label="订单完成情况">
+                                {(
+                                    [
+                                        ["all", "全部"],
+                                        ["open", "未完成"],
+                                        ["done", "已完成"],
+                                    ] as const
+                                ).map(([key, label]) => (
+                                    <button
+                                        type="button"
+                                        key={key}
+                                        aria-pressed={mobileDone === key}
+                                        onClick={() => {
+                                            setMobileDone(key);
+                                            setPage(1);
+                                        }}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
                             {canCreate && (
-                                <Button icon="plus" className="max-sm:flex-1" onClick={() => setNewOpen(true)}>
-                                    新建订单
+                                <Button onClick={() => setNewOpen(true)} className="px-3" aria-label="新建订单">
+                                    新建
                                 </Button>
                             )}
-                        </TableHeaderActions>
+                        </div>
+                    </div>
+                    <div className="hidden lg:block">
+                        <div className="list-card-primary">
+                            <div className="table-task-tabs" aria-label="订单快捷筛选">
+                                {[
+                                    { key: "all", label: "全部", count: counts.total },
+                                    { key: "pending", label: "待交付", count: counts.unfinished },
+                                    { key: "ready", label: "可发货", count: counts.ready },
+                                ].map(item => (
+                                    <button
+                                        type="button"
+                                        key={item.key}
+                                        aria-pressed={taskFilter === item.key}
+                                        onClick={() => {
+                                            setTaskFilter(item.key);
+                                            setStatusFilter("全部状态");
+                                            setManualOrder(null);
+                                            setPage(1);
+                                        }}
+                                    >
+                                        {item.label} <strong>{item.count}</strong>
+                                    </button>
+                                ))}
+                            </div>
+                            <TableHeaderActions className="ml-auto">
+                                {canCreate && (
+                                    <Button icon="plus" className="max-sm:flex-1" onClick={() => setNewOpen(true)}>
+                                        新建订单
+                                    </Button>
+                                )}
+                            </TableHeaderActions>
+                        </div>
                     </div>
                     <ListToolbar
                         keyword={keyword}
                         onKeywordChange={onKeywordChange}
-                        placeholder="客户名 / 订单号 / BOM"
+                        placeholder="客户名、订单号或 BOM 编码"
                         onClear={clearFilters}
                         filtersActive={filtersActive}
                         trailing={
@@ -1239,38 +1281,6 @@ export function OrdersPage() {
                             </div>
                         }
                     >
-                        {/* 移动端完成度二段筛选（桌面六态状态/品类筛选与排序下拉不进移动端） */}
-                        <div
-                            className="flex w-full items-center gap-1 rounded-btn border border-line bg-soft p-1 lg:hidden"
-                            role="group"
-                            aria-label="按完成度筛选"
-                        >
-                            {(
-                                [
-                                    ["all", "全部"],
-                                    ["open", "未完成"],
-                                    ["done", "已完成"],
-                                ] as const
-                            ).map(([key, label]) => {
-                                const active = mobileDone === key;
-                                return (
-                                    <button
-                                        type="button"
-                                        key={key}
-                                        aria-pressed={active}
-                                        onClick={() => {
-                                            setMobileDone(key);
-                                            setPage(1);
-                                        }}
-                                        className={`min-h-9 flex-1 rounded-lg px-3 text-13 font-semibold transition ${
-                                            active ? "bg-surface text-ink shadow-xs" : "text-muted"
-                                        }`}
-                                    >
-                                        {label}
-                                    </button>
-                                );
-                            })}
-                        </div>
                         <ToolbarSelect
                             value={statusFilter}
                             onChange={value => {

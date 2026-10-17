@@ -48,7 +48,16 @@ export function MenuItemLink({ item, inset = false, onNote, onNavigate }: MenuIt
             }
         >
             <Icon name={item.icon} size={18} strokeWidth={1.7} className="shrink-0" />
-            <span className="min-w-0 flex-1 truncate">{item.label}</span>
+            <span className="min-w-0 flex-1 truncate">
+                {item.to === "/orders" ? (
+                    <>
+                        <span className="lg:hidden">销售订单</span>
+                        <span className="hidden lg:inline">{item.label}</span>
+                    </>
+                ) : (
+                    item.label
+                )}
+            </span>
         </NavLink>
     );
 }

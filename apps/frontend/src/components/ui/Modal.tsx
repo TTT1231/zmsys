@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@/lib/icons";
 import { Button } from "./Button";
@@ -27,7 +27,8 @@ interface ModalProps {
     width?: number;
     children: ReactNode;
     footer?: ReactNode;
-    layout?: "default" | "workspace" | "detail";
+    layout?: "default" | "workspace" | "detail" | "search";
+    initialFocusRef?: RefObject<HTMLElement | null>;
 }
 
 export function Modal({
@@ -41,6 +42,7 @@ export function Modal({
     children,
     footer,
     layout = "default",
+    initialFocusRef,
 }: ModalProps) {
     const panelRef = useRef<HTMLDivElement>(null);
     const overlayRef = useRef<HTMLDivElement>(null);
@@ -78,7 +80,7 @@ export function Modal({
             ).filter(element => element.getAttribute("aria-hidden") !== "true");
 
         const focusables = getFocusables();
-        (focusables[0] ?? panelRef.current)?.focus();
+        (initialFocusRef?.current ?? focusables[0] ?? panelRef.current)?.focus();
         const onKey = (event: KeyboardEvent) => {
             // 叠加时只让栈顶响应，避免一次 ESC 关掉多层、焦点陷阱互相拉扯
             if (modalStack.at(-1) !== token) return;
@@ -122,7 +124,7 @@ export function Modal({
             // 仅栈顶正常关闭时恢复焦点；外层先于内层卸载时不与内层抢焦点
             if (wasTop) restoreRef.current?.focus?.();
         };
-    }, [open]);
+    }, [open, initialFocusRef]);
 
     if (!open) return null;
 
@@ -131,7 +133,7 @@ export function Modal({
     return createPortal(
         <div
             ref={overlayRef}
-            className={`fixed inset-0 z-150 flex animate-fade-in bg-scrim backdrop-blur-[2px] ${layout === "detail" ? "items-stretch justify-end" : "items-center justify-center p-4 max-md:items-end max-md:p-0"}`}
+            className={`fixed inset-0 z-150 flex animate-fade-in bg-scrim backdrop-blur-[2px] ${layout === "detail" ? "items-stretch justify-end" : layout === "search" ? "items-start justify-center p-3 pt-4" : "items-center justify-center p-4 max-md:items-end max-md:p-0"}`}
             onMouseDown={event => {
                 if (event.target === event.currentTarget) onClose();
             }}
@@ -148,9 +150,11 @@ export function Modal({
                 } ${
                     layout === "detail"
                         ? "h-dvh max-h-dvh rounded-l-panel max-md:rounded-none"
-                        : layout === "workspace"
-                          ? "h-[calc(100dvh-24px)] max-h-240 rounded-panel max-md:h-[calc(100dvh-16px)] max-md:max-h-[calc(100dvh-16px)] max-md:rounded-b-none max-md:rounded-t-[22px]"
-                          : "max-h-[88dvh] rounded-panel max-md:max-h-[calc(100dvh-16px)] max-md:rounded-b-none max-md:rounded-t-[22px]"
+                        : layout === "search"
+                          ? "max-h-[calc(100dvh-32px)] rounded-panel"
+                          : layout === "workspace"
+                            ? "h-[calc(100dvh-24px)] max-h-240 rounded-panel max-md:h-[calc(100dvh-16px)] max-md:max-h-[calc(100dvh-16px)] max-md:rounded-b-none max-md:rounded-t-[22px]"
+                            : "max-h-[88dvh] rounded-panel max-md:max-h-[calc(100dvh-16px)] max-md:rounded-b-none max-md:rounded-t-[22px]"
                 }`}
             >
                 <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-4">

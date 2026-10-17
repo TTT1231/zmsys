@@ -17,7 +17,7 @@ import { ProfileDialog } from "./ProfileDialog";
 
 /* 顶栏用户下拉:菜单内仅保留 姓名 + 角色 两行信息;
    「个人中心」打开资料弹窗,「退出登录」先确认再登出 */
-export function UserMenu() {
+export function UserMenu({ onOpenPreferences }: { onOpenPreferences?: () => void }) {
     const navigate = useNavigate();
     const { user, role, logout } = useApp();
     const toast = useToast();
@@ -42,18 +42,18 @@ export function UserMenu() {
             {/* 用户下拉不锁页面滚动，避免菜单打开时改变页面宽度。 */}
             <DropdownMenu modal={false}>
                 <DropdownMenuTrigger
-                    className="flex shrink-0 items-center gap-2.5 rounded-btn px-1.5 py-1 transition hover:bg-soft"
+                    className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2.5 rounded-btn px-1 py-1 transition hover:bg-soft lg:px-1.5"
                     aria-label="用户菜单"
                 >
                     <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-[var(--color-primary)] to-[var(--color-primary-strong)] text-14 font-semibold text-white">
                         {user?.name.slice(0, 1) ?? "?"}
                         <span className="absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full border-2 border-surface bg-success" />
                     </span>
-                    <span className="hidden text-left leading-tight sm:block">
+                    <span className="hidden text-left leading-tight lg:block">
                         <span className="block text-13 font-semibold text-ink">{user?.name ?? "未登录"}</span>
                         <span className="block text-12 text-muted">{ROLE_META[role].roleName}</span>
                     </span>
-                    <Icon name="chevron-down" size={14} className="text-muted" />
+                    <Icon name="chevron-down" size={14} className="hidden text-muted lg:block" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-60">
                     <DropdownMenuLabel className="pb-1">
@@ -65,6 +65,12 @@ export function UserMenu() {
                         <Icon name="users" size={16} className="text-muted" />
                         个人中心
                     </DropdownMenuItem>
+                    {onOpenPreferences && (
+                        <DropdownMenuItem className="lg:hidden" onSelect={onOpenPreferences}>
+                            <Icon name="settings" size={16} className="text-muted" />
+                            偏好设置
+                        </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                         className="text-danger data-highlighted:bg-danger-soft data-highlighted:text-danger"
                         onSelect={() => setConfirmOpen(true)}

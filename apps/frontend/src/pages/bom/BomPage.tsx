@@ -3,6 +3,8 @@ import { DangerNote } from "@/components/business/DangerNote";
 import { RemarkCell } from "@/components/ui/RemarkCell";
 import { DataTable } from "@/components/ui/DataTable";
 import { ListToolbar } from "@/components/ui/ListToolbar";
+import { MobileListControls } from "@/components/ui/MobileListControls";
+import { useRememberedListState } from "@/context/useListView";
 import { ToolbarSelect } from "@/components/ui/ToolbarSelect";
 import { SortTh } from "@/components/ui/SortTh";
 import { nextSortState, type SortState } from "@/lib/tableSort";
@@ -817,8 +819,8 @@ export function BomPage() {
     const stocksQuery = useBomStocks();
     const usageQuery = useBomUsage();
     const { refresh } = useBomRefresh();
-    const [category, setCategory] = useState("全部品类");
-    const [statusFilter, setStatusFilter] = useState("全部状态");
+    const [category, setCategory] = useRememberedListState("category", "全部品类");
+    const [statusFilter, setStatusFilter] = useRememberedListState("status", "全部状态");
     /* 未使用/正在使用都依赖使用关系数据，未加载完成前不参与筛选防误报 */
     const usageFilterActive = statusFilter !== "全部状态";
     const usageUnavailable = usageFilterActive && usageQuery.isError && usageQuery.data === undefined;
@@ -937,9 +939,44 @@ export function BomPage() {
                 <ListToolbar
                     keyword={keyword}
                     onKeywordChange={onKeywordChange}
-                    placeholder="BOM / 品类 / 型号 / 物料"
+                    placeholder="BOM 编码、品类、型号或物料名称"
                     onClear={clearFilters}
                     filtersActive={filtersActive}
+                    mobileContent={
+                        <MobileListControls
+                            fields={[
+                                {
+                                    key: "status",
+                                    label: "状态",
+                                    value: statusFilter,
+                                    defaultValue: "全部状态",
+                                    options: ["全部状态", "正在使用", "未使用"],
+                                    onChange: value => {
+                                        setStatusFilter(value);
+                                        setPage(1);
+                                    },
+                                },
+                                {
+                                    key: "category",
+                                    label: "品类",
+                                    value: category,
+                                    defaultValue: "全部品类",
+                                    options: ["全部品类", ...categories],
+                                    onChange: value => {
+                                        setCategory(value);
+                                        setPage(1);
+                                    },
+                                },
+                            ]}
+                            action={
+                                canCreate && (
+                                    <Button onClick={() => setNewOpen(true)} className="px-3" aria-label="新建 BOM">
+                                        新建
+                                    </Button>
+                                )
+                            }
+                        />
+                    }
                     trailing={
                         <TableHeaderActions className="ml-auto">
                             <ToolbarMore>

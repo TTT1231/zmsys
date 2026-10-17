@@ -1,6 +1,8 @@
 import { DataTable } from "@/components/ui/DataTable";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { ListToolbar } from "@/components/ui/ListToolbar";
+import { MobileListControls } from "@/components/ui/MobileListControls";
+import { useRememberedListState } from "@/context/useListView";
 import { ToolbarSelect } from "@/components/ui/ToolbarSelect";
 import { DateRangeFilter } from "@/components/ui/DateRangeFilter";
 import { ListState, OrderTaskCard } from "@/components/ui/MobileList";
@@ -21,7 +23,6 @@ import { Pagination } from "@/components/ui/Pagination";
 import { CustomerCell, DateCell, QtyCell } from "@/components/ui/cells";
 import { RemarkCell } from "@/components/ui/RemarkCell";
 import { SortTh } from "@/components/ui/SortTh";
-import { MobileSortSelect } from "@/components/ui/MobileSortSelect";
 import { nextSortState, type SortState } from "@/lib/tableSort";
 import { SnapProvider } from "@/context/snap";
 import { deriveOrders, orderStatusOfMax } from "@/data/views";
@@ -33,13 +34,17 @@ import type { Order } from "@/api";
  * 状态徽章直接展示交付进度（已完成/部分发货），无"取消后归档"等专属形态 */
 const STATUS_OPTIONS = ["全部状态", "已完成", "部分发货"];
 
-/* 可排序列：订单号 / 数量 / 交期 / 归档时间；桌面表头与移动端排序下拉共用 */
+/* 可排序列：订单号 / 数量 / 交期 / 归档时间。手机排序收进筛选，使用直白的方向说明。 */
 type ArchivedSortKey = "orderNo" | "qty" | "deliverDate" | "archivedAt";
-const SORT_COLUMNS: Array<{ key: ArchivedSortKey; label: string }> = [
-    { key: "orderNo", label: "销售订单号" },
-    { key: "qty", label: "订单数量" },
-    { key: "deliverDate", label: "交货日期" },
-    { key: "archivedAt", label: "归档时间" },
+const MOBILE_SORT_OPTIONS = [
+    { value: "archivedAt:desc", label: "归档时间从新到旧" },
+    { value: "archivedAt:asc", label: "归档时间从旧到新" },
+    { value: "orderNo:asc", label: "订单号从小到大" },
+    { value: "orderNo:desc", label: "订单号从大到小" },
+    { value: "qty:asc", label: "数量从少到多" },
+    { value: "qty:desc", label: "数量从多到少" },
+    { value: "deliverDate:asc", label: "交货日期从早到晚" },
+    { value: "deliverDate:desc", label: "交货日期从晚到早" },
 ];
 
 /** 归档订单：存档仅供查询（编辑/发货入口均不提供），归档人与时间见详情；
@@ -47,11 +52,14 @@ const SORT_COLUMNS: Array<{ key: ArchivedSortKey; label: string }> = [
 export function ArchivedOrdersPage() {
     const { snap, isLoading, refreshing: overlay } = useWbView();
     const { refresh } = useWbRefresh();
-    const [statusFilter, setStatusFilter] = useState("全部状态");
-    const [categoryFilter, setCategoryFilter] = useState("全部品类");
-    const [dateStart, setDateStart] = useState("");
-    const [dateEnd, setDateEnd] = useState("");
-    const [sort, setSort] = useState<SortState<ArchivedSortKey>>({ key: "archivedAt", dir: "desc" });
+    const [statusFilter, setStatusFilter] = useRememberedListState("status", "全部状态");
+    const [categoryFilter, setCategoryFilter] = useRememberedListState("category", "全部品类");
+    const [dateStart, setDateStart] = useRememberedListState("dateStart", "");
+    const [dateEnd, setDateEnd] = useRememberedListState("dateEnd", "");
+    const [sort, setSort] = useRememberedListState<SortState<ArchivedSortKey>>("sort", {
+        key: "archivedAt",
+        dir: "desc",
+    });
     const { keyword, setKeyword, onKeywordChange, page, setPage, pageSize, onPageSizeChange, tableScrollRef } =
         useTableControls({ resetKey: sort });
     const [detail, setDetail] = useState<Order | null>(null);
@@ -130,9 +138,78 @@ export function ArchivedOrdersPage() {
                     <ListToolbar
                         keyword={keyword}
                         onKeywordChange={onKeywordChange}
-                        placeholder="客户名 / 订单号 / BOM / 归档人"
+                        placeholder="客户名、订单号、BOM 编码或归档人"
                         onClear={clearFilters}
                         filtersActive={filtersActive}
+                        mobileContent={
+                            <MobileListControls
+                                fields={[
+                                    {
+                                        key: "status",
+                                        label: "状态",
+                                        value: statusFilter,
+                                        defaultValue: "全部状态",
+                                        options: STATUS_OPTIONS,
+                                        onChange: value => {
+                                            setStatusFilter(value);
+                                            setPage(1);
+                                        },
+                                    },
+                                    {
+                                        key: "category",
+                                        label: "品类",
+                                        value: categoryFilter,
+                                        defaultValue: "全部品类",
+                                        options: ["全部品类", ...categories],
+                                        onChange: value => {
+                                            setCategoryFilter(value);
+                                            setPage(1);
+                                        },
+                                    },
+                                ]}
+                                more={[
+                                    {
+                                        key: "sort",
+                                        label: "排序",
+                                        value: `${sort.key}:${sort.dir}`,
+                                        defaultValue: "archivedAt:desc",
+                                        options: MOBILE_SORT_OPTIONS,
+                                        onChange: value => {
+                                            const [key, dir] = value.split(":") as [ArchivedSortKey, "asc" | "desc"];
+                                            setSort({ key, dir });
+                                            setPage(1);
+                                        },
+                                    },
+                                    {
+                                        key: "from",
+                                        label: "交货开始日期",
+                                        type: "date",
+                                        value: dateStart,
+                                        defaultValue: "",
+                                        onChange: value => {
+                                            setDateStart(value);
+                                            setPage(1);
+                                        },
+                                    },
+                                    {
+                                        key: "to",
+                                        label: "交货结束日期",
+                                        type: "date",
+                                        value: dateEnd,
+                                        defaultValue: "",
+                                        onChange: value => {
+                                            setDateEnd(value);
+                                            setPage(1);
+                                        },
+                                    },
+                                ]}
+                                validate={draft =>
+                                    draft.from && draft.to && draft.from > draft.to
+                                        ? "开始日期不能晚于结束日期。"
+                                        : undefined
+                                }
+                            />
+                        }
                         trailing={
                             <>
                                 <span className="ml-auto text-13 text-muted">共 {num(filtered.length)} 条归档</span>
@@ -163,13 +240,6 @@ export function ArchivedOrdersPage() {
                             }}
                             label="按品类筛选"
                             options={["全部品类", ...categories]}
-                        />
-                        <MobileSortSelect
-                            columns={SORT_COLUMNS}
-                            value={sort}
-                            onChange={next => {
-                                if (next) setSort(next);
-                            }}
                         />
                         <DateRangeFilter
                             start={dateStart}

@@ -1,5 +1,7 @@
 import { DataTable } from "@/components/ui/DataTable";
 import { ListToolbar } from "@/components/ui/ListToolbar";
+import { MobileListControls } from "@/components/ui/MobileListControls";
+import { useRememberedListState } from "@/context/useListView";
 import { ToolbarSelect } from "@/components/ui/ToolbarSelect";
 import { SortTh } from "@/components/ui/SortTh";
 import { nextSortState, type SortState } from "@/lib/tableSort";
@@ -219,9 +221,9 @@ export function StockPage() {
     const isFetching = bomsQuery.isFetching || stocksQuery.isFetching;
     // 首载出替换式占位,后台刷新出保留式遮罩(200ms 内完成不闪现)
     const overlay = useDelayedFlag(isFetching && !isLoading);
-    const [category, setCategory] = useState("全部品类");
+    const [category, setCategory] = useRememberedListState("category", "全部品类");
     /* 已用完 = 余量为 0，未用完 = 余量不为 0 */
-    const [statusFilter, setStatusFilter] = useState("全部状态");
+    const [statusFilter, setStatusFilter] = useRememberedListState("status", "全部状态");
     const [sort, setSort] = useState<SortState<StockSortKey> | null>(null);
     const { keyword, setKeyword, onKeywordChange, page, setPage, pageSize, onPageSizeChange, tableScrollRef } =
         useTableControls({ resetKey: sort });
@@ -279,9 +281,37 @@ export function StockPage() {
                 <ListToolbar
                     keyword={keyword}
                     onKeywordChange={onKeywordChange}
-                    placeholder="BOM 编码 / 品类 / 备注"
+                    placeholder="BOM 编码、品类或备注"
                     onClear={clearFilters}
                     filtersActive={filtersActive}
+                    mobileContent={
+                        <MobileListControls
+                            fields={[
+                                {
+                                    key: "status",
+                                    label: "状态",
+                                    value: statusFilter,
+                                    defaultValue: "全部状态",
+                                    options: ["全部状态", "已用完", "未用完"],
+                                    onChange: value => {
+                                        setStatusFilter(value);
+                                        setPage(1);
+                                    },
+                                },
+                                {
+                                    key: "category",
+                                    label: "品类",
+                                    value: category,
+                                    defaultValue: "全部品类",
+                                    options: ["全部品类", ...categories],
+                                    onChange: value => {
+                                        setCategory(value);
+                                        setPage(1);
+                                    },
+                                },
+                            ]}
+                        />
+                    }
                     trailing={
                         <TableHeaderActions className="ml-auto">
                             <ToolbarMore>

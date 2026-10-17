@@ -77,7 +77,10 @@ beforeEach(() => {
     useWbView.mockReset();
     useWbView.mockReturnValue({ snap: EMPTY_SNAPSHOT, isLoading: false, refreshing: false });
 });
-afterEach(cleanup);
+afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+});
 
 const renderPage = () =>
     render(
@@ -249,6 +252,56 @@ it("自定义范围延迟生效：from>to 报错（role=alert），合法时点�
         expect.objectContaining({ range: "custom", from: "2026-09-20", to: "2026-09-30" }),
         true,
     );
+});
+
+it("手机选择自定义时间直接打开面板，日期确认前保留原查询，错误日期不提交", () => {
+    vi.stubGlobal(
+        "matchMedia",
+        vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
+    );
+    renderPage();
+    fireEvent.change(screen.getByRole("combobox", { name: "时间" }), { target: { value: "custom" } });
+    const dialog = screen.getByRole("dialog", { name: "筛选" });
+    expect(useSystemLogs.mock.calls.at(-1)![0]).toMatchObject({ range: "7d" });
+    const from = within(dialog).getByLabelText("开始日期");
+    const to = within(dialog).getByLabelText("结束日期");
+    fireEvent.change(from, { target: { value: "2026-10-16" } });
+    fireEvent.change(to, { target: { value: "2026-10-01" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "确认" }));
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("开始日期不能晚于结束日期");
+    expect(useSystemLogs.mock.calls.at(-1)![0]).toMatchObject({ range: "7d" });
+    fireEvent.change(to, { target: { value: "2026-10-20" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "确认" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(useSystemLogs).toHaveBeenLastCalledWith(
+        expect.objectContaining({ range: "custom", from: "2026-10-16", to: "2026-10-20" }),
+        true,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "清除开始日期筛选" }));
+    expect(useSystemLogs.mock.calls.at(-1)![0]).toMatchObject({ range: "7d" });
+});
+
+it("窄屏在筛选面板选择业务类型，确认后查询并可从完整名称提示清除", () => {
+    vi.stubGlobal(
+        "matchMedia",
+        vi.fn((query: string) => ({
+            matches: query === "(max-width: 359px)",
+            addEventListener: vi.fn(),
+            removeEventListener: vi.fn(),
+        })),
+    );
+    renderPage();
+    expect(screen.queryByRole("combobox", { name: "业务类型" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "筛选" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "业务类型" }), { target: { value: "bom" } });
+    expect(useSystemLogs.mock.calls.at(-1)![0].domain).toBeUndefined();
+    fireEvent.click(within(dialog).getByRole("button", { name: "确认" }));
+    expect(useSystemLogs.mock.calls.at(-1)![0]).toMatchObject({ domain: "bom" });
+    const condition = screen.getByRole("button", { name: "清除业务类型筛选" });
+    expect(condition).toHaveTextContent("业务类型：物料与 BOM");
+    fireEvent.click(condition);
+    expect(useSystemLogs.mock.calls.at(-1)![0].domain).toBeUndefined();
 });
 
 it("重置回到默认筛选：全部 tab、清空关键词、操作类型 all、时间范围最近 7 天", async () => {
