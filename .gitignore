@@ -60,6 +60,8 @@ vite.config.ts.*
 
 # 生产库备份产物（scripts/backup-database.ts）
 scripts/backups
+# 定时备份本机默认落盘目录（BACKUP_DIR 未设置时 backend cwd 下 backups/）
+apps/backend/backups
 # 部署 staging 临时产物（scripts/deploy/deploy.ts）
 scripts/deploy/.staging
 scripts/deploy/.staging.tar.gz

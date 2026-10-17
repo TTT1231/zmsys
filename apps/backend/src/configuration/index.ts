@@ -1,4 +1,6 @@
 /** 应用配置结构：ConfigService<AppConfig> 据此提供 key 补全与编译期检查 */
+import { join } from "node:path";
+
 export interface AppConfig {
     nodeEnv: NodeEnv;
     server: {
@@ -23,6 +25,12 @@ export interface AppConfig {
     };
     cors: {
         origins: string[];
+    };
+    backup: {
+        /** 定时备份落盘目录（生产容器指到 zmsys-backups 卷；本机缺省 backend cwd 下 backups/） */
+        dir: string;
+        /** 过期备份保留天数（按文件名日期戳清理） */
+        retentionDays: number;
     };
 }
 
@@ -110,6 +118,17 @@ export default (): AppConfig => {
         .map(origin => origin.trim())
         .filter(origin => origin.length > 0);
 
+    // 定时备份：目录生产经 compose 注入 /app/backups（zmsys-backups 卷）；本机缺省 backend cwd 下 backups/
+    const backupDir = process.env.BACKUP_DIR?.trim() || join(process.cwd(), "backups");
+    const backupRetentionDays = optionalInt(
+        "BACKUP_RETENTION_DAYS",
+        process.env.BACKUP_RETENTION_DAYS,
+        7,
+        1,
+        365,
+        errors,
+    );
+
     if (errors.length > 0) {
         throw new Error(`环境变量校验失败：\n- ${errors.join("\n- ")}`);
     }
@@ -135,5 +154,6 @@ export default (): AppConfig => {
         },
         snowflake: { workerId },
         cors: { origins: corsOrigins },
+        backup: { dir: backupDir, retentionDays: backupRetentionDays },
     };
 };

@@ -50,6 +50,10 @@ services:
       SNOWFLAKE_WORKER_ID: "1"
       # 同域反代下浏览器同源请求也会带 Origin 头，把站点 origin 加入白名单（deploy.ts 注入）
       CORS_ORIGINS: ${DEPLOY_CORS_ORIGINS}
+      # 定时备份落盘目录：zmsys-backups 卷持久化（每日北京时间 0 点全量，保留 7 天）
+      BACKUP_DIR: /app/backups
+    volumes:
+      - backups:/app/backups
     depends_on:
       db:
         condition: service_healthy
@@ -80,3 +84,6 @@ services:
 volumes:
   mysql-data:
     name: zmsys-mysql-data
+  # 定时备份产物（backend 写入，zmsys-backup v1 格式；按保留期自动轮换）
+  backups:
+    name: zmsys-backups

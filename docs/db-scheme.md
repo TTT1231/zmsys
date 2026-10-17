@@ -343,6 +343,7 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 
 ### 10.5 CLI 与演练
 
+- 服务内定时备份（`scheduled-backup.service`）：每日北京时间 0 点（进程时区锁 UTC，按 UTC 16:00 墙钟链式排程，不用 @nestjs/schedule）在 backend 容器内以同一引擎全量 gzip 备份，原子落盘（`.part` → rename）到 `BACKUP_DIR`（compose 注入 `/app/backups`，持久化于 `zmsys-backups` 卷）；文件名沿用引擎口径、日期戳取北京日期（如 `zmdb-full-20261018-000000.sql.gz`）。落盘后按 `BACKUP_RETENTION_DAYS`（默认 7 天）清理过期文件（含崩溃遗留 `.part`；只删引擎口径文件名，其余不动）。只读快照不取恢复锁、不写 op_log（自动化运维通道，同 backup-cli 口径）；维护态激活时跳过本轮，下个周期再试；test 环境不排程（同幂等清理口径）。
 - `pnpm backup-app [--local] [--groups <逗号分隔>] [--out <目录>] [--no-gzip]`：应用级备份 CLI（与网页「备份」同一引擎，产 zmsys-backup v1 文件，可用网页「恢复」或 restore-database 恢复）；默认远程全量 gzip，临时命令容器跑 `node dist/system/backup-cli.js`（stdout 纯备份字节、状态走 stderr），只读一致性快照不要求停写、不记 op_log（运维通道）；本地 `--local` 仅允许 localhost。与 backup-database（mysqldump 运维全量，含 DDL）互不替代。
 - `pnpm restore-database [--local] [--replace] [--yes] [--request-key <key>] <文件>`：--local 与容器同一薄入口（`apps/backend/src/system/restore-cli.ts`，进程 UTC 初始化，stdin 专用于备份字节）；默认远程＝一次 SSH → backend 镜像临时命令容器 `docker compose run --rm -T --no-deps backend node dist/system/restore-cli.js ...`，先检查 backend 已停、目标库与本地确认值一致，确认在本地外壳完成。**停写前提**（backend/其他写入进程已停、暂停部署迁移）不因 --yes 绕过。
 - `--reset-password <account>` 独立救援改密：不要求重跑恢复；停写后取得同一恢复锁，新密码经 stdin 隐藏传入（不走 argv、不记录），复用口令规则（6-128 位），更新 bcrypt/password_changed_at/token_version/row_version 并记用户变更日志。现有 users 重置接口禁止 super，本救援入口不沿用该限制。
