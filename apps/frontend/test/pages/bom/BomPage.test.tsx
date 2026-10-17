@@ -78,7 +78,7 @@ it("表格渲染 BOM 行，编码入口可打开详情", () => {
 it("库存余量已加载时移动卡片显示数量，未加载时降级为占位符", () => {
     stocksRef.current = { [detailBom.code]: 200 };
     const { unmount } = renderPage();
-    expect(screen.getByText("当前库存")).toBeInTheDocument();
+    expect(screen.getByText("库存")).toBeInTheDocument();
     expect(screen.getByText("200 个")).toBeInTheDocument();
     unmount();
 

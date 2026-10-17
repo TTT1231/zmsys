@@ -138,7 +138,7 @@ function StockLedgerModal({
                         </div>
                     )}
                     <div className="rounded-btn border border-primary-border bg-primary-soft px-4.5 py-3.5">
-                        <p className="text-14 text-muted">当前库存</p>
+                        <p className="text-14 text-muted">库存</p>
                         <p className="tnum mt-1 text-26 font-bold text-primary-strong">{num(ledger?.stockQty ?? 0)}</p>
                     </div>
                 </div>
@@ -352,11 +352,15 @@ export function StockPage() {
                                     </Button>
                                 }
                             >
-                                {/* BOM 详情完整内联（分组芯片铺开 + 备注有才显示），
-                                    免去逐卡点"查看详情"才能看构成与备注 */}
-                                <BomInlineDetail bom={row.bom} bomCode={row.code} categories={categoriesQuery.data} />
+                                {/* 标题已含编码和品类，此处仅展示物料构成与已填写的备注。 */}
+                                <BomInlineDetail
+                                    bom={row.bom}
+                                    bomCode={row.code}
+                                    categories={categoriesQuery.data}
+                                    showIdentity={false}
+                                />
                                 <div className="mt-2 flex flex-col gap-1.5">
-                                    <CardField label="当前库存" value={`${num(row.stock)} 个`} strong />
+                                    <CardField label="库存" value={`${num(row.stock)} 个`} strong />
                                 </div>
                             </RecordCard>
                         ))}

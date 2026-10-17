@@ -10,6 +10,7 @@ import { useLayoutFlags } from "@/components/layout/useLayoutFlags";
 import { PageLoading } from "@/components/ui/PageLoading";
 import { GlobalWatermark } from "@/components/ui/Watermark";
 import { AppContentErrorBoundary, ErrorPage } from "@/pages/error/ErrorPage";
+import { useIsMobile } from "@/lib/useIsMobile";
 
 const AiChatWidget = lazy(() => import("@/components/ai/AiChatWidget"));
 
@@ -25,6 +26,7 @@ function resolveTitle(pathname: string, role: Role) {
    按布局偏好渲染两种骨架（vben 式）：A 侧栏全高 + 顶栏在内容列；B 通栏顶栏 + 侧栏在下方 */
 export function AppLayout() {
     const location = useLocation();
+    const isMobile = useIsMobile();
     const { status, role, grant, user } = useApp();
     const { preferences } = usePreferences();
     const { sidebarForm, headerFull, headerMenu } = useLayoutFlags();
@@ -166,7 +168,7 @@ export function AppLayout() {
                 )}
                 {!maximized && <MobileBottomNav onOpenDrawer={() => setDrawerPath(location.pathname)} />}
                 {user && <GlobalWatermark text={user.name} subtle={location.pathname === "/analytics"} />}
-                {user && (
+                {user && !isMobile && (
                     <Suspense fallback={null}>
                         <AiChatWidget key={`${user.account}:${role}:${grant.version}`} />
                     </Suspense>

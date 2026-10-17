@@ -637,8 +637,8 @@ html.dark::view-transition-new(root) {
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    border-bottom: 1px solid var(--color-line);
-    padding: 10px;
+    padding: 12px 12px 0;
+    background: var(--color-canvas);
 }
 .mobile-list-controls > button {
     flex-shrink: 0;

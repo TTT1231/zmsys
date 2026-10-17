@@ -1308,7 +1308,12 @@ export function OrdersPage() {
                                 }}
                                 action={
                                     canCreate && (
-                                        <Button onClick={() => setNewOpen(true)} className="px-3" aria-label="新建订单">
+                                        <Button
+                                            icon="plus"
+                                            onClick={() => setNewOpen(true)}
+                                            className="px-3"
+                                            aria-label="新建订单"
+                                        >
                                             新建
                                         </Button>
                                     )

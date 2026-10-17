@@ -561,6 +561,7 @@ export function CustomersPage() {
                                     canCreate && (
                                         <Button
                                             onClick={() => setFormTarget("new")}
+                                            icon="plus"
                                             className="px-3"
                                             aria-label="新建客户"
                                         >

@@ -111,7 +111,7 @@ it("仅列出存在流水的 BOM；表格渲染品类与库存数量，移动卡
     expect(table).toHaveTextContent(otherBom.name);
     expect(screen.getByText("1,520")).toBeInTheDocument();
     // 移动卡片：无流水档案同样不可见
-    expect(screen.getAllByText("当前库存").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("库存").length).toBeGreaterThan(0);
     expect(screen.queryByText(idleBom.name)).not.toBeInTheDocument();
 });
 
@@ -190,12 +190,12 @@ it("详情弹窗：流水倒序、有符号数量、结余与摘要卡，非零�
     expect(within(dialog).getByText(detailBom.code)).toBeInTheDocument();
 
     // 摘要卡按标签定位（数字与流水行文本可能重复，容器断言避免撞车）：
-    // 累计入库 +500 / 累计出库 −200 / 调整 +60 / 当前库存 360
+    // 累计入库 +500 / 累计出库 −200 / 调整 +60 / 库存 360
     const cardOf = (label: string) => within(dialog).getByText(label).closest("div");
     expect(cardOf("累计入库")).toHaveTextContent("+500");
     expect(cardOf("累计出库")).toHaveTextContent("−200");
     expect(cardOf("库存调整")).toHaveTextContent("+60");
-    expect(cardOf("当前库存")).toHaveTextContent("360");
+    expect(cardOf("库存")).toHaveTextContent("360");
 
     // 流水倒序：最新（调整单）在最上；结余列取后端累计
     const rows = within(dialog).getAllByRole("row");

@@ -111,7 +111,7 @@ export function BomInlineDetail({
             )}
             {bom ? (
                 <div className="mt-1.5">
-                    <BomSpecs bom={bom} categories={categories} layout="list" />
+                    <BomSpecs bom={bom} categories={categories} layout="list" showIdentity={false} />
                 </div>
             ) : (
                 <p className="mt-1 text-13 text-muted">未找到该成品的物料档案</p>

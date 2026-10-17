@@ -570,7 +570,7 @@ export function InboundPage() {
                                 }}
                                 action={
                                     canRegister && (
-                                        <Button onClick={() => setNewOpen(true)} className="px-3">
+                                        <Button icon="inbound" onClick={() => setNewOpen(true)} className="px-3">
                                             入库
                                         </Button>
                                     )

@@ -69,11 +69,12 @@ export function MobileListControls({
             <div ref={toolbarRef} className="mobile-list-controls">
                 <Button
                     variant="secondary"
+                    icon="sliders"
                     aria-label={activeCount ? `筛选，已选 ${activeCount} 项` : "筛选"}
                     aria-haspopup="dialog"
                     aria-expanded={draft !== null}
                     onClick={open}
-                    className={`shrink-0 px-3 ${activeCount ? "border-primary-border bg-primary-soft text-primary-strong" : ""}`}
+                    className={`flex-1 whitespace-nowrap px-3 ${activeCount ? "border-primary-border bg-primary-soft text-primary-strong" : ""}`}
                 >
                     筛选{activeCount > 0 && <span aria-hidden="true"> · {activeCount}</span>}
                 </Button>
@@ -90,7 +91,7 @@ export function MobileListControls({
                         清空
                     </Button>
                 )}
-                {action && <div className="ml-auto flex shrink-0">{action}</div>}
+                {action && <div className="flex min-w-0 flex-1 [&>button]:w-full">{action}</div>}
             </div>
             <Modal
                 open={draft !== null}

@@ -967,7 +967,12 @@ export function BomPage() {
                             }}
                             action={
                                 canCreate && (
-                                    <Button onClick={() => setNewOpen(true)} className="px-3" aria-label="新建 BOM">
+                                    <Button
+                                        icon="plus"
+                                        onClick={() => setNewOpen(true)}
+                                        className="px-3"
+                                        aria-label="新建 BOM"
+                                    >
                                         新建
                                     </Button>
                                 )
@@ -1037,7 +1042,7 @@ export function BomPage() {
                                     />
                                     <div className="mt-2 grid grid-cols-2 gap-2">
                                         <CardField
-                                            label="当前库存"
+                                            label="库存"
                                             value={
                                                 stocksQuery.data ? `${num(stocksQuery.data[bom.code] ?? 0)} 个` : "—"
                                             }

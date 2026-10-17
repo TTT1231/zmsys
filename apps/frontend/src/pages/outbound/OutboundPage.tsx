@@ -561,7 +561,7 @@ export function OutboundPage() {
                                 }}
                                 action={
                                     canRegister && (
-                                        <Button onClick={() => setNewOpen(true)} className="px-3">
+                                        <Button icon="outbound" onClick={() => setNewOpen(true)} className="px-3">
                                             出库
                                         </Button>
                                     )
