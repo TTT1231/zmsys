@@ -17,6 +17,7 @@ const GROUP_COPY: Record<string, { title: string; description: string }> = {
     inbound: { title: "成品入库", description: "入库记录与库存调整" },
     outbound: { title: "成品出库", description: "发货记录与出库流水" },
     system: { title: "操作记录", description: "系统操作日志" },
+    ai: { title: "AI 工作台配置", description: "AI 服务地址、密钥与模型设置" },
 };
 
 /** 勾选联动（后端闭包展开的前端镜像）：勾选组自动补齐依赖；取消后净化依赖不全的组（不动点） */
@@ -354,7 +355,7 @@ export function BackupPage() {
                 </div>
                 <p className="mt-4 flex items-start gap-2 text-12 leading-5 text-muted">
                     <Icon name="info" size={15} className="mt-0.5 shrink-0 text-primary-strong" />
-                    备份完成后会自动下载文件；文件包含用户口令哈希等敏感数据，请妥善保管。
+                    备份完成后会自动下载文件；文件包含用户口令哈希与 AI 接口密钥等敏感数据，请妥善保管。
                 </p>
                 {!allChecked && (
                     <p className="mt-2 flex items-start gap-2 text-12 leading-5 text-warning-strong">

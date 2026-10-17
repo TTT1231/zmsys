@@ -37,7 +37,7 @@ interface JobBody {
 }
 
 const TERMINAL: readonly JobBody["status"][] = ["SUCCEEDED", "SUCCEEDED_AUDIT_FAILED", "FAILED"];
-const FULL_GROUPS = ["users", "sequences", "customers", "bom", "orders", "inbound", "outbound", "system"];
+const FULL_GROUPS = ["users", "sequences", "customers", "bom", "orders", "inbound", "outbound", "system", "ai"];
 
 /** ParsedValue → SQL 字面量（INSERT 行重写的逆序列化） */
 const renderValue = (value: ParsedValue): string => {
@@ -296,15 +296,17 @@ describe("应用内备份/恢复 (e2e)", () => {
         expect(doc.lines[0]).toBe(FORMAT_HEADER);
         expect(doc.lines.at(-1)).toBe(FORMAT_END);
         expect(doc.lines.find(line => line.startsWith(CHECKSUM_PREFIX))).toMatch(/^-- checksum: [0-9a-f]{64}$/);
-        expect(doc.meta.groups).toHaveLength(8);
+        expect(doc.meta.groups).toHaveLength(9);
         const tableNames = doc.meta.tables.map(table => table.name);
         expect(tableNames).toContain("sys_user");
         expect(tableNames).toContain("op_log");
+        expect(tableNames).toContain("ai_provider_config");
         expect(tableNames).not.toContain("sys_permission");
         expect(tableNames).not.toContain("api_idempotency");
         expect(tableNames).not.toContain("sys_restore_job");
-        // 表段顺序满足 FK 拓扑（sys_role 在 sys_user 前）
+        // 表段顺序满足 FK 拓扑（sys_role 在 sys_user 前；ai_provider_config 在 sys_user 后）
         expect(doc.lines.indexOf("-- table sys_role")).toBeLessThan(doc.lines.indexOf("-- table sys_user"));
+        expect(doc.lines.indexOf("-- table sys_user")).toBeLessThan(doc.lines.indexOf("-- table ai_provider_config"));
 
         const gz = await downloadBackup(["sequences"], true);
         expect(gz[0]).toBe(0x1f);

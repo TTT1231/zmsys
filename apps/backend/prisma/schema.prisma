@@ -745,8 +745,9 @@ enum AiUsageStatus {
 }
 
 /// AI 对话代理配置：单行表（id 固定 1，CHECK 约束兜底），由超管在 AI 工作台维护。
-/// api_key 仅存服务端，任何读接口不透出原文（脱敏后返回）；备份分类为运行态表，
-/// 永不入应用备份（明文 key 不随备份文件分发），replace 恢复亦不清理
+/// api_key 仅存服务端，任何读接口不透出原文（脱敏后返回）；备份分类归 ai 组
+/// （随完整备份导出，replace 恢复原样还原，恢复后无需重新配置）——备份文件
+/// 因此含明文 key，须与口令哈希同级别按机密保管
 model AiProviderConfig {
   id        Int      @id @db.UnsignedTinyInt
   baseUrl   String   @map("base_url") @db.VarChar(255)

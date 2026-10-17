@@ -3,7 +3,10 @@
  * - 每组声明 tables 与 dependsOn；完整备份 = 目录全集（动态计算，不硬编码清单）；
  * - 后端 run/restore 自行闭包展开；前端 BackupPage 的 applyLinkage 是本表的镜像；
  * - 运行态表 sys_permission / api_idempotency / sys_restore_job 永不入备份
- *   （sys_permission 是迁移播种的目录数据，后两者是运行态；replace 不清空 sys_restore_job）。
+ *   （sys_permission 是迁移播种的目录数据，后两者是运行态；replace 不清空 sys_restore_job）；
+ * - ai_provider_config（AI 工作台配置，含明文 api_key）归 ai 组随完整备份导出：
+ *   恢复后 AI 配置原样可用，不必重新配置；备份文件因此含明文 key，按机密保管
+ *   （与口令哈希同级别要求）。
  *
  * 入库↔出库互为依赖（v_bom_stock 口径：出库冲销可回指入库/调整，入库调整可关联出库冲销）；
  * bom 依赖 sequences：nextBomCode 的 INSERT IGNORE 只初始化缺失行。
@@ -72,16 +75,16 @@ export const BACKUP_GROUPS: readonly BackupGroupDef[] = [
         tables: ["op_log", "ai_usage_log"],
         dependsOn: ["users"],
     },
+    {
+        key: "ai",
+        label: "AI 工作台配置",
+        tables: ["ai_provider_config"],
+        dependsOn: ["users"],
+    },
 ] as const;
 
-/** 运行态表：永不入备份（目录数据 + 幂等/恢复凭证 + 含明文 key 的 AI 配置——
- *  ai_provider_config 不随备份文件分发，replace 恢复不清理，恢复后配置保持现状） */
-export const RUNTIME_TABLES: readonly string[] = [
-    "sys_permission",
-    "api_idempotency",
-    "sys_restore_job",
-    "ai_provider_config",
-];
+/** 运行态表：永不入备份（目录数据 + 幂等/恢复凭证；replace 不清空 sys_restore_job） */
+export const RUNTIME_TABLES: readonly string[] = ["sys_permission", "api_idempotency", "sys_restore_job"];
 
 /** replace 模式执行前可清理的运行表（api_idempotency 是可重建的幂等占位） */
 export const CLEANABLE_RUNTIME_TABLES: readonly string[] = ["api_idempotency"];

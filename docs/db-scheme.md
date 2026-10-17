@@ -313,11 +313,11 @@ BOM = **品类 + 使用者勾选的物料集合（数量分组可携带 1-99 数
 
 ## 10. 应用内数据库备份/恢复（仅超管）
 
-超管专属功能：菜单「系统」→「备份」「恢复」；引擎与校验同时供 CLI（`pnpm restore-database`）应急通道复用。业务组闭包含 `sys_user`（bcrypt 哈希）——**备份文件按机密保管**。另一类是运维级 mysqldump 全量备份（`pnpm backup-database`，含 DDL/视图/触发器，部署前兜底，用 mysql 客户端还原）——与本节 zmsys-backup v1 格式互不通用，恢复预检识别后明确拒绝。
+超管专属功能：菜单「系统」→「备份」「恢复」；引擎与校验同时供 CLI（`pnpm restore-database`）应急通道复用。业务组闭包含 `sys_user`（bcrypt 哈希）与 `ai_provider_config`（明文 API key）——**备份文件按机密保管**。另一类是运维级 mysqldump 全量备份（`pnpm backup-database`，含 DDL/视图/触发器，部署前兜底，用 mysql 客户端还原）——与本节 zmsys-backup v1 格式互不通用，恢复预检识别后明确拒绝。
 
 ### 10.1 分组与文件格式
 
-- 分组目录单一来源 `src/system/backup.catalog.ts`：8 组（users/sequences/customers/bom/orders/inbound/outbound/system），入库↔出库互为依赖（v_bom_stock 口径），bom 依赖 sequences（nextBomCode INSERT IGNORE）。完整备份＝目录全集（动态计算）。`sys_permission`/`api_idempotency`/`sys_restore_job` 永不入备份。
+- 分组目录单一来源 `src/system/backup.catalog.ts`：9 组（users/sequences/customers/bom/orders/inbound/outbound/system/ai），入库↔出库互为依赖（v_bom_stock 口径），bom 依赖 sequences（nextBomCode INSERT IGNORE），ai（ai_provider_config）依赖 users（updated_by FK）。完整备份＝目录全集（动态计算）——含 AI 工作台配置，replace 后无需重新配置 AI。`sys_permission`/`api_idempotency`/`sys_restore_job` 永不入备份（目录数据 + 运行态，replace 不清空 sys_restore_job）。
 - 格式 `zmsys-backup v1`：UTF-8/LF、一行一语句、仅数据不含 DDL。固定头/meta（JSON）/`SET NAMES utf8mb4;`/表段/INSERT/checksum/尾标记；checksum 为 header 后至 checksum 行前全部行的 sha256。表按 information_schema FK 拓扑序输出；自引用表（material_group/stock_adjustment/outbound_ledger）按递归深度父先子后、同层主键序。批次 ≤1000 行/1MiB，单行 ≤8MiB；解压上限 2GiB、上传 512MiB（nginx 总请求体 513m）。
 - 保真纪律：备份/恢复专用一次性连接固定 `bigIntAsNumber:false / decimalAsNumber:false / jsonStrings:true / dateStrings:true` + UTC。业务 JSON 列保持数据库原文（禁止 JS parse→stringify 往返，大整数会静默改值），DATETIME/DATE 保持原文（不经本地 Date）。schemaFingerprint（列全量类型/可空/默认/排序规则、主键、唯一索引、FK、CHECK 的规范化摘要）与 latestMigration 均须一致才允许恢复；serverProduct/大版本一致（v1 仅同构库）。
 
@@ -363,7 +363,7 @@ AI 工作台使用情况由账户余额与按成员归集的用量金额组成�
 
 业务工具全部为现有 GET 端点，按实时菜单/操作授权筛选，后端继续独立校验；对话只能查询和解释操作，不能执行写操作。工具参数由 `docs/openapi.yaml` 生成到前端目录；修改相关查询契约后运行 `pnpm --filter zmsysbackend exec tsx scripts/generate-ai-tools.ts`，可加 `--check` 检查是否同步。附件最多 5 个、单个原文件不超过 10MB；文本与问题合计最多 16000 字符，图片压缩后以 OpenAI 兼容图片内容发送，识别能力取决于所配模型。语音输入使用浏览器语音识别能力，不支持或失败时明确提示，允许继续文字输入。
 
-- **ai_provider_config（单行表，id 固定 1，CHECK 兜底）**：base_url VARCHAR(255)、api_key VARCHAR(512) ascii_bin、model VARCHAR(64)、enabled、updated_by FK→sys_user。api_key 只存服务端，读接口只回脱敏值（apiKeySet + 掩码）；写入经受保护权限 `menu:ai-workbench`（与菜单同码，可解锁下放）。**备份分类为运行态表**：永不入应用备份（明文 key 不随备份文件分发），replace 恢复不清理——恢复后系统级 AI 配置保持现状。残留风险：CLI 整库 dump（backup-database，含 DDL 的运维全量）仍含明文 key，备份文件按机密保管（与含口令哈希的备份同级别要求）。apiKey 空串=显式清除；省略=保留原值。
+- **ai_provider_config（单行表，id 固定 1，CHECK 兜底）**：base_url VARCHAR(255)、api_key VARCHAR(512) ascii_bin、model VARCHAR(64)、enabled、updated_by FK→sys_user。api_key 只存服务端，读接口只回脱敏值（apiKeySet + 掩码）；写入经受保护权限 `menu:ai-workbench`（与菜单同码，可解锁下放）。**备份分类归 ai 组**：随完整备份导出（依赖 users），replace 恢复原样还原——恢复后 AI 工作台配置无需重做；代价是备份文件含明文 key，须与口令哈希同级别按机密保管（2026-10 起从"运行态不入备份"改为入备份：否则 AI 配置过一次后，replace 会因范围外引用预检中止，且灾后须重配 AI）。apiKey 空串=显式清除；省略=保留原值。
 - **ai_usage_log（追加型用量记账）**：id Snowflake、user_id FK→sys_user、model、prompt/completion/total_tokens、status ENUM(success,error)、error_message(500)、duration_ms、created_at；索引 (user_id, created_at DESC)、(created_at DESC)。每次对话代理请求一行；失败/断流记 error，已取得的用量保留；缺失字段以 0 占位，error_message 标注用量未知/部分未知。HTTP usage.status 与流式 event: usage 同步区分 known/partial/unknown，不把未知当作确定零。**备份分类归 system 组**（与 op_log 同类，随「系统与日志」分组导出）。
 - **配置审计**：设置变更与业务行同事务写 op_log(update_ai_config)——系统审计动作，不进系统日志业务时间线（同 db_backup/db_restore）；快照脱敏（变更字段名/是否轮换 key/启用态/host/模型），绝不写入 key 内容。
 - **对话约束**：messages ≤40 条 ×16k 字符（含工具调用循环的 assistant/tool 消息；字符数限制；JSON 序列化字节仍受 Fastify 默认 1MiB 请求体上限约束，超限 413——异常转义编码可能放大体积，不承诺按字符数推导的字节上限）；上游 max_tokens 4096；超时 45s（非流式/流式统一，**低于恢复排空窗 60s**——在途 AI 请求不会阻塞恢复）；流式带 stream_options.include_usage 由后端嗅探记账，响应头发出后上游失败以 SSE `event: error` 收尾；客户端断线即中止上游。对话不纳入 Idempotency-Key 清单：重试=新请求新计费。

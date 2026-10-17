@@ -44,15 +44,37 @@ describe("备份分组目录", () => {
         expect(isFullBackupClosure(["inbound"])).toBe(false);
         expect(isFullBackupClosure(["users"])).toBe(false);
         expect(
-            isFullBackupClosure(["users", "sequences", "customers", "bom", "orders", "inbound", "outbound", "system"]),
+            isFullBackupClosure([
+                "users",
+                "sequences",
+                "customers",
+                "bom",
+                "orders",
+                "inbound",
+                "outbound",
+                "system",
+                "ai",
+            ]),
         ).toBe(true);
+    });
+    it("ai 组闭包含 users（ai_provider_config.updated_by → sys_user）", () => {
+        expect([...expandGroupClosure(["ai"])].sort()).toEqual(["ai", "users"].sort());
+        expect([...closureTables(["ai"])]).toEqual([
+            "ai_provider_config",
+            "sys_role",
+            "sys_user",
+            "sys_grant",
+            "sys_grant_log",
+            "sys_user_change_log",
+            "sys_permission_change_log",
+        ]);
     });
     it("运行态表永不入目录", () => {
         const all = allCatalogTables();
         for (const table of RUNTIME_TABLES) {
             expect(all.has(table)).toBe(false);
         }
-        expect(BACKUP_GROUPS.length).toBe(8);
+        expect(BACKUP_GROUPS.length).toBe(9);
     });
     it("每张 Prisma 实体表都纳入备份或显式列为运行态例外", () => {
         const schema = readFileSync(resolve(__dirname, "../../../prisma/schema.prisma"), "utf8");

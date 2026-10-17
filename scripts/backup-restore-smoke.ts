@@ -132,15 +132,15 @@ async function main(): Promise<void> {
         const auth = { authorization: `Bearer ${token}` };
         const catalogRes = await fetch(`${base}/system/backup/catalog`, { headers: auth });
         const catalog = ((await catalogRes.json()) as { data: { groups: unknown[] } }).data;
-        if (catalog.groups.length !== 8) throw new Error(`目录应为 8 组，实际 ${catalog.groups.length}`);
-        console.log("  ✓ 登录/目录（8 组）");
+        if (catalog.groups.length !== 9) throw new Error(`目录应为 9 组，实际 ${catalog.groups.length}`);
+        console.log("  ✓ 登录/目录（9 组）");
 
         // ③ 全量 gzip 备份：校验头尾/checksum/行数=生产
         const backupRes = await fetch(`${base}/system/backup/run`, {
             method: "POST",
             headers: { ...auth, "content-type": "application/json" },
             body: JSON.stringify({
-                groups: ["users", "sequences", "customers", "bom", "orders", "inbound", "outbound", "system"],
+                groups: ["users", "sequences", "customers", "bom", "orders", "inbound", "outbound", "system", "ai"],
                 gzip: true,
             }),
         });

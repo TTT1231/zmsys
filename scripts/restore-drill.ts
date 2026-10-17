@@ -1,9 +1,9 @@
 /**
  * 恢复演练（db-scheme.md §10.5，双轨 + 故障注入，仅对 *_test 库）：
  *
- * replace 轨：源库造自引用父子/三层（子 id < 父 id）→ 备份 → reset+seed → 目标库造
- * 幂等记录与待删行 → replace → 断言自引用插回/幂等清空/业务字段还原/token_version
- * 抬升/凭证 SUCCEEDED/取号不撞。
+ * replace 轨：源库造自引用父子/三层（子 id < 父 id）与 AI 工作台配置单行 → 备份 →
+ * reset+seed → 目标库造幂等记录与待删行 → replace → 断言自引用插回/幂等清空/业务
+ * 字段还原/token_version 抬升/AI 配置还原/凭证 SUCCEEDED/取号不撞。
  *
  * merge 轨：基线（reset+seed 后重新备份）→ 删 2 行 op_log 补插 / 调低 biz_sequence
  * GREATEST 抬升 / 改名分歧整体回滚。
@@ -231,6 +231,11 @@ const main = async (): Promise<void> => {
         `INSERT INTO biz_sequence (sequence_key, next_value, updated_at) VALUES ('order:global', 42, '2026-01-01 00:00:00.000')
          ON DUPLICATE KEY UPDATE next_value = 42`,
     );
+    // AI 工作台配置（ai 组）随备份导出：源库造单行配置，replace 后应原样还原
+    await execute(
+        `INSERT INTO ai_provider_config (id, base_url, api_key, model, enabled, updated_by, created_at, updated_at)
+         VALUES (1, 'https://drill.example/v1', 'sk-drill-secret', 'drill-model', 1, 1, '2026-01-01 00:00:00.000', '2026-01-01 00:00:00.000')`,
+    );
     const replaceBackupPath = tempFile("replace");
     await makeBackup(replaceBackupPath);
 
@@ -278,6 +283,16 @@ const main = async (): Promise<void> => {
         "SELECT COUNT(*) AS n FROM biz_sequence WHERE sequence_key = 'order:global' AND next_value = 42",
     );
     assert(Number(sequence?.n) === 1, "序列未还原（后续取号将撞号）");
+    const aiConfig = await queryOne<{ base_url: string; api_key: string; model: string; enabled: number }>(
+        "SELECT base_url, api_key, model, enabled FROM ai_provider_config WHERE id = 1",
+    );
+    assert(
+        aiConfig?.base_url === "https://drill.example/v1" &&
+            aiConfig?.api_key === "sk-drill-secret" &&
+            aiConfig?.model === "drill-model" &&
+            aiConfig?.enabled === 1,
+        `AI 工作台配置未随 replace 还原：${JSON.stringify(aiConfig)}`,
+    );
     const credential = await queryOne<{ status: string; mode: string }>(
         "SELECT status, mode FROM sys_restore_job WHERE request_key = ?",
         [replaceKey],

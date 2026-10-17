@@ -1436,7 +1436,8 @@ CREATE TABLE sys_restore_job (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- AI 对话代理配置（单行表，见 db-scheme.md §11）：仅超管在 AI 工作台维护；api_key 只存
--- 服务端且读接口不透出原文；备份分类为运行态表——永不入应用备份，replace 恢复不清理
+-- 服务端且读接口不透出原文；备份分类归 ai 组——随完整备份导出（明文 key 入备份文件，
+-- 按机密保管），replace 恢复原样还原，恢复后无需重新配置
 CREATE TABLE ai_provider_config (
     id TINYINT UNSIGNED NOT NULL,
     base_url VARCHAR(255) NOT NULL,
