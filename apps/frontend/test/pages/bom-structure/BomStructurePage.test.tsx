@@ -79,6 +79,7 @@ it("品类折叠面板：容器品类嵌套展开，点选下属类型展示复�
     expect(screen.queryByText("焊线", { exact: true })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /旋转XK3/ }));
     await user.click(screen.getByRole("button", { name: "焊线" }));
+    await user.click(screen.getByRole("button", { name: "展开全部" }));
     // 复合视图：主品类无自有目录 → 只有本品「焊线工艺」一节，分组树来自容器快照
     expect(screen.getByText("焊线工艺")).toBeInTheDocument();
     expect(screen.getByText("PC塑料", { exact: true })).toBeInTheDocument();
@@ -89,6 +90,7 @@ it("品类折叠面板：容器品类嵌套展开，点选下属类型展示复�
     expect(screen.getByRole("button", { name: /旋转XK3/ })).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("button", { name: "焊线" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "新微动跌倒" }));
+    await user.click(screen.getByRole("button", { name: "展开全部" }));
     expect(screen.getByText("跌倒开关类型")).toBeInTheDocument();
     expect(screen.getByText("微动开关类型")).toBeInTheDocument();
     expect(screen.getByText("跌倒盖", { exact: true })).toBeInTheDocument();
@@ -106,7 +108,7 @@ it("新建品类先建本地草稿，保存结构时才连整棵树一次性入�
     await user.click(within(dialog).getByRole("button", { name: "创建品类" }));
     expect(createRef.current).not.toHaveBeenCalled();
     expect(screen.getByText("未保存的新品类")).toBeInTheDocument();
-    expect(screen.getByText("草稿品类 · 保存后入库")).toBeInTheDocument();
+    expect(screen.queryByText("草稿品类 · 保存后入库")).not.toBeInTheDocument();
     // 草稿品类本身即一条待入库变更
     expect(screen.getByText("未保存 1 条")).toBeInTheDocument();
 
@@ -137,6 +139,127 @@ it("新建品类先建本地草稿，保存结构时才连整棵树一次性入�
     expect(invalidateQueries).toHaveBeenCalled();
 }, 30000);
 
+it("首个品类带下属类型时默认选中类型，父品类默认折叠且只控制展开", async () => {
+    catalogRef.current = BOM_CATEGORIES.filter(category =>
+        ["rotary-xk3", "xk3-wire", "xk3-plug"].includes(category.key),
+    );
+    const user = userEvent.setup();
+    render(<BomStructurePage />);
+    const parent = screen.getByRole("button", { name: "旋转XK3" });
+    expect(parent).toHaveAttribute("aria-expanded", "false");
+    expect(parent).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("heading", { name: "旋转XK3 / 焊线" })).toBeInTheDocument();
+    await user.click(parent);
+    expect(parent).toHaveAttribute("aria-expanded", "true");
+    await user.click(parent);
+    expect(parent).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("heading", { name: "旋转XK3 / 焊线" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "添加内容" })).not.toBeInTheDocument();
+});
+
+it("新建品类的 A/B 类型立即嵌套在导航中，各自结构在切换后保留并一起保存", async () => {
+    const user = userEvent.setup();
+    render(<BomStructurePage />);
+
+    await user.click(screen.getByRole("button", { name: /新建品类/ }));
+    const dialog = screen.getByRole("dialog");
+    await user.type(within(dialog).getByRole("textbox", { name: /品类名称/ }), "全微动");
+    await user.type(within(dialog).getByRole("textbox", { name: /编号开头/ }), "QA");
+    await user.click(within(dialog).getByRole("checkbox", { name: "再分几种类型" }));
+    await user.type(within(dialog).getByRole("textbox", { name: "类型 1 名称" }), " A ");
+    await user.click(within(dialog).getByRole("button", { name: "添加类型" }));
+    await user.type(within(dialog).getByRole("textbox", { name: "类型 2 名称" }), "B");
+    await user.click(within(dialog).getByRole("button", { name: "创建品类" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(createRef.current).not.toHaveBeenCalled();
+    const nav = within(screen.getByRole("navigation", { name: "选择品类" }));
+    expect(nav.getByRole("button", { name: /全微动.*草稿/ })).toHaveAttribute("aria-expanded", "false");
+    expect(nav.queryByRole("button", { name: "A" })).not.toBeInTheDocument();
+    await user.click(nav.getByRole("button", { name: /全微动.*草稿/ }));
+    expect(nav.getByRole("button", { name: "A" })).toHaveAttribute("aria-current", "page");
+    expect(nav.getByRole("button", { name: "B" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "全微动 / A" })).toBeInTheDocument();
+
+    // 与已有旋转XK3一致：父品类仅控制展开，不切换右侧类型，也不打开父品类编辑器。
+    await user.click(nav.getByRole("button", { name: /全微动.*草稿/ }));
+    expect(nav.getByRole("button", { name: /全微动.*草稿/ })).toHaveAttribute("aria-expanded", "false");
+    expect(nav.queryByRole("button", { name: "A" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "全微动 / A" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "添加内容" })).not.toBeInTheDocument();
+    await user.click(nav.getByRole("button", { name: /全微动.*草稿/ }));
+    expect(nav.getByRole("button", { name: "A" })).toHaveAttribute("aria-current", "page");
+
+    await user.click(screen.getByRole("button", { name: "添加内容：A结构" }));
+    await user.type(screen.getByPlaceholderText("如：底座"), "A物料");
+    await user.click(screen.getByRole("button", { name: "添加物料" }));
+    await user.click(nav.getByRole("button", { name: "B" }));
+    expect(screen.queryByRole("button", { name: "A物料" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "添加内容：B结构" }));
+    await user.type(screen.getByPlaceholderText("如：底座"), "B物料");
+    await user.click(screen.getByRole("button", { name: "添加物料" }));
+    await user.click(nav.getByRole("button", { name: "A" }));
+    expect(screen.getByRole("button", { name: "A物料" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "B物料" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "预览" }));
+    expect(screen.getByRole("radio", { name: "A物料" })).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "B物料" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "关闭预览" }));
+
+    await user.click(screen.getByRole("button", { name: /保存结构/ }));
+    expect(createRef.current).toHaveBeenCalledTimes(1);
+    expect(createRef.current).toHaveBeenCalledWith({
+        name: "全微动",
+        codePrefix: "QA",
+        groups: [],
+        types: [
+            {
+                name: "A",
+                groups: [
+                    expect.objectContaining({
+                        kind: "GROUP",
+                        name: "A物料",
+                        items: [{ tempId: expect.any(String), name: "A物料" }],
+                    }),
+                ],
+            },
+            {
+                name: "B",
+                groups: [
+                    expect.objectContaining({
+                        kind: "GROUP",
+                        name: "B物料",
+                        items: [{ tempId: expect.any(String), name: "B物料" }],
+                    }),
+                ],
+            },
+        ],
+    });
+    await act(async () => {});
+}, 30000);
+
+it("目录默认折叠，切换品类保持各自的展开选择，展开和收起全部仍可用", async () => {
+    const user = userEvent.setup();
+    render(<BomStructurePage />);
+    expect(screen.getByRole("button", { name: "展开：型号" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: "0-2" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "展开全部" }));
+    expect(screen.getByRole("button", { name: "0-2" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "老微动" }));
+    expect(
+        screen
+            .getAllByRole("treeitem")
+            .filter(row => row.hasAttribute("aria-expanded"))
+            .every(row => row.getAttribute("aria-expanded") === "false"),
+    ).toBe(true);
+    await user.click(screen.getByRole("button", { name: "旋转XK2" }));
+    expect(screen.getByRole("button", { name: "0-2" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "收起全部" }));
+    expect(screen.queryByRole("button", { name: "0-2" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "展开：型号" }));
+    expect(screen.getByRole("button", { name: "0-2" })).toBeInTheDocument();
+}, 15000);
+
 it("草稿投影所见即所存：新增分组（含随组物料）、设为不可选后保存携带版本与 ops", async () => {
     const user = userEvent.setup();
     render(<BomStructurePage />);
@@ -151,6 +274,7 @@ it("草稿投影所见即所存：新增分组（含随组物料）、设为不�
 
     // 设为不可选（物料行走右键菜单）：立即出现「不可选」角标（投影生效，不等待保存；
     // CPU 争用下 React 刷新可能滞后一拍，findByText 自动等待）
+    await user.click(screen.getByRole("button", { name: "展开：型号" }));
     fireEvent.contextMenu(screen.getByRole("button", { name: "0-2" }));
     await user.click(await screen.findByRole("menuitem", { name: "设置为不可选" }));
     expect(await screen.findByText("不可选", { exact: true })).toBeInTheDocument();
@@ -286,6 +410,7 @@ it("点击名称只选中；三级缩进与折叠箭头独立，物料行无行�
     catalogRef.current = [exampleCategory];
     const user = userEvent.setup();
     const { container } = render(<BomStructurePage />);
+    await user.click(screen.getByRole("button", { name: "展开全部" }));
     expect(container.querySelector('[data-node-row="A"]')).toHaveAttribute("data-depth", "0");
     expect(container.querySelector('[data-node-row="D"]')).toHaveAttribute("data-depth", "1");
     expect(container.querySelector('[data-node-row="e"]')).toHaveAttribute("data-depth", "2");
@@ -313,7 +438,7 @@ it("A 中可直接添加 f 物料和 G 分组，保存仍使用现有目录契�
     catalogRef.current = [exampleCategory];
     const user = userEvent.setup();
     render(<BomStructurePage />);
-    await user.click(screen.getByRole("button", { name: "收起：A" }));
+    expect(screen.getByRole("button", { name: "展开：A" })).toHaveAttribute("aria-expanded", "false");
     await user.click(screen.getByRole("button", { name: "添加内容：A" }));
     expect(screen.getByText("添加到：A", { exact: true })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "物料" })).toBeChecked();
@@ -353,6 +478,7 @@ it("合为一行的物料仍可 F2 改名及设为不可选，分组与物料名
     catalogRef.current = [exampleCategory];
     const user = userEvent.setup();
     render(<BomStructurePage />);
+    await user.click(screen.getByRole("button", { name: "展开全部" }));
     await user.click(screen.getByRole("button", { name: "a" }));
     await user.keyboard("{F2}");
     const dialog = screen.getByRole("dialog");
@@ -486,6 +612,7 @@ it("五层树：第四层可加物料，不能继续加空分组；最大化复�
     );
     await user.click(screen.getByRole("button", { name: "最大化表格" }));
     expect(toggle).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "展开全部" }));
     await user.click(screen.getByRole("button", { name: "添加内容：D" }));
     expect(screen.getByRole("radio", { name: "分组" })).toBeDisabled();
     await user.type(screen.getByRole("textbox", { name: "物料名称" }), "末层物料");
@@ -501,6 +628,7 @@ it("分组右键菜单显示七项操作，添加物料落到右键分组", asyn
     catalogRef.current = [exampleCategory];
     const user = userEvent.setup();
     render(<BomStructurePage />);
+    await user.click(screen.getByRole("button", { name: "展开全部" }));
     await user.click(screen.getByRole("button", { name: "a" }));
     fireEvent.contextMenu(screen.getByRole("button", { name: "D" }), { clientX: 120, clientY: 180 });
     const menu = await screen.findByRole("menu");
@@ -531,6 +659,7 @@ it("物料右键菜单只有六项，合并展示物料可改名，普通物料�
     catalogRef.current = [exampleCategory];
     const user = userEvent.setup();
     render(<BomStructurePage />);
+    await user.click(screen.getByRole("button", { name: "展开全部" }));
     fireEvent.contextMenu(screen.getByRole("button", { name: "a" }), { clientX: 130, clientY: 200 });
     let menu = await screen.findByRole("menu");
     expect(
@@ -574,6 +703,7 @@ it("Shift+F10 打开节点菜单，方向键只移动菜单焦点；删除选中
     catalogRef.current = [exampleCategory];
     const user = userEvent.setup();
     render(<BomStructurePage />);
+    await user.click(screen.getByRole("button", { name: "展开全部" }));
     const entry = screen.getByRole("button", { name: "D" });
     await user.click(entry);
     await user.keyboard("{Shift>}{F10}{/Shift}");

@@ -364,7 +364,7 @@ paths:
             tags: [boms]
             operationId: listBomCategories
             summary: 后端权威 BOM 品类与物料目录（全量含停用标记）
-            description: "权限 `bom:view`。品类集合 = 7 个启用品类 + xk3-wire/xk3-plug 两个停用目录容器（status=false 下发供合并目录）；品类内节点/物料全量下发——停用节点/物料带 `status: false` 标记（启用省略），仅供管理页展示与历史归属匹配（bomComposition），新建 BOM 的可选集由前端按「自身∧祖先启用」过滤、后端建档校验仍以启用目录为权威。每品类携带 rowVersion（目录整树乐观锁，结构维护保存时比对）。跌倒开关、旋转XK3 品类额外下发 childCategories 标记（建档时传子品类 key，该子品类完整物料目录并入校验，不引用任何已建 BOM）；前端不得自行决定有效品类、目录结构或编码前缀。"
+            description: "权限 `bom:view`。品类集合 = 启用品类 + 被启用品类 childCategories 引用的目录容器（如焊线/插线、新微动跌倒/老微动跌倒；status=false 下发供合并目录），不固定品类或容器数量；品类内节点/物料全量下发——停用节点/物料带 `status: false` 标记（启用省略），仅供管理页展示与历史归属匹配（bomComposition），新建 BOM 的可选集由前端按「自身∧祖先启用」过滤、后端建档校验仍以启用目录为权威。每品类携带 rowVersion（目录整树乐观锁，结构维护保存时比对）。复合品类额外下发 childCategories 标记（建档时传子品类 key，该子品类完整物料目录并入校验，不引用任何已建 BOM）；前端不得自行决定有效品类、目录结构或编码前缀。"
             responses:
                 "200":
                     description: 成功
@@ -453,7 +453,7 @@ paths:
             tags: [bom-structure]
             operationId: createBomCategory
             summary: 新建品类（名称 + 编码前缀 + 整棵草稿树，可选下属类型）
-            description: 受保护权限 `bom-structure:manage`，默认仅 super（super 可解锁后授予其他角色）。事务内锁定 bom_category 全部既有行（id 升序）串行化创建：校验品类名/编码前缀唯一，且前缀不得与既有前缀构成「前缀 + 纯数字尾差」的数字延长关系（XK2 与 XK21 拒绝；KW/KWO、XK3/XK3W 字母尾差合法——序列 padStart 不截断，数字延长会拼出相同 BOM 编码）。categoryKey 与分组 groupKey 由后端生成（分组键依次派生 g1..；存量数据中的 model 键仅为旧数据兼容，无维护语义）。v2 新增可选 types（下属类型，至多 12 个，各带名称与前缀、同样参与唯一/数字延长校验）：创建后主品类登记 child_categories 成为复合品类，类型为停用的目录容器品类（永不取号、不进建档下拉），与既有 焊线/插线、新/老微动跌倒 容器同构。仍不开放品类改名、改 key/前缀、复合关系编辑与品类级停用。
+            description: 受保护权限 `bom-structure:manage`，默认仅 super（super 可解锁后授予其他角色）。事务内锁定 bom_category 全部既有行（id 升序）串行化创建：校验品类名/编码前缀唯一，且前缀不得与既有前缀构成「前缀 + 纯数字尾差」的数字延长关系（XK2 与 XK21 拒绝；KW/KWO、XK3/XK3W 字母尾差合法——序列 padStart 不截断，数字延长会拼出相同 BOM 编码）。categoryKey 与分组 groupKey 由后端生成（分组键依次派生 g1..；存量数据中的 model 键仅为旧数据兼容，无维护语义）。可选 types（下属类型，至多 12 个）：各类型只需名称，可携带独立 groups 草稿目录；codePrefix 为可选内部防撞前缀，省略时由后端生成，显式传入时仍校验唯一与数字延长。主品类与全部类型目录统一校验并原子保存，类型分组键避开主品类分组键。创建后主品类登记 child_categories 成为复合品类，类型为停用的目录容器品类（永不取号、不进建档下拉），与既有 焊线/插线、新/老微动跌倒 容器同构。仍不开放品类改名、改 key/前缀、复合关系编辑与品类级停用。
             parameters:
                 - $ref: "#/components/parameters/IdempotencyKey"
             requestBody:
@@ -2246,10 +2246,15 @@ components:
                     items:
                         type: object
                         additionalProperties: false
-                        required: [name, codePrefix]
+                        required: [name]
                         properties:
                             name: { type: string, maxLength: 64 }
-                            codePrefix: { type: string, pattern: "^[A-Z0-9]{1,16}$" }
+                            codePrefix: { type: string, pattern: "^[A-Z0-9]{1,16}$", description: 内部防撞前缀，省略时由后端生成；类型不独立取号 }
+                            groups:
+                                type: array
+                                maxItems: 100
+                                description: 该类型的独立草稿目录，与主品类目录一起校验并原子保存
+                                items: { $ref: "#/components/schemas/DraftNode" }
                 groups:
                     type: array
                     maxItems: 100

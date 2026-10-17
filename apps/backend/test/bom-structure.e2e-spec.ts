@@ -921,6 +921,91 @@ describe("BOM 结构在线维护 (e2e)", () => {
         expect(keys).toContain("qtb");
     });
 
+    it("下属类型只填名称即可创建，各自草稿目录与共用目录一起保存并可建档", async () => {
+        const name = `AB品类_${RUN}`;
+        const payload = {
+            name,
+            codePrefix: "QAB",
+            groups: [
+                { kind: "GROUP", tempId: "shared", name: "共用组", items: [{ tempId: "shared-i", name: "共用物料" }] },
+            ],
+            types: ["A", "B"].map(type => ({
+                name: `${type}_${RUN}`,
+                groups: [
+                    { kind: "GROUP", tempId: "own", name: "独立组", items: [{ tempId: "own-i", name: `${type}物料` }] },
+                ],
+            })),
+        };
+        const idemKey = `e2e-bs-${RUN}-ab`;
+        const created = await createCategory(payload, idemKey);
+        expect(created.statusCode).toBe(200);
+        const result = created.json().data as { key: string; types: Array<{ key: string; codePrefix: string }> };
+        createdCategoryKeys.push(result.key, ...result.types.map(type => type.key));
+        expect(result.types).toHaveLength(2);
+        expect(new Set(result.types.map(type => type.codePrefix)).size).toBe(2);
+        expect(result.types.every(type => /^[A-Z0-9]{1,16}$/.test(type.codePrefix))).toBe(true);
+        const replay = await createCategory(payload, idemKey);
+        expect(replay.json().data).toEqual(created.json().data);
+
+        const list = await app.inject({ method: "GET", url: "/api/bom-categories", headers: authHeaders(superToken) });
+        const categories = list.json().data as Array<{ key: string; childCategories?: string[] }>;
+        expect(categories.find(row => row.key === result.key)?.childCategories).toEqual(
+            result.types.map(type => type.key),
+        );
+        const parent = await prisma.bomCategory.findUniqueOrThrow({
+            where: { categoryKey: result.key },
+            include: { groups: { include: { items: true } } },
+        });
+        for (const [index, type] of result.types.entries()) {
+            const child = await prisma.bomCategory.findUniqueOrThrow({
+                where: { categoryKey: type.key },
+                include: { groups: { include: { items: true } } },
+            });
+            expect(child.status).toBe(false);
+            expect(child.groups[0]!.groupKey).not.toBe(parent.groups[0]!.groupKey);
+            expect(child.groups[0]!.items[0]!.name).toBe(index === 0 ? "A物料" : "B物料");
+            const bom = await app.inject({
+                method: "POST",
+                url: "/api/boms",
+                headers: { ...authHeaders(superToken), "idempotency-key": `e2e-bs-${RUN}-ab-bom-${index}` },
+                payload: {
+                    name,
+                    childCategory: type.key,
+                    materialItemIds: [
+                        parent.groups[0]!.items[0]!.id.toString(),
+                        child.groups[0]!.items[0]!.id.toString(),
+                    ],
+                },
+            });
+            expect(bom.statusCode).toBe(200);
+            createdBomCodes.push(bom.json().data.code as string);
+        }
+    });
+
+    it("下属类型目录校验失败时，主品类和其他类型均不落库", async () => {
+        const names = [`回滚主品类_${RUN}`, `回滚A_${RUN}`, `回滚B_${RUN}`];
+        const response = await createCategory(
+            {
+                name: names[0],
+                codePrefix: "QROLL",
+                groups: [],
+                types: [
+                    { name: names[1], groups: [] },
+                    {
+                        name: names[2],
+                        groups: [
+                            { kind: "GROUP", tempId: "g1", name: "重名" },
+                            { kind: "GROUP", tempId: "g2", name: "重名" },
+                        ],
+                    },
+                ],
+            },
+            `e2e-bs-${RUN}-ab-invalid`,
+        );
+        expect(response.statusCode).toBe(400);
+        expect(await prisma.bomCategory.count({ where: { name: { in: names } } })).toBe(0);
+    });
+
     it("删除品类：admin 403、空品类/含未引用 BOM 级联删除、被订单引用与容器引用 409、op_log 与时间线", async () => {
         const adminToken = await createUser(accountOf("admdel"), "admin");
 

@@ -151,7 +151,7 @@ export function BomStructurePage() {
     /* 新建品类草稿（未入库）：弹窗提交追加，保存结构时 createBomCategory 一次写入 */
     const [draftCategories, setDraftCategories] = useState<DraftCategoryInfo[]>([]);
     const [discarding, setDiscarding] = useState<DraftCategoryInfo | null>(null);
-    const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+    const [expandedNodes, setExpandedNodes] = useState<ReadonlySet<string>>(new Set());
     const [expandedCategories, setExpandedCategories] = useState<ReadonlySet<string>>(new Set());
     const [selectedNode, setSelectedNode] = useState<string | null>(null);
     const [conflictCategory, setConflictCategory] = useState<string | null>(null);
@@ -167,10 +167,35 @@ export function BomStructurePage() {
     const stateRef = useRef(state);
     stateRef.current = state;
 
+    /* 草稿的主品类与下属类型使用和已存目录一致的导航/投影模型。 */
+    const editorCategories = useMemo<BomCategory[]>(
+        () => [
+            ...(categories ?? []),
+            ...draftCategories.flatMap(draft => [
+                {
+                    key: draft.key,
+                    name: draft.name,
+                    codePrefix: draft.codePrefix,
+                    rowVersion: 0,
+                    groups: [],
+                    childCategories: draft.types.map(type => type.key),
+                },
+                ...draft.types.map(type => ({
+                    ...type,
+                    codePrefix: draft.codePrefix,
+                    rowVersion: 0,
+                    status: false,
+                    groups: [],
+                })),
+            ]),
+        ],
+        [categories, draftCategories],
+    );
+
     /* 品类归属：child_categories 指向的下属类型嵌套在主品类下（目录容器） */
     const parentOf = useMemo(() => {
         const map = new Map<string, string>();
-        for (const row of categories ?? []) {
+        for (const row of editorCategories) {
             for (const childKey of row.childCategories ?? []) {
                 if (!map.has(childKey)) {
                     map.set(childKey, row.key);
@@ -178,61 +203,61 @@ export function BomStructurePage() {
             }
         }
         return map;
-    }, [categories]);
+    }, [editorCategories]);
     const childrenOf = useMemo(() => {
         const map = new Map<string, BomCategory[]>();
         for (const [childKey, parentKey] of parentOf) {
-            const child = categories?.find(row => row.key === childKey);
+            const child = editorCategories.find(row => row.key === childKey);
             if (!child) {
                 continue;
             }
             map.set(parentKey, [...(map.get(parentKey) ?? []), child]);
         }
         return map;
-    }, [parentOf, categories]);
+    }, [parentOf, editorCategories]);
     const rootCategories = useMemo(
         () => (categories ?? []).filter(row => !parentOf.has(row.key)),
         [categories, parentOf],
     );
 
-    const selected = categories?.find(row => row.key === selectedKey) ?? null;
-    const selectedDraft = selected ? null : (draftCategories.find(row => row.key === selectedKey) ?? null);
-    const hasSelection = selected !== null || selectedDraft !== null;
+    const selected = editorCategories.find(row => row.key === selectedKey) ?? null;
+    const selectedDraft =
+        draftCategories.find(row => row.key === selectedKey || row.types.some(type => type.key === selectedKey)) ??
+        null;
+    const hasSelection = selected !== null;
     const parentCategory = selected
-        ? ((categories?.find(row => row.key === parentOf.get(selected.key)) ?? null) as BomCategory | null)
+        ? (editorCategories.find(row => row.key === parentOf.get(selected.key)) ?? null)
         : null;
     /** 弹窗副标题用：已存品类名 → 草稿品类名 → 空串 */
     const nameOfKey = useCallback(
-        (key: string) =>
-            categories?.find(row => row.key === key)?.name ?? draftCategories.find(row => row.key === key)?.name ?? "",
-        [categories, draftCategories],
+        (key: string) => editorCategories.find(row => row.key === key)?.name ?? "",
+        [editorCategories],
     );
 
     /* 各品类当前投影（快照 + 草稿 ops，与后端投影同构；草稿品类快照为空树） */
     const projections = useMemo(() => {
         const map = new Map<string, ViewRoot[]>();
-        for (const row of categories ?? []) {
+        for (const row of editorCategories) {
             map.set(row.key, applyOpsToView(viewTreeOf(row.groups), state.drafts[row.key] ?? []));
         }
-        for (const draft of draftCategories) {
-            map.set(draft.key, applyOpsToView([], state.drafts[draft.key] ?? []));
-        }
         return map;
-    }, [categories, draftCategories, state.drafts]);
+    }, [editorCategories, state.drafts]);
+
+    /* 只记录主动展开的节点：首次加载及切换到新目录时默认折叠，异步刷新也不会先展开再收起。 */
+    const collapsed = useMemo(
+        () =>
+            new Set(
+                [...projections.values()]
+                    .flatMap(viewNodesOf)
+                    .filter(node => !expandedNodes.has(node.id))
+                    .map(node => node.id),
+            ),
+        [projections, expandedNodes],
+    );
 
     /* 复合品类分节：主品类共用结构（有目录时）+ 本品结构；单品类视图无标题；
-     * 草稿品类 = 单分节空树编辑（保存后入库） */
+     * 草稿下属类型也可分别编辑，保存时与主品类一次性入库。 */
     const sections = useMemo<EditorSection[]>(() => {
-        if (selectedDraft) {
-            return [
-                {
-                    categoryKey: selectedDraft.key,
-                    label: selectedDraft.name,
-                    composite: false,
-                    tree: projections.get(selectedDraft.key) ?? [],
-                },
-            ];
-        }
         if (!selected) {
             return [];
         }
@@ -247,7 +272,7 @@ export function BomStructurePage() {
             ];
         }
         const views: EditorSection[] = [];
-        if ((parentCategory.groups ?? []).length > 0) {
+        if ((projections.get(parentCategory.key)?.length ?? 0) > 0) {
             views.push({
                 categoryKey: parentCategory.key,
                 label: `${parentCategory.name}类型`,
@@ -262,7 +287,7 @@ export function BomStructurePage() {
             tree: projections.get(selected.key) ?? [],
         });
         return views;
-    }, [selectedDraft, selected, parentCategory, projections]);
+    }, [selected, parentCategory, projections]);
 
     const dirtyKeys = useMemo(
         () => (categories ?? []).filter(row => (state.drafts[row.key]?.length ?? 0) > 0).map(row => row.key),
@@ -271,17 +296,16 @@ export function BomStructurePage() {
     /* 待保存总量 = 已存品类与草稿品类下的 ops 数 + 草稿品类数（每个草稿品类
      * 本身即一条待入库变更） */
     const pendingCount =
-        [...(categories ?? []).map(row => row.key), ...draftCategories.map(draft => draft.key)].reduce(
-            (sum, key) => sum + (state.drafts[key]?.length ?? 0),
-            0,
-        ) + draftCategories.length;
+        editorCategories.reduce((sum, row) => sum + (state.drafts[row.key]?.length ?? 0), 0) + draftCategories.length;
 
     /* 首个品类默认选中（下属类型优先展开归属主品类） */
     useEffect(() => {
         if (!selectedKey && rootCategories.length > 0) {
-            setSelectedKey(rootCategories[0]!.key);
+            const first = rootCategories[0]!;
+            const child = childrenOf.get(first.key)?.[0];
+            setSelectedKey(child?.key ?? first.key);
         }
-    }, [selectedKey, rootCategories]);
+    }, [selectedKey, rootCategories, childrenOf]);
 
     /* 离开页面前的未保存提醒（草稿与草稿品类仅存于内存） */
     useEffect(() => {
@@ -305,9 +329,9 @@ export function BomStructurePage() {
             .flatMap(section => viewPathOf(section.tree, id))
             .map(node => node.id)
             .filter(nodeId => nodeId !== id);
-        setCollapsed(current => {
-            if (!ancestors.some(ancestor => current.has(ancestor))) return current;
-            return new Set([...current].filter(ancestor => !ancestors.includes(ancestor)));
+        setExpandedNodes(current => {
+            if (ancestors.every(ancestor => current.has(ancestor))) return current;
+            return new Set([...current, ...ancestors]);
         });
         setFocusRequest(null);
         requestAnimationFrame(() => {
@@ -319,9 +343,9 @@ export function BomStructurePage() {
 
     const revealAndSelect = useCallback((id: string) => {
         setSelectedNode(id);
-        setCollapsed(current => {
+        setExpandedNodes(current => {
             const next = new Set(current);
-            next.delete(id);
+            next.add(id);
             return next;
         });
         setFocusRequest(id);
@@ -333,7 +357,7 @@ export function BomStructurePage() {
     const actions: TreeActions = useMemo(
         () => ({
             toggleCollapse: id =>
-                setCollapsed(current => {
+                setExpandedNodes(current => {
                     const next = new Set(current);
                     if (next.has(id)) {
                         next.delete(id);
@@ -435,12 +459,29 @@ export function BomStructurePage() {
                     const created = await createBomCategory({
                         name: draft.name,
                         codePrefix: draft.codePrefix,
-                        ...(draft.types.length > 0 ? { types: draft.types } : {}),
+                        ...(draft.types.length > 0
+                            ? {
+                                  types: draft.types.map(type => ({
+                                      name: type.name,
+                                      groups: flatDraftInputOf(
+                                          applyOpsToView([], stateRef.current.drafts[type.key] ?? []),
+                                      ),
+                                  })),
+                              }
+                            : {}),
                         groups: flatDraftInputOf(applyOpsToView([], stateRef.current.drafts[draft.key] ?? [])),
                     });
                     savedCount += 1;
                     createdTarget = created;
+                    setExpandedCategories(current => {
+                        if (!current.has(draft.key)) return current;
+                        const next = new Set(current);
+                        next.delete(draft.key);
+                        next.add(created.key);
+                        return next;
+                    });
                     dispatch({ type: "saved", key: draft.key });
+                    for (const type of draft.types) dispatch({ type: "saved", key: type.key });
                     setDraftCategories(current => current.filter(entry => entry.key !== draft.key));
                 } catch (error) {
                     failure = error instanceof Error ? error.message : "保存失败，请稍后再试";
@@ -463,9 +504,6 @@ export function BomStructurePage() {
         /* 草稿品类落库后选中它（复合品类切到首个下属类型，方便继续搭目录） */
         if (createdTarget) {
             setSelectedKey(createdTarget.types?.[0]?.key ?? createdTarget.key);
-            if (createdTarget.types?.length) {
-                setExpandedCategories(current => new Set([...current, createdTarget.key]));
-            }
             setSelectedNode(null);
         }
         if (conflictName) {
@@ -599,13 +637,14 @@ export function BomStructurePage() {
         return <PageLoading label="加载 BOM 结构" />;
     }
 
-    const fullTitle = selectedDraft
-        ? `${selectedDraft.name}（编号 ${selectedDraft.codePrefix}…）`
-        : selected
-          ? parentCategory
-              ? `${parentCategory.name} / ${selected.name}`
-              : selected.name
-          : "";
+    const fullTitle =
+        selectedDraft && !parentCategory
+            ? `${selectedDraft.name}（编号 ${selectedDraft.codePrefix}…）`
+            : selected
+              ? parentCategory
+                  ? `${parentCategory.name} / ${selected.name}`
+                  : selected.name
+              : "";
     const composite = sections.some(section => section.composite);
 
     /* 弹窗提交处理器（与 dialog 状态一一对应） */
@@ -663,11 +702,6 @@ export function BomStructurePage() {
                                             onClick={() => actions.openAddNode(selectedKey, { type: "root" })}
                                         />
                                     )}
-                                    {selectedDraft && (
-                                        <span className="flex-none rounded-[4px] bg-warning/15 px-1.5 py-0.5 text-11 text-warning">
-                                            草稿品类 · 保存后入库
-                                        </span>
-                                    )}
                                     <span
                                         className={cn(
                                             "flex items-center gap-1.5 text-11",
@@ -694,11 +728,11 @@ export function BomStructurePage() {
                                             aria-label="展开全部"
                                             title="展开全部"
                                             onClick={() =>
-                                                setCollapsed(current => {
+                                                setExpandedNodes(current => {
                                                     const next = new Set(current);
                                                     for (const section of sections) {
                                                         for (const row of flattenTree(section.tree)) {
-                                                            next.delete(row.id);
+                                                            next.add(row.id);
                                                         }
                                                     }
                                                     return next;
@@ -712,12 +746,12 @@ export function BomStructurePage() {
                                             aria-label="收起全部"
                                             title="收起全部"
                                             onClick={() =>
-                                                setCollapsed(current => {
+                                                setExpandedNodes(current => {
                                                     const next = new Set(current);
                                                     for (const section of sections) {
                                                         for (const row of flattenTree(section.tree)) {
                                                             if (row.kind !== "item") {
-                                                                next.add(row.id);
+                                                                next.delete(row.id);
                                                             }
                                                         }
                                                     }
@@ -835,11 +869,12 @@ export function BomStructurePage() {
                     onClose={() => setCreating(false)}
                     onDraft={draft => {
                         const key = `draft-${uuid()}`;
+                        const types = draft.typeNames.map(name => ({ key: `draft-${uuid()}`, name }));
                         setDraftCategories(current => [
                             ...current,
-                            { key, name: draft.name, codePrefix: draft.codePrefix, types: draft.types },
+                            { key, name: draft.name, codePrefix: draft.codePrefix, types },
                         ]);
-                        setSelectedKey(key);
+                        setSelectedKey(types[0]?.key ?? key);
                         setSelectedNode(null);
                         setCreating(false);
                         toast.success("草稿品类已创建，搭建结构后点「保存结构」入库");
@@ -863,9 +898,10 @@ export function BomStructurePage() {
                                 variant="danger"
                                 onClick={() => {
                                     const key = discarding.key;
+                                    const keys = [key, ...discarding.types.map(type => type.key)];
                                     setDraftCategories(current => current.filter(entry => entry.key !== key));
-                                    dispatch({ type: "replace", key, ops: [] });
-                                    setSelectedKey(current => (current === key ? "" : current));
+                                    for (const draftKey of keys) dispatch({ type: "saved", key: draftKey });
+                                    setSelectedKey(current => (keys.includes(current) ? "" : current));
                                     setDiscarding(null);
                                     setSelectedNode(null);
                                 }}
@@ -954,9 +990,9 @@ export function BomStructurePage() {
                         });
                         setDialog(null);
                         if (parentId)
-                            setCollapsed(current => {
+                            setExpandedNodes(current => {
                                 const next = new Set(current);
-                                next.delete(parentId);
+                                next.add(parentId);
                                 return next;
                             });
                         revealAndSelect(tempId);

@@ -179,7 +179,11 @@ function normalizeOperations(operations: StructureOperationDto[]): StructureOper
 }
 
 /** 新建品类草稿 → 树形态（雪花 id；分组 key 依次派生 g1..；sortOrder 按数组序） */
-function draftTreeOf(drafts: DraftNodeDto[], genId: () => bigint): CatalogTreeNode[] {
+function draftTreeOf(
+    drafts: DraftNodeDto[],
+    genId: () => bigint,
+    reservedKeys: Iterable<string> = [],
+): CatalogTreeNode[] {
     const tempToId = new Map<string, string>();
     const claim = (tempId: string): string => {
         if (tempToId.has(tempId)) {
@@ -196,7 +200,7 @@ function draftTreeOf(drafts: DraftNodeDto[], genId: () => bigint): CatalogTreeNo
             claim(item.tempId);
         }
     }
-    const usedKeys = new Set<string>();
+    const usedKeys = new Set(reservedKeys);
     const nodes: CatalogTreeNode[] = drafts.map(draft => {
         if (draft.kind === "SECTION") {
             if (draft.parentTempId) {
@@ -420,7 +424,16 @@ export class BomStructureService {
                     const all = await tx.bomCategory.findMany({
                         select: { categoryKey: true, name: true, codePrefix: true },
                     });
-                    const types = dto.types ?? [];
+                    const reservedPrefixes = new Set([
+                        ...all.map(row => row.codePrefix),
+                        dto.codePrefix,
+                        ...(dto.types ?? []).flatMap(type => (type.codePrefix ? [type.codePrefix] : [])),
+                    ]);
+                    const types = (dto.types ?? []).map(type => {
+                        const codePrefix = type.codePrefix ?? this.deriveTypePrefix(reservedPrefixes);
+                        reservedPrefixes.add(codePrefix);
+                        return { ...type, codePrefix };
+                    });
                     // 名称唯一：主品类与各类型互不相重、不与既有品类重名（类型与主品类
                     // 平铺在同一 name 命名空间——bom_category.name 全局唯一）
                     const newNames = [dto.name, ...types.map(type => type.name)];
@@ -450,6 +463,12 @@ export class BomStructureService {
                     });
                     const tree = draftTreeOf(dto.groups, () => this.snowflake.next());
                     validateCatalogTree(tree);
+                    const parentKeys = tree.flatMap(node => (node.groupKey ? [node.groupKey] : []));
+                    const typeTrees = types.map(type => {
+                        const typeTree = draftTreeOf(type.groups ?? [], () => this.snowflake.next(), parentKeys);
+                        validateCatalogTree(typeTree);
+                        return typeTree;
+                    });
                     const categoryId = this.snowflake.next();
                     const seqWidth = dto.seqWidth ?? 3;
                     await tx.bomCategory.create({
@@ -492,11 +511,16 @@ export class BomStructureService {
                             codePrefix: type.codePrefix,
                         });
                     }
-                    if (tree.length > 0) {
+                    const catalogs = [
+                        { categoryId, tree },
+                        ...createdTypes.map((type, index) => ({ categoryId: type.id, tree: typeTrees[index]! })),
+                    ];
+                    for (const catalog of catalogs) {
+                        if (catalog.tree.length === 0) continue;
                         await tx.materialGroup.createMany({
-                            data: tree.map(node => ({
+                            data: catalog.tree.map(node => ({
                                 id: BigInt(node.id),
-                                categoryId,
+                                categoryId: catalog.categoryId,
                                 parentId: node.parentId === null ? null : BigInt(node.parentId),
                                 kind: node.kind,
                                 name: node.name,
@@ -507,7 +531,7 @@ export class BomStructureService {
                                 createdAt: now,
                             })),
                         });
-                        const items = tree.flatMap(node =>
+                        const items = catalog.tree.flatMap(node =>
                             node.items.map(item => ({
                                 id: BigInt(item.id),
                                 groupId: BigInt(node.id),
@@ -520,9 +544,10 @@ export class BomStructureService {
                             await tx.materialItem.createMany({ data: items });
                         }
                     }
-                    const sections = tree.filter(node => node.kind === "SECTION").length;
-                    const groups = tree.length - sections;
-                    const itemCount = tree.reduce((sum, node) => sum + node.items.length, 0);
+                    const allNodes = catalogs.flatMap(catalog => catalog.tree);
+                    const sections = allNodes.filter(node => node.kind === "SECTION").length;
+                    const groups = allNodes.length - sections;
+                    const itemCount = allNodes.reduce((sum, node) => sum + node.items.length, 0);
                     await recordOpLog(tx, this.snowflake, actor, {
                         action: "create_bom_category",
                         targetType: "bom_category",
@@ -851,6 +876,20 @@ export class BomStructureService {
     }
 
     /** categoryKey 由前缀派生（小写 + 非字母数字转 -），冲突时追加 -2/-3… */
+    /** 容器不取号：生成带字母结尾的内部前缀，避开既有前缀及其数字延长。 */
+    private deriveTypePrefix(existing: ReadonlySet<string>): string {
+        while (true) {
+            const prefix = `T${this.snowflake.next().toString(36).toUpperCase()}T`;
+            if (
+                [...existing].some(
+                    value => value === prefix || (value.startsWith(prefix) && /^\d+$/.test(value.slice(prefix.length))),
+                )
+            )
+                continue;
+            return prefix;
+        }
+    }
+
     private deriveCategoryKey(codePrefix: string, existingKeys: string[]): string {
         const base = codePrefix
             .toLowerCase()

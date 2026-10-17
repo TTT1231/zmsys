@@ -7,11 +7,11 @@ import { Icon } from "@/lib/icons";
 export interface NewCategoryDraftInput {
     name: string;
     codePrefix: string;
-    types: Array<{ name: string; codePrefix: string }>;
+    typeNames: string[];
 }
 
 /**
- * 新建品类（BOM结构原型.html 交互）：名称 + 编码开头，可选「再分几种类型」——
+ * 新建品类：名称 + 编码开头，可选「再分几种类型」（各自维护物料结构的子目录）——
  * 提交只生成左侧导航里的本地草稿品类（未入库），右侧搭建结构后点「保存结构」
  * 才调 createBomCategory 连品类带整棵树一次写入；中途放弃直接丢弃，无残留。
  */
@@ -28,29 +28,26 @@ export function CategoryCreateModal({
     const [name, setName] = useState("");
     const [codePrefix, setCodePrefix] = useState("");
     const [hasTypes, setHasTypes] = useState(false);
-    const [types, setTypes] = useState<Array<{ name: string; codePrefix: string }>>([{ name: "", codePrefix: "" }]);
+    const [typeNames, setTypeNames] = useState<string[]>([""]);
     const [error, setError] = useState("");
 
     const close = () => {
         setName("");
         setCodePrefix("");
         setHasTypes(false);
-        setTypes([{ name: "", codePrefix: "" }]);
+        setTypeNames([""]);
         setError("");
         onClose();
     };
 
     const addRow = () => {
-        // 后端 CreateBomCategoryDto 上限 12 个类型：到顶后按钮不再追加
-        setTypes(current => (current.length >= 12 ? current : [...current, { name: "", codePrefix: "" }]));
+        setTypeNames(current => (current.length >= 12 ? current : [...current, ""]));
         setError("");
     };
 
     const submit = () => {
         const trimmedName = name.trim();
-        const filledTypes = hasTypes
-            ? types.map(row => ({ name: row.name.trim(), codePrefix: row.codePrefix.trim() }))
-            : [];
+        const filledTypes = hasTypes ? typeNames.map(typeName => typeName.trim()) : [];
         if (!trimmedName) {
             setError("请填写品类名称");
             return;
@@ -60,27 +57,17 @@ export function CategoryCreateModal({
             return;
         }
         if (hasTypes) {
-            if (filledTypes.some(row => !row.name || !row.codePrefix)) {
-                setError("还有类型没填完整");
+            if (filledTypes.some(typeName => !typeName)) {
+                setError("请填写每个类型的名称");
                 return;
             }
-            const names = [trimmedName, ...filledTypes.map(row => row.name)];
-            if (new Set(names).size !== names.length) {
+            if (new Set([trimmedName, ...filledTypes]).size !== filledTypes.length + 1) {
                 setError("品类和类型的名称不能重复");
-                return;
-            }
-            const prefixes = [codePrefix, ...filledTypes.map(row => row.codePrefix)];
-            if (filledTypes.some(row => !/^[A-Z0-9]{1,16}$/.test(row.codePrefix))) {
-                setError("类型代号只能填字母或数字");
-                return;
-            }
-            if (new Set(prefixes).size !== prefixes.length) {
-                setError("编号开头和类型代号不能重复");
                 return;
             }
         }
         setError("");
-        onDraft({ name: trimmedName, codePrefix, types: filledTypes });
+        onDraft({ name: trimmedName, codePrefix, typeNames: filledTypes });
         close();
     };
 
@@ -148,43 +135,22 @@ export function CategoryCreateModal({
             </label>
             {hasTypes && (
                 <div className="mt-2">
-                    <div
-                        className="mb-1 grid grid-cols-[minmax(0,1fr)_104px_32px] gap-2 text-12 text-muted"
-                        aria-hidden="true"
-                    >
-                        <span>类型名称</span>
-                        <span>类型代号</span>
-                    </div>
+                    <p className="mb-2 text-12 text-muted">创建后在左侧品类下显示，各类型可分别搭建物料结构。</p>
+                    <p className="mb-1 text-12 text-muted" aria-hidden="true">
+                        类型名称 *
+                    </p>
                     <div className="flex flex-col gap-2">
-                        {types.map((row, index) => (
-                            <div key={index} className="grid grid-cols-[minmax(0,1fr)_104px_32px] items-center gap-2">
+                        {typeNames.map((typeName, index) => (
+                            <div key={index} className="grid grid-cols-[minmax(0,1fr)_32px] items-center gap-2">
                                 <input
-                                    value={row.name}
+                                    value={typeName}
                                     maxLength={64}
                                     aria-label={`类型 ${index + 1} 名称`}
-                                    placeholder="如：新微动"
+                                    aria-required="true"
+                                    placeholder="如：A 型"
                                     onChange={event => {
-                                        setTypes(current =>
-                                            current.map((item, i) =>
-                                                i === index ? { ...item, name: event.target.value } : item,
-                                            ),
-                                        );
-                                        setError("");
-                                    }}
-                                    className="w-full rounded-input border border-line-strong bg-surface px-3 py-2 text-14 text-ink outline-none focus:border-primary"
-                                />
-                                <input
-                                    value={row.codePrefix}
-                                    maxLength={16}
-                                    aria-label={`类型 ${index + 1} 代号`}
-                                    placeholder="如：KQN"
-                                    onChange={event => {
-                                        setTypes(current =>
-                                            current.map((item, i) =>
-                                                i === index
-                                                    ? { ...item, codePrefix: event.target.value.toUpperCase() }
-                                                    : item,
-                                            ),
+                                        setTypeNames(current =>
+                                            current.map((item, i) => (i === index ? event.target.value : item)),
                                         );
                                         setError("");
                                     }}
@@ -193,9 +159,9 @@ export function CategoryCreateModal({
                                 <button
                                     type="button"
                                     aria-label={`删除类型 ${index + 1}`}
-                                    disabled={types.length === 1}
+                                    disabled={typeNames.length === 1}
                                     onClick={() => {
-                                        setTypes(current => current.filter((_, i) => i !== index));
+                                        setTypeNames(current => current.filter((_, i) => i !== index));
                                         setError("");
                                     }}
                                     className="inline-flex size-8 items-center justify-center rounded-md text-muted transition hover:bg-soft hover:text-ink disabled:cursor-not-allowed disabled:text-placeholder"
@@ -208,8 +174,8 @@ export function CategoryCreateModal({
                     <button
                         type="button"
                         onClick={addRow}
-                        disabled={types.length >= 12}
-                        title={types.length >= 12 ? "最多 12 种类型" : undefined}
+                        disabled={typeNames.length >= 12}
+                        title={typeNames.length >= 12 ? "最多 12 种类型" : undefined}
                         className="mt-2.5 flex h-9 w-[calc(100%-40px)] items-center justify-center gap-1.5 rounded-btn border border-dashed border-line bg-panel text-13 text-primary-strong transition hover:border-primary-border hover:bg-primary-soft disabled:cursor-not-allowed disabled:text-placeholder"
                     >
                         <Icon name="plus" size={14} />

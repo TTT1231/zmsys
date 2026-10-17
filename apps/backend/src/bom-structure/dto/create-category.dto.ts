@@ -65,9 +65,18 @@ export class CategoryTypeDto {
     @MaxLength(64)
     name!: string;
 
+    /** 内部防撞前缀，省略时由服务端生成；类型不独立取号。 */
+    @IsOptional()
     @IsString()
     @Matches(/^[A-Z0-9]{1,16}$/, { message: "编码前缀为 1-16 位大写字母/数字" })
-    codePrefix!: string;
+    codePrefix?: string;
+
+    @IsOptional()
+    @IsArray()
+    @ArrayMaxSize(100)
+    @ValidateNested({ each: true })
+    @Type(() => DraftNodeDto)
+    groups?: DraftNodeDto[];
 }
 
 /** POST /bom-structure/categories 请求体 */

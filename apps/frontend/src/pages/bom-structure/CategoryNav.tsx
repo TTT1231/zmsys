@@ -16,7 +16,7 @@ export interface DraftCategoryInfo {
     key: string;
     name: string;
     codePrefix: string;
-    types: Array<{ name: string; codePrefix: string }>;
+    types: Array<{ key: string; name: string }>;
 }
 
 export function CategoryNav({
@@ -152,27 +152,60 @@ export function CategoryNav({
                 {drafts.length > 0 && (
                     <div className="mt-1 border-t border-line pt-2">
                         <p className="mb-1 px-1 text-11 font-medium text-warning">未保存的新品类</p>
-                        {drafts.map(draft => (
-                            <div
-                                key={draft.key}
-                                data-category-item
-                                onContextMenu={event => showMenu(draft, true, event)}
-                                onKeyDown={event => menuKeys(draft, true, event)}
-                            >
-                                <button
-                                    type="button"
-                                    onClick={() => onPick(draft.key)}
-                                    aria-current={draft.key === selectedKey ? "page" : undefined}
-                                    className={itemClass(draft.key === selectedKey)}
-                                >
-                                    <Icon name="layers" size={16} className="flex-none text-muted" />
-                                    <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{draft.name}</span>
-                                    <span className="flex-none rounded-[4px] bg-warning/15 px-1.5 py-0.5 text-11 text-warning">
-                                        草稿
-                                    </span>
-                                </button>
-                            </div>
-                        ))}
+                        {drafts.map(draft => {
+                            const open = expanded.has(draft.key);
+                            return (
+                                <div key={draft.key} className="mb-1">
+                                    <div
+                                        data-category-item
+                                        onContextMenu={event => showMenu(draft, true, event)}
+                                        onKeyDown={event => menuKeys(draft, true, event)}
+                                    >
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                draft.types.length > 0 ? onToggle(draft.key) : onPick(draft.key)
+                                            }
+                                            aria-current={draft.key === selectedKey ? "page" : undefined}
+                                            aria-expanded={draft.types.length > 0 ? open : undefined}
+                                            className={itemClass(draft.key === selectedKey)}
+                                        >
+                                            <Icon name="layers" size={16} className="flex-none text-muted" />
+                                            <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                                                {draft.name}
+                                            </span>
+                                            <span className="flex-none rounded-[4px] bg-warning/15 px-1.5 py-0.5 text-11 text-warning">
+                                                草稿
+                                            </span>
+                                            {draft.types.length > 0 && (
+                                                <Icon
+                                                    name={open ? "chevron-down" : "chevron-right"}
+                                                    size={14}
+                                                    className="flex-none text-muted"
+                                                />
+                                            )}
+                                        </button>
+                                    </div>
+                                    {open && draft.types.length > 0 && (
+                                        <div className="ml-4 border-l border-line-strong pl-2">
+                                            {draft.types.map(type => (
+                                                <button
+                                                    key={type.key}
+                                                    type="button"
+                                                    onClick={() => onPick(type.key)}
+                                                    aria-current={type.key === selectedKey ? "page" : undefined}
+                                                    className={itemClass(type.key === selectedKey)}
+                                                >
+                                                    <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                                                        {type.name}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
             </nav>

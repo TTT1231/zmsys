@@ -56,6 +56,8 @@
 
 POST /ai/chat、POST /ai/chat/stream 和 GET /ai/status 均为登录即可使用；它们提供对话代理、流式对话和服务状态，不是 agent 的业务数据查询工具。
 
+AI 工作台的 GET /ai/admin/balance 与 GET /ai/admin/usage 沿用受保护权限 menu:ai-workbench。余额来自上游实时查询，不随用量日期范围变化；usage 的 amount 为按模型单价折算的人民币估算值，不能当成实际扣费或用它倒推余额。它们属于管理页面接口，不扩大日常 agent 的业务查询权限。
+
 ## 数据边界与已知语义
 
 - agent 查询沿用各业务端点权限；可见数据与当前登录用户在系统页面可见范围一致。

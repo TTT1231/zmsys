@@ -122,7 +122,9 @@ export interface DraftNodeInput {
 /** 新建品类时一并创建的下属类型（目录容器品类，status=false） */
 export interface CategoryTypeInput {
     name: string;
-    codePrefix: string;
+    /** 内部防撞前缀，省略时由服务端生成；不参与 BOM 取号。 */
+    codePrefix?: string;
+    groups?: DraftNodeInput[];
 }
 
 export interface CreateBomCategoryInput {
