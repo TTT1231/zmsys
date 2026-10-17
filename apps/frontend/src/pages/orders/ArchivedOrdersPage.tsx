@@ -150,10 +150,6 @@ export function ArchivedOrdersPage() {
                                         value: statusFilter,
                                         defaultValue: "全部状态",
                                         options: STATUS_OPTIONS,
-                                        onChange: value => {
-                                            setStatusFilter(value);
-                                            setPage(1);
-                                        },
                                     },
                                     {
                                         key: "category",
@@ -161,24 +157,16 @@ export function ArchivedOrdersPage() {
                                         value: categoryFilter,
                                         defaultValue: "全部品类",
                                         options: ["全部品类", ...categories],
-                                        onChange: value => {
-                                            setCategoryFilter(value);
-                                            setPage(1);
-                                        },
                                     },
-                                ]}
-                                more={[
                                     {
-                                        key: "sort",
-                                        label: "排序",
-                                        value: `${sort.key}:${sort.dir}`,
-                                        defaultValue: "archivedAt:desc",
-                                        options: MOBILE_SORT_OPTIONS,
-                                        onChange: value => {
-                                            const [key, dir] = value.split(":") as [ArchivedSortKey, "asc" | "desc"];
-                                            setSort({ key, dir });
-                                            setPage(1);
-                                        },
+                                        key: "delivery",
+                                        label: "交期",
+                                        value: dateStart || dateEnd ? "custom" : "any",
+                                        defaultValue: "any",
+                                        options: [
+                                            { value: "any", label: "不限" },
+                                            { value: "custom", label: "指定日期" },
+                                        ],
                                     },
                                     {
                                         key: "from",
@@ -186,10 +174,8 @@ export function ArchivedOrdersPage() {
                                         type: "date",
                                         value: dateStart,
                                         defaultValue: "",
-                                        onChange: value => {
-                                            setDateStart(value);
-                                            setPage(1);
-                                        },
+                                        visibleWhen: { key: "delivery", value: "custom" },
+                                        count: false,
                                     },
                                     {
                                         key: "to",
@@ -197,17 +183,31 @@ export function ArchivedOrdersPage() {
                                         type: "date",
                                         value: dateEnd,
                                         defaultValue: "",
-                                        onChange: value => {
-                                            setDateEnd(value);
-                                            setPage(1);
-                                        },
+                                        visibleWhen: { key: "delivery", value: "custom" },
+                                        count: false,
+                                    },
+                                    {
+                                        key: "sort",
+                                        label: "排序",
+                                        value: `${sort.key}:${sort.dir}`,
+                                        defaultValue: "archivedAt:desc",
+                                        options: MOBILE_SORT_OPTIONS,
                                     },
                                 ]}
                                 validate={draft =>
-                                    draft.from && draft.to && draft.from > draft.to
-                                        ? "开始日期不能晚于结束日期。"
+                                    draft.delivery === "custom" && (!draft.from || !draft.to || draft.from > draft.to)
+                                        ? "请选择开始和结束日期，开始日期不能晚于结束日期。"
                                         : undefined
                                 }
+                                onApply={draft => {
+                                    setStatusFilter(draft.status!);
+                                    setCategoryFilter(draft.category!);
+                                    setDateStart(draft.delivery === "custom" ? draft.from! : "");
+                                    setDateEnd(draft.delivery === "custom" ? draft.to! : "");
+                                    const [key, dir] = draft.sort!.split(":") as [ArchivedSortKey, "asc" | "desc"];
+                                    setSort({ key, dir });
+                                    setPage(1);
+                                }}
                             />
                         }
                         trailing={

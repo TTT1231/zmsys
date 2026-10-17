@@ -631,20 +631,14 @@ html.dark::view-transition-new(root) {
     background: linear-gradient(to bottom, var(--color-surface), var(--color-panel));
 }
 
-/* 手机列表仅保留常用条件和主操作，次要条件通过带文字的「筛选」面板设置。 */
+/* 手机列表仅保留筛选入口和主操作，所有查询条件在同一面板中确认。 */
 .mobile-list-controls {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     border-bottom: 1px solid var(--color-line);
     padding: 10px;
-}
-.mobile-list-controls > select {
-    flex: 1 1 68px;
-    width: 0;
-    min-width: 68px;
-    max-width: 100%;
 }
 .mobile-list-controls > button {
     flex-shrink: 0;

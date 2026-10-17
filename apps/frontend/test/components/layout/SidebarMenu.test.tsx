@@ -5,9 +5,9 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { SidebarMenu } from "@/components/layout/SidebarMenu";
+import { MenuItemLink, SidebarMenu } from "@/components/layout/SidebarMenu";
 import type { NavSection } from "@/data/permissions";
 
 const sections: NavSection[] = [
@@ -41,7 +41,10 @@ function renderAt(path: string) {
 
 const groupButton = (name: string) => screen.getByRole("button", { name });
 
-afterEach(cleanup);
+afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+});
 
 describe("SidebarMenu", () => {
     it("自动展开当前路由所在组，其余组收起（手风琴）", () => {
@@ -64,6 +67,22 @@ describe("SidebarMenu", () => {
         renderAt("/orders");
         const link = screen.getByRole("link", { name: "销售订单" });
         expect(link).toHaveClass("bg-primary-soft");
+    });
+
+    it.each([
+        { mobile: true, label: "销售订单" },
+        { mobile: false, label: "待发货订单" },
+    ])("仓管订单入口在 mobile=$mobile 时只呈现一个名称", ({ mobile, label }) => {
+        vi.stubGlobal(
+            "matchMedia",
+            vi.fn(() => ({ matches: !mobile, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
+        );
+        render(
+            <MemoryRouter>
+                <MenuItemLink item={{ label: "待发货订单", icon: "order", to: "/orders" }} onNote={vi.fn()} />
+            </MemoryRouter>,
+        );
+        expect(screen.getByRole("link", { name: label })).toHaveTextContent(label);
     });
 
     it("note 型入口点击弹出说明弹窗", async () => {

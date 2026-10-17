@@ -546,10 +546,6 @@ export function InboundPage() {
                                         value: statusFilter,
                                         defaultValue: "全部状态",
                                         options: ["全部状态", "已入库", "已作废"],
-                                        onChange: value => {
-                                            setStatusFilter(value);
-                                            setPage(1);
-                                        },
                                     },
                                     {
                                         key: "category",
@@ -557,25 +553,21 @@ export function InboundPage() {
                                         value: category,
                                         defaultValue: "全部品类",
                                         options: ["全部品类", ...categories],
-                                        onChange: value => {
-                                            setCategory(value);
-                                            setPage(1);
-                                        },
                                     },
-                                ]}
-                                more={[
                                     {
                                         key: "operator",
                                         label: "登记人",
                                         value: inspectorFilter,
                                         defaultValue: "全部登记人",
                                         options: ["全部登记人", ...inspectors],
-                                        onChange: value => {
-                                            setInspectorFilter(value);
-                                            setPage(1);
-                                        },
                                     },
                                 ]}
+                                onApply={draft => {
+                                    setStatusFilter(draft.status!);
+                                    setCategory(draft.category!);
+                                    setInspectorFilter(draft.operator!);
+                                    setPage(1);
+                                }}
                                 action={
                                     canRegister && (
                                         <Button onClick={() => setNewOpen(true)} className="px-3">

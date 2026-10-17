@@ -293,10 +293,6 @@ export function StockPage() {
                                     value: statusFilter,
                                     defaultValue: "全部状态",
                                     options: ["全部状态", "已用完", "未用完"],
-                                    onChange: value => {
-                                        setStatusFilter(value);
-                                        setPage(1);
-                                    },
                                 },
                                 {
                                     key: "category",
@@ -304,12 +300,13 @@ export function StockPage() {
                                     value: category,
                                     defaultValue: "全部品类",
                                     options: ["全部品类", ...categories],
-                                    onChange: value => {
-                                        setCategory(value);
-                                        setPage(1);
-                                    },
                                 },
                             ]}
+                            onApply={draft => {
+                                setStatusFilter(draft.status!);
+                                setCategory(draft.category!);
+                                setPage(1);
+                            }}
                         />
                     }
                     trailing={

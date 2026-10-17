@@ -551,12 +551,12 @@ export function CustomersPage() {
                                         value: statusFilter,
                                         defaultValue: "全部状态",
                                         options: ["全部状态", "合作中", "待跟进"],
-                                        onChange: value => {
-                                            setStatusFilter(value);
-                                            setPage(1);
-                                        },
                                     },
                                 ]}
+                                onApply={draft => {
+                                    setStatusFilter(draft.status!);
+                                    setPage(1);
+                                }}
                                 action={
                                     canCreate && (
                                         <Button

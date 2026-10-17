@@ -44,7 +44,7 @@ export function ListToolbar({
                     />
                 </label>
                 {children}
-                {/* 手机使用条件旁的清除入口和筛选面板的重置操作。 */}
+                {/* 手机在筛选面板重置，或通过工具栏一键清空筛选。 */}
                 <Button
                     variant="link"
                     onClick={onClear}

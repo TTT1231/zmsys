@@ -254,14 +254,16 @@ it("自定义范围延迟生效：from>to 报错（role=alert），合法时点�
     );
 });
 
-it("手机选择自定义时间直接打开面板，日期确认前保留原查询，错误日期不提交", () => {
+it("手机所有时间条件在面板确认后生效，错误日期不提交，自定义范围只计一项", () => {
     vi.stubGlobal(
         "matchMedia",
         vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
     );
     renderPage();
-    fireEvent.change(screen.getByRole("combobox", { name: "时间" }), { target: { value: "custom" } });
+    expect(screen.queryByRole("combobox", { name: "时间" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "筛选" }));
     const dialog = screen.getByRole("dialog", { name: "筛选" });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "时间" }), { target: { value: "custom" } });
     expect(useSystemLogs.mock.calls.at(-1)![0]).toMatchObject({ range: "7d" });
     const from = within(dialog).getByLabelText("开始日期");
     const to = within(dialog).getByLabelText("结束日期");
@@ -269,6 +271,7 @@ it("手机选择自定义时间直接打开面板，日期确认前保留原查�
     fireEvent.change(to, { target: { value: "2026-10-01" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "确认" }));
     expect(within(dialog).getByRole("alert")).toHaveTextContent("开始日期不能晚于结束日期");
+    expect(within(dialog).getByRole("alert")).toHaveFocus();
     expect(useSystemLogs.mock.calls.at(-1)![0]).toMatchObject({ range: "7d" });
     fireEvent.change(to, { target: { value: "2026-10-20" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "确认" }));
@@ -277,11 +280,12 @@ it("手机选择自定义时间直接打开面板，日期确认前保留原查�
         expect.objectContaining({ range: "custom", from: "2026-10-16", to: "2026-10-20" }),
         true,
     );
-    fireEvent.click(screen.getByRole("button", { name: "清除开始日期筛选" }));
+    expect(screen.getByRole("button", { name: "筛选，已选 1 项" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "清空筛选" }));
     expect(useSystemLogs.mock.calls.at(-1)![0]).toMatchObject({ range: "7d" });
 });
 
-it("窄屏在筛选面板选择业务类型，确认后查询并可从完整名称提示清除", () => {
+it("手机业务、操作和时间共同确认，一键清空恢复默认条件", () => {
     vi.stubGlobal(
         "matchMedia",
         vi.fn((query: string) => ({
@@ -295,13 +299,16 @@ it("窄屏在筛选面板选择业务类型，确认后查询并可从完整名�
     fireEvent.click(screen.getByRole("button", { name: "筛选" }));
     const dialog = screen.getByRole("dialog");
     fireEvent.change(within(dialog).getByRole("combobox", { name: "业务类型" }), { target: { value: "bom" } });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "操作" }), { target: { value: "edit" } });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "时间" }), { target: { value: "today" } });
     expect(useSystemLogs.mock.calls.at(-1)![0].domain).toBeUndefined();
     fireEvent.click(within(dialog).getByRole("button", { name: "确认" }));
-    expect(useSystemLogs.mock.calls.at(-1)![0]).toMatchObject({ domain: "bom" });
-    const condition = screen.getByRole("button", { name: "清除业务类型筛选" });
-    expect(condition).toHaveTextContent("业务类型：物料与 BOM");
-    fireEvent.click(condition);
+    expect(useSystemLogs.mock.calls.at(-1)![0]).toMatchObject({ domain: "bom", action: "edit", range: "today" });
+    expect(screen.getByRole("button", { name: "筛选，已选 3 项" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "清空筛选" }));
     expect(useSystemLogs.mock.calls.at(-1)![0].domain).toBeUndefined();
+    expect(useSystemLogs.mock.calls.at(-1)![0].action).toBeUndefined();
+    expect(useSystemLogs.mock.calls.at(-1)![0]).toMatchObject({ range: "7d" });
 });
 
 it("重置回到默认筛选：全部 tab、清空关键词、操作类型 all、时间范围最近 7 天", async () => {

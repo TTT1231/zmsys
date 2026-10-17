@@ -327,10 +327,6 @@ export function SystemLogsPage() {
             label: `${user.name}（${user.account}）${user.active ? "" : "· 已停用"}`,
         })),
     ];
-    const mobileRangeOptions = RANGE_OPTIONS.map(option => ({
-        ...option,
-        label: option.label.replace("最近 ", "近").replace(" 天", "天").replace("自定义范围", "自定义"),
-    }));
 
     // 按北京日分组（保持服务端降序）；相邻同日事件归入同组（依赖查询结果引用而非派生数组）
     const groups = useMemo(() => {
@@ -385,31 +381,15 @@ export function SystemLogsPage() {
                                     defaultValue: "all",
                                     options: DOMAIN_TABS.map(item => ({
                                         value: item.key,
-                                        label: item.key === "all" ? "业务" : item.label,
+                                        label: item.label,
                                     })),
-                                    onChange: value => setTab(value as DomainKey),
                                 },
-                                {
-                                    key: "range",
-                                    label: "时间",
-                                    value: range,
-                                    defaultValue: "7d",
-                                    options: mobileRangeOptions,
-                                    openPanelValue: "custom",
-                                    onChange: value => {
-                                        setRange(value as typeof range);
-                                        setDateError("");
-                                    },
-                                },
-                            ]}
-                            more={[
                                 {
                                     key: "action",
                                     label: "操作",
                                     value: action,
                                     defaultValue: "all",
                                     options: ACTION_OPTIONS,
-                                    onChange: setAction,
                                 },
                                 {
                                     key: "operator",
@@ -417,7 +397,6 @@ export function SystemLogsPage() {
                                     value: operator,
                                     defaultValue: "all",
                                     options: operatorOptions,
-                                    onChange: setOperator,
                                 },
                                 {
                                     key: "range",
@@ -425,8 +404,6 @@ export function SystemLogsPage() {
                                     value: range,
                                     defaultValue: "7d",
                                     options: RANGE_OPTIONS,
-                                    summary: false,
-                                    onChange: value => setRange(value as typeof range),
                                 },
                                 {
                                     key: "from",
@@ -435,10 +412,7 @@ export function SystemLogsPage() {
                                     defaultValue: "",
                                     type: "date",
                                     visibleWhen: { key: "range", value: "custom" },
-                                    onChange: () => {
-                                        setRange("7d");
-                                        setApplied(null);
-                                    },
+                                    count: false,
                                 },
                                 {
                                     key: "to",
@@ -447,10 +421,7 @@ export function SystemLogsPage() {
                                     defaultValue: "",
                                     type: "date",
                                     visibleWhen: { key: "range", value: "custom" },
-                                    onChange: () => {
-                                        setRange("7d");
-                                        setApplied(null);
-                                    },
+                                    count: false,
                                 },
                             ]}
                             validate={draft =>
@@ -459,7 +430,7 @@ export function SystemLogsPage() {
                                     : undefined
                             }
                             onApply={draft => {
-                                if (draft.domain) setTab(draft.domain as DomainKey);
+                                setTab(draft.domain as DomainKey);
                                 setAction(draft.action!);
                                 setOperator(draft.operator!);
                                 setRange(draft.range as typeof range);

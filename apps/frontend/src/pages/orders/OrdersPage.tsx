@@ -2,6 +2,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { ToolbarMore } from "@/components/ui/ToolbarMore";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { ListToolbar } from "@/components/ui/ListToolbar";
+import { MobileListControls } from "@/components/ui/MobileListControls";
 import { ToolbarSelect } from "@/components/ui/ToolbarSelect";
 import { DateRangeFilter } from "@/components/ui/DateRangeFilter";
 import { ListState, OrderTaskCard } from "@/components/ui/MobileList";
@@ -860,8 +861,8 @@ export function OrdersPage() {
     const [searchParams] = useSearchParams();
     const [statusFilter, setStatusFilter] = useRememberedListState("status", "全部状态");
     const [categoryFilter, setCategoryFilter] = useRememberedListState("category", "全部品类");
-    // 移动端仅按完成度筛选，与桌面快捷任务、细分状态和交期条件分别生效。
-    const [mobileDone, setMobileDone] = useRememberedListState<"all" | "open" | "done">("completion", "all");
+    // 手机将完成度与细分状态合成单选，避免与桌面快捷任务叠加成互相冲突的条件。
+    const [mobileStatus, setMobileStatus] = useRememberedListState("mobileStatus", "全部状态");
     const [dateStart, setDateStart] = useRememberedListState("dateStart", "");
     const [dateEnd, setDateEnd] = useRememberedListState("dateEnd", "");
     // 列排序默认升序：默认按订单号；仓管视角默认交货日期（按交期备货）。
@@ -940,17 +941,22 @@ export function OrdersPage() {
             // 可发量/状态读一次派生的预计算行；不在分配行内（已交满）按可发 0 判状态
             const row = derived.byOrderNo.get(order.orderNo);
             if (isMobile) {
-                if (mobileDone === "open" && remainingOf(order) <= 0) return false;
-                if (mobileDone === "done" && remainingOf(order) > 0) return false;
+                if (mobileStatus === "未完成") {
+                    if (remainingOf(order) <= 0) return false;
+                } else if (
+                    mobileStatus !== "全部状态" &&
+                    (row?.status ?? orderStatusOfMax(order, 0)).label !== mobileStatus
+                )
+                    return false;
             } else {
                 if (taskFilter === "pending" && remainingOf(order) <= 0) return false;
                 if (taskFilter === "ready" && (row?.maxShip ?? 0) <= 0) return false;
                 if (statusFilter !== "全部状态" && (row?.status ?? orderStatusOfMax(order, 0)).label !== statusFilter)
                     return false;
-                if (categoryFilter !== "全部品类" && bomCategory.get(order.bomCode) !== categoryFilter) return false;
-                if (dateStart && order.deliverDate < dateStart) return false;
-                if (dateEnd && order.deliverDate > dateEnd) return false;
             }
+            if (categoryFilter !== "全部品类" && bomCategory.get(order.bomCode) !== categoryFilter) return false;
+            if (dateStart && order.deliverDate < dateStart) return false;
+            if (dateEnd && order.deliverDate > dateEnd) return false;
             if (kw) {
                 const bom = derived.bomIndex.get(order.bomCode);
                 const text =
@@ -964,7 +970,7 @@ export function OrdersPage() {
         keyword,
         taskFilter,
         statusFilter,
-        mobileDone,
+        mobileStatus,
         categoryFilter,
         dateStart,
         dateEnd,
@@ -1013,7 +1019,7 @@ export function OrdersPage() {
     const dateFilterActive = !!dateStart || !!dateEnd;
     const filtersActive =
         dateFilterActive || !!keyword.trim() || statusFilter !== "全部状态" || categoryFilter !== "全部品类";
-    /* 桌面交期快捷区间；移动端不展示、不参与筛选。 */
+    /* 桌面交期快捷区间；手机在统一筛选面板指定日期范围。 */
     const monthStart = monthStartOf(today);
     const quickRanges = [
         { label: "近 7 天", start: addDays(today, -6), end: today },
@@ -1196,36 +1202,6 @@ export function OrdersPage() {
 
                 <section className="relative overflow-hidden rounded-panel border border-line bg-surface/97 shadow-card">
                     {overlay && <LoadingOverlay />}
-                    <div className="lg:hidden">
-                        <div className="mobile-list-controls">
-                            <div className="table-task-tabs flex-1" role="group" aria-label="订单完成情况">
-                                {(
-                                    [
-                                        ["all", "全部"],
-                                        ["open", "未完成"],
-                                        ["done", "已完成"],
-                                    ] as const
-                                ).map(([key, label]) => (
-                                    <button
-                                        type="button"
-                                        key={key}
-                                        aria-pressed={mobileDone === key}
-                                        onClick={() => {
-                                            setMobileDone(key);
-                                            setPage(1);
-                                        }}
-                                    >
-                                        {label}
-                                    </button>
-                                ))}
-                            </div>
-                            {canCreate && (
-                                <Button onClick={() => setNewOpen(true)} className="px-3" aria-label="新建订单">
-                                    新建
-                                </Button>
-                            )}
-                        </div>
-                    </div>
                     <div className="hidden lg:block">
                         <div className="list-card-primary">
                             <div className="table-task-tabs" aria-label="订单快捷筛选">
@@ -1264,6 +1240,81 @@ export function OrdersPage() {
                         placeholder="客户名、订单号或 BOM 编码"
                         onClear={clearFilters}
                         filtersActive={filtersActive}
+                        mobileContent={
+                            <MobileListControls
+                                fields={[
+                                    {
+                                        key: "status",
+                                        label: "订单状态",
+                                        value: mobileStatus,
+                                        defaultValue: "全部状态",
+                                        options: [
+                                            "全部状态",
+                                            "未完成",
+                                            "已完成",
+                                            ...STATUS_OPTIONS.filter(
+                                                status => status !== "全部状态" && status !== "已完成",
+                                            ),
+                                        ],
+                                    },
+                                    {
+                                        key: "category",
+                                        label: "品类",
+                                        value: categoryFilter,
+                                        defaultValue: "全部品类",
+                                        options: ["全部品类", ...categories],
+                                    },
+                                    {
+                                        key: "delivery",
+                                        label: "交期",
+                                        value: dateStart || dateEnd ? "custom" : "any",
+                                        defaultValue: "any",
+                                        options: [
+                                            { value: "any", label: "不限" },
+                                            { value: "custom", label: "指定日期" },
+                                        ],
+                                    },
+                                    {
+                                        key: "from",
+                                        label: "交货开始日期",
+                                        type: "date",
+                                        value: dateStart,
+                                        defaultValue: "",
+                                        visibleWhen: { key: "delivery", value: "custom" },
+                                        count: false,
+                                    },
+                                    {
+                                        key: "to",
+                                        label: "交货结束日期",
+                                        type: "date",
+                                        value: dateEnd,
+                                        defaultValue: "",
+                                        visibleWhen: { key: "delivery", value: "custom" },
+                                        count: false,
+                                    },
+                                ]}
+                                validate={draft =>
+                                    draft.delivery === "custom" && (!draft.from || !draft.to || draft.from > draft.to)
+                                        ? "请选择开始和结束日期，开始日期不能晚于结束日期。"
+                                        : undefined
+                                }
+                                onApply={draft => {
+                                    setMobileStatus(draft.status!);
+                                    setCategoryFilter(draft.category!);
+                                    setDateStart(draft.delivery === "custom" ? draft.from! : "");
+                                    setDateEnd(draft.delivery === "custom" ? draft.to! : "");
+                                    setManualOrder(null);
+                                    setPage(1);
+                                }}
+                                action={
+                                    canCreate && (
+                                        <Button onClick={() => setNewOpen(true)} className="px-3" aria-label="新建订单">
+                                            新建
+                                        </Button>
+                                    )
+                                }
+                            />
+                        }
                         trailing={
                             <div className="ml-auto">
                                 <ToolbarMore>

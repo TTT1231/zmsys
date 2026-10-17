@@ -1,5 +1,5 @@
-import { useEffect, useId, useState, type ReactNode } from "react";
-import { useIsMobile, useMediaQuery } from "@/lib/useIsMobile";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useIsMobile } from "@/lib/useIsMobile";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
 import { ToolbarSelect } from "./ToolbarSelect";
@@ -11,125 +11,87 @@ export interface MobileFilterField {
     defaultValue: string;
     options?: Array<string | { value: string; label: string }>;
     type?: "date";
-    openPanelValue?: string;
     visibleWhen?: { key: string; value: string };
-    summary?: boolean;
-    onChange: (value: string) => void;
+    /** 日期等从属字段随范围一起计数，不重复计为独立条件。 */
+    count?: boolean;
 }
 
 export function MobileListControls({
-    fields = [],
-    more = [],
+    fields,
     action,
     validate,
     onApply,
 }: {
-    fields?: MobileFilterField[];
-    more?: MobileFilterField[];
+    fields: MobileFilterField[];
     action?: ReactNode;
     validate?: (draft: Record<string, string>) => string | undefined;
-    onApply?: (draft: Record<string, string>) => void;
+    onApply: (draft: Record<string, string>) => void;
 }) {
     const id = useId();
     const isMobile = useIsMobile();
-    const narrow = useMediaQuery("(max-width: 359px)");
     const [draft, setDraft] = useState<Record<string, string> | null>(null);
     const [error, setError] = useState("");
-    // 最窄的手机将名称较长的条件收进面板，选中后完整回显，给常用条件和主操作留出空间。
-    const foldCandidate =
-        fields.length > 1 ? fields.find(field => field.key === "category" || field.key === "domain") : undefined;
-    // 旋转手机时保留已打开面板中的条件，避免正在编辑的内容突然消失。
-    const foldedField = foldCandidate && (narrow || (draft && foldCandidate.key in draft)) ? foldCandidate : undefined;
-    const inlineFields = fields.filter(field => field !== foldedField);
-    const panelFields = foldedField ? [foldedField, ...more] : more;
+    const toolbarRef = useRef<HTMLDivElement>(null);
+    const errorRef = useRef<HTMLParagraphElement>(null);
     useEffect(() => {
         if (!isMobile) setDraft(null);
     }, [isMobile]);
-    const values = Object.fromEntries(panelFields.map(field => [field.key, field.value]));
-    const active = panelFields.filter(
+    useEffect(() => {
+        if (error) errorRef.current?.focus();
+    }, [error]);
+    const values = Object.fromEntries(fields.map(field => [field.key, field.value]));
+    const defaults = Object.fromEntries(fields.map(field => [field.key, field.defaultValue]));
+    const activeCount = fields.filter(
         field =>
-            field.summary !== false &&
+            field.count !== false &&
             field.value !== field.defaultValue &&
             (!field.visibleWhen || values[field.visibleWhen.key] === field.visibleWhen.value),
-    );
-    const open = (overrides: Record<string, string> = {}) => {
+    ).length;
+    const open = () => {
         setError("");
-        setDraft({ ...values, ...overrides });
+        setDraft(values);
     };
     const apply = () => {
         if (!draft) return;
-        const next = Object.fromEntries(panelFields.map(field => [field.key, draft[field.key] ?? field.value]));
+        const next = Object.fromEntries(fields.map(field => [field.key, draft[field.key] ?? field.value]));
         const message = validate?.(next);
         if (message) {
             setError(message);
             return;
         }
-        if (onApply) onApply(next);
-        else for (const field of panelFields) field.onChange(next[field.key]!);
+        onApply(next);
         setDraft(null);
     };
 
     if (!isMobile) return null;
     return (
         <div className="lg:hidden">
-            <div className="mobile-list-controls">
-                {inlineFields.map(field => (
-                    <ToolbarSelect
-                        key={field.key}
-                        label={field.label}
-                        value={field.value}
-                        onChange={value => {
-                            if (field.openPanelValue === value) open({ [field.key]: value });
-                            else field.onChange(value);
-                        }}
-                        options={field.options ?? []}
-                        className="min-w-0 flex-1 px-2"
-                    />
-                ))}
-                {panelFields.length > 0 && (
+            <div ref={toolbarRef} className="mobile-list-controls">
+                <Button
+                    variant="secondary"
+                    aria-label={activeCount ? `筛选，已选 ${activeCount} 项` : "筛选"}
+                    aria-haspopup="dialog"
+                    aria-expanded={draft !== null}
+                    onClick={open}
+                    className={`shrink-0 px-3 ${activeCount ? "border-primary-border bg-primary-soft text-primary-strong" : ""}`}
+                >
+                    筛选{activeCount > 0 && <span aria-hidden="true"> · {activeCount}</span>}
+                </Button>
+                {activeCount > 0 && (
                     <Button
-                        variant="secondary"
-                        aria-label={active.length ? `筛选，已选 ${active.length} 项` : "筛选"}
-                        onClick={() => open()}
-                        className="relative shrink-0 px-3"
+                        variant="ghost"
+                        aria-label="清空筛选"
+                        onClick={() => {
+                            onApply(defaults);
+                            toolbarRef.current?.querySelector("button")?.focus();
+                        }}
+                        className="px-3"
                     >
-                        筛选
-                        {active.length > 0 && (
-                            <span
-                                aria-hidden="true"
-                                className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-11 text-white"
-                            >
-                                {active.length}
-                            </span>
-                        )}
+                        清空
                     </Button>
                 )}
-                {action}
+                {action && <div className="ml-auto flex shrink-0">{action}</div>}
             </div>
-            {active.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 border-b border-line px-3 pb-2" aria-label="已选筛选条件">
-                    {active.map(field => {
-                        const selected = field.options?.find(
-                            option => typeof option !== "string" && option.value === field.value,
-                        );
-                        const text = selected && typeof selected !== "string" ? selected.label : field.value;
-                        return (
-                            <Button
-                                key={field.key}
-                                variant="ghost"
-                                onClick={() => field.onChange(field.defaultValue)}
-                                aria-label={`清除${field.label}筛选`}
-                                className="min-h-11 max-w-full gap-2 bg-soft px-2.5 text-13 text-td"
-                            >
-                                <span className="min-w-0 wrap-anywhere text-left">
-                                    {field.label}：{text}
-                                </span>
-                                <span aria-hidden="true">×</span>
-                            </Button>
-                        );
-                    })}
-                </div>
-            )}
             <Modal
                 open={draft !== null}
                 onClose={() => setDraft(null)}
@@ -141,7 +103,7 @@ export function MobileListControls({
                             variant="ghost"
                             onClick={() => {
                                 setError("");
-                                setDraft(Object.fromEntries(panelFields.map(field => [field.key, field.defaultValue])));
+                                setDraft(defaults);
                             }}
                         >
                             重置
@@ -160,7 +122,8 @@ export function MobileListControls({
                         apply();
                     }}
                 >
-                    {panelFields
+                    <p className="text-13 text-muted">选择条件后，点击“确认”查看结果。</p>
+                    {fields
                         .filter(
                             field => !field.visibleWhen || draft?.[field.visibleWhen.key] === field.visibleWhen.value,
                         )
@@ -171,9 +134,10 @@ export function MobileListControls({
                                     <input
                                         type="date"
                                         value={draft?.[field.key] ?? ""}
-                                        onChange={event =>
-                                            setDraft(current => ({ ...current, [field.key]: event.target.value }))
-                                        }
+                                        onChange={event => {
+                                            setError("");
+                                            setDraft(current => ({ ...current, [field.key]: event.target.value }));
+                                        }}
                                         aria-invalid={!!error}
                                         aria-describedby={error ? `${id}-error` : undefined}
                                         className="min-h-11 w-full min-w-0 rounded-input border border-line-strong bg-surface px-3 text-16 font-normal"
@@ -182,15 +146,29 @@ export function MobileListControls({
                                     <ToolbarSelect
                                         label={field.label}
                                         value={draft?.[field.key] ?? field.value}
-                                        onChange={value => setDraft(current => ({ ...current, [field.key]: value }))}
-                                        options={field.options ?? []}
+                                        onChange={value => {
+                                            setError("");
+                                            setDraft(current => ({ ...current, [field.key]: value }));
+                                        }}
+                                        options={(field.options ?? []).map(option => {
+                                            const value = typeof option === "string" ? option : option.value;
+                                            const label = typeof option === "string" ? option : option.label;
+                                            return {
+                                                value,
+                                                label:
+                                                    value === field.defaultValue &&
+                                                    (value === "all" || value.startsWith("全部"))
+                                                        ? "全部"
+                                                        : label,
+                                            };
+                                        })}
                                         className="w-full min-w-0 font-normal"
                                     />
                                 )}
                             </label>
                         ))}
                     {error && (
-                        <p id={`${id}-error`} role="alert" className="text-14 text-danger">
+                        <p ref={errorRef} id={`${id}-error`} role="alert" tabIndex={-1} className="text-14 text-danger">
                             {error}
                         </p>
                     )}

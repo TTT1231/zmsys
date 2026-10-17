@@ -951,10 +951,6 @@ export function BomPage() {
                                     value: statusFilter,
                                     defaultValue: "全部状态",
                                     options: ["全部状态", "正在使用", "未使用"],
-                                    onChange: value => {
-                                        setStatusFilter(value);
-                                        setPage(1);
-                                    },
                                 },
                                 {
                                     key: "category",
@@ -962,12 +958,13 @@ export function BomPage() {
                                     value: category,
                                     defaultValue: "全部品类",
                                     options: ["全部品类", ...categories],
-                                    onChange: value => {
-                                        setCategory(value);
-                                        setPage(1);
-                                    },
                                 },
                             ]}
+                            onApply={draft => {
+                                setStatusFilter(draft.status!);
+                                setCategory(draft.category!);
+                                setPage(1);
+                            }}
                             action={
                                 canCreate && (
                                     <Button onClick={() => setNewOpen(true)} className="px-3" aria-label="新建 BOM">

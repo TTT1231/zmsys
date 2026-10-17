@@ -35,16 +35,16 @@ function ListPage() {
                 onClear={() => onKeywordChange("")}
                 mobileContent={
                     <MobileListControls
-                        more={[
+                        fields={[
                             {
                                 key: "operator",
                                 label: "登记人",
                                 value: operator,
                                 defaultValue: "全部登记人",
                                 options: ["全部登记人", "登记人甲"],
-                                onChange: setOperator,
                             },
                         ]}
+                        onApply={draft => setOperator(draft.operator!)}
                     />
                 }
             />
@@ -126,8 +126,11 @@ it("页面搜索和人员条件分别记忆，工作台搜索禁用，切换账�
     expect(screen.getByLabelText("当前登记人")).toHaveTextContent("全部登记人");
 });
 
-it("筛选的选择和重置只在确认后生效，选中条件可直接清除", () => {
+it("筛选的选择和重置只在确认后生效，清空筛选保留当前搜索", () => {
     render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "搜索销售订单" }));
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "KW0001" } });
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "确认" }));
     fireEvent.click(screen.getByRole("button", { name: "筛选" }));
     let dialog = screen.getByRole("dialog");
     fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "登记人甲" } });
@@ -144,20 +147,18 @@ it("筛选的选择和重置只在确认后生效，选中条件可直接清除"
     fireEvent.click(within(dialog).getByRole("button", { name: "重置" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
     expect(screen.getByLabelText("当前登记人")).toHaveTextContent("登记人甲");
-    fireEvent.click(screen.getByRole("button", { name: "清除登记人筛选" }));
+    const clear = screen.getByRole("button", { name: "清空筛选" });
+    clear.focus();
+    fireEvent.click(clear);
     expect(screen.getByLabelText("当前登记人")).toHaveTextContent("全部登记人");
+    expect(screen.getByLabelText("当前搜索")).toHaveTextContent("KW0001");
+    expect(screen.queryByRole("button", { name: "清空筛选" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "筛选" })).toHaveFocus();
 });
 
-it("窄屏将品类收进筛选，选中后保留可清除的条件提示", () => {
-    vi.stubGlobal(
-        "matchMedia",
-        vi.fn((query: string) => ({
-            matches: query === "(max-width: 359px)",
-            addEventListener: vi.fn(),
-            removeEventListener: vi.fn(),
-        })),
-    );
-    function NarrowToolbar() {
+it("手机工具栏只保留筛选和业务操作，多项条件确认后显示数量", () => {
+    function Toolbar() {
+        const [status, setStatus] = useState("全部状态");
         const [category, setCategory] = useState("全部品类");
         return (
             <MobileListControls
@@ -165,10 +166,9 @@ it("窄屏将品类收进筛选，选中后保留可清除的条件提示", () =
                     {
                         key: "status",
                         label: "状态",
-                        value: "全部状态",
+                        value: status,
                         defaultValue: "全部状态",
                         options: ["全部状态", "已入库"],
-                        onChange: vi.fn(),
                     },
                     {
                         key: "category",
@@ -176,35 +176,42 @@ it("窄屏将品类收进筛选，选中后保留可清除的条件提示", () =
                         value: category,
                         defaultValue: "全部品类",
                         options: ["全部品类", "旋转开关"],
-                        onChange: setCategory,
                     },
-                ]}
-                more={[
                     {
                         key: "operator",
                         label: "登记人",
                         value: "全部登记人",
                         defaultValue: "全部登记人",
                         options: ["全部登记人"],
-                        onChange: vi.fn(),
                     },
                 ]}
+                onApply={draft => {
+                    setStatus(draft.status!);
+                    setCategory(draft.category!);
+                }}
                 action={<button>入库</button>}
             />
         );
     }
-    render(<NarrowToolbar />);
+    render(<Toolbar />);
     expect(screen.getByRole("button", { name: "入库" })).toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: "品类" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "筛选" }));
     const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("combobox", { name: "状态" })).toHaveDisplayValue("全部");
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "状态" }), {
+        target: { value: "已入库" },
+    });
     fireEvent.change(within(dialog).getByRole("combobox", { name: "品类" }), {
         target: { value: "旋转开关" },
     });
     fireEvent.click(within(dialog).getByRole("button", { name: "确认" }));
-    expect(screen.getByRole("button", { name: "清除品类筛选" })).toHaveTextContent("品类：旋转开关");
-    expect(screen.getByRole("button", { name: "筛选，已选 1 项" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "清除品类筛选" }));
+    expect(screen.getByRole("button", { name: "筛选，已选 2 项" })).toHaveTextContent("筛选 · 2");
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "筛选，已选 2 项" }));
+    expect(within(screen.getByRole("dialog")).getByRole("combobox", { name: "品类" })).toHaveValue("旋转开关");
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "重置" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "确认" }));
     expect(screen.getByRole("button", { name: "筛选" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "清除品类筛选" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "清空筛选" })).not.toBeInTheDocument();
 });

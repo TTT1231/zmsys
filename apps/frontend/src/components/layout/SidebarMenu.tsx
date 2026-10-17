@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router";
 import { Icon } from "@/lib/icons";
+import { useIsMobile } from "@/lib/useIsMobile";
 import { findActiveGroup, type NavItem, type NavSection } from "@/data/permissions";
 import { useMenuNote, type MenuNote } from "./useMenuNote";
 
@@ -18,6 +19,7 @@ interface MenuItemLinkProps {
 
 /* 单个二级菜单项：NavLink（激活浅色圆角底 + 主色文字）或 note 说明按钮 */
 export function MenuItemLink({ item, inset = false, onNote, onNavigate }: MenuItemLinkProps) {
+    const isMobile = useIsMobile();
     const padding = inset ? "pl-9 pr-3.5" : "px-3.5";
 
     if (item.note) {
@@ -49,14 +51,7 @@ export function MenuItemLink({ item, inset = false, onNote, onNavigate }: MenuIt
         >
             <Icon name={item.icon} size={18} strokeWidth={1.7} className="shrink-0" />
             <span className="min-w-0 flex-1 truncate">
-                {item.to === "/orders" ? (
-                    <>
-                        <span className="lg:hidden">销售订单</span>
-                        <span className="hidden lg:inline">{item.label}</span>
-                    </>
-                ) : (
-                    item.label
-                )}
+                {isMobile && item.to === "/orders" ? "销售订单" : item.label}
             </span>
         </NavLink>
     );
